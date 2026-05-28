@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { getSql } from "@/lib/db"
 import { hashPassword, createToken, setAuthCookie } from "@/lib/auth"
 
 export async function POST(request: Request) {
   try {
     const { name, email, password } = await request.json()
+    const sql = getSql()
 
     // Validate input
     if (!name || !email || !password) {

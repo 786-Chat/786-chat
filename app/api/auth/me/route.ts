@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { sql } from "@/lib/db"
+import { getSql } from "@/lib/db"
 
 export async function GET() {
   try {
@@ -12,6 +12,8 @@ export async function GET() {
         { status: 401 }
       )
     }
+
+    const sql = getSql()
 
     // Get fresh user data from database
     const users = await sql`

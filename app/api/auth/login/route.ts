@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { sql } from "@/lib/db"
+import { getSql } from "@/lib/db"
 import { verifyPassword, createToken } from "@/lib/auth"
 
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
+    const sql = getSql()
     
     console.log("[v0] Login attempt for:", email)
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
@@ -24,6 +24,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const { name, email } = await request.json()
+    const sql = getSql()
 
     if (!name || !email) {
       return NextResponse.json(
