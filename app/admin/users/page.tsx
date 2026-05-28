@@ -15,7 +15,10 @@ import {
   Plus,
   RefreshCw,
   UserCheck,
-  Shield
+  Shield,
+  Eye,
+  Infinity,
+  UserX
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +46,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 
 interface User {
   id: string
@@ -62,6 +67,10 @@ interface User {
   current_period_end: string | null
   chat_count: number
   message_count: number
+  is_blocked: boolean
+  block_reason: string | null
+  is_admin: boolean
+  unlimited_messages: boolean
 }
 
 interface Stats {
@@ -84,8 +93,10 @@ export default function AdminUsersPage() {
   const [addCreditsDialog, setAddCreditsDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
   const [changePlanDialog, setChangePlanDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
+  const [blockDialog, setBlockDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
   const [creditsToAdd, setCreditsToAdd] = useState("100")
   const [newPlan, setNewPlan] = useState("starter")
+  const [blockReason, setBlockReason] = useState("")
 
   const fetchUsers = async () => {
     setIsLoading(true)
@@ -136,12 +147,66 @@ export default function AdminUsersPage() {
       if (res.ok) {
         setDeleteDialog({ open: false, user: null })
         fetchUsers()
+        toast.success("User deleted successfully")
       }
     } catch (error) {
       console.error("Delete failed:", error)
+      toast.error("Failed to delete user")
     } finally {
       setActionLoading(null)
     }
+  }
+
+  const handleBlockUser = async () => {
+    if (!blockDialog.user || !blockReason.trim()) {
+      toast.error("Please provide a reason for blocking")
+      return
+    }
+    setActionLoading(blockDialog.user.id + "block")
+    try {
+      const res = await fetch("/api/admin/users/block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: blockDialog.user.id, reason: blockReason })
+      })
+      if (res.ok) {
+        toast.success(`User ${blockDialog.user.email} has been blocked`)
+        setBlockDialog({ open: false, user: null })
+        setBlockReason("")
+        fetchUsers()
+      }
+    } catch (error) {
+      toast.error("Failed to block user")
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleUnblockUser = async (user: User) => {
+    setActionLoading(user.id + "unblock")
+    try {
+      const res = await fetch("/api/admin/users/unblock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: user.id })
+      })
+      if (res.ok) {
+        toast.success(`User ${user.email} has been unblocked`)
+        fetchUsers()
+      }
+    } catch (error) {
+      toast.error("Failed to unblock user")
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleMasterAccess = (user: User) => {
+    // Open user's dashboard in new tab with master access
+    window.open(`/dashboard?master_access=${user.id}`, "_blank")
+    toast.success(`Viewing dashboard as ${user.email}`)
   }
 
   const filteredUsers = users.filter(user => {
@@ -317,14 +382,25 @@ export default function AdminUsersPage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="font-medium">{user.name || "No name"}</p>
-                                {user.role === "admin" && (
-                                  <Shield className="w-4 h-4 text-red-500" />
+                                {user.is_admin && (
+                                  <Shield className="w-4 h-4 text-purple-500" title="Admin" />
+                                )}
+                                {user.unlimited_messages && (
+                                  <Infinity className="w-4 h-4 text-cyan-500" title="Unlimited Messages" />
+                                )}
+                                {user.is_blocked && (
+                                  <Ban className="w-4 h-4 text-red-500" title="Blocked" />
                                 )}
                                 {user.email_verified && (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                  <CheckCircle className="w-4 h-4 text-green-500" title="Verified" />
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground">{user.email}</p>
+                              {user.is_blocked && user.block_reason && (
+                                <p className="text-xs text-red-400 mt-1 max-w-[200px] truncate" title={user.block_reason}>
+                                  Blocked: {user.block_reason}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -356,6 +432,11 @@ export default function AdminUsersPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleMasterAccess(user)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                View as User
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => {
                                 setNewPlan(user.plan || "starter")
                                 setChangePlanDialog({ open: true, user })
@@ -372,18 +453,22 @@ export default function AdminUsersPage() {
                                 Reset Usage
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {user.subscription_status === "suspended" ? (
-                                <DropdownMenuItem onClick={() => handleAction(user.id, "activate")}>
+                              {user.is_blocked ? (
+                                <DropdownMenuItem 
+                                  className="text-green-500"
+                                  onClick={() => handleUnblockUser(user)}
+                                >
                                   <UserCheck className="w-4 h-4 mr-2" />
-                                  Activate User
+                                  Unblock User
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem 
                                   className="text-orange-500"
-                                  onClick={() => handleAction(user.id, "suspend")}
+                                  onClick={() => setBlockDialog({ open: true, user })}
+                                  disabled={user.is_admin}
                                 >
-                                  <Ban className="w-4 h-4 mr-2" />
-                                  Suspend User
+                                  <UserX className="w-4 h-4 mr-2" />
+                                  Block User
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem 
@@ -524,6 +609,53 @@ export default function AdminUsersPage() {
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
               ) : null}
               Delete User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block User Dialog */}
+      <Dialog open={blockDialog.open} onOpenChange={(open) => setBlockDialog({ open, user: open ? blockDialog.user : null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-500">
+              <UserX className="w-5 h-5" />
+              Block User
+            </DialogTitle>
+            <DialogDescription>
+              Block {blockDialog.user?.email} from using MujeebProAI. They will see your message when they try to login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="blockReason">Reason for blocking (shown to user)</Label>
+              <Textarea
+                id="blockReason"
+                placeholder="Example: Your account has been suspended due to violation of our terms of service..."
+                value={blockReason}
+                onChange={(e) => setBlockReason(e.target.value)}
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setBlockDialog({ open: false, user: null })
+              setBlockReason("")
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive"
+              onClick={handleBlockUser}
+              disabled={actionLoading === blockDialog.user?.id + "block" || !blockReason.trim()}
+            >
+              {actionLoading === blockDialog.user?.id + "block" ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <UserX className="w-4 h-4 mr-2" />
+              )}
+              Block User
             </Button>
           </DialogFooter>
         </DialogContent>
