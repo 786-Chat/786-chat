@@ -20,6 +20,70 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { DEVICE_PRESETS } from "./top-bar"
 
+// Helper function to wrap code in proper HTML for preview
+function wrapCodeInHtml(code: string): string {
+  // Already complete HTML document
+  if (code.trim().toLowerCase().startsWith('<!doctype') || code.trim().toLowerCase().startsWith('<html')) {
+    return code
+  }
+  
+  // Check if it's React/JSX code
+  const isReactCode = code.includes('import React') || 
+                      code.includes('from "react"') || 
+                      code.includes("from 'react'") ||
+                      code.includes('useState') ||
+                      code.includes('useEffect') ||
+                      code.includes('export default function') ||
+                      code.includes('export function') ||
+                      code.includes('const App') ||
+                      /<[A-Z][a-zA-Z]*/.test(code)
+
+  if (isReactCode) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: system-ui, sans-serif; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } = React;
+    ${code.replace(/<\/script>/gi, '<\\/script>')}
+    const components = [typeof App !== 'undefined' && App, typeof Main !== 'undefined' && Main, typeof Home !== 'undefined' && Home, typeof Page !== 'undefined' && Page, typeof Component !== 'undefined' && Component].filter(Boolean);
+    if (components.length > 0) ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(components[0]));
+  </script>
+</body>
+</html>`
+  }
+
+  // Plain HTML
+  if (code.includes('<') && code.includes('>')) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: system-ui, sans-serif; }</style>
+</head>
+<body>${code}</body>
+</html>`
+  }
+
+  // Plain text/code
+  return `<!DOCTYPE html>
+<html><head><style>body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; white-space: pre-wrap; }</style></head>
+<body><pre>${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></body></html>`
+}
+
 interface PreviewPanelProps {
   device: string
   setDevice: (device: string) => void
@@ -249,10 +313,10 @@ export function WorkspacePreviewPanel({
           isFullSize ? (
             <iframe
               key={`html-${refreshKey}-${device}`}
-              srcDoc={previewHtml}
+              srcDoc={wrapCodeInHtml(previewHtml)}
               className="absolute inset-0 w-full h-full bg-white"
               title="Generated Preview"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
             />
           ) : (
             <div className="absolute inset-0 flex items-start justify-center overflow-auto p-2 sm:p-4 md:p-6">
@@ -278,10 +342,10 @@ export function WorkspacePreviewPanel({
                 >
                   <iframe
                     key={`html-${refreshKey}-${device}`}
-                    srcDoc={previewHtml}
+                    srcDoc={wrapCodeInHtml(previewHtml)}
                     className="w-full h-full border-0"
                     title="Generated Preview"
-                    sandbox="allow-scripts"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                   />
                 </div>
                 <div className="flex justify-center mt-1 sm:mt-2 pb-0.5 sm:pb-1">
