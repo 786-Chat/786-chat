@@ -164,6 +164,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
           "flex-shrink-0 glass-sidebar flex flex-col overflow-hidden",
           "md:relative fixed left-0 top-12 bottom-0 z-40"
         )}
+        style={{ backgroundColor: 'rgba(15, 10, 25, 0.95)' }}
       >
         <div className="w-[260px] h-full flex flex-col">
           {/* New Chat Button */}

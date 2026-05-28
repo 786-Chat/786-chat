@@ -390,7 +390,7 @@ export async function POST(request: Request) {
       model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
       system: hasAgentMode 
         ? `${aiSettings.systemPrompt}\n\nYou are an AI agent with the ability to read, edit, and write files in the user's project. You can also deploy their site. When the user asks you to make changes to their code or website, use the available tools to do so. Always confirm what changes you made after completing them.`
-        : aiSettings.systemPrompt,
+        : `${aiSettings.systemPrompt}\n\nYou are a helpful coding assistant. When the user asks you to create code, provide complete working code in markdown code blocks. You do NOT have access to file tools - just output code directly for the user to copy. Never try to call functions like read_file or write_file.`,
       messages: modelMessages,
       temperature: aiSettings.temperature,
       maxTokens: aiSettings.maxTokens,
