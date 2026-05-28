@@ -1,7 +1,5 @@
 import "server-only"
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { getSql } from "./db"
 
 // DeepSeek pricing (per 1M tokens)
 export const DEEPSEEK_PRICING = {
@@ -35,7 +33,7 @@ export interface AISettings {
 
 // Get current AI settings
 export async function getAISettings(): Promise<AISettings> {
-  const [settings] = await sql`
+  const [settings] = await getSql()`
     SELECT 
       id,
       model,
@@ -83,7 +81,7 @@ export async function updateAISettings(
   adminId: string
 ): Promise<boolean> {
   try {
-    await sql`
+    await getSql()`
       UPDATE ai_settings
       SET 
         model = COALESCE(${settings.model}, model),
@@ -127,7 +125,7 @@ export async function trackUsage(
 ): Promise<void> {
   const cost = calculateCost(model, inputTokens, outputTokens)
 
-  await sql`
+  await getSql()`
     INSERT INTO ai_cost_tracking (user_id, date, messages_count, input_tokens, output_tokens, estimated_cost_usd, model)
     VALUES (${userId}::uuid, CURRENT_DATE, 1, ${inputTokens}, ${outputTokens}, ${cost}, ${model})
     ON CONFLICT (user_id, date) 
@@ -144,7 +142,7 @@ export async function trackUsage(
 export async function checkUserDailyLimit(userId: string): Promise<{ allowed: boolean; used: number; limit: number }> {
   const settings = await getAISettings()
   
-  const [usage] = await sql`
+  const [usage] = await getSql()`
     SELECT COALESCE(messages_count, 0) as count
     FROM ai_cost_tracking
     WHERE user_id = ${userId}::uuid AND date = CURRENT_DATE
@@ -160,7 +158,7 @@ export async function checkUserDailyLimit(userId: string): Promise<{ allowed: bo
 export async function checkUserMonthlyLimit(userId: string): Promise<{ allowed: boolean; used: number; limit: number }> {
   const settings = await getAISettings()
   
-  const [usage] = await sql`
+  const [usage] = await getSql()`
     SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as tokens
     FROM ai_cost_tracking
     WHERE user_id = ${userId}::uuid 
@@ -181,7 +179,7 @@ export async function getCostSummary(): Promise<{
 }> {
   const settings = await getAISettings()
 
-  const [todayStats] = await sql`
+  const [todayStats] = await getSql()`
     SELECT 
       COALESCE(SUM(estimated_cost_usd), 0) as cost,
       COALESCE(SUM(messages_count), 0) as messages,
@@ -190,7 +188,7 @@ export async function getCostSummary(): Promise<{
     WHERE date = CURRENT_DATE
   `
 
-  const [monthStats] = await sql`
+  const [monthStats] = await getSql()`
     SELECT 
       COALESCE(SUM(estimated_cost_usd), 0) as cost,
       COALESCE(SUM(messages_count), 0) as messages,
@@ -234,7 +232,7 @@ export async function getCostPerUser(): Promise<Array<{
   todayMessages: number
   monthMessages: number
 }>> {
-  const results = await sql`
+  const results = await getSql()`
     SELECT 
       u.id as user_id,
       u.name as user_name,

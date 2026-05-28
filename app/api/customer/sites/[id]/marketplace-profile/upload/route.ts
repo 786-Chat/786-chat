@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { put } from "@vercel/blob"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(
   request: NextRequest,
@@ -39,11 +38,11 @@ export async function POST(
     // Update database if not gallery (gallery is handled separately)
     if (field !== "gallery") {
       if (field === "marketplace_cover_image") {
-        await sql`UPDATE customer_site_settings SET marketplace_cover_image = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
+        await getSql()`UPDATE customer_site_settings SET marketplace_cover_image = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
       } else if (field === "marketplace_thumbnail") {
-        await sql`UPDATE customer_site_settings SET marketplace_thumbnail = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
+        await getSql()`UPDATE customer_site_settings SET marketplace_thumbnail = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
       } else if (field === "restaurant_logo") {
-        await sql`UPDATE customer_site_settings SET restaurant_logo = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
+        await getSql()`UPDATE customer_site_settings SET restaurant_logo = ${blob.url}, updated_at = NOW() WHERE site_id = ${id}`
       }
     }
     

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get user's subscription details
 export async function GET() {
@@ -21,7 +20,7 @@ export async function GET() {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const subscriptions = await sql`
+    const subscriptions = await getSql()`
       SELECT s.*, u.email, u.name, u.currency, u.language
       FROM subscriptions s
       JOIN users u ON s.user_id = u.id
@@ -86,7 +85,7 @@ export async function POST(request: NextRequest) {
     const newPlan = BILLING_PLANS[planId as PlanId]
 
     // Update subscription
-    await sql`
+    await getSql()`
       UPDATE subscriptions 
       SET 
         plan = ${planId},

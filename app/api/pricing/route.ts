@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Fetch pricing plans (combines DB overrides with defaults)
 export async function GET() {
   try {
     // Try to get pricing from database (admin-configurable)
-    const dbPlans = await sql`
+    const dbPlans = await getSql()`
       SELECT * FROM pricing_plans ORDER BY sort_order ASC
     `.catch(() => [])
 

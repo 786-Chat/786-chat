@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Check if user is admin
 async function isAdmin(): Promise<boolean> {
@@ -15,14 +14,14 @@ async function isAdmin(): Promise<boolean> {
   const payload = await verifyToken(token)
   if (!payload) return false
   
-  const users = await sql`SELECT role FROM users WHERE id = ${payload.id}`
+  const users = await getSql()`SELECT role FROM users WHERE id = ${payload.id}`
   return users.length > 0 && users[0].role === 'admin'
 }
 
 // GET all plans
 export async function GET() {
   try {
-    const plans = await sql`
+    const plans = await getSql()`
       SELECT 
         plan_id as id,
         name,
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
       updatedFeatures[0] = `${messages_included.toLocaleString()} AI messages/month`
     }
     
-    await sql`
+    await getSql()`
       INSERT INTO pricing_plans (
         plan_id, name, 
         price_gbp, price_usd, price_eur, price_pkr,
@@ -128,7 +127,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Plan ID required" }, { status: 400 })
     }
     
-    await sql`DELETE FROM pricing_plans WHERE plan_id = ${id}`
+    await getSql()`DELETE FROM pricing_plans WHERE plan_id = ${id}`
     
     return NextResponse.json({ success: true })
   } catch (error) {

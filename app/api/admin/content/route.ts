@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Check if user is admin
 async function isAdmin(request: NextRequest): Promise<boolean> {
@@ -15,14 +14,14 @@ async function isAdmin(request: NextRequest): Promise<boolean> {
   const payload = await verifyToken(token)
   if (!payload) return false
   
-  const users = await sql`SELECT role FROM users WHERE id = ${payload.id}`
+  const users = await getSql()`SELECT role FROM users WHERE id = ${payload.id}`
   return users.length > 0 && users[0].role === 'admin'
 }
 
 // GET all content
 export async function GET(request: NextRequest) {
   try {
-    const content = await sql`SELECT * FROM site_content`
+    const content = await getSql()`SELECT * FROM site_content`
     
     // Convert to object format
     const contentMap: Record<string, unknown> = {}
@@ -51,7 +50,7 @@ export async function POST(request: NextRequest) {
     
     const valueJson = JSON.stringify(value)
     
-    await sql`
+    await getSql()`
       INSERT INTO site_content (key, value, updated_at)
       VALUES (${key}, ${valueJson}::jsonb, NOW())
       ON CONFLICT (key) DO UPDATE SET

@@ -1,6 +1,6 @@
 import { streamText, convertToModelMessages, consumeStream, UIMessage, tool } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 import { checkAIProtection, recordUsage, withTimeout, type ProtectionResult } from "@/lib/ai-protection"
@@ -10,7 +10,6 @@ import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings }
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
 import { z } from "zod"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Create DeepSeek provider
 const deepseek = createDeepSeek({
@@ -119,7 +118,7 @@ export async function POST(request: Request) {
     const chatId: string | null = body.chatId
 
     // Get user's subscription and plan
-    const subscriptions = await sql`
+    const subscriptions = await getSql()`
       SELECT 
         plan, 
         messages_used, 
@@ -139,7 +138,7 @@ export async function POST(request: Request) {
     if (!subscription) {
       const plan = (session.plan || "starter") as PlanId
       const planConfig = BILLING_PLANS[plan] || BILLING_PLANS.starter
-      await sql`
+      await getSql()`
         INSERT INTO subscriptions (
           user_id, plan, messages_used, messages_limit, 
           daily_messages_used, daily_reset_at, extra_credits, status
@@ -202,7 +201,7 @@ export async function POST(request: Request) {
 
     if (!protectionResult.allowed) {
       // Log failed request
-      await sql`
+      await getSql()`
         INSERT INTO usage_logs (user_id, action, metadata)
         VALUES (${session.id}, 'ai_error', ${JSON.stringify({ errorCode: protectionResult.errorCode })})
       `
@@ -231,7 +230,7 @@ export async function POST(request: Request) {
     if (!currentChatId) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
 
-      const newChat = await sql`
+      const newChat = await getSql()`
         INSERT INTO chats (user_id, title)
         VALUES (${session.id}, ${title})
         RETURNING id
@@ -241,7 +240,7 @@ export async function POST(request: Request) {
 
     // Save user message to database
     if (userText) {
-      await sql`
+      await getSql()`
         INSERT INTO messages (chat_id, role, content)
         VALUES (${currentChatId}, 'user', ${userText})
       `
@@ -394,7 +393,7 @@ export async function POST(request: Request) {
         if (lastAssistant) {
           const assistantText = getMessageText(lastAssistant)
           if (assistantText) {
-            await sql`
+            await getSql()`
               INSERT INTO messages (chat_id, role, content)
               VALUES (${currentChatId}, 'assistant', ${assistantText})
             `
@@ -402,7 +401,7 @@ export async function POST(request: Request) {
         }
 
         // Update chat timestamp
-        await sql`
+        await getSql()`
           UPDATE chats SET updated_at = NOW() WHERE id = ${currentChatId}
         `
 
@@ -471,7 +470,7 @@ export async function GET(request: Request) {
 
     if (chatId) {
       // Get specific chat messages
-      const dbMessages = await sql`
+      const dbMessages = await getSql()`
         SELECT id, role, content, created_at
         FROM messages
         WHERE chat_id = ${chatId}
@@ -482,7 +481,7 @@ export async function GET(request: Request) {
       })
     } else {
       // Get all chats for user
-      const chats = await sql`
+      const chats = await getSql()`
         SELECT c.id, c.title, c.created_at, c.updated_at,
                (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
         FROM chats c
@@ -492,7 +491,7 @@ export async function GET(request: Request) {
       `
 
       // Get comprehensive usage info
-      const subscriptions = await sql`
+      const subscriptions = await getSql()`
         SELECT 
           plan, 
           messages_used, 
@@ -512,7 +511,7 @@ export async function GET(request: Request) {
       }
 
       // Get user balance data
-      const balanceData = await sql`
+      const balanceData = await getSql()`
         SELECT balance, free_messages_used, free_messages_limit 
         FROM user_balances 
         WHERE user_id = ${session.id}

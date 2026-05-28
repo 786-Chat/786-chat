@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { headers } from "next/headers"
+import { getSession } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
 
-const sql = neon(process.env.DATABASE_URL!)
+// Lazy-load database connection
+function getDb() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL not configured")
+  }
+  return neon(process.env.DATABASE_URL)
+}
 
 // Get user's GitHub credentials
 async function getUserGitHub(userId: string) {
+  const sql = getDb()
   const result = await sql`
     SELECT github_token, github_repo, github_username 
     FROM user_projects 
@@ -18,15 +24,15 @@ async function getUserGitHub(userId: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() })
-    if (!session?.user?.id) {
+    const session = await getSession()
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { action, ...params } = body
 
-    const github = await getUserGitHub(session.user.id)
+    const github = await getUserGitHub(session.id)
     if (!github || !github.github_token) {
       return NextResponse.json({ 
         success: false, 

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +9,7 @@ export async function GET(
   try {
     const { id: siteId } = await params
     
-    const items = await sql`
+    const items = await getSql()`
       SELECT mi.*, 
         COALESCE(
           (SELECT json_agg(v ORDER BY v.display_order) 
@@ -44,7 +43,7 @@ export async function POST(
       dietary_labels, allergens, ingredients, variants
     } = body
     
-    const [item] = await sql`
+    const [item] = await getSql()`
       INSERT INTO menu_items (
         site_id, name, description, price, compare_price, category_id, image_url,
         is_available, is_featured, is_new, is_popular,
@@ -63,7 +62,7 @@ export async function POST(
     // Add variants if provided
     if (variants && variants.length > 0) {
       for (const variant of variants) {
-        await sql`
+        await getSql()`
           INSERT INTO menu_item_variants (item_id, name, price, is_default, display_order)
           VALUES (${item.id}, ${variant.name}, ${variant.price}, ${variant.is_default || false}, ${variant.display_order || 0})
         `

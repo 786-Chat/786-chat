@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
@@ -12,7 +11,7 @@ export async function GET() {
     }
 
     // Get customer's primary deployed site
-    const sites = await sql`
+    const sites = await getSql()`
       SELECT 
         s.id,
         s.name,
@@ -46,7 +45,7 @@ export async function GET() {
     }
 
     // Check domains table as fallback
-    const domains = await sql`
+    const domains = await getSql()`
       SELECT domain, status, is_primary
       FROM user_domains
       WHERE user_id = ${session.id}::uuid

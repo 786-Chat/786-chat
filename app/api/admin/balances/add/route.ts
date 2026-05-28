@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { addCredits } from "@/lib/ai-balance"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +20,7 @@ export async function POST(request: Request) {
     const newBalance = await addCredits(userId, amount)
 
     // Log admin action
-    await sql`
+    await getSql()`
       INSERT INTO admin_logs (admin_id, action, details)
       VALUES (
         ${session.id}::uuid, 

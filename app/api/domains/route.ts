@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { v4 as uuidv4 } from "uuid"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get all domains for user
 export async function GET(request: NextRequest) {
@@ -13,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const domains = await sql`
+    const domains = await getSql()`
       SELECT * FROM user_domains 
       WHERE user_id = ${session.id}::uuid
       ORDER BY is_primary DESC, created_at DESC
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
     const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//, "").replace(/\/$/, "")
 
     // Check if domain already exists
-    const [existing] = await sql`
+    const [existing] = await getSql()`
       SELECT id FROM user_domains WHERE domain = ${cleanDomain}
     `
 
@@ -56,13 +55,13 @@ export async function POST(request: NextRequest) {
     const verificationToken = `mujeebproai-verify=${uuidv4()}`
 
     // Check if user has any domains - if not, make this primary
-    const [domainCount] = await sql`
+    const [domainCount] = await getSql()`
       SELECT COUNT(*) as count FROM user_domains WHERE user_id = ${session.id}::uuid
     `
     const isPrimary = Number(domainCount?.count || 0) === 0
 
     // Insert domain
-    const [newDomain] = await sql`
+    const [newDomain] = await getSql()`
       INSERT INTO user_domains (user_id, domain, type, status, verification_token, is_primary)
       VALUES (${session.id}::uuid, ${cleanDomain}, ${type || 'custom'}, 'pending', ${verificationToken}, ${isPrimary})
       RETURNING *
@@ -97,7 +96,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if domain belongs to user
-    const [domain] = await sql`
+    const [domain] = await getSql()`
       SELECT * FROM user_domains 
       WHERE id = ${domainId}::uuid AND user_id = ${session.id}::uuid
     `
@@ -107,11 +106,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete domain
-    await sql`DELETE FROM user_domains WHERE id = ${domainId}::uuid`
+    await getSql()`DELETE FROM user_domains WHERE id = ${domainId}::uuid`
 
     // If this was primary, make another domain primary
     if (domain.is_primary) {
-      await sql`
+      await getSql()`
         UPDATE user_domains 
         SET is_primary = true 
         WHERE user_id = ${session.id}::uuid 
@@ -142,7 +141,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Check if domain belongs to user
-    const [domain] = await sql`
+    const [domain] = await getSql()`
       SELECT * FROM user_domains 
       WHERE id = ${id}::uuid AND user_id = ${session.id}::uuid
     `
@@ -153,13 +152,13 @@ export async function PATCH(request: NextRequest) {
 
     if (action === "set_primary") {
       // Remove primary from all other domains
-      await sql`
+      await getSql()`
         UPDATE user_domains 
         SET is_primary = false 
         WHERE user_id = ${session.id}::uuid
       `
       // Set this as primary
-      await sql`
+      await getSql()`
         UPDATE user_domains 
         SET is_primary = true 
         WHERE id = ${id}::uuid
@@ -170,7 +169,7 @@ export async function PATCH(request: NextRequest) {
     if (action === "verify") {
       // In production, this would check DNS records
       // For now, simulate verification
-      await sql`
+      await getSql()`
         UPDATE user_domains 
         SET status = 'verified', verified_at = NOW() 
         WHERE id = ${id}::uuid

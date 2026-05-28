@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 import { completeTopup } from "@/lib/ai-balance"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-04-30.basil",
 })
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -16,7 +14,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -38,7 +36,7 @@ export async function POST(request: Request) {
 
           if (userId && credits > 0) {
             // Update transaction status
-            await sql`
+            await getSql()`
               UPDATE topup_transactions 
               SET status = 'completed', 
                   payment_intent_id = ${session.payment_intent as string},
@@ -47,7 +45,7 @@ export async function POST(request: Request) {
             `
 
             // Add credits to user balance
-            await sql`
+            await getSql()`
               INSERT INTO user_balances (user_id, balance)
               VALUES (${userId}::uuid, ${credits})
               ON CONFLICT (user_id) 
@@ -74,7 +72,7 @@ export async function POST(request: Request) {
         
         // Update transaction status if it exists
         if (paymentIntent.metadata?.topupTransactionId) {
-          await sql`
+          await getSql()`
             UPDATE topup_transactions 
             SET status = 'failed' 
             WHERE id = ${paymentIntent.metadata.topupTransactionId}::uuid

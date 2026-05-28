@@ -3,9 +3,8 @@
 import { stripe } from "@/lib/stripe"
 import { CREDIT_PACKAGES, calculateOrderTotal } from "@/lib/credit-packages"
 import { getSession } from "@/lib/auth"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function startCreditsCheckout(packageId: string) {
   const session = await getSession()
@@ -58,7 +57,7 @@ export async function startCreditsCheckout(packageId: string) {
   })
 
   // Record pending transaction
-  await sql`
+  await getSql()`
     INSERT INTO topup_transactions (user_id, amount, credits_added, stripe_session_id, status)
     VALUES (${session.id}::uuid, ${totals.total / 100}, ${creditPackage.credits}, ${checkoutSession.id}, 'pending')
   `

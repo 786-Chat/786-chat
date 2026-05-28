@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { sql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
 // Helper to check if user is admin
 async function isAdmin() {
@@ -146,7 +146,7 @@ export async function PUT() {
     const stripe = new Stripe(settings[0].stripe_secret_key)
     
     // Try to retrieve balance to test connection
-    const balance = await stripe.balance.retrieve()
+    const balance = await getStripe().balance.retrieve()
     
     return NextResponse.json({ 
       success: true, 

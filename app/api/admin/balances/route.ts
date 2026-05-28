@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
@@ -12,7 +11,7 @@ export async function GET() {
     }
 
     // Get all user balances with user info
-    const users = await sql`
+    const users = await getSql()`
       SELECT 
         ub.user_id as "userId",
         u.name as "userName",
@@ -28,7 +27,7 @@ export async function GET() {
     `
 
     // Get stats
-    const [statsResult] = await sql`
+    const [statsResult] = await getSql()`
       SELECT 
         COUNT(DISTINCT u.id) as "totalUsers",
         COALESCE(SUM(ub.balance), 0) as "totalBalance",
@@ -39,7 +38,7 @@ export async function GET() {
     `
 
     // Get pricing settings
-    const [pricing] = await sql`
+    const [pricing] = await getSql()`
       SELECT 
         cost_per_1000_messages as "costPer1000Messages",
         free_messages_default as "freeMessagesDefault",

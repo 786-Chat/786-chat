@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +9,7 @@ export async function GET(
   try {
     const { id } = await params
     
-    const result = await sql`
+    const result = await getSql()`
       SELECT 
         cs.site_name,
         cs.subdomain,
@@ -54,22 +53,22 @@ export async function PUT(
     
     // Update each field individually using tagged template
     if (body.marketplace_cover_image !== undefined) {
-      await sql`UPDATE customer_site_settings SET marketplace_cover_image = ${body.marketplace_cover_image}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET marketplace_cover_image = ${body.marketplace_cover_image}, updated_at = NOW() WHERE site_id = ${id}`
     }
     if (body.marketplace_thumbnail !== undefined) {
-      await sql`UPDATE customer_site_settings SET marketplace_thumbnail = ${body.marketplace_thumbnail}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET marketplace_thumbnail = ${body.marketplace_thumbnail}, updated_at = NOW() WHERE site_id = ${id}`
     }
     if (body.restaurant_logo !== undefined) {
-      await sql`UPDATE customer_site_settings SET restaurant_logo = ${body.restaurant_logo}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET restaurant_logo = ${body.restaurant_logo}, updated_at = NOW() WHERE site_id = ${id}`
     }
     if (body.gallery_images !== undefined) {
-      await sql`UPDATE customer_site_settings SET gallery_images = ${JSON.stringify(body.gallery_images)}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET gallery_images = ${JSON.stringify(body.gallery_images)}, updated_at = NOW() WHERE site_id = ${id}`
     }
     if (body.marketplace_description !== undefined) {
-      await sql`UPDATE customer_site_settings SET marketplace_description = ${body.marketplace_description}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET marketplace_description = ${body.marketplace_description}, updated_at = NOW() WHERE site_id = ${id}`
     }
     if (body.marketplace_category !== undefined) {
-      await sql`UPDATE customer_site_settings SET marketplace_category = ${body.marketplace_category}, updated_at = NOW() WHERE site_id = ${id}`
+      await getSql()`UPDATE customer_site_settings SET marketplace_category = ${body.marketplace_category}, updated_at = NOW() WHERE site_id = ${id}`
     }
     
     return NextResponse.json({ success: true })

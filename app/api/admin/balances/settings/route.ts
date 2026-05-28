@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function PUT(request: Request) {
   try {
@@ -14,7 +13,7 @@ export async function PUT(request: Request) {
     const { costPer1000Messages, freeMessagesDefault, markupPercentage } = await request.json()
 
     // Update settings
-    await sql`
+    await getSql()`
       UPDATE ai_pricing_settings
       SET 
         cost_per_1000_messages = ${costPer1000Messages},
@@ -26,7 +25,7 @@ export async function PUT(request: Request) {
     `
 
     // Log admin action
-    await sql`
+    await getSql()`
       INSERT INTO admin_logs (admin_id, action, details)
       VALUES (
         ${session.id}::uuid, 

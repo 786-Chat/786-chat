@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 const DEPLOYMENT_STEPS = [
   "preparing",
@@ -21,7 +20,7 @@ async function simulateDeployment(deploymentId: string, siteId: string) {
     const step = DEPLOYMENT_STEPS[i]
     
     // Update current step
-    await sql`
+    await getSql()`
       UPDATE site_deployments 
       SET 
         current_step = ${step},
@@ -34,7 +33,7 @@ async function simulateDeployment(deploymentId: string, siteId: string) {
     await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
 
     // Mark step as completed
-    await sql`
+    await getSql()`
       UPDATE site_deployments 
       SET 
         steps_completed = steps_completed || ${JSON.stringify([step])}::jsonb,
@@ -44,7 +43,7 @@ async function simulateDeployment(deploymentId: string, siteId: string) {
   }
 
   // Get site details for URL generation
-  const [site] = await sql`
+  const [site] = await getSql()`
     SELECT subdomain, business_name, custom_domain FROM sites WHERE id = ${siteId}::uuid
   `
 
@@ -53,7 +52,7 @@ async function simulateDeployment(deploymentId: string, siteId: string) {
   const dashboardUrl = `/shop-dashboard`
 
   // Mark as completed
-  await sql`
+  await getSql()`
     UPDATE site_deployments 
     SET 
       status = 'completed',
@@ -68,7 +67,7 @@ async function simulateDeployment(deploymentId: string, siteId: string) {
   `
 
   // Update site with live URL
-  await sql`
+  await getSql()`
     UPDATE sites 
     SET 
       is_published = true,
@@ -92,7 +91,7 @@ export async function POST(
     const { siteId } = await params
 
     // Get or create deployment
-    let [deployment] = await sql`
+    let [deployment] = await getSql()`
       SELECT * FROM site_deployments 
       WHERE site_id = ${siteId}::uuid 
       ORDER BY created_at DESC 
@@ -101,7 +100,7 @@ export async function POST(
 
     if (!deployment || deployment.status === 'completed' || deployment.status === 'failed') {
       // Create new deployment
-      const [newDeployment] = await sql`
+      const [newDeployment] = await getSql()`
         INSERT INTO site_deployments (site_id, user_id, status, current_step, steps_completed)
         VALUES (${siteId}::uuid, ${session.user.id}::uuid, 'deploying', 'preparing', '[]'::jsonb)
         RETURNING *
@@ -109,7 +108,7 @@ export async function POST(
       deployment = newDeployment
     } else if (deployment.status === 'pending') {
       // Update to deploying
-      await sql`
+      await getSql()`
         UPDATE site_deployments 
         SET status = 'deploying', started_at = NOW(), updated_at = NOW()
         WHERE id = ${deployment.id}::uuid
@@ -119,7 +118,7 @@ export async function POST(
     // Start deployment in background (don't await)
     simulateDeployment(deployment.id, siteId).catch(async (error) => {
       console.error("Deployment failed:", error)
-      await sql`
+      await getSql()`
         UPDATE site_deployments 
         SET 
           status = 'failed',

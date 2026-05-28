@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function PUT(
   request: NextRequest,
@@ -12,7 +11,7 @@ export async function PUT(
     const body = await request.json()
     const { name, description, selection_type, min_selections, max_selections, is_required, addons } = body
     
-    const [group] = await sql`
+    const [group] = await getSql()`
       UPDATE menu_addon_groups SET
         name = COALESCE(${name}, name),
         description = ${description},
@@ -27,12 +26,12 @@ export async function PUT(
     // Update addons if provided
     if (addons) {
       // Delete existing addons
-      await sql`DELETE FROM menu_addons WHERE group_id = ${groupId}`
+      await getSql()`DELETE FROM menu_addons WHERE group_id = ${groupId}`
       
       // Add new addons
       for (let i = 0; i < addons.length; i++) {
         const addon = addons[i]
-        await sql`
+        await getSql()`
           INSERT INTO menu_addons (group_id, name, price, display_order)
           VALUES (${groupId}, ${addon.name}, ${addon.price || 0}, ${i})
         `
@@ -53,7 +52,7 @@ export async function DELETE(
   try {
     const { groupId } = await params
     
-    await sql`DELETE FROM menu_addon_groups WHERE id = ${groupId}`
+    await getSql()`DELETE FROM menu_addon_groups WHERE id = ${groupId}`
     
     return NextResponse.json({ success: true })
   } catch (error) {

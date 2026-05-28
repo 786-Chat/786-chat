@@ -3,11 +3,9 @@
  * Handles rate limiting, spam detection, daily limits, and budget protection
  */
 
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "./db"
 import { AI_LIMITS, getLimitsForPlan, estimateTokens, type PlanType } from "./ai-limits"
 import { checkBudgetLimits, trackAICost } from "./ai-spending"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export interface ProtectionResult {
   allowed: boolean
@@ -53,7 +51,7 @@ export async function checkAIProtection(ctx: UsageContext): Promise<ProtectionRe
  * Check if user is currently blocked
  */
 async function checkUserBlocked(userId: string): Promise<ProtectionResult> {
-  const result = await sql`
+  const result = await getSql()`
     SELECT is_blocked, blocked_until, block_reason
     FROM rate_limits
     WHERE user_id = ${userId}::uuid AND action = 'chat'
@@ -67,7 +65,7 @@ async function checkUserBlocked(userId: string): Promise<ProtectionResult> {
   if (is_blocked) {
     if (blocked_until && new Date(blocked_until) < new Date()) {
       // Block expired, unblock user
-      await sql`
+      await getSql()`
         UPDATE rate_limits
         SET is_blocked = FALSE, blocked_until = NULL, block_reason = NULL
         WHERE user_id = ${userId}::uuid AND action = 'chat'
@@ -97,7 +95,7 @@ async function checkRateLimit(userId: string): Promise<ProtectionResult> {
   const { messagesPerMinute } = AI_LIMITS.rateLimit
 
   // Get or create rate limit record
-  const result = await sql`
+  const result = await getSql()`
     INSERT INTO rate_limits (user_id, action, window_start, request_count, last_request_at)
     VALUES (${userId}::uuid, 'chat', NOW(), 1, NOW())
     ON CONFLICT (user_id, action) DO UPDATE SET
@@ -140,7 +138,7 @@ async function checkUsageLimits(ctx: UsageContext): Promise<ProtectionResult> {
   const limits = getLimitsForPlan(ctx.plan)
 
   // Get subscription info
-  const subResult = await sql`
+  const subResult = await getSql()`
     SELECT 
       messages_used,
       messages_limit,
@@ -178,7 +176,7 @@ async function checkUsageLimits(ctx: UsageContext): Promise<ProtectionResult> {
   let dailyUsed = Number(sub.daily_messages_used || 0)
   if (dailyResetAt < today) {
     // Reset daily counter
-    await sql`
+    await getSql()`
       UPDATE subscriptions
       SET daily_messages_used = 0, daily_reset_at = NOW()
       WHERE user_id = ${ctx.userId}::uuid
@@ -234,7 +232,7 @@ async function checkUsageLimits(ctx: UsageContext): Promise<ProtectionResult> {
  */
 async function checkStarterLimits(userId: string): Promise<ProtectionResult> {
   // Check total messages ever used (starter is 5 total, not per month)
-  const result = await sql`
+  const result = await getSql()`
     SELECT COUNT(*) as total_messages
     FROM usage_logs
     WHERE user_id = ${userId}::uuid
@@ -368,7 +366,7 @@ async function checkSpamPatterns(userId: string, content: string): Promise<Prote
   }
 
   // Check for repeated messages
-  const recentMessages = await sql`
+  const recentMessages = await getSql()`
     SELECT details
     FROM usage_logs
     WHERE user_id = ${userId}::uuid
@@ -393,7 +391,7 @@ async function checkSpamPatterns(userId: string, content: string): Promise<Prote
 
   // Update spam score in database
   if (spamScore > 0) {
-    const result = await sql`
+    const result = await getSql()`
       UPDATE rate_limits
       SET spam_score = LEAST(spam_score + ${spamScore}, 100), updated_at = NOW()
       WHERE user_id = ${userId}::uuid AND action = 'chat'
@@ -403,7 +401,7 @@ async function checkSpamPatterns(userId: string, content: string): Promise<Prote
     if (result.length > 0 && Number(result[0].spam_score) >= maxSpamScore) {
       // Block the user
       const blockMinutes = AI_LIMITS.blockDurations.moderate
-      await sql`
+      await getSql()`
         UPDATE rate_limits
         SET is_blocked = TRUE, 
             blocked_until = NOW() + INTERVAL '30 minutes',
@@ -445,7 +443,7 @@ async function getRemainingUsage(
 ): Promise<{ dailyMessages: number; monthlyMessages: number; extraCredits: number }> {
   const limits = getLimitsForPlan(plan)
 
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       messages_used,
       messages_limit,
@@ -458,7 +456,7 @@ async function getRemainingUsage(
 
   if (result.length === 0) {
     // Starter user
-    const usageResult = await sql`
+    const usageResult = await getSql()`
       SELECT COUNT(*) as total_messages
       FROM usage_logs
       WHERE user_id = ${userId}::uuid AND action = 'ai_message'
@@ -500,7 +498,7 @@ export async function recordUsage(
 
     // Update subscription counters
     if (useExtraCredit) {
-      await sql`
+      await getSql()`
         UPDATE subscriptions
         SET 
           extra_credits = extra_credits - 1,
@@ -509,7 +507,7 @@ export async function recordUsage(
         WHERE user_id = ${userId}::uuid
       `
     } else {
-      await sql`
+      await getSql()`
         UPDATE subscriptions
         SET 
           messages_used = messages_used + 1,
@@ -520,7 +518,7 @@ export async function recordUsage(
     }
 
     // Decay spam score over time
-    await sql`
+    await getSql()`
       UPDATE rate_limits
       SET spam_score = GREATEST(0, spam_score - 1)
       WHERE user_id = ${userId}::uuid AND action = 'chat'
@@ -553,7 +551,7 @@ export async function blockUser(
 ): Promise<void> {
   const blockedUntil = durationMinutes === -1 ? null : `NOW() + INTERVAL '${durationMinutes} minutes'`
   
-  await sql`
+  await getSql()`
     INSERT INTO rate_limits (user_id, action, is_blocked, blocked_until, block_reason)
     VALUES (${userId}::uuid, 'chat', TRUE, ${blockedUntil ? sql`NOW() + INTERVAL '${durationMinutes} minutes'` : null}, ${reason})
     ON CONFLICT (user_id, action) DO UPDATE SET
@@ -568,7 +566,7 @@ export async function blockUser(
  * Admin function to unblock a user
  */
 export async function unblockUser(userId: string): Promise<void> {
-  await sql`
+  await getSql()`
     UPDATE rate_limits
     SET is_blocked = FALSE, blocked_until = NULL, block_reason = NULL, spam_score = 0
     WHERE user_id = ${userId}::uuid
@@ -579,7 +577,7 @@ export async function unblockUser(userId: string): Promise<void> {
  * Admin function to suspend a user
  */
 export async function suspendUser(userId: string, reason: string): Promise<void> {
-  await sql`
+  await getSql()`
     UPDATE users
     SET status = 'suspended', updated_at = NOW()
     WHERE id = ${userId}::uuid
@@ -591,7 +589,7 @@ export async function suspendUser(userId: string, reason: string): Promise<void>
  * Add extra credits to a user
  */
 export async function addExtraCredits(userId: string, credits: number): Promise<void> {
-  await sql`
+  await getSql()`
     UPDATE subscriptions
     SET extra_credits = extra_credits + ${credits}, updated_at = NOW()
     WHERE user_id = ${userId}::uuid
@@ -605,7 +603,7 @@ export async function checkFreeTrialAbuse(email: string, ipAddress?: string): Pr
   // Check for similar email patterns (e.g., user+1@gmail.com, user+2@gmail.com)
   const baseEmail = email.replace(/\+[^@]+@/, "@").toLowerCase()
   
-  const result = await sql`
+  const result = await getSql()`
     SELECT COUNT(*) as count
     FROM users
     WHERE LOWER(REPLACE(email, SUBSTRING(email FROM '\\+[^@]+'), '')) = ${baseEmail}
@@ -617,7 +615,7 @@ export async function checkFreeTrialAbuse(email: string, ipAddress?: string): Pr
 
   // Check for multiple accounts from same IP in last 24 hours
   if (ipAddress) {
-    const ipResult = await sql`
+    const ipResult = await getSql()`
       SELECT COUNT(*) as count
       FROM users
       WHERE created_at > NOW() - INTERVAL '24 hours'

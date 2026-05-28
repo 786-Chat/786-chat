@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get user's current usage
 export async function GET() {
@@ -22,13 +21,13 @@ export async function GET() {
     }
 
     // Get user's subscription
-    const subscriptions = await sql`
+    const subscriptions = await getSql()`
       SELECT * FROM subscriptions WHERE user_id = ${payload.id}
     `
 
     if (subscriptions.length === 0) {
       // Create default subscription for user
-      await sql`
+      await getSql()`
         INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
         VALUES (${payload.id}, 'starter', 0, 5, 'active')
       `
@@ -89,7 +88,7 @@ export async function POST(request: NextRequest) {
     const { action = "ai_message", tokensUsed = 1 } = await request.json()
 
     // Get user's subscription
-    const subscriptions = await sql`
+    const subscriptions = await getSql()`
       SELECT * FROM subscriptions WHERE user_id = ${payload.id}
     `
 
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
     
     if (!subscription) {
       // Create default subscription
-      const newSub = await sql`
+      const newSub = await getSql()`
         INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
         VALUES (${payload.id}, 'starter', 0, 5, 'active')
         RETURNING *
@@ -129,7 +128,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update subscription usage
-    await sql`
+    await getSql()`
       UPDATE subscriptions 
       SET 
         messages_used = messages_used + ${tokensUsed},
@@ -139,7 +138,7 @@ export async function POST(request: NextRequest) {
     `
 
     // Log usage
-    await sql`
+    await getSql()`
       INSERT INTO usage_logs (user_id, action, tokens_used, cost)
       VALUES (${payload.id}, ${action}, ${tokensUsed}, ${extraCost})
     `

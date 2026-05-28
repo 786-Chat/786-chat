@@ -3,10 +3,8 @@
  * Track and manage AI costs per user, per day, per month
  */
 
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "./db"
 import { AI_LIMITS, estimateMessageCost, usdToGbp } from "./ai-limits"
-
-const sql = neon(process.env.DATABASE_URL!)
 
 export interface SpendingRecord {
   userId: string
@@ -56,7 +54,7 @@ export async function trackAICost(
   const costUsd = estimateMessageCost(inputTokens, outputTokens, imageCount, pdfPages)
   const costGbp = usdToGbp(costUsd)
 
-  await sql`
+  await getSql()`
     INSERT INTO usage_logs (
       user_id, 
       action, 
@@ -83,7 +81,7 @@ export async function trackAICost(
  * Get today's total AI spend
  */
 export async function getTodaySpend(): Promise<{ messages: number; costGbp: number }> {
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       COUNT(*) as message_count,
       COALESCE(SUM(estimated_cost_gbp), 0) as total_cost
@@ -101,7 +99,7 @@ export async function getTodaySpend(): Promise<{ messages: number; costGbp: numb
  * Get this month's total AI spend
  */
 export async function getMonthSpend(): Promise<{ messages: number; costGbp: number }> {
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       COUNT(*) as message_count,
       COALESCE(SUM(estimated_cost_gbp), 0) as total_cost
@@ -152,7 +150,7 @@ export async function getUserSpending(
     dateFilter = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)"
   }
 
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       COUNT(*) as message_count,
       COALESCE(SUM(estimated_cost_gbp), 0) as total_cost,
@@ -180,7 +178,7 @@ export async function getTopUsersBySpending(
   limit: number = 10,
   period: "day" | "month" | "all" = "month"
 ): Promise<UserSpending[]> {
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       u.id as user_id,
       u.email,
@@ -224,7 +222,7 @@ export async function getSystemSpendingReport(): Promise<SystemSpending> {
   ])
 
   // Get all-time totals
-  const allTimeResult = await sql`
+  const allTimeResult = await getSql()`
     SELECT 
       COUNT(*) as message_count,
       COALESCE(SUM(estimated_cost_gbp), 0) as total_cost
@@ -253,7 +251,7 @@ export async function getSystemSpendingReport(): Promise<SystemSpending> {
 export async function getSpendingByPlan(): Promise<
   Array<{ plan: string; users: number; messages: number; costGbp: number }>
 > {
-  const result = await sql`
+  const result = await getSql()`
     SELECT 
       COALESCE(s.plan, 'starter') as plan,
       COUNT(DISTINCT u.id) as user_count,

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
     const { subdomain } = await params
     
     // Get site by subdomain first
-    const [site] = await sql`
+    const [site] = await getSql()`
       SELECT id FROM customer_sites WHERE subdomain = ${subdomain}
     `
     
@@ -20,7 +19,7 @@ export async function GET(
     }
     
     // Get categories with items
-    const categories = await sql`
+    const categories = await getSql()`
       SELECT id, name, description, image_url, display_order
       FROM menu_categories
       WHERE site_id = ${site.id} AND is_active = true
@@ -28,7 +27,7 @@ export async function GET(
     `
     
     // Get all menu items
-    const items = await sql`
+    const items = await getSql()`
       SELECT mi.*, 
         COALESCE(
           (SELECT json_agg(v ORDER BY v.display_order) 
@@ -42,7 +41,7 @@ export async function GET(
     `
     
     // Get addon groups with addons
-    const groups = await sql`
+    const groups = await getSql()`
       SELECT mag.*, 
         COALESCE(
           (SELECT json_agg(ma ORDER BY ma.display_order) 

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -17,7 +16,7 @@ export async function GET(
     const { siteId } = await params
 
     // Get deployment for this site
-    const [deployment] = await sql`
+    const [deployment] = await getSql()`
       SELECT 
         sd.*,
         s.business_name,
@@ -31,7 +30,7 @@ export async function GET(
 
     if (!deployment) {
       // Create a new pending deployment
-      const [newDeployment] = await sql`
+      const [newDeployment] = await getSql()`
         INSERT INTO site_deployments (site_id, user_id, status, current_step)
         VALUES (${siteId}::uuid, ${session.user.id}::uuid, 'pending', 'preparing')
         RETURNING *

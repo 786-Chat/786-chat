@@ -1,6 +1,4 @@
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { getSql } from "./db"
 
 export interface UserBalance {
   balance: number
@@ -32,7 +30,7 @@ export interface CanSendResult {
 // Get or create user balance record
 export async function getUserBalance(userId: string): Promise<UserBalance> {
   // Try to get existing balance
-  const [existing] = await sql`
+  const [existing] = await getSql()`
     SELECT * FROM user_balances WHERE user_id = ${userId}::uuid
   `
 
@@ -48,11 +46,11 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
   }
 
   // Get default free messages from settings
-  const [settings] = await sql`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
+  const [settings] = await getSql()`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
   const freeLimit = settings?.free_messages_default || 100
 
   // Create new balance record
-  await sql`
+  await getSql()`
     INSERT INTO user_balances (user_id, free_messages_limit)
     VALUES (${userId}::uuid, ${freeLimit})
   `
@@ -69,7 +67,7 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
 
 // Get pricing settings
 export async function getPricingSettings(): Promise<PricingSettings> {
-  const [settings] = await sql`SELECT * FROM ai_pricing_settings WHERE is_active = true LIMIT 1`
+  const [settings] = await getSql()`SELECT * FROM ai_pricing_settings WHERE is_active = true LIMIT 1`
 
   const costPer1000 = Number(settings?.cost_per_1000_messages) || 0.50
   
@@ -123,7 +121,7 @@ export async function canSendMessage(userId: string): Promise<CanSendResult> {
 export async function deductMessageCost(userId: string, usingFreeMessage: boolean, cost: number): Promise<void> {
   if (usingFreeMessage) {
     // Increment free messages used
-    await sql`
+    await getSql()`
       UPDATE user_balances 
       SET free_messages_used = free_messages_used + 1,
           total_messages_sent = total_messages_sent + 1,
@@ -132,7 +130,7 @@ export async function deductMessageCost(userId: string, usingFreeMessage: boolea
     `
   } else {
     // Deduct from balance
-    await sql`
+    await getSql()`
       UPDATE user_balances 
       SET balance = balance - ${cost},
           total_messages_sent = total_messages_sent + 1,
@@ -149,7 +147,7 @@ export async function addCredits(userId: string, amount: number): Promise<number
   await getUserBalance(userId)
 
   // Add credits
-  const [result] = await sql`
+  const [result] = await getSql()`
     UPDATE user_balances 
     SET balance = balance + ${amount},
         updated_at = NOW()
@@ -168,7 +166,7 @@ export async function recordTopup(
   stripeSessionId: string,
   status: string = "pending"
 ): Promise<string> {
-  const [result] = await sql`
+  const [result] = await getSql()`
     INSERT INTO topup_transactions (user_id, amount, credits_added, stripe_session_id, status)
     VALUES (${userId}::uuid, ${amount}, ${creditsAdded}, ${stripeSessionId}, ${status})
     RETURNING id
@@ -179,7 +177,7 @@ export async function recordTopup(
 // Complete a top-up transaction
 export async function completeTopup(stripeSessionId: string, paymentIntentId: string): Promise<boolean> {
   // Get the transaction
-  const [transaction] = await sql`
+  const [transaction] = await getSql()`
     SELECT * FROM topup_transactions WHERE stripe_session_id = ${stripeSessionId} AND status = 'pending'
   `
 
@@ -188,7 +186,7 @@ export async function completeTopup(stripeSessionId: string, paymentIntentId: st
   }
 
   // Update transaction status
-  await sql`
+  await getSql()`
     UPDATE topup_transactions 
     SET status = 'completed', payment_intent_id = ${paymentIntentId}, completed_at = NOW()
     WHERE id = ${transaction.id}::uuid

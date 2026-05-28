@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function PUT(
   request: NextRequest,
@@ -17,7 +16,7 @@ export async function PUT(
       dietary_labels, allergens, ingredients, display_order
     } = body
     
-    const [item] = await sql`
+    const [item] = await getSql()`
       UPDATE menu_items SET
         name = COALESCE(${name}, name),
         description = ${description},
@@ -55,7 +54,7 @@ export async function DELETE(
   try {
     const { itemId } = await params
     
-    await sql`DELETE FROM menu_items WHERE id = ${itemId}`
+    await getSql()`DELETE FROM menu_items WHERE id = ${itemId}`
     
     return NextResponse.json({ success: true })
   } catch (error) {

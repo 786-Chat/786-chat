@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { verifyToken } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
     const userName = users[0]?.name || ""
 
     // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: "payment",
       customer_email: userEmail,
       line_items: [

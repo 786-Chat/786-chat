@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
-    const modules = await sql`
+    const modules = await getSql()`
       SELECT * FROM module_pricing 
       ORDER BY display_order ASC
     `
@@ -20,7 +19,7 @@ export async function PUT(request: Request) {
   try {
     const data = await request.json()
     
-    await sql`
+    await getSql()`
       UPDATE module_pricing SET
         module_name = ${data.module_name},
         description = ${data.description || null},

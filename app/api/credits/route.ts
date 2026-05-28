@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 import Stripe from "stripe"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Get Stripe instance with key from database settings
 async function getStripe() {
-  const settings = await sql`SELECT stripe_secret_key FROM admin_settings LIMIT 1`
+  const settings = await getSql()`SELECT stripe_secret_key FROM admin_settings LIMIT 1`
   if (!settings[0]?.stripe_secret_key) {
     throw new Error("Stripe not configured")
   }
@@ -35,7 +34,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get user's subscription and credit info
-    const subscription = await sql`
+    const subscription = await getSql()`
       SELECT 
         plan,
         messages_used,
@@ -107,7 +106,7 @@ export async function POST(req: NextRequest) {
     const { packageId, customCredits } = body as { packageId?: PackageId; customCredits?: number }
 
     // Get user's subscription
-    const subscription = await sql`
+    const subscription = await getSql()`
       SELECT plan, stripe_customer_id
       FROM subscriptions
       WHERE user_id = ${session.id}
@@ -152,7 +151,7 @@ export async function POST(req: NextRequest) {
     const stripe = await getStripe()
 
     if (!stripeCustomerId) {
-      const user = await sql`SELECT email, name FROM users WHERE id = ${session.id}`
+      const user = await getSql()`SELECT email, name FROM users WHERE id = ${session.id}`
       
       const customer = await stripe.customers.create({
         email: user[0].email,
@@ -161,7 +160,7 @@ export async function POST(req: NextRequest) {
       })
       stripeCustomerId = customer.id
 
-      await sql`
+      await getSql()`
         UPDATE subscriptions
         SET stripe_customer_id = ${stripeCustomerId}
         WHERE user_id = ${session.id}

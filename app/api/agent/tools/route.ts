@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { headers } from "next/headers"
+import { getSession } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
 import { promises as fs } from "fs"
 import path from "path"
 
-const sql = neon(process.env.DATABASE_URL!)
+// Lazy-load database connection
+function getDb() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL not configured")
+  }
+  return neon(process.env.DATABASE_URL)
+}
 
 // Get user's project directory (stored in database)
 async function getUserProjectPath(userId: string): Promise<string | null> {
+  const sql = getDb()
   const result = await sql`
     SELECT github_repo, project_path FROM user_projects WHERE user_id = ${userId} LIMIT 1
   `
@@ -29,8 +35,8 @@ function validatePath(basePath: string, requestedPath: string): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() })
-    if (!session?.user?.id) {
+    const session = await getSession()
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
     const { tool, params } = body
 
     // Get user's project path
-    const projectPath = await getUserProjectPath(session.user.id)
+    const projectPath = await getUserProjectPath(session.id)
     if (!projectPath) {
       return NextResponse.json({ 
         success: false, 
@@ -75,9 +81,10 @@ export async function POST(request: NextRequest) {
           result = { success: true, message: `File written: ${params.file_path}`, data: { path: params.file_path } }
           
           // Log the action
+          const sql = getDb()
           await sql`
             INSERT INTO agent_actions (user_id, action_type, file_path, created_at)
-            VALUES (${session.user.id}, 'write_file', ${params.file_path}, NOW())
+            VALUES (${session.id}, 'write_file', ${params.file_path}, NOW())
           `
         } catch (e) {
           result = { success: false, message: `Failed to write file: ${e}` }
@@ -100,9 +107,10 @@ export async function POST(request: NextRequest) {
             result = { success: true, message: `File edited: ${params.file_path}` }
             
             // Log the action
+            const sql = getDb()
             await sql`
               INSERT INTO agent_actions (user_id, action_type, file_path, created_at)
-              VALUES (${session.user.id}, 'edit_file', ${params.file_path}, NOW())
+              VALUES (${session.id}, 'edit_file', ${params.file_path}, NOW())
             `
           }
         } catch {

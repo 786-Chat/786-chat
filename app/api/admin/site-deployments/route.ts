@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
@@ -12,7 +11,7 @@ export async function GET() {
     }
 
     // Check if admin
-    const [user] = await sql`
+    const [user] = await getSql()`
       SELECT role FROM users WHERE id = ${session.user.id}::uuid
     `
     if (user?.role !== "admin" && user?.role !== "superadmin") {
@@ -20,7 +19,7 @@ export async function GET() {
     }
 
     // Get all deployments with customer info
-    const deployments = await sql`
+    const deployments = await getSql()`
       SELECT 
         sd.id,
         sd.site_id as "siteId",

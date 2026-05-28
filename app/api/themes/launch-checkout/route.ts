@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 export async function POST(request: NextRequest) {
   try {
@@ -156,7 +155,7 @@ export async function POST(request: NextRequest) {
       quantity: 1,
     } : null
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: modulesPrice > 0 ? "subscription" : "payment",
       customer_email: payload.email,
       line_items: modulesPrice > 0 

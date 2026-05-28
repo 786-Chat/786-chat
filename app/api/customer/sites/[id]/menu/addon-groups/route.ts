@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +9,7 @@ export async function GET(
   try {
     const { id: siteId } = await params
     
-    const groups = await sql`
+    const groups = await getSql()`
       SELECT mag.*,
         COALESCE(
           (SELECT json_agg(ma ORDER BY ma.display_order) 
@@ -39,7 +38,7 @@ export async function POST(
     const body = await request.json()
     const { name, description, selection_type, min_selections, max_selections, is_required, addons } = body
     
-    const [group] = await sql`
+    const [group] = await getSql()`
       INSERT INTO menu_addon_groups (
         site_id, name, description, selection_type, 
         min_selections, max_selections, is_required
@@ -54,7 +53,7 @@ export async function POST(
     if (addons && addons.length > 0) {
       for (let i = 0; i < addons.length; i++) {
         const addon = addons[i]
-        await sql`
+        await getSql()`
           INSERT INTO menu_addons (group_id, name, price, display_order)
           VALUES (${group.id}, ${addon.name}, ${addon.price || 0}, ${i})
         `

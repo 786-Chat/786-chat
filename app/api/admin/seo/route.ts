@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Check if user is admin
 async function isAdmin(request: NextRequest): Promise<boolean> {
@@ -15,14 +14,14 @@ async function isAdmin(request: NextRequest): Promise<boolean> {
   const payload = await verifyToken(token)
   if (!payload) return false
   
-  const users = await sql`SELECT role FROM users WHERE id = ${payload.id}`
+  const users = await getSql()`SELECT role FROM users WHERE id = ${payload.id}`
   return users.length > 0 && users[0].role === 'admin'
 }
 
 // GET all SEO settings
 export async function GET(request: NextRequest) {
   try {
-    const seo = await sql`SELECT * FROM seo_settings`
+    const seo = await getSql()`SELECT * FROM seo_settings`
     
     // Convert to object format
     const seoMap: Record<string, unknown> = {}
@@ -54,7 +53,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { page, title, description, keywords, og_image } = body
     
-    await sql`
+    await getSql()`
       INSERT INTO seo_settings (page, title, description, keywords, og_image, updated_at)
       VALUES (${page}, ${title}, ${description}, ${keywords}, ${og_image}, NOW())
       ON CONFLICT (page) DO UPDATE SET

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +9,7 @@ export async function GET(
   try {
     const { id: siteId } = await params
     
-    const categories = await sql`
+    const categories = await getSql()`
       SELECT * FROM menu_categories
       WHERE site_id = ${siteId}
       ORDER BY display_order ASC, name ASC
@@ -32,7 +31,7 @@ export async function POST(
     const body = await request.json()
     const { name, description, image_url } = body
     
-    const [category] = await sql`
+    const [category] = await getSql()`
       INSERT INTO menu_categories (site_id, name, description, image_url)
       VALUES (${siteId}, ${name}, ${description || null}, ${image_url || null})
       RETURNING *

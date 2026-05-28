@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Fetch user's deployments
 export async function GET() {
@@ -12,7 +11,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const deployments = await sql`
+    const deployments = await getSql()`
       SELECT 
         d.*,
         cs.site_name,
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     const { siteId, environment = "production" } = await request.json()
 
     // Get the site
-    const [site] = await sql`
+    const [site] = await getSql()`
       SELECT * FROM customer_sites WHERE id = ${siteId}::uuid AND user_id = ${session.user.id}::uuid
     `
 
@@ -51,7 +50,7 @@ export async function POST(request: Request) {
     }
 
     // Create deployment record
-    const [deployment] = await sql`
+    const [deployment] = await getSql()`
       INSERT INTO deployments (
         user_id, site_id, status, environment, domain, created_at
       ) VALUES (
@@ -68,7 +67,7 @@ export async function POST(request: Request) {
     // Simulate deployment process (in production, this would trigger actual deployment)
     setTimeout(async () => {
       try {
-        await sql`
+        await getSql()`
           UPDATE deployments 
           SET status = 'ready', deployed_at = NOW()
           WHERE id = ${deployment.id}::uuid

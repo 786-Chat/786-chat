@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +10,7 @@ export async function GET(
     const { subdomain } = await params
     
     // Get site by subdomain first
-    const [site] = await sql`
+    const [site] = await getSql()`
       SELECT id FROM customer_sites WHERE subdomain = ${subdomain}
     `
     
@@ -20,7 +19,7 @@ export async function GET(
     }
     
     // Get site settings
-    const [settings] = await sql`
+    const [settings] = await getSql()`
       SELECT 
         delivery_enabled,
         collection_enabled,

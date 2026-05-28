@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Fetch user's project settings
 export async function GET(request: NextRequest) {
@@ -12,7 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const projects = await sql`
+    const projects = await getSql()`
       SELECT github_username, github_repo, 
              CASE WHEN github_token IS NOT NULL THEN true ELSE false END as has_token,
              vercel_project_id, created_at, updated_at
@@ -76,14 +75,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if project exists
-    const existing = await sql`
+    const existing = await getSql()`
       SELECT id FROM user_projects WHERE user_id = ${session.id}
     `
 
     if (existing.length > 0) {
       // Update existing
       if (github_token) {
-        await sql`
+        await getSql()`
           UPDATE user_projects 
           SET github_username = ${github_username},
               github_repo = ${github_repo},
@@ -93,7 +92,7 @@ export async function POST(request: NextRequest) {
           WHERE user_id = ${session.id}
         `
       } else {
-        await sql`
+        await getSql()`
           UPDATE user_projects 
           SET github_username = ${github_username},
               github_repo = ${github_repo},
@@ -104,7 +103,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Insert new
-      await sql`
+      await getSql()`
         INSERT INTO user_projects (user_id, github_username, github_repo, github_token, vercel_project_id)
         VALUES (${session.id}, ${github_username}, ${github_repo}, ${github_token || null}, ${vercel_project_id || null})
       `
@@ -125,7 +124,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    await sql`
+    await getSql()`
       DELETE FROM user_projects WHERE user_id = ${session.id}
     `
 

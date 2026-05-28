@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { put } from "@vercel/blob"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(
   request: NextRequest,
@@ -23,7 +22,7 @@ export async function POST(
     })
 
     // Create a pending import record for admin review
-    await sql`
+    await getSql()`
       INSERT INTO menu_imports (
         site_id,
         file_url,

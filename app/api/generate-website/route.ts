@@ -4,7 +4,13 @@ import { getSession } from "@/lib/auth"
 import Stripe from "stripe"
 import bcrypt from "bcryptjs"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+// Lazy-load Stripe
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY not configured")
+  }
+  return new Stripe(process.env.STRIPE_SECRET_KEY)
+}
 
 // Generate a random password for manager
 function generatePassword(length = 12): string {
@@ -30,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the Stripe session
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const session = await getStripe().checkout.sessions.retrieve(sessionId)
     
     if (session.payment_status !== "paid") {
       return NextResponse.json({ error: "Payment not completed" }, { status: 400 })

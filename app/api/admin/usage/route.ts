@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { getSql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { getSystemSpendingReport, getSpendingByPlan, getTodaySpend, getMonthSpend } from "@/lib/ai-spending"
 import { unblockUser, blockUser, suspendUser, addExtraCredits } from "@/lib/ai-protection"
 import { AI_LIMITS } from "@/lib/ai-limits"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get admin usage dashboard data
 export async function GET(request: Request) {
@@ -17,7 +16,7 @@ export async function GET(request: Request) {
     }
 
     // Check if user is admin
-    const user = await sql`
+    const user = await getSql()`
       SELECT role FROM users WHERE id = ${session.id}
     `
 
@@ -38,7 +37,7 @@ export async function GET(request: Request) {
       ])
 
       // Get subscription stats
-      const subscriptionStats = await sql`
+      const subscriptionStats = await getSql()`
         SELECT 
           plan,
           status,
@@ -51,7 +50,7 @@ export async function GET(request: Request) {
       `
 
       // Get revenue estimate (monthly)
-      const revenueStats = await sql`
+      const revenueStats = await getSql()`
         SELECT 
           plan,
           COUNT(*) as subscriber_count,
@@ -68,7 +67,7 @@ export async function GET(request: Request) {
       `
 
       // Get failed requests in last 24h
-      const failedRequests = await sql`
+      const failedRequests = await getSql()`
         SELECT 
           COALESCE(metadata->>'errorCode', 'unknown') as error_code,
           COUNT(*) as count
@@ -81,14 +80,14 @@ export async function GET(request: Request) {
       `
 
       // Get active users (last 24h)
-      const activeUsers = await sql`
+      const activeUsers = await getSql()`
         SELECT COUNT(DISTINCT user_id) as count
         FROM usage_logs
         WHERE created_at > NOW() - INTERVAL '24 hours'
       `
 
       // Get blocked users
-      const blockedUsers = await sql`
+      const blockedUsers = await getSql()`
         SELECT 
           r.user_id,
           u.email,
@@ -140,7 +139,7 @@ export async function GET(request: Request) {
 
     // Top users view
     if (view === "topUsers") {
-      const topUsers = await sql`
+      const topUsers = await getSql()`
         SELECT 
           u.id, u.email, u.name,
           s.plan, s.messages_used, s.messages_limit, s.extra_credits,
@@ -158,7 +157,7 @@ export async function GET(request: Request) {
 
     // Blocked users view
     if (view === "blocked") {
-      const blocked = await sql`
+      const blocked = await getSql()`
         SELECT rl.*, u.email, u.name
         FROM rate_limits rl
         JOIN users u ON rl.user_id = u.id
@@ -171,20 +170,20 @@ export async function GET(request: Request) {
     // Specific user view
     const userId = searchParams.get("userId")
     if (userId) {
-      const userInfo = await sql`
+      const userInfo = await getSql()`
         SELECT id, email, name, role, created_at
         FROM users WHERE id = ${userId}::uuid
       `
       
-      const subscription = await sql`
+      const subscription = await getSql()`
         SELECT * FROM subscriptions WHERE user_id = ${userId}::uuid
       `
       
-      const rateLimits = await sql`
+      const rateLimits = await getSql()`
         SELECT * FROM rate_limits WHERE user_id = ${userId}::uuid
       `
       
-      const recentUsage = await sql`
+      const recentUsage = await getSql()`
         SELECT * FROM usage_logs 
         WHERE user_id = ${userId}::uuid
         ORDER BY created_at DESC
@@ -216,7 +215,7 @@ export async function POST(request: Request) {
     }
 
     // Check if user is admin
-    const user = await sql`
+    const user = await getSql()`
       SELECT role FROM users WHERE id = ${session.id}
     `
 
@@ -229,7 +228,7 @@ export async function POST(request: Request) {
 
     // Log all admin actions
     const logAdminAction = async (actionType: string, details: object) => {
-      await sql`
+      await getSql()`
         INSERT INTO usage_logs (user_id, action, metadata)
         VALUES (${session.id}, ${`admin_${actionType}`}, ${JSON.stringify({ targetUserId: userId, ...details })})
       `
@@ -260,7 +259,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, message: `Added ${credits} credits` })
 
       case "reset_usage":
-        await sql`
+        await getSql()`
           UPDATE subscriptions
           SET messages_used = 0, daily_messages_used = 0, updated_at = NOW()
           WHERE user_id = ${userId}::uuid
@@ -269,7 +268,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, message: "Usage reset" })
 
       case "reset_spam":
-        await sql`
+        await getSql()`
           UPDATE rate_limits
           SET spam_score = 0
           WHERE user_id = ${userId}::uuid AND action = 'chat'
@@ -282,7 +281,7 @@ export async function POST(request: Request) {
         if (!["starter", "basic", "pro", "business", "enterprise"].includes(plan)) {
           return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
         }
-        await sql`
+        await getSql()`
           UPDATE subscriptions
           SET plan = ${plan}, messages_limit = ${messagesLimit || null}, updated_at = NOW()
           WHERE user_id = ${userId}::uuid
