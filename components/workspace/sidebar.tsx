@@ -342,6 +342,13 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                 <span>Deployments</span>
                 <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
               </Link>
+              <Link
+                href="/dashboard/settings/agent"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all bg-gradient-to-r from-cyan-500/5 to-purple-500/5 border border-cyan-500/10"
+              >
+                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent font-medium">Agent Mode</span>
+              </Link>
             </div>
           </div>
         </div>
