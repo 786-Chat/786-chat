@@ -649,8 +649,12 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                       ))}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                      <span className="text-xs text-cyan-400 font-medium">Agent is thinking...</span>
+                      <div className="relative w-4 h-4">
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 animate-spin" style={{ animationDuration: '1.5s' }} />
+                        <div className="absolute inset-0.5 rounded-full bg-[#14141f]" />
+                        <div className="absolute inset-1 rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 animate-pulse" />
+                      </div>
+                      <span className="text-xs font-medium bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">Agent is thinking...</span>
                     </div>
                     <button onClick={stop} className="p-1.5 rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-colors" title="Stop">
                       <StopCircle className="w-3.5 h-3.5" />
@@ -764,9 +768,13 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                 type="submit"
                 disabled={(!input.trim() && attachedFiles.length === 0) || isLoading}
                 size="icon"
-                className="h-8 w-8 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:bg-white/10 m-1.5 flex-shrink-0"
+                className="h-8 w-8 rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:from-cyan-400 hover:via-blue-400 hover:to-purple-400 disabled:opacity-30 disabled:bg-white/10 m-1.5 flex-shrink-0"
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
+                {isLoading ? (
+                  <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <ArrowUp className="w-4 h-4" />
+                )}
               </Button>
             </div>
             <p className="text-[10px] text-white/25 text-center mt-2">

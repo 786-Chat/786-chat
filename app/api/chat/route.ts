@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages, consumeStream, UIMessage } from "ai"
+import { streamText, convertToModelMessages, consumeStream, UIMessage, tool } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
 import { neon } from "@neondatabase/serverless"
 import { getSession } from "@/lib/auth"
@@ -8,6 +8,7 @@ import { AI_LIMITS, estimateTokens, type PlanType } from "@/lib/ai-limits"
 import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
+import { z } from "zod"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -278,14 +279,111 @@ export async function POST(request: Request) {
       )
     }
 
+    // Check if user has agent mode enabled (Pro+ plans)
+    const hasAgentMode = userPlan !== "starter" && userPlan !== "basic"
+    
+    // Define agent tools for Pro+ users
+    const agentTools = hasAgentMode ? {
+      read_file: tool({
+        description: "Read the contents of a file from the user's project",
+        parameters: z.object({
+          file_path: z.string().describe("The path to the file to read")
+        }),
+        execute: async ({ file_path }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/tools`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "read_file", params: { file_path } })
+          })
+          return await res.json()
+        }
+      }),
+      write_file: tool({
+        description: "Write or create a file in the user's project",
+        parameters: z.object({
+          file_path: z.string().describe("The path to write the file"),
+          content: z.string().describe("The content to write")
+        }),
+        execute: async ({ file_path, content }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/tools`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "write_file", params: { file_path, content } })
+          })
+          return await res.json()
+        }
+      }),
+      edit_file: tool({
+        description: "Edit a specific part of a file by replacing text",
+        parameters: z.object({
+          file_path: z.string().describe("The path to the file"),
+          old_text: z.string().describe("The text to find and replace"),
+          new_text: z.string().describe("The replacement text")
+        }),
+        execute: async ({ file_path, old_text, new_text }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/tools`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "edit_file", params: { file_path, old_text, new_text } })
+          })
+          return await res.json()
+        }
+      }),
+      list_files: tool({
+        description: "List files in a directory",
+        parameters: z.object({
+          directory: z.string().describe("The directory path to list")
+        }),
+        execute: async ({ directory }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/tools`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "list_files", params: { directory } })
+          })
+          return await res.json()
+        }
+      }),
+      search_code: tool({
+        description: "Search for text or patterns in the codebase",
+        parameters: z.object({
+          pattern: z.string().describe("The search pattern or text")
+        }),
+        execute: async ({ pattern }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/tools`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tool: "search_code", params: { pattern } })
+          })
+          return await res.json()
+        }
+      }),
+      deploy_site: tool({
+        description: "Deploy the user's site to production",
+        parameters: z.object({
+          message: z.string().optional().describe("Deployment commit message")
+        }),
+        execute: async ({ message }) => {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || ''}/api/agent/github`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "trigger_deploy", message })
+          })
+          return await res.json()
+        }
+      }),
+    } : undefined
+
     // Stream response from DeepSeek with dynamic settings
     const result = await streamText({
       model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-      system: aiSettings.systemPrompt,
+      system: hasAgentMode 
+        ? `${aiSettings.systemPrompt}\n\nYou are an AI agent with the ability to read, edit, and write files in the user's project. You can also deploy their site. When the user asks you to make changes to their code or website, use the available tools to do so. Always confirm what changes you made after completing them.`
+        : aiSettings.systemPrompt,
       messages: modelMessages,
       temperature: aiSettings.temperature,
       maxTokens: aiSettings.maxTokens,
       abortSignal: request.signal,
+      ...(agentTools ? { tools: agentTools, maxSteps: 10 } : {}),
     })
 
     return result.toUIMessageStreamResponse({
