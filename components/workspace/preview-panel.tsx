@@ -12,6 +12,9 @@ import {
   Check,
   Lock,
   CreditCard,
+  ChevronLeft,
+  ChevronRight,
+  RotateCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -50,12 +53,20 @@ export function WorkspacePreviewPanel({
   const [urlInput, setUrlInput] = useState(previewUrl || "")
   const [liveUrl, setLiveUrl] = useState(previewUrl || "")
   const [copied, setCopied] = useState(false)
+  const [currentPath, setCurrentPath] = useState("/")
 
   // Only update when previewUrl changes from outside (e.g. AI generates a project)
   useEffect(() => {
     if (previewUrl) {
       setLiveUrl(previewUrl)
       setUrlInput(previewUrl)
+      // Extract path from URL
+      try {
+        const url = new URL(previewUrl)
+        setCurrentPath(url.pathname || "/")
+      } catch {
+        setCurrentPath("/")
+      }
     }
   }, [previewUrl])
 
@@ -97,113 +108,95 @@ export function WorkspacePreviewPanel({
 
   return (
     <div className="relative glass-preview flex flex-col h-full overflow-hidden w-full max-w-full">
-      {/* Preview Header */}
-      <div className="h-10 border-b border-white/[0.06] flex items-center justify-between px-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
+      {/* v0-style URL Bar */}
+      <div className="h-10 border-b border-white/[0.08] flex items-center px-2 flex-shrink-0 bg-[#18181b]/80">
+        {/* Browser Controls */}
+        <div className="flex items-center gap-1 mr-2">
+          <div className="flex items-center gap-1.5 px-1">
+            <div className="w-3 h-3 rounded-full bg-[#ff5f57] hover:bg-[#ff5f57]/80 cursor-pointer" />
+            <div className="w-3 h-3 rounded-full bg-[#febc2e] hover:bg-[#febc2e]/80 cursor-pointer" />
+            <div className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28c840]/80 cursor-pointer" />
           </div>
-          <span className="text-[10px] text-white/30 ml-2">
-            {liveUrl ? currentDevice.label : previewHtml ? "Generated Preview" : currentDevice.label}
+          <div className="flex items-center gap-0.5 ml-2">
+            <button className="p-1 rounded hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button className="p-1 rounded hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        
+        {/* URL Input - v0 Style */}
+        <form onSubmit={handleUrlSubmit} className="flex-1 flex items-center">
+          <div className="flex-1 flex items-center h-7 bg-[#27272a] rounded-md border border-white/[0.08] hover:border-white/[0.12] focus-within:border-cyan-500/50 transition-colors">
+            <div className="flex items-center px-2 text-white/40">
+              <Globe className="w-3.5 h-3.5" />
+            </div>
+            <input
+              type="text"
+              value={urlInput || currentPath}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="Enter URL or path..."
+              className="flex-1 bg-transparent text-sm text-white/80 placeholder:text-white/30 outline-none h-full pr-2 font-mono"
+            />
+          </div>
+        </form>
+        
+        {/* Actions */}
+        <div className="flex items-center gap-1 ml-2">
+          <button
+            onClick={() => setRefreshKey(prev => prev + 1)}
+            className="p-1.5 rounded hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+            title="Refresh"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+          {liveUrl && (
+            <a
+              href={liveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded hover:bg-white/[0.06] text-white/40 hover:text-white/60 transition-colors"
+              title="Open in new tab"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Device Size Indicator */}
+      <div className="px-3 py-1.5 border-b border-white/[0.06] flex items-center justify-between bg-[#18181b]/40">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/40">
+            {previewHtml ? (viewMode === "code" ? "Code View" : "Live Preview") : currentDevice.label}
           </span>
           {frameDims && (
-            <span className="text-[10px] text-white/20">
+            <span className="text-[10px] text-white/25">
               {frameDims.width} x {frameDims.height}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
-            onClick={() => setRefreshKey(prev => prev + 1)}
-            title="Refresh"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </Button>
-          {liveUrl && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
-              onClick={() => window.open(liveUrl, "_blank")}
-              title="Open in new tab"
-            >
-              <ExternalLink className="w-3 h-3" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
-            onClick={onClose}
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        </div>
-      </div>
-
-      {/* URL Bar - Show different content based on what's being previewed */}
-      <div className="px-3 py-2 border-b border-white/[0.06]">
-        {previewHtml ? (
-          /* When showing generated code, display a label instead of URL input */
-          <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
-            <span className="text-[11px] text-cyan-400/80">
-              {viewMode === "code" ? "Generated Code" : "Live Preview"} - Your AI Generated Project
-            </span>
-          </div>
-        ) : (
-          /* When no generated code, show URL input for external sites */
-          <form onSubmit={handleUrlSubmit} className="flex items-center gap-2">
-            <div className="flex items-center flex-1 h-7 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5">
-              <Globe className="w-3 h-3 text-white/20 mr-2 flex-shrink-0" />
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="Enter your website URL to preview..."
-                className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none"
-              />
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* Device Quick Switch */}
-      <div className="px-3 py-1.5 border-b border-white/[0.06] flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-7 w-7",
-              device === "full"
-                ? "text-cyan-400 bg-cyan-500/10"
-                : "text-white/30 hover:text-white hover:bg-white/5"
-            )}
+          <button
             onClick={() => setDevice("full")}
-            title="Full size"
+            className={cn(
+              "p-1 rounded transition-colors",
+              device === "full" ? "bg-white/10 text-white/70" : "text-white/30 hover:text-white/50"
+            )}
           >
             <Monitor className="w-3.5 h-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
+          </button>
+          <button
+            onClick={() => setDevice("iphone14")}
             className={cn(
-              "h-7 w-7",
-              device !== "full"
-                ? "text-cyan-400 bg-cyan-500/10"
-                : "text-white/30 hover:text-white hover:bg-white/5"
+              "p-1 rounded transition-colors",
+              device === "iphone14" ? "bg-white/10 text-white/70" : "text-white/30 hover:text-white/50"
             )}
-            onClick={() => setDevice("iphone-17-pro")}
-            title="Mobile"
           >
             <Smartphone className="w-3.5 h-3.5" />
-          </Button>
+          </button>
         </div>
       </div>
 
