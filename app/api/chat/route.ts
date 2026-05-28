@@ -89,29 +89,36 @@ export async function POST(request: Request) {
       })
     }
 
-    // === GLOBAL BUDGET CHECK ===
-    const budgetStatus = await checkBudgetLimits()
-    if (budgetStatus.exceeded) {
-      return new Response(
-        JSON.stringify({
-          error: "SERVICE_UNAVAILABLE",
-          message: "AI service temporarily unavailable due to high demand. Please try again later.",
-        }),
-        { status: 503, headers: { "Content-Type": "application/json" } }
-      )
+    // Check if user is admin (skip all limits for admins)
+    const isUserAdmin = isAdmin(session.email)
+
+    // === GLOBAL BUDGET CHECK === (skip for admins)
+    if (!isUserAdmin) {
+      const budgetStatus = await checkBudgetLimits()
+      if (budgetStatus.exceeded) {
+        return new Response(
+          JSON.stringify({
+            error: "SERVICE_UNAVAILABLE",
+            message: "AI service temporarily unavailable due to high demand. Please try again later.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } }
+        )
+      }
     }
 
-    // === USER BALANCE CHECK ===
-    const balanceCheck = await canSendMessage(session.id)
-    if (!balanceCheck.allowed) {
-      return new Response(
-        JSON.stringify({
-          error: "INSUFFICIENT_BALANCE",
-          message: balanceCheck.reason || "Please top up your balance to continue.",
-          needsTopup: true,
-        }),
-        { status: 402, headers: { "Content-Type": "application/json" } }
-      )
+    // === USER BALANCE CHECK === (skip for admins)
+    if (!isUserAdmin) {
+      const balanceCheck = await canSendMessage(session.id)
+      if (!balanceCheck.allowed) {
+        return new Response(
+          JSON.stringify({
+            error: "INSUFFICIENT_BALANCE",
+            message: balanceCheck.reason || "Please top up your balance to continue.",
+            needsTopup: true,
+          }),
+          { status: 402, headers: { "Content-Type": "application/json" } }
+        )
+      }
     }
 
     const body = await request.json()
@@ -265,25 +272,26 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check user daily limit
-    const dailyLimit = await checkUserDailyLimit(session.id)
-    if (!dailyLimit.allowed) {
-      return new Response(
-        JSON.stringify({ 
-          error: "DAILY_LIMIT_REACHED", 
-          message: `You have reached your daily message limit (${dailyLimit.limit} messages). Please try again tomorrow.`,
-          used: dailyLimit.used,
-          limit: dailyLimit.limit
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } }
-      )
+    // Check user daily limit (skip for admins)
+    if (!isUserAdmin) {
+      const dailyLimit = await checkUserDailyLimit(session.id)
+      if (!dailyLimit.allowed) {
+        return new Response(
+          JSON.stringify({ 
+            error: "DAILY_LIMIT_REACHED", 
+            message: `You have reached your daily message limit (${dailyLimit.limit} messages). Please try again tomorrow.`,
+            used: dailyLimit.used,
+            limit: dailyLimit.limit
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        )
+      }
     }
 
     // Check if user has agent mode enabled (Pro+ plans)
     // For editing mujeebproai.com, only admins are allowed
     // Regular users can only edit their own projects
     const userEmail = session?.email || null
-    const isUserAdmin = isAdmin(userEmail)
     const hasAgentMode = (userPlan !== "starter" && userPlan !== "basic") || isUserAdmin
     
     // Define agent tools for Pro+ users
