@@ -1,6 +1,6 @@
 import { streamText, convertToModelMessages, consumeStream, UIMessage } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 import { checkAIProtection, recordUsage, withTimeout, type ProtectionResult } from "@/lib/ai-protection"
@@ -9,7 +9,6 @@ import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Create DeepSeek provider
 const deepseek = createDeepSeek({

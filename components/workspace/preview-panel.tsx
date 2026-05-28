@@ -90,9 +90,14 @@ export function WorkspacePreviewPanel({
   }
 
   return (
-    <div className="relative border-l border-white/[0.06] md:border-l-0 bg-[#0d0d14] flex flex-col h-full overflow-hidden w-full max-w-full">
+    <div 
+      className="relative flex flex-col h-full overflow-hidden w-full max-w-full backdrop-blur-xl border-l border-teal-500/20"
+      style={{ 
+        background: 'linear-gradient(180deg, rgba(20, 184, 166, 0.1) 0%, rgba(10, 20, 30, 0.98) 100%)',
+      }}
+    >
       {/* Preview Header */}
-      <div className="h-10 border-b border-white/[0.06] flex items-center justify-between px-3 flex-shrink-0">
+      <div className="h-10 border-b border-teal-500/20 flex items-center justify-between px-3 flex-shrink-0" style={{ background: 'rgba(20, 184, 166, 0.05)' }}>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />

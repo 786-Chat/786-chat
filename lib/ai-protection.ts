@@ -3,11 +3,10 @@
  * Handles rate limiting, spam detection, daily limits, and budget protection
  */
 
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { AI_LIMITS, getLimitsForPlan, estimateTokens, type PlanType } from "./ai-limits"
 import { checkBudgetLimits, trackAICost } from "./ai-spending"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export interface ProtectionResult {
   allowed: boolean

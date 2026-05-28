@@ -13,6 +13,8 @@ import {
   Globe,
   LayoutDashboard,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Monitor,
   Smartphone,
   Tablet,
@@ -178,6 +180,30 @@ export function WorkspaceTopBar({
           </Button>
 
           <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
+
+          {/* v0-style URL Bar */}
+          <div className="hidden md:flex items-center gap-2 flex-1 max-w-md mx-2">
+            {/* Traffic Lights */}
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-110 cursor-pointer" />
+              <div className="w-3 h-3 rounded-full bg-[#febc2e] hover:brightness-110 cursor-pointer" />
+              <div className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-110 cursor-pointer" />
+            </div>
+            {/* Navigation Arrows */}
+            <div className="flex items-center gap-0.5">
+              <button className="p-1 text-white/30 hover:text-white/60 transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button className="p-1 text-white/30 hover:text-white/60 transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            {/* URL Input */}
+            <div className="flex-1 flex items-center h-7 bg-white/[0.05] border border-white/[0.1] rounded-lg px-2.5">
+              <Globe className="w-3.5 h-3.5 text-white/30 mr-2" />
+              <span className="text-xs text-white/50">/</span>
+            </div>
+          </div>
         </div>
 
         {/* Center - Mobile View Switcher */}

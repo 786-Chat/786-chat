@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { addCredits } from "@/lib/ai-balance"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: Request) {
   try {

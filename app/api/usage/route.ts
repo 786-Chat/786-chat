@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get user's current usage
 export async function GET() {

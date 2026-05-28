@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Check if user is admin
 async function isAdmin(request: NextRequest): Promise<boolean> {

@@ -3,10 +3,9 @@
  * Track and manage AI costs per user, per day, per month
  */
 
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { AI_LIMITS, estimateMessageCost, usdToGbp } from "./ai-limits"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 export interface SpendingRecord {
   userId: string

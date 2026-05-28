@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server"
+import { stripe } from "@/lib/stripe"
 import Stripe from "stripe"
 import { completeTopup } from "@/lib/ai-balance"
-import { neon } from "@neondatabase/serverless"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-04-30.basil",
-})
-
-const sql = neon(process.env.DATABASE_URL!)
+import { sql } from "@/lib/db"
 
 export async function POST(request: Request) {
   const body = await request.text()

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
+import { stripe, getStripe } from "@/lib/stripe"
 import Stripe from "stripe"
 import bcrypt from "bcryptjs"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 // Generate a random password for manager
 function generatePassword(length = 12): string {

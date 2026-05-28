@@ -508,7 +508,12 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
   const canSendMessage = !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0a0a0f] relative">
+    <div 
+      className="flex-1 flex flex-col h-full relative backdrop-blur-xl border-r border-cyan-500/10"
+      style={{ 
+        background: 'linear-gradient(180deg, rgba(6, 182, 212, 0.08) 0%, rgba(10, 15, 30, 0.98) 100%)',
+      }}
+    >
       {/* Messages Area with proper scrolling */}
       <div className="flex-1 overflow-y-auto flex flex-col" style={{ scrollBehavior: 'smooth' }}>
         {messages.length === 0 ? (

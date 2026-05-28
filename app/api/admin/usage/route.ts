@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { getSystemSpendingReport, getSpendingByPlan, getTodaySpend, getMonthSpend } from "@/lib/ai-spending"
 import { unblockUser, blockUser, suspendUser, addExtraCredits } from "@/lib/ai-protection"
 import { AI_LIMITS } from "@/lib/ai-limits"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // GET - Get admin usage dashboard data
 export async function GET(request: Request) {

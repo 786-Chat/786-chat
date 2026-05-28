@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 import Stripe from "stripe"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // Get Stripe instance with key from database settings
 async function getStripe() {

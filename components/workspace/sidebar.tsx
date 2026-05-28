@@ -161,9 +161,12 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
         className={cn(
-          "flex-shrink-0 border-r border-white/[0.06] bg-[#0d0d14] flex flex-col overflow-hidden",
+          "flex-shrink-0 border-r border-purple-500/20 flex flex-col overflow-hidden backdrop-blur-xl",
           "md:relative fixed left-0 top-12 bottom-0 z-40"
         )}
+        style={{ 
+          background: 'linear-gradient(180deg, rgba(88, 28, 135, 0.15) 0%, rgba(15, 10, 35, 0.98) 100%)',
+        }}
       >
         <div className="w-[260px] h-full flex flex-col">
           {/* New Chat Button */}

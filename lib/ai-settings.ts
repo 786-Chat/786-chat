@@ -1,7 +1,6 @@
 import "server-only"
-import { neon } from "@neondatabase/serverless"
+import { sql } from "@/lib/db"
 
-const sql = neon(process.env.DATABASE_URL!)
 
 // DeepSeek pricing (per 1M tokens)
 export const DEEPSEEK_PRICING = {
