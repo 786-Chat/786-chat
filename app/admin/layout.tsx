@@ -33,7 +33,8 @@ import {
   UtensilsCrossed,
   Package,
   Share2,
-  Bot
+  Bot,
+  Gift
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,7 @@ const adminNavItems = [
   { href: "/admin/social-links", label: "Social Links", icon: Share2 },
   { href: "/admin/content", label: "Website Content", icon: FileText },
   { href: "/admin/pricing", label: "Pricing Plans", icon: DollarSign },
+  { href: "/admin/referrals", label: "Referrals", icon: Gift },
   { href: "/admin/seo", label: "SEO Settings", icon: Search },
   { href: "/admin/settings/stripe", label: "Stripe Integration", icon: CreditCard },
   { href: "/admin/settings", label: "Settings", icon: Settings },

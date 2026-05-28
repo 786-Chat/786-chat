@@ -10,6 +10,8 @@ import {
   Globe,
   Copy,
   Check,
+  Lock,
+  CreditCard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -26,6 +28,8 @@ interface PreviewPanelProps {
   previewHtml?: string
   viewMode?: "preview" | "code"
   onViewModeChange?: (mode: "preview" | "code") => void
+  hasPaidSubscription?: boolean
+  onUpgradeClick?: () => void
 }
 
 export function WorkspacePreviewPanel({
@@ -39,6 +43,8 @@ export function WorkspacePreviewPanel({
   previewHtml,
   viewMode = "preview",
   onViewModeChange,
+  hasPaidSubscription = false,
+  onUpgradeClick,
 }: PreviewPanelProps) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [urlInput, setUrlInput] = useState(previewUrl || "")
@@ -204,22 +210,47 @@ export function WorkspacePreviewPanel({
       {/* Preview Content */}
       <div className="flex-1 relative overflow-hidden bg-[#08080d] w-full max-w-full">
         {viewMode === "code" && previewHtml ? (
-          /* Code View - show the raw code */
-          <div className="absolute inset-0 overflow-auto">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
-              <span className="text-xs text-white/50">Generated Code</span>
-              <button
-                onClick={copyCode}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors"
-              >
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                {copied ? "Copied!" : "Copy"}
-              </button>
+          /* Code View - show paywall if not subscribed */
+          hasPaidSubscription ? (
+            <div className="absolute inset-0 overflow-auto">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
+                <span className="text-xs text-white/50">Generated Code</span>
+                <button
+                  onClick={copyCode}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors"
+                >
+                  {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
+                {previewHtml}
+              </pre>
             </div>
-            <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {previewHtml}
-            </pre>
-          </div>
+          ) : (
+            /* Paywall for code view */
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-[#0d0d14] to-[#08080d]">
+              <div className="text-center p-8 max-w-md">
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-r from-cyan-500/20 to-purple-500/20 flex items-center justify-center">
+                  <Lock className="w-8 h-8 text-cyan-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Unlock Code Access</h3>
+                <p className="text-white/50 mb-6">
+                  Subscribe to view and copy the generated code. Export your projects and deploy them anywhere.
+                </p>
+                <Button
+                  onClick={onUpgradeClick}
+                  className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white px-6"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Subscribe Now
+                </Button>
+                <p className="text-white/30 text-xs mt-4">
+                  Starting from £5 for 100 messages
+                </p>
+              </div>
+            </div>
+          )
         ) : previewHtml ? (
           /* AI-generated code preview - PRIORITIZE THIS over liveUrl */
           isFullSize ? (
