@@ -508,7 +508,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
   const canSendMessage = !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0a0a0f] relative">
+    <div className="flex-1 flex flex-col h-full glass-chat relative">
       {/* Messages Area with proper scrolling */}
       <div className="flex-1 overflow-y-auto flex flex-col" style={{ scrollBehavior: 'smooth' }}>
         {messages.length === 0 ? (

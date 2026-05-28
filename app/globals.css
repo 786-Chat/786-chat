@@ -64,6 +64,14 @@
   --glow-primary: oklch(0.7 0.2 230);
   --glow-cyan: oklch(0.75 0.18 195);
   --glow-purple: oklch(0.65 0.22 290);
+  
+  /* 3 Panel Glass Colors - Modern Purple/Green/Teal */
+  --panel-sidebar: oklch(0.08 0.04 290 / 0.85); /* Purple tint */
+  --panel-sidebar-border: oklch(0.35 0.12 290 / 0.4);
+  --panel-chat: oklch(0.06 0.03 180 / 0.9); /* Teal/Green tint */
+  --panel-chat-border: oklch(0.35 0.1 180 / 0.3);
+  --panel-preview: oklch(0.07 0.025 230 / 0.85); /* Blue tint */
+  --panel-preview-border: oklch(0.35 0.1 230 / 0.3);
 }
 
 .dark {
@@ -99,6 +107,14 @@
   --sidebar-accent-foreground: oklch(0.95 0 0);
   --sidebar-border: oklch(0.2 0.02 260 / 0.5);
   --sidebar-ring: oklch(0.7 0.2 230);
+  
+  /* 3 Panel Glass Colors - Dark Mode */
+  --panel-sidebar: oklch(0.08 0.04 290 / 0.85);
+  --panel-sidebar-border: oklch(0.35 0.12 290 / 0.4);
+  --panel-chat: oklch(0.06 0.03 180 / 0.9);
+  --panel-chat-border: oklch(0.35 0.1 180 / 0.3);
+  --panel-preview: oklch(0.07 0.025 230 / 0.85);
+  --panel-preview-border: oklch(0.35 0.1 230 / 0.3);
 }
 
 @theme inline {
@@ -140,6 +156,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Panel Colors */
+  --color-panel-sidebar: var(--panel-sidebar);
+  --color-panel-sidebar-border: var(--panel-sidebar-border);
+  --color-panel-chat: var(--panel-chat);
+  --color-panel-chat-border: var(--panel-chat-border);
+  --color-panel-preview: var(--panel-preview);
+  --color-panel-preview-border: var(--panel-preview-border);
 }
 
 @layer base {
@@ -209,6 +233,38 @@
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
   border: 1px solid oklch(0.3 0.03 260 / 0.4);
+}
+
+/* 3-Panel Glass Styles */
+.glass-sidebar {
+  background: linear-gradient(135deg, oklch(0.1 0.05 290 / 0.9), oklch(0.06 0.03 280 / 0.85));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid oklch(0.4 0.15 290 / 0.25);
+  box-shadow: 
+    inset 0 0 60px oklch(0.5 0.2 290 / 0.05),
+    0 0 40px oklch(0.5 0.2 290 / 0.08);
+}
+
+.glass-chat {
+  background: linear-gradient(180deg, oklch(0.07 0.035 175 / 0.92), oklch(0.05 0.025 185 / 0.88));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-left: 1px solid oklch(0.4 0.12 175 / 0.2);
+  border-right: 1px solid oklch(0.4 0.12 175 / 0.2);
+  box-shadow: 
+    inset 0 0 80px oklch(0.5 0.15 175 / 0.04),
+    0 0 30px oklch(0.5 0.15 180 / 0.05);
+}
+
+.glass-preview {
+  background: linear-gradient(135deg, oklch(0.08 0.03 230 / 0.9), oklch(0.05 0.02 240 / 0.85));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid oklch(0.4 0.12 230 / 0.2);
+  box-shadow: 
+    inset 0 0 60px oklch(0.5 0.18 230 / 0.05),
+    0 0 40px oklch(0.5 0.18 230 / 0.08);
 }
 
 /* Electric Glow Effects */

@@ -161,7 +161,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
         className={cn(
-          "flex-shrink-0 border-r border-white/[0.06] bg-[#0d0d14] flex flex-col overflow-hidden",
+          "flex-shrink-0 glass-sidebar flex flex-col overflow-hidden",
           "md:relative fixed left-0 top-12 bottom-0 z-40"
         )}
       >

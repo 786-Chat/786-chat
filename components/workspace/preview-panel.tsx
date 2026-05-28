@@ -96,7 +96,7 @@ export function WorkspacePreviewPanel({
   }
 
   return (
-    <div className="relative border-l border-white/[0.06] md:border-l-0 bg-[#0d0d14] flex flex-col h-full overflow-hidden w-full max-w-full">
+    <div className="relative glass-preview flex flex-col h-full overflow-hidden w-full max-w-full">
       {/* Preview Header */}
       <div className="h-10 border-b border-white/[0.06] flex items-center justify-between px-3 flex-shrink-0">
         <div className="flex items-center gap-2">
