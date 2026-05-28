@@ -2,9 +2,7 @@ import { NextResponse } from "next/server"
 import { getStripe } from "@/lib/stripe"
 import { completeTopup } from "@/lib/ai-balance"
 import { getSql } from "@/lib/db"
-
-  apiVersion: "2025-04-30.basil",
-})
+import Stripe from "stripe"
 
 
 export async function POST(request: Request) {

@@ -3,9 +3,6 @@ import { getStripe } from "@/lib/stripe"
 import { getSession } from "@/lib/auth"
 import { recordTopup } from "@/lib/ai-balance"
 
-  apiVersion: "2025-04-30.basil",
-})
-
 export async function POST(request: Request) {
   try {
     const session = await getSession()
