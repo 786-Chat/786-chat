@@ -9,6 +9,7 @@ import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
 import { z } from "zod"
+import { isAdmin } from "@/lib/admin-check"
 
 
 // Create DeepSeek provider
@@ -279,7 +280,11 @@ export async function POST(request: Request) {
     }
 
     // Check if user has agent mode enabled (Pro+ plans)
-    const hasAgentMode = userPlan !== "starter" && userPlan !== "basic"
+    // For editing mujeebproai.com, only admins are allowed
+    // Regular users can only edit their own projects
+    const userEmail = session?.email || null
+    const isUserAdmin = isAdmin(userEmail)
+    const hasAgentMode = (userPlan !== "starter" && userPlan !== "basic") || isUserAdmin
     
     // Define agent tools for Pro+ users
     const agentTools = hasAgentMode ? {

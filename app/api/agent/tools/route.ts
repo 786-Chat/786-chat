@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth"
 import { neon } from "@neondatabase/serverless"
 import { promises as fs } from "fs"
 import path from "path"
+import { isAdmin, canEditProject } from "@/lib/admin-check"
 
 // Lazy-load database connection
 function getDb() {

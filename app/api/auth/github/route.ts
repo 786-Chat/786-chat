@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"))
     }
 
-    const clientId = process.env.GITHUB_APP_CLIENT_ID
+    const clientId = process.env.GITHUB_CLIENT_ID
     if (!clientId) {
       return NextResponse.json({ error: "GitHub App not configured" }, { status: 500 })
     }
