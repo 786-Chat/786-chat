@@ -99,16 +99,11 @@ export function WorkspacePreviewPanel({
       {/* Preview Header */}
       <div className="h-10 border-b border-teal-500/20 flex items-center justify-between px-3 flex-shrink-0" style={{ background: 'rgba(20, 184, 166, 0.05)' }}>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-            <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
-          </div>
-          <span className="text-[10px] text-white/30 ml-2">
-            {liveUrl ? currentDevice.label : previewHtml ? "Generated Preview" : currentDevice.label}
+          <span className="text-[11px] text-white/50 font-medium">
+            {liveUrl ? currentDevice.label : previewHtml ? "Preview" : currentDevice.label}
           </span>
           {frameDims && (
-            <span className="text-[10px] text-white/20">
+            <span className="text-[10px] text-white/30">
               {frameDims.width} x {frameDims.height}
             </span>
           )}
