@@ -45,18 +45,19 @@ You have tools to:
 2. update_site_content - Change text, titles, descriptions
 3. get_current_site - Get the current site configuration
 
+IMPORTANT: All changes are AUTO-SAVED and AUTO-PUBLISHED instantly. The customer does NOT need to click any deploy/publish button.
+
 When the user asks to change something:
 1. Understand what they want to change
 2. Use the appropriate tool to make the change
-3. Explain what you changed
+3. Confirm the changes - they are ALREADY LIVE on their website!
 
-Be helpful, friendly, and creative. Suggest improvements when appropriate.
-Always confirm the changes you've made.`
+Be helpful, friendly, and creative. Suggest improvements when appropriate.`
 
     // Project-specific tools
     const projectTools = {
       update_site_config: tool({
-        description: "Update the site design configuration (colors, fonts, borders, etc.)",
+        description: "Update the site design configuration (colors, fonts, borders, etc.) - Changes go LIVE instantly",
         parameters: z.object({
           primaryColor: z.string().optional().describe("Primary brand color in hex format"),
           secondaryColor: z.string().optional().describe("Secondary color in hex format"),
@@ -70,15 +71,18 @@ Always confirm the changes you've made.`
             const currentConfig = site.site_config || {}
             const newConfig = { ...currentConfig, ...updates }
             
+            // Auto-save AND auto-publish - no button needed
             await sql`
               UPDATE customer_sites 
-              SET site_config = ${JSON.stringify(newConfig)}, updated_at = NOW()
+              SET site_config = ${JSON.stringify(newConfig)}, 
+                  is_published = true,
+                  updated_at = NOW()
               WHERE id = ${siteId}
             `
             
             return { 
               success: true, 
-              message: "Site configuration updated successfully",
+              message: "Changes saved and LIVE on your website!",
               changes: updates,
               newConfig
             }
@@ -89,9 +93,9 @@ Always confirm the changes you've made.`
       }),
 
       update_site_content: tool({
-        description: "Update the site content (text, titles, descriptions)",
+        description: "Update the site content (text, titles, descriptions) - Changes go LIVE instantly",
         parameters: z.object({
-          section: z.enum(["hero", "about", "contact", "footer"]).describe("Which section to update"),
+          section: z.enum(["hero", "about", "contact", "footer", "services", "testimonials"]).describe("Which section to update"),
           updates: z.record(z.string()).describe("Key-value pairs of content to update"),
         }),
         execute: async ({ section, updates }) => {
@@ -101,15 +105,18 @@ Always confirm the changes you've made.`
             const newSectionContent = { ...sectionContent, ...updates }
             const newContent = { ...currentContent, [section]: newSectionContent }
             
+            // Auto-save AND auto-publish - no button needed
             await sql`
               UPDATE customer_sites 
-              SET site_content = ${JSON.stringify(newContent)}, updated_at = NOW()
+              SET site_content = ${JSON.stringify(newContent)}, 
+                  is_published = true,
+                  updated_at = NOW()
               WHERE id = ${siteId}
             `
             
             return { 
               success: true, 
-              message: `${section} section updated successfully`,
+              message: `${section} section updated and LIVE on your website!`,
               changes: updates
             }
           } catch (error) {
@@ -139,31 +146,8 @@ Always confirm the changes you've made.`
         },
       }),
 
-      publish_site: tool({
-        description: "Publish or unpublish the site",
-        parameters: z.object({
-          publish: z.boolean().describe("True to publish, false to unpublish"),
-        }),
-        execute: async ({ publish }) => {
-          try {
-            await sql`
-              UPDATE customer_sites 
-              SET is_published = ${publish}, updated_at = NOW()
-              WHERE id = ${siteId}
-            `
-            
-            return { 
-              success: true, 
-              message: publish ? "Site is now live!" : "Site has been unpublished"
-            }
-          } catch (error) {
-            return { success: false, error: error instanceof Error ? error.message : "Failed to update publish status" }
-          }
-        },
-      }),
-
       add_feature: tool({
-        description: "Add a new feature to the features section",
+        description: "Add a new feature to the features section - Changes go LIVE instantly",
         parameters: z.object({
           title: z.string().describe("Feature title"),
           description: z.string().describe("Feature description"),
@@ -176,15 +160,18 @@ Always confirm the changes you've made.`
             features.push({ title, description, icon })
             const newContent = { ...currentContent, features }
             
+            // Auto-save AND auto-publish - no button needed
             await sql`
               UPDATE customer_sites 
-              SET site_content = ${JSON.stringify(newContent)}, updated_at = NOW()
+              SET site_content = ${JSON.stringify(newContent)}, 
+                  is_published = true,
+                  updated_at = NOW()
               WHERE id = ${siteId}
             `
             
             return { 
               success: true, 
-              message: `Feature "${title}" added successfully`
+              message: `Feature "${title}" added and LIVE on your website!`
             }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to add feature" }

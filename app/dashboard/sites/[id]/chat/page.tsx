@@ -17,7 +17,9 @@ import {
   Tablet,
   Smartphone,
   RefreshCw,
-  MessageSquare
+  MessageSquare,
+  Rocket,
+  CheckCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -48,6 +50,8 @@ export default function ProjectChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [previewKey, setPreviewKey] = useState(0)
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deploySuccess, setDeploySuccess] = useState(false)
 
   // Fetch site data
   const { data: siteData, mutate: mutateSite } = useSWR(
@@ -91,6 +95,28 @@ export default function ProjectChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Deploy/Publish function
+  const handleDeploy = async () => {
+    setIsDeploying(true)
+    setDeploySuccess(false)
+    try {
+      const response = await fetch(`/api/customer/sites/${siteId}/deploy`, {
+        method: "POST",
+        credentials: "include"
+      })
+      if (response.ok) {
+        setDeploySuccess(true)
+        mutateSite() // Refresh site data
+        // Reset success state after 3 seconds
+        setTimeout(() => setDeploySuccess(false), 3000)
+      }
+    } catch (error) {
+      console.error("Deploy failed:", error)
+    } finally {
+      setIsDeploying(false)
+    }
+  }
 
   // Handle textarea auto-resize
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -196,6 +222,37 @@ export default function ProjectChatPage() {
               </a>
             </Button>
           )}
+
+          {/* Deploy/Publish Button */}
+          <Button
+            size="sm"
+            onClick={handleDeploy}
+            disabled={isDeploying}
+            className={`h-7 text-xs ${
+              deploySuccess 
+                ? "bg-green-600 hover:bg-green-500" 
+                : site.is_published 
+                  ? "bg-orange-600 hover:bg-orange-500" 
+                  : "bg-cyan-600 hover:bg-cyan-500"
+            }`}
+          >
+            {isDeploying ? (
+              <>
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Deploying...
+              </>
+            ) : deploySuccess ? (
+              <>
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Deployed!
+              </>
+            ) : (
+              <>
+                <Rocket className="w-3 h-3 mr-1" />
+                {site.is_published ? "Republish" : "Publish"}
+              </>
+            )}
+          </Button>
         </div>
       </header>
 
