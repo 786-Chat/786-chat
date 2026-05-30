@@ -8,6 +8,8 @@ import { AI_LIMITS, estimateTokens, type PlanType } from "@/lib/ai-limits"
 import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
+import { isAdminUser } from "@/lib/admin-config"
+import { adminAgentTools } from "@/lib/agent-tools"
 
 
 // Create DeepSeek provider
@@ -87,20 +89,27 @@ export async function POST(request: Request) {
       })
     }
 
-    // === GLOBAL BUDGET CHECK ===
-    const budgetStatus = await checkBudgetLimits()
-    if (budgetStatus.exceeded) {
-      return new Response(
-        JSON.stringify({
-          error: "SERVICE_UNAVAILABLE",
-          message: "AI service temporarily unavailable due to high demand. Please try again later.",
-        }),
-        { status: 503, headers: { "Content-Type": "application/json" } }
-      )
+    // Check if admin user - skip all limits for admin
+    const isAdminRequest = isAdminUser(session.email)
+
+    // === GLOBAL BUDGET CHECK (skip for admin) ===
+    if (!isAdminRequest) {
+      const budgetStatus = await checkBudgetLimits()
+      if (budgetStatus.exceeded) {
+        return new Response(
+          JSON.stringify({
+            error: "SERVICE_UNAVAILABLE",
+            message: "AI service temporarily unavailable due to high demand. Please try again later.",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json" } }
+        )
+      }
     }
 
-    // === USER BALANCE CHECK ===
-    const balanceCheck = await canSendMessage(session.id)
+    // === USER BALANCE CHECK (skip for admin) ===
+    const balanceCheck = isAdminRequest 
+      ? { allowed: true, usingFreeMessage: false, messageCost: 0 }
+      : await canSendMessage(session.id)
     if (!balanceCheck.allowed) {
       return new Response(
         JSON.stringify({
@@ -263,27 +272,58 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check user daily limit
-    const dailyLimit = await checkUserDailyLimit(session.id)
-    if (!dailyLimit.allowed) {
-      return new Response(
-        JSON.stringify({ 
-          error: "DAILY_LIMIT_REACHED", 
-          message: `You have reached your daily message limit (${dailyLimit.limit} messages). Please try again tomorrow.`,
-          used: dailyLimit.used,
-          limit: dailyLimit.limit
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } }
-      )
+    // Check user daily limit (skip for admin)
+    if (!isAdminRequest) {
+      const dailyLimit = await checkUserDailyLimit(session.id)
+      if (!dailyLimit.allowed) {
+        return new Response(
+          JSON.stringify({ 
+            error: "DAILY_LIMIT_REACHED", 
+            message: `You have reached your daily message limit (${dailyLimit.limit} messages). Please try again tomorrow.`,
+            used: dailyLimit.used,
+            limit: dailyLimit.limit
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } }
+        )
+      }
     }
 
-    // Stream response from DeepSeek with dynamic settings
+    // Check if user is admin (for AI model selection)
+    const isAdmin = isAdminRequest
+
+    // Admin system prompt with agent capabilities
+    const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS.
+
+You have access to powerful tools to manage the MujeebProAI website:
+- read_file: Read any file from the codebase
+- write_file: Create or update files (auto-deploys to production)
+- delete_file: Remove files from the codebase
+- list_files: Browse directory contents
+- search_code: Find code patterns
+- get_database_info: View database structure
+- query_database: Run SELECT queries
+
+When the admin asks to change the website:
+1. First read the relevant files to understand the current code
+2. Make the changes using write_file
+3. Explain what you changed
+
+All changes auto-deploy to mujeebproai.com within 1-2 minutes.
+
+Be helpful, precise, and always confirm before making major changes.`
+
+    // Stream response - use different model based on admin status
     const result = await streamText({
-      model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-      system: aiSettings.systemPrompt,
+      // Admin uses Vercel AI Gateway (Claude), customers use DeepSeek
+      model: isAdmin 
+        ? "anthropic/claude-sonnet-4" as any
+        : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+      system: isAdmin ? adminSystemPrompt : aiSettings.systemPrompt,
       messages: modelMessages,
-      temperature: aiSettings.temperature,
-      maxTokens: aiSettings.maxTokens,
+      temperature: isAdmin ? 0.7 : aiSettings.temperature,
+      maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
+      // Only provide tools for admin
+      ...(isAdmin && { tools: adminAgentTools, maxSteps: 10 }),
       abortSignal: request.signal,
     })
 
