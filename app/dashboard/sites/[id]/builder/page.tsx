@@ -229,6 +229,28 @@ export default function SiteBuilderPage() {
     }
   }
 
+  // Deploy/Publish function
+  const handleDeploy = async () => {
+    if (!site) return
+    setIsDeploying(true)
+    setDeploySuccess(false)
+    try {
+      const response = await fetch(`/api/customer/sites/${params.id}/deploy`, {
+        method: "POST",
+        credentials: "include"
+      })
+      if (response.ok) {
+        setDeploySuccess(true)
+        setSite({ ...site, is_published: true })
+        setTimeout(() => setDeploySuccess(false), 3000)
+      }
+    } catch (error) {
+      console.error("Deploy failed:", error)
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   const updateConfig = (key: keyof SiteConfig, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }))
     triggerAutoSave() // Auto-save after change
@@ -331,6 +353,37 @@ export default function SiteBuilderPage() {
           )}
 
           <div className="h-6 w-px bg-border" />
+
+          {/* Deploy/Publish Button */}
+          <Button
+            size="sm"
+            onClick={handleDeploy}
+            disabled={isDeploying}
+            className={`${
+              deploySuccess 
+                ? "bg-green-600 hover:bg-green-500 text-white" 
+                : site.is_published 
+                  ? "bg-orange-600 hover:bg-orange-500 text-white" 
+                  : "bg-cyan-600 hover:bg-cyan-500 text-white"
+            }`}
+          >
+            {isDeploying ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Deploying...
+              </>
+            ) : deploySuccess ? (
+              <>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Deployed!
+              </>
+            ) : (
+              <>
+                <Rocket className="w-4 h-4 mr-2" />
+                {site.is_published ? "Republish" : "Publish"}
+              </>
+            )}
+          </Button>
 
           {/* Preview Button - always show since auto-published */}
           <Button size="sm" variant="outline" asChild>
