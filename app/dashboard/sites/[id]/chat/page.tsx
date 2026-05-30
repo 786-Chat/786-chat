@@ -52,6 +52,7 @@ export default function ProjectChatPage() {
   const [previewKey, setPreviewKey] = useState(0)
   const [isDeploying, setIsDeploying] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false) // Track when AI makes changes
 
   // Fetch site data
   const { data: siteData, mutate: mutateSite } = useSWR(
@@ -82,6 +83,8 @@ export default function ProjectChatPage() {
       mutateSite()
       // Refresh preview
       setPreviewKey(prev => prev + 1)
+      // Mark that changes were made - needs republish
+      setHasChanges(true)
     }
   })
 
@@ -107,6 +110,7 @@ export default function ProjectChatPage() {
       })
       if (response.ok) {
         setDeploySuccess(true)
+        setHasChanges(false) // Reset changes after successful deploy
         mutateSite() // Refresh site data
         // Reset success state after 3 seconds
         setTimeout(() => setDeploySuccess(false), 3000)
@@ -231,9 +235,11 @@ export default function ProjectChatPage() {
             className={`h-7 text-xs ${
               deploySuccess 
                 ? "bg-green-600 hover:bg-green-500" 
-                : site.is_published 
-                  ? "bg-orange-600 hover:bg-orange-500" 
-                  : "bg-cyan-600 hover:bg-cyan-500"
+                : hasChanges
+                  ? "bg-orange-600 hover:bg-orange-500 animate-pulse" 
+                  : site.is_published 
+                    ? "bg-gray-600 hover:bg-gray-500" 
+                    : "bg-cyan-600 hover:bg-cyan-500"
             }`}
           >
             {isDeploying ? (
@@ -246,10 +252,15 @@ export default function ProjectChatPage() {
                 <CheckCircle className="w-3 h-3 mr-1" />
                 Deployed!
               </>
+            ) : hasChanges ? (
+              <>
+                <Rocket className="w-3 h-3 mr-1" />
+                Republish Changes
+              </>
             ) : (
               <>
                 <Rocket className="w-3 h-3 mr-1" />
-                {site.is_published ? "Republish" : "Publish"}
+                {site.is_published ? "Published" : "Publish"}
               </>
             )}
           </Button>

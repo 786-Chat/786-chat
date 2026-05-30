@@ -138,6 +138,7 @@ export default function SiteBuilderPage() {
   const [copied, setCopied] = useState(false)
   const [isDeploying, setIsDeploying] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false) // Track unsaved changes
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -242,6 +243,7 @@ export default function SiteBuilderPage() {
       if (response.ok) {
         setDeploySuccess(true)
         setSite({ ...site, is_published: true })
+        setHasChanges(false) // Reset changes after successful deploy
         setTimeout(() => setDeploySuccess(false), 3000)
       }
     } catch (error) {
@@ -253,6 +255,7 @@ export default function SiteBuilderPage() {
 
   const updateConfig = (key: keyof SiteConfig, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }))
+    setHasChanges(true) // Mark as having changes
     triggerAutoSave() // Auto-save after change
   }
 
@@ -264,6 +267,7 @@ export default function SiteBuilderPage() {
         [key]: value
       }
     }))
+    setHasChanges(true) // Mark as having changes
     triggerAutoSave() // Auto-save after change
   }
 
@@ -362,9 +366,11 @@ export default function SiteBuilderPage() {
             className={`${
               deploySuccess 
                 ? "bg-green-600 hover:bg-green-500 text-white" 
-                : site.is_published 
-                  ? "bg-orange-600 hover:bg-orange-500 text-white" 
-                  : "bg-cyan-600 hover:bg-cyan-500 text-white"
+                : hasChanges
+                  ? "bg-orange-600 hover:bg-orange-500 text-white animate-pulse" 
+                  : site.is_published 
+                    ? "bg-gray-600 hover:bg-gray-500 text-white" 
+                    : "bg-cyan-600 hover:bg-cyan-500 text-white"
             }`}
           >
             {isDeploying ? (
@@ -377,10 +383,15 @@ export default function SiteBuilderPage() {
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Deployed!
               </>
+            ) : hasChanges ? (
+              <>
+                <Rocket className="w-4 h-4 mr-2" />
+                Republish Changes
+              </>
             ) : (
               <>
                 <Rocket className="w-4 h-4 mr-2" />
-                {site.is_published ? "Republish" : "Publish"}
+                {site.is_published ? "Published" : "Publish"}
               </>
             )}
           </Button>
