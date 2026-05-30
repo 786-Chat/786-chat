@@ -396,11 +396,11 @@ Focus on helping customers:
       list_files: tool({
         description: "List files and directories in a path",
         parameters: z.object({
-          path: z.string().default("").describe("Directory path to list, empty for root"),
+          path: z.string().optional().describe("Directory path to list, leave empty for root"),
         }),
         execute: async ({ path }) => {
           try {
-            const files = await github.listFiles(path)
+            const files = await github.listFiles(path || "")
             return { success: true, files }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to list files" }
@@ -425,7 +425,9 @@ Focus on helping customers:
 
       get_database_info: tool({
         description: "Get information about the database tables and structure",
-        parameters: z.object({}),
+        parameters: z.object({
+          includeColumns: z.boolean().optional().describe("Whether to include column details"),
+        }),
         execute: async () => {
           try {
             const tables = await sql`
