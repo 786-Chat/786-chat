@@ -58,7 +58,7 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
     const projectTools = {
       update_site_config: tool({
         description: "Update the site design configuration (colors, fonts, borders, etc.) - Changes go LIVE instantly",
-        parameters: z.object({
+        inputSchema: z.object({
           primaryColor: z.string().optional().describe("Primary brand color in hex format"),
           secondaryColor: z.string().optional().describe("Secondary color in hex format"),
           backgroundColor: z.string().optional().describe("Background color in hex format"),
@@ -94,7 +94,7 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
 
       update_site_content: tool({
         description: "Update the site content (text, titles, descriptions) - Changes go LIVE instantly",
-        parameters: z.object({
+        inputSchema: z.object({
           section: z.enum(["hero", "about", "contact", "footer", "services", "testimonials"]).describe("Which section to update"),
           updates: z.record(z.string()).describe("Key-value pairs of content to update"),
         }),
@@ -127,7 +127,9 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
 
       get_current_site: tool({
         description: "Get the current site configuration and content",
-        parameters: z.object({}),
+        inputSchema: z.object({
+          dummy: z.boolean().optional().describe("Unused parameter"),
+        }),
         execute: async () => {
           const currentSite = await sql`
             SELECT site_config, site_content, site_name, subdomain, is_published
@@ -148,16 +150,16 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
 
       add_feature: tool({
         description: "Add a new feature to the features section - Changes go LIVE instantly",
-        parameters: z.object({
+        inputSchema: z.object({
           title: z.string().describe("Feature title"),
           description: z.string().describe("Feature description"),
-          icon: z.string().default("star").describe("Icon name (star, zap, shield, heart, etc.)"),
+          icon: z.string().optional().describe("Icon name (star, zap, shield, heart, etc.)"),
         }),
         execute: async ({ title, description, icon }) => {
           try {
             const currentContent = site.site_content || {}
             const features = currentContent.features || []
-            features.push({ title, description, icon })
+            features.push({ title, description, icon: icon || "star" })
             const newContent = { ...currentContent, features }
             
             // Auto-save AND auto-publish - no button needed

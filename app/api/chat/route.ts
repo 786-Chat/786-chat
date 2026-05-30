@@ -343,7 +343,7 @@ Focus on helping customers:
     const adminTools = {
       read_file: tool({
         description: "Read the contents of a file from the MujeebProAI codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path relative to the repo root, e.g., 'app/page.tsx' or 'components/header.tsx'"),
         }),
         execute: async ({ path }) => {
@@ -358,7 +358,7 @@ Focus on helping customers:
 
       write_file: tool({
         description: "Create or update a file in the MujeebProAI codebase. Changes auto-deploy to production.",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path relative to repo root"),
           content: z.string().describe("The complete file content to write"),
           message: z.string().describe("Commit message describing the change"),
@@ -379,7 +379,7 @@ Focus on helping customers:
 
       delete_file: tool({
         description: "Delete a file from the MujeebProAI codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path to delete"),
           message: z.string().describe("Commit message explaining why the file is being deleted"),
         }),
@@ -395,7 +395,7 @@ Focus on helping customers:
 
       list_files: tool({
         description: "List files and directories in a path",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().optional().describe("Directory path to list, leave empty for root"),
         }),
         execute: async ({ path }) => {
@@ -410,7 +410,7 @@ Focus on helping customers:
 
       search_code: tool({
         description: "Search for code patterns in the codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe("Search query - can be code, function names, text, etc."),
         }),
         execute: async ({ query }) => {
@@ -425,7 +425,7 @@ Focus on helping customers:
 
       get_database_info: tool({
         description: "Get information about the database tables and structure",
-        parameters: z.object({
+        inputSchema: z.object({
           includeColumns: z.boolean().optional().describe("Whether to include column details"),
         }),
         execute: async () => {
@@ -445,7 +445,7 @@ Focus on helping customers:
 
       query_database: tool({
         description: "Run a SELECT query on the database (read-only, no modifications)",
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe("SQL SELECT query to run"),
         }),
         execute: async ({ query: sqlQuery }) => {
@@ -465,10 +465,8 @@ Focus on helping customers:
 
     // Stream response - use different model based on admin status
     const result = await streamText({
-      // Admin uses Vercel AI Gateway (OpenAI - included free), customers use DeepSeek
-      model: isAdmin 
-        ? "openai/gpt-4.1" as any
-        : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+      // Admin uses DeepSeek (same as customers for now - tools work better)
+      model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
       system: isAdmin ? adminSystemPrompt : userSystemPrompt,
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
