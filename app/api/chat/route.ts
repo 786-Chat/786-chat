@@ -343,7 +343,7 @@ Focus on helping customers:
     const adminTools = {
       read_file: tool({
         description: "Read the contents of a file from the MujeebProAI codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path relative to the repo root, e.g., 'app/page.tsx' or 'components/header.tsx'"),
         }),
         execute: async ({ path }) => {
@@ -358,7 +358,7 @@ Focus on helping customers:
 
       write_file: tool({
         description: "Create or update a file in the MujeebProAI codebase. Changes auto-deploy to production.",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path relative to repo root"),
           content: z.string().describe("The complete file content to write"),
           message: z.string().describe("Commit message describing the change"),
@@ -379,7 +379,7 @@ Focus on helping customers:
 
       delete_file: tool({
         description: "Delete a file from the MujeebProAI codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           path: z.string().describe("The file path to delete"),
           message: z.string().describe("Commit message explaining why the file is being deleted"),
         }),
@@ -395,12 +395,12 @@ Focus on helping customers:
 
       list_files: tool({
         description: "List files and directories in a path",
-        parameters: z.object({
-          path: z.string().default("").describe("Directory path to list, empty for root"),
+        inputSchema: z.object({
+          path: z.string().optional().describe("Directory path to list, leave empty for root"),
         }),
         execute: async ({ path }) => {
           try {
-            const files = await github.listFiles(path)
+            const files = await github.listFiles(path || "")
             return { success: true, files }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to list files" }
@@ -410,7 +410,7 @@ Focus on helping customers:
 
       search_code: tool({
         description: "Search for code patterns in the codebase",
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe("Search query - can be code, function names, text, etc."),
         }),
         execute: async ({ query }) => {
@@ -425,7 +425,9 @@ Focus on helping customers:
 
       get_database_info: tool({
         description: "Get information about the database tables and structure",
-        parameters: z.object({}),
+        inputSchema: z.object({
+          includeColumns: z.boolean().optional().describe("Whether to include column details"),
+        }),
         execute: async () => {
           try {
             const tables = await sql`
@@ -443,7 +445,7 @@ Focus on helping customers:
 
       query_database: tool({
         description: "Run a SELECT query on the database (read-only, no modifications)",
-        parameters: z.object({
+        inputSchema: z.object({
           query: z.string().describe("SQL SELECT query to run"),
         }),
         execute: async ({ query: sqlQuery }) => {
@@ -463,10 +465,8 @@ Focus on helping customers:
 
     // Stream response - use different model based on admin status
     const result = await streamText({
-      // Admin uses Vercel AI Gateway (OpenAI - included free), customers use DeepSeek
-      model: isAdmin 
-        ? "openai/gpt-4.1" as any
-        : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+      // Admin uses DeepSeek (same as customers for now - tools work better)
+      model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
       system: isAdmin ? adminSystemPrompt : userSystemPrompt,
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
@@ -640,6 +640,58 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[Chat API] Get chats error:", error)
     return new Response(JSON.stringify({ error: "Failed to get chats" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+}
+
+// Delete a chat
+export async function DELETE(request: Request) {
+  try {
+    const session = await getSession()
+
+    if (!session) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const chatId = searchParams.get("chatId")
+
+    if (!chatId) {
+      return new Response(JSON.stringify({ error: "Chat ID required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // First verify the chat belongs to this user
+    const chat = await sql`
+      SELECT id FROM chats WHERE id = ${chatId} AND user_id = ${session.id}
+    `
+
+    if (chat.length === 0) {
+      return new Response(JSON.stringify({ error: "Chat not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Delete messages first (foreign key constraint)
+    await sql`DELETE FROM messages WHERE chat_id = ${chatId}`
+    
+    // Then delete the chat
+    await sql`DELETE FROM chats WHERE id = ${chatId} AND user_id = ${session.id}`
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("[Chat API] Delete chat error:", error)
+    return new Response(JSON.stringify({ error: "Failed to delete chat" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })

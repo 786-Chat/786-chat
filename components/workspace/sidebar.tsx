@@ -121,6 +121,29 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     if (window.innerWidth < 768) onClose()
   }
 
+  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent loading the chat when clicking delete
+    if (!confirm("Are you sure you want to delete this chat?")) return
+    
+    try {
+      const response = await fetch(`/api/chat?chatId=${chatId}`, {
+        method: "DELETE",
+        credentials: "include"
+      })
+      
+      if (response.ok) {
+        // Remove from local state
+        setChatHistory(prev => prev.filter(c => c.id !== chatId))
+        // If we deleted the current chat, start a new one
+        if (currentChatId === chatId) {
+          startNewChat()
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete chat:", error)
+    }
+  }
+
   const filteredChats = chatHistory.filter(chat =>
     chat.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -264,6 +287,10 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                   >
                     <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="truncate flex-1">{chat.title}</span>
+                    <Trash2 
+                      className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
+                      onClick={(e) => deleteChat(chat.id, e)}
+                    />
                   </button>
                 ))}
               </div>
@@ -285,6 +312,10 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                   >
                     <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="truncate flex-1">{chat.title}</span>
+                    <Trash2 
+                      className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
+                      onClick={(e) => deleteChat(chat.id, e)}
+                    />
                   </button>
                 ))}
               </div>
