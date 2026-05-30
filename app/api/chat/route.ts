@@ -1,5 +1,6 @@
-import { streamText, convertToModelMessages, consumeStream, UIMessage } from "ai"
+import { streamText, convertToModelMessages, consumeStream, UIMessage, tool } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
+import { z } from "zod"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
@@ -9,6 +10,7 @@ import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
 import { isAdminUser } from "@/lib/admin-config"
+import * as github from "@/lib/github-api"
 
 
 // Create DeepSeek provider
@@ -323,6 +325,128 @@ If they ask to change, modify, or fix the MujeebProAI project/website, politely 
 "Changes to the MujeebProAI project can only be made by the admin (mujeeb@job4u.com). 
 Please contact the admin if you need any changes to the website."`
 
+    // Admin tools for file operations (only available to admin)
+    const adminTools = {
+      read_file: tool({
+        description: "Read the contents of a file from the MujeebProAI codebase",
+        parameters: z.object({
+          path: z.string().describe("The file path relative to the repo root, e.g., 'app/page.tsx' or 'components/header.tsx'"),
+        }),
+        execute: async ({ path }) => {
+          try {
+            const { content } = await github.readFile(path)
+            return { success: true, content, path }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to read file" }
+          }
+        },
+      }),
+
+      write_file: tool({
+        description: "Create or update a file in the MujeebProAI codebase. Changes auto-deploy to production.",
+        parameters: z.object({
+          path: z.string().describe("The file path relative to repo root"),
+          content: z.string().describe("The complete file content to write"),
+          message: z.string().describe("Commit message describing the change"),
+        }),
+        execute: async ({ path, content, message }) => {
+          try {
+            const result = await github.writeFile(path, content, message)
+            return { 
+              success: true, 
+              message: `File ${path} updated successfully. Changes will deploy in 1-2 minutes.`,
+              sha: result.sha 
+            }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to write file" }
+          }
+        },
+      }),
+
+      delete_file: tool({
+        description: "Delete a file from the MujeebProAI codebase",
+        parameters: z.object({
+          path: z.string().describe("The file path to delete"),
+          message: z.string().describe("Commit message explaining why the file is being deleted"),
+        }),
+        execute: async ({ path, message }) => {
+          try {
+            await github.deleteFile(path, message)
+            return { success: true, message: `File ${path} deleted successfully.` }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to delete file" }
+          }
+        },
+      }),
+
+      list_files: tool({
+        description: "List files and directories in a path",
+        parameters: z.object({
+          path: z.string().default("").describe("Directory path to list, empty for root"),
+        }),
+        execute: async ({ path }) => {
+          try {
+            const files = await github.listFiles(path)
+            return { success: true, files }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to list files" }
+          }
+        },
+      }),
+
+      search_code: tool({
+        description: "Search for code patterns in the codebase",
+        parameters: z.object({
+          query: z.string().describe("Search query - can be code, function names, text, etc."),
+        }),
+        execute: async ({ query }) => {
+          try {
+            const results = await github.searchCode(query)
+            return { success: true, results }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to search" }
+          }
+        },
+      }),
+
+      get_database_info: tool({
+        description: "Get information about the database tables and structure",
+        parameters: z.object({}),
+        execute: async () => {
+          try {
+            const tables = await sql`
+              SELECT table_name 
+              FROM information_schema.tables 
+              WHERE table_schema = 'public'
+              ORDER BY table_name
+            `
+            return { success: true, tables: tables.map(t => t.table_name) }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to get database info" }
+          }
+        },
+      }),
+
+      query_database: tool({
+        description: "Run a SELECT query on the database (read-only, no modifications)",
+        parameters: z.object({
+          query: z.string().describe("SQL SELECT query to run"),
+        }),
+        execute: async ({ query: sqlQuery }) => {
+          // Only allow SELECT queries for safety
+          if (!sqlQuery.trim().toLowerCase().startsWith("select")) {
+            return { success: false, error: "Only SELECT queries are allowed" }
+          }
+          try {
+            const result = await sql.unsafe(sqlQuery)
+            return { success: true, rows: result.slice(0, 100), totalRows: result.length }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : "Query failed" }
+          }
+        },
+      }),
+    }
+
     // Stream response - use different model based on admin status
     const result = await streamText({
       // Admin uses Vercel AI Gateway (OpenAI - included free), customers use DeepSeek
@@ -333,8 +457,9 @@ Please contact the admin if you need any changes to the website."`
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
       maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-      // Note: Tools disabled temporarily due to schema compatibility issues
-      // Will be re-enabled when GitHub token is configured for full agent mode
+      // Enable tools for admin users only
+      tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
+      maxSteps: isAdmin ? 10 : undefined, // Allow multiple tool calls for admin
       abortSignal: request.signal,
     })
 
