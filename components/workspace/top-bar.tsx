@@ -432,16 +432,8 @@ export function WorkspaceTopBar({
                 <span className="text-xs text-white font-medium">MujeebProAI</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-white/60">Framework</span>
-                <span className="text-xs text-white font-medium">Next.js 16</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/60">Region</span>
-                <span className="text-xs text-white font-medium">Auto (Edge)</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/60">Database</span>
-                <span className="text-xs text-white font-medium">Neon PostgreSQL</span>
+                <span className="text-xs text-white/60">Status</span>
+                <span className="text-xs text-green-400 font-medium">Ready to deploy</span>
               </div>
             </div>
             <Button

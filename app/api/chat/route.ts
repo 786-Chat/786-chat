@@ -9,7 +9,6 @@ import { checkBudgetLimits } from "@/lib/ai-spending"
 import { canSendMessage, deductMessageCost, getUserBalance, getPricingSettings } from "@/lib/ai-balance"
 import { getAISettings, trackUsage, checkUserDailyLimit, type DeepSeekModel } from "@/lib/ai-settings"
 import { isAdminUser } from "@/lib/admin-config"
-import { adminAgentTools } from "@/lib/agent-tools"
 
 
 // Create DeepSeek provider
@@ -322,8 +321,8 @@ Be helpful, precise, and always confirm before making major changes.`
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
       maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-      // Only provide tools for admin
-      ...(isAdmin && { tools: adminAgentTools, maxSteps: 10 }),
+      // Note: Tools disabled temporarily due to schema compatibility issues
+      // Will be re-enabled when GitHub token is configured for full agent mode
       abortSignal: request.signal,
     })
 
