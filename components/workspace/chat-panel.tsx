@@ -626,36 +626,53 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                 )
               })}
 
-              {/* Enhanced Thinking Animation */}
+              {/* Enhanced Colorful Thinking Animation */}
               {isLoading && messages.length > 0 && messages[messages.length - 1]?.role === "user" && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center mt-1 relative">
-                    <Bot className="w-3.5 h-3.5 text-white" />
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center mt-1 relative overflow-hidden">
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400"
+                      animate={{ x: ["-100%", "100%"] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                    />
+                    <Bot className="w-3.5 h-3.5 text-white relative z-10" />
                     {/* Pulsing ring animation */}
-                    <div className="absolute inset-0 rounded-lg bg-cyan-500/30 animate-ping" />
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-500/30 to-purple-500/30 animate-ping" />
                   </div>
-                  <div className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-3">
-                    {/* Animated dots */}
+                  <div className="bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 border border-cyan-500/20 rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-3">
+                    {/* Animated colorful dots */}
                     <div className="flex gap-1.5">
-                      {[0, 1, 2].map((i) => (
+                      {[
+                        { color: "bg-cyan-400", delay: 0 },
+                        { color: "bg-purple-400", delay: 0.15 },
+                        { color: "bg-pink-400", delay: 0.3 },
+                      ].map((dot, i) => (
                         <motion.span
                           key={i}
-                          className="w-2 h-2 bg-cyan-400 rounded-full"
+                          className={`w-2 h-2 ${dot.color} rounded-full`}
                           animate={{
                             y: [0, -6, 0],
+                            scale: [1, 1.2, 1],
                             opacity: [0.5, 1, 0.5],
                           }}
                           transition={{
                             duration: 0.8,
                             repeat: Infinity,
-                            delay: i * 0.15,
+                            delay: dot.delay,
                           }}
                         />
                       ))}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                      <span className="text-xs text-cyan-400 font-medium">Agent is thinking...</span>
+                      <motion.div
+                        animate={{ rotate: [0, 360] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      </motion.div>
+                      <span className="text-xs bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent font-medium">
+                        AI is thinking...
+                      </span>
                     </div>
                     <button onClick={stop} className="p-1.5 rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-colors" title="Stop">
                       <StopCircle className="w-3.5 h-3.5" />
@@ -769,9 +786,23 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                 type="submit"
                 disabled={(!input.trim() && attachedFiles.length === 0) || isLoading}
                 size="icon"
-                className="h-8 w-8 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:bg-white/10 m-1.5 flex-shrink-0"
+                className={cn(
+                  "h-8 w-8 rounded-xl m-1.5 flex-shrink-0 transition-all duration-300",
+                  isLoading 
+                    ? "bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 animate-pulse" 
+                    : "bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:bg-white/10"
+                )}
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
+                {isLoading ? (
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  >
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </motion.div>
+                ) : (
+                  <ArrowUp className="w-4 h-4" />
+                )}
               </Button>
             </div>
             <p className="text-[10px] text-white/25 text-center mt-2">
