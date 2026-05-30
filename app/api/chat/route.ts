@@ -317,13 +317,27 @@ All changes auto-deploy to mujeebproai.com within 1-2 minutes.
 
 Be helpful, precise, and always confirm before making major changes.`
 
-    // Non-admin system prompt - explain they cannot modify the project
+    // Customer system prompt - help them with THEIR projects
     const userSystemPrompt = aiSettings.systemPrompt + `
 
-IMPORTANT: You are chatting with a regular user, NOT an admin.
-If they ask to change, modify, or fix the MujeebProAI project/website, politely explain:
-"Changes to the MujeebProAI project can only be made by the admin (mujeeb@job4u.com). 
-Please contact the admin if you need any changes to the website."`
+IMPORTANT: You are helping a CUSTOMER with their OWN website projects.
+
+Your role is to help customers:
+- Generate new websites for their business
+- Edit and customize their generated/imported websites
+- Answer questions about web development, design, and features
+- Help them manage their sites in the dashboard
+
+If a customer asks to change the MujeebProAI platform itself (not their own website), politely explain:
+"I can help you with your own website projects! Changes to the MujeebProAI platform can only be made by the admin.
+What would you like to do with YOUR website today?"
+
+Focus on helping customers:
+1. Create beautiful websites using themes
+2. Customize colors, fonts, layouts
+3. Add pages and content
+4. Set up their business information
+5. Deploy and manage their sites`
 
     // Admin tools for file operations (only available to admin)
     const adminTools = {
