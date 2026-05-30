@@ -645,3 +645,55 @@ export async function GET(request: Request) {
     })
   }
 }
+
+// Delete a chat
+export async function DELETE(request: Request) {
+  try {
+    const session = await getSession()
+
+    if (!session) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const chatId = searchParams.get("chatId")
+
+    if (!chatId) {
+      return new Response(JSON.stringify({ error: "Chat ID required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // First verify the chat belongs to this user
+    const chat = await sql`
+      SELECT id FROM chats WHERE id = ${chatId} AND user_id = ${session.id}
+    `
+
+    if (chat.length === 0) {
+      return new Response(JSON.stringify({ error: "Chat not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Delete messages first (foreign key constraint)
+    await sql`DELETE FROM messages WHERE chat_id = ${chatId}`
+    
+    // Then delete the chat
+    await sql`DELETE FROM chats WHERE id = ${chatId} AND user_id = ${session.id}`
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("[Chat API] Delete chat error:", error)
+    return new Response(JSON.stringify({ error: "Failed to delete chat" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+}
