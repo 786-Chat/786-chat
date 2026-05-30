@@ -14,7 +14,8 @@ import {
   Eye,
   EyeOff,
   MoreVertical,
-  Pencil
+  Pencil,
+  MessageSquare
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -165,20 +166,25 @@ export default function MySitesPage() {
                       {/* Overlay on hover */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <Button size="sm" asChild>
+                          <Link href={`/dashboard/sites/${site.id}/chat`}>
+                            <MessageSquare className="w-4 h-4 mr-1" />
+                            AI Chat
+                          </Link>
+                        </Button>
+                        <Button size="sm" variant="secondary" asChild>
                           <Link href={`/dashboard/sites/${site.id}/builder`}>
                             <Pencil className="w-4 h-4 mr-1" />
                             Edit
                           </Link>
                         </Button>
                         {site.is_published && (
-                          <Button size="sm" variant="secondary" asChild>
+                          <Button size="sm" variant="outline" className="bg-white/10" asChild>
                             <a 
                               href={`https://${site.subdomain}.mujeebproai.com`} 
                               target="_blank" 
                               rel="noopener noreferrer"
                             >
-                              <ExternalLink className="w-4 h-4 mr-1" />
-                              View
+                              <ExternalLink className="w-4 h-4" />
                             </a>
                           </Button>
                         )}
@@ -207,6 +213,12 @@ export default function MySitesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/dashboard/sites/${site.id}/chat`}>
+                                <MessageSquare className="w-4 h-4 mr-2" />
+                                AI Chat
+                              </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem asChild>
                               <Link href={`/dashboard/sites/${site.id}/builder`}>
                                 <Pencil className="w-4 h-4 mr-2" />

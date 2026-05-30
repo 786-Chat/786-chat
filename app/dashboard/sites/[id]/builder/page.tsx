@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { 
-  Save, 
   Eye, 
   Loader2, 
   ArrowLeft,
@@ -13,7 +12,6 @@ import {
   Layout,
   Image as ImageIcon,
   Settings,
-  Globe,
   Monitor,
   Tablet,
   Smartphone,
@@ -138,6 +136,9 @@ export default function SiteBuilderPage() {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [activeTab, setActiveTab] = useState("design")
   const [copied, setCopied] = useState(false)
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deploySuccess, setDeploySuccess] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false) // Track unsaved changes
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -179,14 +180,19 @@ export default function SiteBuilderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           site_config: config,
-          site_content: content
+          site_content: content,
+          is_published: true // Auto-publish on every save
         }),
         credentials: "include"
       })
 
       if (res.ok) {
         setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 3000)
+        // Update local site state to show as published
+        if (site) {
+          setSite({ ...site, is_published: true })
+        }
+        setTimeout(() => setSaveSuccess(false), 2000)
       }
     } catch (error) {
       console.error("Failed to save:", error)
@@ -195,22 +201,26 @@ export default function SiteBuilderPage() {
     }
   }
 
-  const handlePublish = async () => {
-    try {
-      await fetch(`/api/customer/sites/${params.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_published: !site?.is_published }),
-        credentials: "include"
-      })
-      
-      if (site) {
-        setSite({ ...site, is_published: !site.is_published })
-      }
-    } catch (error) {
-      console.error("Failed to toggle publish:", error)
+  // Auto-save with debounce - saves 1 second after user stops typing
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  const triggerAutoSave = useCallback(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
     }
-  }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      handleSave()
+    }, 1000) // 1 second debounce
+  }, [config, content, params.id, site])
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const copyUrl = () => {
     if (site) {
@@ -220,8 +230,33 @@ export default function SiteBuilderPage() {
     }
   }
 
+  // Deploy/Publish function
+  const handleDeploy = async () => {
+    if (!site) return
+    setIsDeploying(true)
+    setDeploySuccess(false)
+    try {
+      const response = await fetch(`/api/customer/sites/${params.id}/deploy`, {
+        method: "POST",
+        credentials: "include"
+      })
+      if (response.ok) {
+        setDeploySuccess(true)
+        setSite({ ...site, is_published: true })
+        setHasChanges(false) // Reset changes after successful deploy
+        setTimeout(() => setDeploySuccess(false), 3000)
+      }
+    } catch (error) {
+      console.error("Deploy failed:", error)
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   const updateConfig = (key: keyof SiteConfig, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }))
+    setHasChanges(true) // Mark as having changes
+    triggerAutoSave() // Auto-save after change
   }
 
   const updateContent = (section: keyof SiteContent, key: string, value: string) => {
@@ -232,6 +267,8 @@ export default function SiteBuilderPage() {
         [key]: value
       }
     }))
+    setHasChanges(true) // Mark as having changes
+    triggerAutoSave() // Auto-save after change
   }
 
   if (authLoading || isLoading) {
@@ -305,48 +342,71 @@ export default function SiteBuilderPage() {
             {site.subdomain}.mujeebproai.com
           </Button>
 
+          {/* Auto-save indicator */}
+          {isSaving && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </div>
+          )}
+          {saveSuccess && (
+            <div className="flex items-center gap-2 text-sm text-green-500">
+              <Check className="w-4 h-4" />
+              Saved & Live!
+            </div>
+          )}
+
           <div className="h-6 w-px bg-border" />
 
-          {/* Save Button */}
-          <Button 
-            size="sm" 
-            variant="outline"
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : saveSuccess ? (
-              <Check className="w-4 h-4 mr-2 text-green-500" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            {saveSuccess ? "Saved!" : "Save"}
-          </Button>
-
-          {/* Publish Button */}
-          <Button 
+          {/* Deploy/Publish Button */}
+          <Button
             size="sm"
-            variant={site.is_published ? "secondary" : "default"}
-            onClick={handlePublish}
+            onClick={handleDeploy}
+            disabled={isDeploying}
+            className={`${
+              deploySuccess 
+                ? "bg-green-600 hover:bg-green-500 text-white" 
+                : hasChanges
+                  ? "bg-orange-600 hover:bg-orange-500 text-white animate-pulse" 
+                  : site.is_published 
+                    ? "bg-gray-600 hover:bg-gray-500 text-white" 
+                    : "bg-cyan-600 hover:bg-cyan-500 text-white"
+            }`}
           >
-            <Globe className="w-4 h-4 mr-2" />
-            {site.is_published ? "Unpublish" : "Publish"}
+            {isDeploying ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Deploying...
+              </>
+            ) : deploySuccess ? (
+              <>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Deployed!
+              </>
+            ) : hasChanges ? (
+              <>
+                <Rocket className="w-4 h-4 mr-2" />
+                Republish Changes
+              </>
+            ) : (
+              <>
+                <Rocket className="w-4 h-4 mr-2" />
+                {site.is_published ? "Published" : "Publish"}
+              </>
+            )}
           </Button>
 
-          {/* Preview Button */}
-          {site.is_published && (
-            <Button size="sm" variant="outline" asChild>
-              <a 
-                href={`https://${site.subdomain}.mujeebproai.com`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                View Live
-              </a>
-            </Button>
-          )}
+          {/* Preview Button - always show since auto-published */}
+          <Button size="sm" variant="outline" asChild>
+            <a 
+              href={`https://${site.subdomain}.mujeebproai.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              View Live Site
+            </a>
+          </Button>
         </div>
       </header>
 

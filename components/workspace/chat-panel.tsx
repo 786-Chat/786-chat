@@ -179,6 +179,11 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+  
+  // Refs to avoid dependency array changes
+  const sendMessageRef = useRef<typeof sendMessage | null>(null)
+  const usageRef = useRef<UsageData | null>(null)
+  const setMessagesRef = useRef<typeof setMessages | null>(null)
 
   const transport = useRef(
     new DefaultChatTransport({
@@ -215,6 +220,19 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
   })
 
   const isLoading = status === "streaming" || status === "submitted"
+
+  // Keep refs updated
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
+  
+  useEffect(() => {
+    usageRef.current = usage
+  }, [usage])
+  
+  useEffect(() => {
+    setMessagesRef.current = setMessages
+  }, [setMessages])
 
   const fetchUsage = useCallback(async () => {
     if (!user) return
@@ -270,11 +288,11 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     }
   }, [messages, onPreviewUpdate])
 
-  // Listen for sidebar events
+  // Listen for sidebar events - use refs to avoid dependency array issues with hot reload
   useEffect(() => {
     const handleNewChat = () => {
       setCurrentChatId(null)
-      setMessages([])
+      if (setMessagesRef.current) setMessagesRef.current([])
       setNoCreditsError(false)
       setInput("")
       setAttachedFiles([])
@@ -294,7 +312,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
             role: m.role as "user" | "assistant",
             parts: [{ type: "text" as const, text: m.content }],
           }))
-          setMessages(uiMessages)
+          if (setMessagesRef.current) setMessagesRef.current(uiMessages)
         }
       } catch (err) {
         console.error("Failed to load chat:", err)
@@ -311,12 +329,30 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     window.addEventListener("new-chat", handleNewChat)
     window.addEventListener("load-chat", handleLoadChat)
     window.addEventListener("chat-selected", handleChatSelected)
+    
+    // Listen for top bar messages - use refs to avoid stale closures
+    const handleTopBarMessage = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.message && sendMessageRef.current) {
+        // Check if user can send using ref
+        const currentUsage = usageRef.current
+        const canSend = currentUsage?.canSend ?? (currentUsage ? (currentUsage.limit - currentUsage.used > 0 || (currentUsage.balance ?? 0) > 0.001) : true)
+        if (!canSend) {
+          setShowUpgradePopup(true)
+          return
+        }
+        sendMessageRef.current({ text: detail.message })
+      }
+    }
+    window.addEventListener("top-bar-message", handleTopBarMessage)
+    
     return () => {
       window.removeEventListener("new-chat", handleNewChat)
       window.removeEventListener("load-chat", handleLoadChat)
       window.removeEventListener("chat-selected", handleChatSelected)
+      window.removeEventListener("top-bar-message", handleTopBarMessage)
     }
-  }, [setMessages])
+  }, []) // Empty dependency array - using refs instead
 
   useEffect(() => {
     if (messages.length > 0 && !currentChatId) {

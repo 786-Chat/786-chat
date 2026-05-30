@@ -199,11 +199,51 @@ export function WorkspaceTopBar({
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          {/* URL Input */}
-          <div className="flex-1 flex items-center h-7 bg-white/[0.05] border border-white/[0.1] rounded-lg px-2.5">
-            <Globe className="w-3.5 h-3.5 text-white/30 mr-2" />
-            <span className="text-xs text-white/50">/</span>
-          </div>
+          {/* URL Input - Detects URLs vs chat messages */}
+          <form 
+            className="flex-1 flex items-center h-7 bg-white/[0.05] border border-white/[0.1] rounded-lg px-2.5 hover:border-cyan-500/30 focus-within:border-cyan-500/50 transition-colors"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const input = e.currentTarget.querySelector('input')
+              if (input && input.value.trim()) {
+                const value = input.value.trim()
+                
+                // Check if it looks like a URL or path
+                const isUrl = value.startsWith('/') || 
+                              value.startsWith('http://') || 
+                              value.startsWith('https://') ||
+                              value.match(/^[a-zA-Z0-9-]+\.(com|org|net|io|ai|app|dev|co|me)/)
+                
+                if (isUrl) {
+                  // It's a URL - show in preview panel
+                  let url = value
+                  if (value.startsWith('/')) {
+                    // Relative path - use current origin
+                    url = window.location.origin + value
+                  } else if (!value.startsWith('http')) {
+                    // Domain without protocol
+                    url = 'https://' + value
+                  }
+                  window.dispatchEvent(new CustomEvent('top-bar-preview-url', { 
+                    detail: { url } 
+                  }))
+                } else {
+                  // It's a chat message
+                  window.dispatchEvent(new CustomEvent('top-bar-message', { 
+                    detail: { message: value } 
+                  }))
+                }
+                input.value = ''
+              }
+            }}
+          >
+            <Globe className="w-3.5 h-3.5 text-white/30 mr-2 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Enter URL to preview or ask AI..."
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-white/40 outline-none"
+            />
+          </form>
         </div>
 
         {/* Center - Mobile View Switcher */}

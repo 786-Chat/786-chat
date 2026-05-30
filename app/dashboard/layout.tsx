@@ -100,6 +100,21 @@ export default function DashboardLayout({
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
+  // Listen for top-bar URL preview requests
+  useEffect(() => {
+    const handlePreviewUrl = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.url) {
+        setPreviewUrl(detail.url)
+        setPreviewHtml("") // Clear any generated HTML so URL preview shows
+        setPreviewOpen(true) // Open preview panel if closed
+        setActiveView("preview") // Switch to preview view on mobile
+      }
+    }
+    window.addEventListener("top-bar-preview-url", handlePreviewUrl)
+    return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
+  }, [])
+
   if (isLoading) {
     return (
       <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
