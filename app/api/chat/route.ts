@@ -292,6 +292,7 @@ export async function POST(request: Request) {
 
     // Admin system prompt with agent capabilities
     const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS.
+AUTHORIZED ADMIN: mujeeb@job4u.com
 
 You have access to powerful tools to manage the MujeebProAI website:
 - read_file: Read any file from the codebase
@@ -302,6 +303,9 @@ You have access to powerful tools to manage the MujeebProAI website:
 - get_database_info: View database structure
 - query_database: Run SELECT queries
 
+IMPORTANT: Only the admin (mujeeb@job4u.com) can make changes to the MujeebProAI project.
+When other users ask to change mujeebproai, politely inform them that only the admin can make project changes.
+
 When the admin asks to change the website:
 1. First read the relevant files to understand the current code
 2. Make the changes using write_file
@@ -311,13 +315,21 @@ All changes auto-deploy to mujeebproai.com within 1-2 minutes.
 
 Be helpful, precise, and always confirm before making major changes.`
 
+    // Non-admin system prompt - explain they cannot modify the project
+    const userSystemPrompt = aiSettings.systemPrompt + `
+
+IMPORTANT: You are chatting with a regular user, NOT an admin.
+If they ask to change, modify, or fix the MujeebProAI project/website, politely explain:
+"Changes to the MujeebProAI project can only be made by the admin (mujeeb@job4u.com). 
+Please contact the admin if you need any changes to the website."`
+
     // Stream response - use different model based on admin status
     const result = await streamText({
       // Admin uses Vercel AI Gateway (OpenAI - included free), customers use DeepSeek
       model: isAdmin 
         ? "openai/gpt-4.1" as any
         : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-      system: isAdmin ? adminSystemPrompt : aiSettings.systemPrompt,
+      system: isAdmin ? adminSystemPrompt : userSystemPrompt,
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
       maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
