@@ -314,9 +314,9 @@ Be helpful, precise, and always confirm before making major changes.`
 
     // Stream response - use different model based on admin status
     const result = await streamText({
-      // Admin uses Vercel AI Gateway (Claude), customers use DeepSeek
+      // Admin uses Vercel AI Gateway (OpenAI - included free), customers use DeepSeek
       model: isAdmin 
-        ? "anthropic/claude-sonnet-4" as any
+        ? "openai/gpt-4.1" as any
         : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
       system: isAdmin ? adminSystemPrompt : aiSettings.systemPrompt,
       messages: modelMessages,
