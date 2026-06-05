@@ -39,8 +39,8 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
     return {
       balance: Number(existing.balance) || 0,
       freeMessagesUsed: existing.free_messages_used || 0,
-      freeMessagesLimit: existing.free_messages_limit || 100,
-      freeMessagesRemaining: Math.max(0, (existing.free_messages_limit || 100) - (existing.free_messages_used || 0)),
+      freeMessagesLimit: existing.free_messages_limit || 10,
+      freeMessagesRemaining: Math.max(0, (existing.free_messages_limit || 10) - (existing.free_messages_used || 0)),
       totalMessagesSent: existing.total_messages_sent || 0,
       totalSpent: Number(existing.total_spent) || 0,
     }
@@ -48,7 +48,7 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
 
   // Get default free messages from settings
   const [settings] = await sql`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
-  const freeLimit = settings?.free_messages_default || 100
+  const freeLimit = settings?.free_messages_default || 10
 
   // Create new balance record
   await sql`
@@ -75,7 +75,7 @@ export async function getPricingSettings(): Promise<PricingSettings> {
   return {
     costPer1000Messages: costPer1000,
     costPerMessage: costPer1000 / 1000,
-    freeMessagesDefault: settings?.free_messages_default || 100,
+    freeMessagesDefault: settings?.free_messages_default || 10,
     markupPercentage: settings?.markup_percentage || 50,
     minBalanceWarning: Number(settings?.min_balance_warning) || 0.10,
     topupAmounts: settings?.topup_amounts || [5, 10, 20, 50],
