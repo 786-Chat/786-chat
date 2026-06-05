@@ -74,7 +74,7 @@ export function Hero() {
             transition={{ duration: 0.8, delay: 0.1 }}
             className="max-w-5xl text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl"
           >
-            <span className="block text-foreground">Professional Websites</span>
+            <span className="block text-foreground">The Future of</span>
             <motion.span 
               className="block gradient-text mt-2"
               animate={{ 
@@ -83,7 +83,7 @@ export function Hero() {
               transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
               style={{ backgroundSize: "200% 200%" }}
             >
-              For Your Business
+              Artificial Intelligence
             </motion.span>
           </motion.h1>
 
