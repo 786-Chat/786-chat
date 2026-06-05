@@ -178,3 +178,41 @@ export async function getRepoInfo(): Promise<{
 export function isGitHubConfigured(): boolean {
   return !!process.env.GITHUB_TOKEN
 }
+
+// Revert a file to its state in the commit BEFORE the most recent change.
+// This is the "undo last change" feature.
+export async function revertFile(
+  path: string
+): Promise<{ success: boolean; message: string }> {
+  // Get the last 2 commits that touched this file
+  const commits = await githubRequest<
+    { sha: string; commit: { message: string } }[]
+  >(
+    `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/commits?path=${encodeURIComponent(
+      path
+    )}&sha=${GITHUB_BRANCH}&per_page=2`
+  )
+
+  if (commits.length < 2) {
+    // Only one commit exists - the file was just created, so deleting is the undo
+    try {
+      await deleteFile(path, `Revert: remove newly created ${path}`)
+      return { success: true, message: `Reverted by removing ${path} (it was newly created).` }
+    } catch {
+      return { success: false, message: `Cannot revert ${path}: no previous version found.` }
+    }
+  }
+
+  // The previous version lives in commits[1]
+  const previousSha = commits[1].sha
+
+  // Fetch file content at that previous commit
+  const previous = await githubRequest<{ content: string; encoding: string }>(
+    `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${previousSha}`
+  )
+  const previousContent = Buffer.from(previous.content, "base64").toString("utf-8")
+
+  // Write the previous content back as a new commit
+  await writeFile(path, previousContent, `Revert ${path} to previous version`)
+  return { success: true, message: `Reverted ${path} to its previous version. Redeploying now.` }
+}

@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { UpgradePopup } from "@/components/upgrade-popup"
+import { ToolActivity, type ToolPart } from "@/components/workspace/tool-activity"
 
 interface UsageData {
   used: number
@@ -61,6 +62,14 @@ function getMessageText(message: { parts?: Array<{ type: string; text?: string }
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("")
+}
+
+// Helper to extract tool-call parts (file edits, searches, etc.) from a message
+function getToolParts(message: { parts?: Array<{ type: string }> }): ToolPart[] {
+  if (!message.parts || !Array.isArray(message.parts)) return []
+  return message.parts.filter((p): p is ToolPart =>
+    typeof p.type === "string" && p.type.startsWith("tool-")
+  )
 }
 
 const suggestedPrompts = [
@@ -287,6 +296,33 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
       onPreviewUpdate(html)
     }
   }, [messages, onPreviewUpdate])
+
+  // After the AI finishes editing a file, point the preview at the live site
+  // so the admin can watch the deployed change appear.
+  const lastDeployedMsgId = useRef<string | null>(null)
+  useEffect(() => {
+    if (isLoading || messages.length === 0) return
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg.role !== "assistant") return
+    if (lastDeployedMsgId.current === lastMsg.id) return
+
+    const toolParts = getToolParts(lastMsg)
+    const didEdit = toolParts.some(
+      (p) =>
+        (p.type === "tool-write_file" || p.type === "tool-delete_file") &&
+        p.state === "output-available" &&
+        p.output?.success !== false
+    )
+    if (didEdit) {
+      lastDeployedMsgId.current = lastMsg.id
+      // Give Vercel a head start, then load the live site in the preview pane.
+      window.dispatchEvent(
+        new CustomEvent("top-bar-preview-url", {
+          detail: { url: "https://mujeebproai.com" },
+        })
+      )
+    }
+  }, [messages, isLoading])
 
   // Listen for sidebar events - use refs to avoid dependency array issues with hot reload
   useEffect(() => {
@@ -596,6 +632,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
             <AnimatePresence mode="popLayout">
               {messages.map((message, index) => {
                 const text = getMessageText(message)
+                const toolParts = message.role === "assistant" ? getToolParts(message) : []
                 return (
                   <motion.div
                     key={message.id}
@@ -617,9 +654,14 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                       )}
                     >
                       {message.role === "assistant" ? (
-                        <div className="prose prose-invert prose-sm max-w-none overflow-hidden prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:overflow-x-auto prose-pre:max-w-full prose-code:text-cyan-400 prose-code:break-all prose-headings:text-white prose-p:text-white/85 prose-li:text-white/85 prose-strong:text-white [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:whitespace-pre-wrap [&_code]:break-words">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
-                        </div>
+                        <>
+                          {toolParts.length > 0 && <ToolActivity parts={toolParts} />}
+                          {text && (
+                            <div className="prose prose-invert prose-sm max-w-none overflow-hidden prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:overflow-x-auto prose-pre:max-w-full prose-code:text-cyan-400 prose-code:break-all prose-headings:text-white prose-p:text-white/85 prose-li:text-white/85 prose-strong:text-white [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:whitespace-pre-wrap [&_code]:break-words">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <p className="text-sm whitespace-pre-wrap">{text}</p>
                       )}

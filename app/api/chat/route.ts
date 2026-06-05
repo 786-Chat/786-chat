@@ -316,6 +316,11 @@ IMPORTANT RULES:
 - Never output raw tool tags like <read_file> as text. Use the actual tools.
 - Be precise and confirm what you changed after each edit.
 
+WORKING WITH IMAGES:
+- When the admin attaches an image, the message includes a public image URL like [Attached Image: name - https://...]. That URL is already hosted and ready to use.
+- To put that image on the site, edit the relevant file and use the exact URL in the code, e.g. <img src="https://..." alt="..." /> or as a CSS background. Use read_file first, then write_file with the URL inserted.
+- For a logo, hero image, or product photo, ask which page/section if it is unclear, then make the edit.
+
 Be helpful, friendly, and precise.`
 
     // Customer system prompt - help them with THEIR projects
