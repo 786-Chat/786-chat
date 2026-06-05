@@ -315,12 +315,22 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     )
     if (didEdit) {
       lastDeployedMsgId.current = lastMsg.id
-      // Give Vercel a head start, then load the live site in the preview pane.
+      // Vercel needs ~1-2 min to build & deploy the change. Show the site now,
+      // then refresh with a cache-buster once the new deploy should be live so
+      // the admin actually sees the updated version, not the old cached one.
       window.dispatchEvent(
         new CustomEvent("top-bar-preview-url", {
           detail: { url: "https://mujeebproai.com" },
         })
       )
+      const t1 = setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("top-bar-preview-url", {
+            detail: { url: `https://mujeebproai.com?v=${Date.now()}` },
+          })
+        )
+      }, 90000)
+      return () => clearTimeout(t1)
     }
   }, [messages, isLoading])
 
