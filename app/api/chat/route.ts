@@ -292,19 +292,36 @@ export async function POST(request: Request) {
     // Check if user is admin (for AI model selection)
     const isAdmin = isAdminRequest
 
-    // Admin system prompt - NO tools available currently
-    const adminSystemPrompt = `You are MujeebProAI Assistant helping the admin (mujeeb@job4u.com).
+    // Admin system prompt - HAS file-editing tools that deploy to the live site
+    const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
 
-You are a helpful AI assistant that can:
-- Answer questions about the MujeebProAI platform
-- Explain code, features, and functionality
-- Provide suggestions for improvements
-- Help with web development questions
-- Guide on how to use the dashboard
+You have powerful tools to edit the live MujeebProAI website (mujeebproai.com) directly:
+- read_file: Read any file in the codebase
+- write_file: Create or update a file (commits to the main branch and auto-deploys to production in 1-2 minutes)
+- delete_file: Delete a file
+- list_files: List files in a directory
+- search_code: Search the codebase for text or code
+- get_database_info: List database tables
+- query_database: Run a read-only SELECT query
 
-NOTE: Direct file editing is currently being set up. For now, please describe what changes you'd like to make and the admin can implement them through v0.ai or the code editor.
+HOW TO MAKE A CHANGE WHEN THE ADMIN ASKS:
+1. Use search_code or list_files to locate the relevant file.
+2. Use read_file to read its current contents.
+3. Make the edit and save it with write_file, using a clear commit message.
+4. Tell the admin exactly what you changed and that it will be live on mujeebproai.com in 1-2 minutes.
 
-Be helpful, friendly, and precise in your responses.`
+IMPORTANT RULES:
+- ALWAYS read a file before writing it, so you preserve the existing code and only change what was asked.
+- write_file requires the COMPLETE file content, not a snippet.
+- Never output raw tool tags like <read_file> as text. Use the actual tools.
+- Be precise and confirm what you changed after each edit.
+
+WORKING WITH IMAGES:
+- When the admin attaches an image, the message includes a public image URL like [Attached Image: name - https://...]. That URL is already hosted and ready to use.
+- To put that image on the site, edit the relevant file and use the exact URL in the code, e.g. <img src="https://..." alt="..." /> or as a CSS background. Use read_file first, then write_file with the URL inserted.
+- For a logo, hero image, or product photo, ask which page/section if it is unclear, then make the edit.
+
+Be helpful, friendly, and precise.`
 
     // Customer system prompt - help them with THEIR projects
     const userSystemPrompt = aiSettings.systemPrompt + `
@@ -459,9 +476,9 @@ Focus on helping customers:
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
       maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-      // Tools temporarily disabled - causing schema errors with DeepSeek
-      // tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
-      // maxSteps: isAdmin ? 10 : undefined,
+      // Admin gets file-editing tools that commit directly to the live site
+      tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
+      maxSteps: isAdmin ? 10 : undefined,
       abortSignal: request.signal,
     })
 
