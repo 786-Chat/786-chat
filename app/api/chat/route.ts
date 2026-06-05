@@ -1,4 +1,4 @@
-import { streamText, convertToModelMessages, consumeStream, UIMessage, tool } from "ai"
+import { streamText, convertToModelMessages, consumeStream, UIMessage, tool, stepCountIs } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
 import { z } from "zod"
 import { sql } from "@/lib/db"
@@ -475,10 +475,12 @@ Focus on helping customers:
       system: isAdmin ? adminSystemPrompt : userSystemPrompt,
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
-      maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
+      maxOutputTokens: isAdmin ? 8192 : aiSettings.maxTokens,
       // Admin gets file-editing tools that commit directly to the live site
       tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
-      maxSteps: isAdmin ? 10 : undefined,
+      // AI SDK v6: allow multiple steps so the model can call a tool, read the
+      // result, and keep going (read file -> answer, edit file -> confirm, etc.)
+      stopWhen: isAdmin ? stepCountIs(10) : undefined,
       abortSignal: request.signal,
     })
 
