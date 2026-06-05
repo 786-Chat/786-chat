@@ -55,7 +55,7 @@ export async function getAISettings(): Promise<AISettings> {
     // Return defaults if no settings exist
     return {
       id: "",
-      model: "deepseek-chat",
+      model: "deepseek-reasoner",
       temperature: 0.7,
       maxTokens: 4096,
       systemPrompt: "You are MujeebProAI, an advanced AI assistant created by Mujeeb Sardar.",

@@ -826,7 +826,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                   "h-8 w-8 rounded-xl m-1.5 flex-shrink-0 transition-all duration-300",
                   isLoading 
                     ? "bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 animate-pulse" 
-                    : "bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:bg-white/10"
+                    : "bg-cyan-500 hover:bg-cyan-400 disabled:bg-white/20 disabled:cursor-not-allowed"
                 )}
               >
                 {isLoading ? (
