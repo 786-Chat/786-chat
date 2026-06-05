@@ -292,30 +292,19 @@ export async function POST(request: Request) {
     // Check if user is admin (for AI model selection)
     const isAdmin = isAdminRequest
 
-    // Admin system prompt with agent capabilities
-    const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS.
-AUTHORIZED ADMIN: mujeeb@job4u.com
+    // Admin system prompt - NO tools available currently
+    const adminSystemPrompt = `You are MujeebProAI Assistant helping the admin (mujeeb@job4u.com).
 
-You have access to powerful tools to manage the MujeebProAI website:
-- read_file: Read any file from the codebase
-- write_file: Create or update files (auto-deploys to production)
-- delete_file: Remove files from the codebase
-- list_files: Browse directory contents
-- search_code: Find code patterns
-- get_database_info: View database structure
-- query_database: Run SELECT queries
+You are a helpful AI assistant that can:
+- Answer questions about the MujeebProAI platform
+- Explain code, features, and functionality
+- Provide suggestions for improvements
+- Help with web development questions
+- Guide on how to use the dashboard
 
-IMPORTANT: Only the admin (mujeeb@job4u.com) can make changes to the MujeebProAI project.
-When other users ask to change mujeebproai, politely inform them that only the admin can make project changes.
+NOTE: Direct file editing is currently being set up. For now, please describe what changes you'd like to make and the admin can implement them through v0.ai or the code editor.
 
-When the admin asks to change the website:
-1. First read the relevant files to understand the current code
-2. Make the changes using write_file
-3. Explain what you changed
-
-All changes auto-deploy to mujeebproai.com within 1-2 minutes.
-
-Be helpful, precise, and always confirm before making major changes.`
+Be helpful, friendly, and precise in your responses.`
 
     // Customer system prompt - help them with THEIR projects
     const userSystemPrompt = aiSettings.systemPrompt + `
