@@ -4,10 +4,10 @@ export const BILLING_PLANS = {
     id: "starter",
     name: "Starter",
     price: { GBP: 0, USD: 0, EUR: 0, PKR: 0 },
-    messagesIncluded: 5,
+    messagesIncluded: 10,
     extraMessageCost: { GBP: 0, USD: 0, EUR: 0, PKR: 0 }, // No extra messages allowed
     features: [
-      "5 total preview messages",
+      "10 total preview messages",
       "Basic AI responses",
       "No source code output",
       "Community support"
@@ -18,7 +18,7 @@ export const BILLING_PLANS = {
   basic: {
     id: "basic",
     name: "Basic",
-    price: { GBP: 10, USD: 13, EUR: 12, PKR: 3500 },
+    price: { GBP: 2, USD: 3, EUR: 3, PKR: 1000 },
     messagesIncluded: 100,
     extraMessageCost: { GBP: 0.15, USD: 0.19, EUR: 0.17, PKR: 52 },
     features: [
