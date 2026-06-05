@@ -73,6 +73,63 @@ function DeployStatus({ path }: { path: string }) {
   )
 }
 
+function UndoButton({ path }: { path: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle")
+  const [errorMsg, setErrorMsg] = useState("")
+
+  const handleUndo = async () => {
+    setState("loading")
+    setErrorMsg("")
+    try {
+      const res = await fetch("/api/admin/revert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ path }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setState("error")
+        setErrorMsg(data?.error || "Could not undo this change.")
+        return
+      }
+      setState("done")
+    } catch {
+      setState("error")
+      setErrorMsg("Network error while undoing.")
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-green-400/90">
+        <Check className="h-3 w-3" />
+        Change undone — redeploying to mujeebproai.com
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={handleUndo}
+        disabled={state === "loading"}
+        className="flex items-center gap-1.5 rounded-md border border-white/[0.1] bg-white/[0.04] px-2 py-1 text-[11px] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-50"
+      >
+        {state === "loading" ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Undo2 className="h-3 w-3" />
+        )}
+        {state === "loading" ? "Undoing..." : "Undo this change"}
+      </button>
+      {state === "error" && (
+        <p className="mt-1 text-[11px] text-red-400/80">{errorMsg}</p>
+      )}
+    </div>
+  )
+}
+
 export function ToolActivity({ parts }: { parts: ToolPart[] }) {
   if (!parts || parts.length === 0) return null
 
@@ -127,6 +184,9 @@ export function ToolActivity({ parts }: { parts: ToolPart[] }) {
             )}
 
             {isWriteOrDelete && target && <DeployStatus path={target} />}
+            {toolName === "write_file" && hasOutput && !failed && target && (
+              <UndoButton path={target} />
+            )}
           </motion.div>
         )
       })}
