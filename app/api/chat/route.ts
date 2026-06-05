@@ -296,7 +296,6 @@ export async function POST(request: Request) {
     const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
 
 You have powerful tools to edit the live MujeebProAI website (mujeebproai.com) directly:
-- preview_website: Open the website (or a specific page) in the live preview pane so the admin can SEE it
 - read_file: Read any file in the codebase
 - write_file: Create or update a file (commits to the main branch and auto-deploys to production in 1-2 minutes)
 - delete_file: Delete a file
@@ -304,11 +303,6 @@ You have powerful tools to edit the live MujeebProAI website (mujeebproai.com) d
 - search_code: Search the codebase for text or code
 - get_database_info: List database tables
 - query_database: Run a read-only SELECT query
-
-WHEN THE ADMIN WANTS TO SEE / VIEW THE SITE:
-- If they say "show me", "see", "view", "open", or "preview" the website or a page, IMMEDIATELY call preview_website (do NOT read code files).
-- Pass the page path if they mention one (e.g. '/about', '/pricing'), otherwise default to the homepage.
-- After calling it, just tell them it's open in the preview pane on the right. Keep it short. Do not dump code.
 
 HOW TO MAKE A CHANGE WHEN THE ADMIN ASKS:
 1. Use search_code or list_files to locate the relevant file.
@@ -470,28 +464,6 @@ Focus on helping customers:
             return { success: true, rows: result.slice(0, 100), totalRows: result.length }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Query failed" }
-          }
-        },
-      }),
-
-      preview_website: tool({
-        description:
-          "Open a website in the live preview pane so the admin can SEE it. Use this whenever the admin asks to 'show me', 'see', 'preview', 'open', or 'view' their website or a page. Do NOT read code files for these requests - use this tool instead.",
-        inputSchema: z.object({
-          path: z
-            .string()
-            .optional()
-            .describe(
-              "Optional page path to preview, e.g. '/' for home, '/about', '/pricing'. Defaults to the homepage."
-            ),
-        }),
-        execute: async ({ path }) => {
-          const cleanPath = path && path.startsWith("/") ? path : path ? `/${path}` : "/"
-          const url = `https://mujeebproai.com${cleanPath === "/" ? "" : cleanPath}`
-          return {
-            success: true,
-            previewUrl: url,
-            message: `Opening ${url} in the preview pane on the right.`,
           }
         },
       }),

@@ -14,7 +14,6 @@ import {
   X,
   Rocket,
   Undo2,
-  Globe,
 } from "lucide-react"
 
 // Map a tool name to a friendly label + icon
@@ -34,8 +33,6 @@ function toolMeta(toolName: string) {
       return { label: "Reading database", Icon: Database, color: "text-emerald-400" }
     case "query_database":
       return { label: "Querying database", Icon: Database, color: "text-emerald-400" }
-    case "preview_website":
-      return { label: "Opening preview", Icon: Globe, color: "text-cyan-400" }
     default:
       return { label: toolName, Icon: FileText, color: "text-white/60" }
   }
@@ -45,7 +42,7 @@ export interface ToolPart {
   type: string // e.g. "tool-write_file"
   state?: string // "input-streaming" | "input-available" | "output-available" | "output-error"
   input?: { path?: string; query?: string; message?: string }
-  output?: { success?: boolean; error?: string; path?: string; message?: string; previewUrl?: string }
+  output?: { success?: boolean; error?: string; path?: string; message?: string }
 }
 
 // Pull a human-readable target (file path or query) out of a tool part
