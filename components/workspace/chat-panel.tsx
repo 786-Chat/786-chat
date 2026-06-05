@@ -307,6 +307,25 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     if (lastDeployedMsgId.current === lastMsg.id) return
 
     const toolParts = getToolParts(lastMsg)
+
+    // If the AI used preview_website, open that URL in the preview pane.
+    const previewPart = toolParts.find(
+      (p) =>
+        p.type === "tool-preview_website" &&
+        p.state === "output-available" &&
+        p.output?.success !== false &&
+        typeof p.output?.previewUrl === "string"
+    )
+    if (previewPart && previewPart.output?.previewUrl) {
+      lastDeployedMsgId.current = lastMsg.id
+      window.dispatchEvent(
+        new CustomEvent("top-bar-preview-url", {
+          detail: { url: previewPart.output.previewUrl },
+        })
+      )
+      return
+    }
+
     const didEdit = toolParts.some(
       (p) =>
         (p.type === "tool-write_file" || p.type === "tool-delete_file") &&
