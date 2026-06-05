@@ -19,15 +19,15 @@ export const SUBSCRIPTION_PLANS = {
   basic: {
     id: "basic",
     name: "Basic",
-    price: 9,
+    price: 2,
     messagesIncluded: 100,
     imagesIncluded: 10,
-    videosIncluded: 2,
+    videosIncluded: 0,
     websitesIncluded: 0,
     features: [
       "100 AI messages/month",
       "10 image uploads",
-      "2 video uploads",
+      "0 video uploads",
       "Code preview",
       "Email support",
     ],
