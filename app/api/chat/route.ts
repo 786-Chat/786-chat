@@ -463,17 +463,16 @@ Focus on helping customers:
       }),
     }
 
-    // Stream response - use different model based on admin status
+    // Stream response - DeepSeek for all users
     const result = await streamText({
-      // Admin uses DeepSeek (same as customers for now - tools work better)
       model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
       system: isAdmin ? adminSystemPrompt : userSystemPrompt,
       messages: modelMessages,
       temperature: isAdmin ? 0.7 : aiSettings.temperature,
       maxTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-      // Enable tools for admin users only
-      tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
-      maxSteps: isAdmin ? 10 : undefined, // Allow multiple tool calls for admin
+      // Tools temporarily disabled - causing schema errors with DeepSeek
+      // tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
+      // maxSteps: isAdmin ? 10 : undefined,
       abortSignal: request.signal,
     })
 
