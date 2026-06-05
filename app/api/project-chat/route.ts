@@ -1,4 +1,4 @@
-import { streamText, tool } from "ai"
+import { streamText, tool, stepCountIs } from "ai"
 import { z } from "zod"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
@@ -187,9 +187,9 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
       system: systemPrompt,
       messages,
       temperature: 0.7,
-      maxTokens: 2048,
+      maxOutputTokens: 2048,
       tools: projectTools,
-      maxSteps: 5,
+      stopWhen: stepCountIs(5),
       abortSignal: request.signal,
     })
 
