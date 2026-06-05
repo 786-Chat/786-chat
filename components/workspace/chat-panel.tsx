@@ -837,7 +837,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
                     <Sparkles className="w-4 h-4 text-white" />
                   </motion.div>
                 ) : (
-                  <ArrowUp className="w-4 h-4" />
+                  <ArrowUp className="w-4 h-4 text-white" />
                 )}
               </Button>
             </div>
