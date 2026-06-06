@@ -30,7 +30,7 @@ const PLAN_PRICES: Record<string, Record<string, number>> = {
 }
 
 const PLAN_NAMES: Record<string, string> = {
-  basic: "Basic Plan",
+  basic: "MujeebProAI Membership",
   pro: "Pro Plan", 
   business: "Business Plan",
   enterprise: "Enterprise Plan"
