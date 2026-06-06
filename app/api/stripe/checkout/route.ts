@@ -23,7 +23,7 @@ async function getCurrentUser() {
 
 // Plan prices in pence/cents
 const PLAN_PRICES: Record<string, Record<string, number>> = {
-  basic: { GBP: 1000, USD: 1300, EUR: 1200, PKR: 350000 },
+  basic: { GBP: 200, USD: 300, EUR: 300, PKR: 100000 },
   pro: { GBP: 2000, USD: 2600, EUR: 2400, PKR: 700000 },
   business: { GBP: 4000, USD: 5200, EUR: 4800, PKR: 1400000 },
   enterprise: { GBP: 9900, USD: 12900, EUR: 11900, PKR: 3500000 }
