@@ -62,9 +62,8 @@ export default function AdminPricingPage() {
       const res = await fetch("/api/admin/plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
- 
-        credentials: "include"
+      bbody: JSON.stringify(plan),
+credentials: "include",
       })
       if (res.ok) {
         setSaveStatus("success")
