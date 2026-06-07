@@ -53,14 +53,20 @@ export async function POST(request: Request) {
 
     const subscription = subscriptions[0] || { plan: 'starter', tokens_used: 0, tokens_limit: 10000 }
 
-    // Create JWT token
-    const token = await createToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      plan: subscription.plan,
-      role: user.role,
-    })
+    // Force owner account to always be admin
+const isOwnerAdmin =
+  user.email?.toLowerCase().trim() === "mujeeb@job4u.com"
+
+const userRole = isOwnerAdmin ? "admin" : user.role
+
+// Create JWT token
+const token = await createToken({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  plan: subscription.plan,
+  role: userRole,
+})
 
     console.log("[MujeebProAI] Login successful, setting cookie for:", email, "role:", user.role)
 
@@ -81,7 +87,7 @@ export async function POST(request: Request) {
         name: user.name,
         email: user.email,
         plan: subscription.plan,
-        role: user.role,
+       role: userRole,
       },
     })
   } catch (error) {
