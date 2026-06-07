@@ -32,7 +32,7 @@ export async function GET() {
         plan: "starter",
         status: "active",
         messagesUsed: 0,
-        messagesLimit: 5,
+       messagesLimit: 10,
         extraUsageCost: 0,
         currency: "GBP"
       })
@@ -56,7 +56,7 @@ export async function GET() {
       features: planConfig.features
     })
   } catch (error) {
-    console.error("[v0] Subscription fetch error:", error)
+    console.error("[MujeebProAI] Subscription fetch error:", error)
     return NextResponse.json({ error: "Failed to fetch subscription" }, { status: 500 })
   }
 }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
       message: `Successfully upgraded to ${newPlan.name} plan`
     })
   } catch (error) {
-    console.error("[v0] Subscription upgrade error:", error)
+   console.error("[MujeebProAI] Subscription upgrade error:", error)
     return NextResponse.json({ error: "Failed to upgrade subscription" }, { status: 500 })
   }
 }
