@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
-    const body = await request.json()
+    console.log("[MujeebProAI] Saving pricing plan:", body)
     const { id, name, price, messages_included, extra_message_price, features, is_popular, is_enabled, sort_order } = body
     
     // Calculate other currencies (approximate conversions)
