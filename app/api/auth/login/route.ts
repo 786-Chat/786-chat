@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
     
-    console.log("[v0] Login attempt for:", email)
+    console.log("[MujeebProAI] Login attempt for:", email)
 
     // Validate input
     if (!email || !password) {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     `
     
     if (users.length === 0) {
-      console.log("[v0] User not found:", email)
+      console.log("[MujeebProAI] User not found:", email)
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     // Verify password
     const isValidPassword = await verifyPassword(password, user.password)
     if (!isValidPassword) {
-      console.log("[v0] Invalid password for:", email)
+     console.log("[MujeebProAI] Invalid password for:", email)
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       role: user.role,
     })
 
-    console.log("[v0] Login successful, setting cookie for:", email, "role:", user.role)
+    console.log("[MujeebProAI] Login successful, setting cookie for:", email, "role:", user.role)
 
     // Set auth cookie directly in response
     const cookieStore = await cookies()
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[v0] Login error:", error)
+  console.error("[MujeebProAI] Login error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
