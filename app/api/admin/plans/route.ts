@@ -4,10 +4,13 @@ import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 
 
-// Check if user is admin
+// Fix admin authentication token
 async function isAdmin(): Promise<boolean> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth_token")?.value
+const cookieStore = await cookies()
+
+const token =
+  cookieStore.get("auth_token")?.value ||
+  cookieStore.get("auth-token")?.value
   
   if (!token) return false
   
