@@ -62,7 +62,7 @@ export default function AdminPricingPage() {
       const res = await fetch("/api/admin/plans", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-      bbody: JSON.stringify(plan),
+      body: JSON.stringify(plan),
 credentials: "include",
       })
       if (res.ok) {
