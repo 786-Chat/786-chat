@@ -30,21 +30,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      console.log("[v0] Refreshing user data...")
+      console.log("[MujeebProAI] Refreshing user data...")
       const response = await fetch("/api/auth/me", {
         credentials: "include",
       })
-      console.log("[v0] Auth me response status:", response.status)
+      console.log("[MujeebProAI] Auth me response status:", response.status)
       if (response.ok) {
         const data = await response.json()
-        console.log("[v0] User data received:", data.user?.email, "role:", data.user?.role)
+        console.log("[MujeebProAI] User data received:", data.user?.email, "role:", data.user?.role)
         setUser(data.user)
       } else {
-        console.log("[v0] Auth me failed, clearing user")
+        console.log("[MujeebProAI]Auth me failed, clearing user")
         setUser(null)
       }
     } catch (err) {
-      console.log("[v0] Auth me error:", err)
+      console.log("[MujeebProAI] Auth me error:", err)
       setUser(null)
     } finally {
       setIsLoading(false)
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      console.log("[v0] Auth context login called for:", email)
+      console.log("[MujeebProAI]Auth context login called for:", email)
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,17 +66,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       const data = await response.json()
-      console.log("[v0] Login response:", response.status, data)
+      console.log("[MujeebProAI] Login response:", response.status, data)
 
       if (response.ok) {
-        console.log("[v0] Login successful, setting user:", data.user?.email)
+        console.log("[MujeebProAI]Login successful, setting user:", data.user?.email)
         setUser(data.user)
         return { success: true }
       } else {
         return { success: false, error: data.error }
       }
     } catch (err) {
-      console.log("[v0] Login error:", err)
+      console.log("[MujeebProAI]Login error:", err)
       return { success: false, error: "Network error. Please try again." }
     }
   }
