@@ -41,7 +41,7 @@ export const searchCodeTool = tool({
       success: true,
       query,
       matchedFiles: matchedFiles.length > 0 ? matchedFiles : ["No exact matches. Try: sidebar, header, chat, preview, api, auth, database, styles"],
-      suggestion: "To make changes, please describe what you want to change and I'll provide the code. You can then ask v0 to implement it, or copy the code manually.",
+      suggestion: "To make changes, please describe what you want to change and I'll provide the code. You can then ask MujeebProAI Assistant to implement it, or copy the code manually.",
     }
   },
 })
@@ -122,7 +122,7 @@ export const suggestCodeTool = tool({
       requestedChange: change,
       instructions: `To implement this change:
 1. I'll provide you with the code modifications needed
-2. You can then ask v0 to make these changes, OR
+2. You can then ask MujeebProAI Assistant to make these changes, OR
 3. Copy the code and update the files manually
 
 The changes will auto-deploy to mujeebproai.com once pushed to GitHub.
