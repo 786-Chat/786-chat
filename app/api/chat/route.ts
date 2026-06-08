@@ -198,7 +198,7 @@ export async function POST(request: Request) {
     const imageCount = lastUserMessage ? getImageCount(lastUserMessage) : 0
 
     // === AI PROTECTION CHECKS ===
-    let protectionResult: ProtectionResult
+let protectionResult: ProtectionResult
 
 if (isAdminRequest) {
   protectionResult = {
@@ -214,18 +214,18 @@ if (isAdminRequest) {
   } as ProtectionResult
 } else {
   protectionResult = await checkAIProtection({
-   
+    userId: session.id,
+    plan: userPlan,
+    messageContent: userText,
+    fileSize: files[0]?.size,
+    fileType: files[0]?.type,
+    pdfPages: files[0]?.pdfPages,
+    imageCount,
+  })
 }
-      userId: session.id,
-      plan: userPlan,
-      messageContent: userText,
-      fileSize: files[0]?.size,
-      fileType: files[0]?.type,
-      pdfPages: files[0]?.pdfPages,
-      imageCount,
-    })
 
-    if (!protectionResult.allowed) {
+if (!protectionResult.allowed) {
+  
       // Log failed request
       await sql`
         INSERT INTO usage_logs (user_id, action, metadata)
