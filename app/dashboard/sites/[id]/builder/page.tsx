@@ -212,28 +212,30 @@ export default function SiteBuilderPage() {
           </div>
         </div>
 
-        {/* Center - Device Switcher */}
-        <div className="hidden md:flex items-center gap-1 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5">
-          {[
-            { id: "desktop" as const, icon: Monitor, label: "Desktop" },
-            { id: "tablet" as const, icon: Tablet, label: "Tablet" },
-            { id: "mobile" as const, icon: Smartphone, label: "Mobile" },
-          ].map((device) => (
-            <button
-              key={device.id}
-              onClick={() => setPreviewDevice(device.id)}
-              className={cn(
-                "px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5",
-                previewDevice === device.id
-                  ? "bg-cyan-500/20 text-cyan-400"
-                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
-              )}
-            >
-              <device.icon className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">{device.label}</span>
-            </button>
-          ))}
-        </div>
+        {/* Center - Device Switcher (only in preview mode) */}
+        {viewMode === "preview" && (
+          <div className="hidden md:flex items-center gap-1 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5">
+            {[
+              { id: "desktop" as const, icon: Monitor, label: "Desktop" },
+              { id: "tablet" as const, icon: Tablet, label: "Tablet" },
+              { id: "mobile" as const, icon: Smartphone, label: "Mobile" },
+            ].map((device) => (
+              <button
+                key={device.id}
+                onClick={() => setPreviewDevice(device.id)}
+                className={cn(
+                  "px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5",
+                  previewDevice === device.id
+                    ? "bg-cyan-500/20 text-cyan-400"
+                    : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+                )}
+              >
+                <device.icon className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">{device.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Right */}
         <div className="flex items-center gap-1">
@@ -311,58 +313,152 @@ export default function SiteBuilderPage() {
           ))}
         </div>
 
-        {/* Tool Panel */}
-        <div className="w-64 border-r border-white/[0.06] bg-[#0a0a0f] overflow-y-auto flex-shrink-0 hidden md:block">
-          <div className="p-4">
-            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
-              {builderTools.find(t => t.id === activeTool)?.label || "Tools"}
-            </h3>
-            <div className="space-y-2">
-              <p className="text-xs text-white/30 text-center py-8">
-                Select elements on the canvas to edit their properties.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Canvas Area */}
-        <div className="flex-1 flex items-start justify-center overflow-auto bg-[#08080d] p-4">
-          <div
-            className={cn(
-              "bg-white rounded-lg shadow-2xl transition-all duration-300",
-              previewDevice === "desktop" && "w-full max-w-5xl min-h-[600px]",
-              previewDevice === "tablet" && "w-[768px] min-h-[900px]",
-              previewDevice === "mobile" && "w-[375px] min-h-[667px]",
-            )}
-          >
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center p-8">
-                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Layout className="w-8 h-8 text-cyan-400" />
-                </div>
-                <h3 className="text-sm font-medium text-gray-900 mb-1">
-                  {site.site_name}
-                </h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  {site.theme_name || "Custom Theme"} — Visual Builder
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-medium">
-                    <Sparkles className="w-3 h-3" />
-                    AI-Powered
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
-                    <Box className="w-3 h-3" />
-                    Drag & Drop
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-6 max-w-xs mx-auto">
-                  Click elements on the canvas or use the AI chat to make changes.
+        {/* Tool Panel (only in preview mode) */}
+        {viewMode === "preview" && (
+          <div className="w-64 border-r border-white/[0.06] bg-[#0a0a0f] overflow-y-auto flex-shrink-0 hidden md:block">
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
+                {builderTools.find(t => t.id === activeTool)?.label || "Tools"}
+              </h3>
+              <div className="space-y-2">
+                <p className="text-xs text-white/30 text-center py-8">
+                  Select elements on the canvas to edit their properties.
                 </p>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Canvas Area - Conditional: Preview or Code */}
+        {viewMode === "preview" ? (
+          <div className="flex-1 flex items-start justify-center overflow-auto bg-[#08080d] p-4">
+            <div
+              className={cn(
+                "bg-white rounded-lg shadow-2xl transition-all duration-300",
+                previewDevice === "desktop" && "w-full max-w-5xl min-h-[600px]",
+                previewDevice === "tablet" && "w-[768px] min-h-[900px]",
+                previewDevice === "mobile" && "w-[375px] min-h-[667px]",
+              )}
+            >
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center p-8">
+                  <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4">
+                    <Layout className="w-8 h-8 text-cyan-400" />
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">
+                    {site.site_name}
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    {site.theme_name || "Custom Theme"} — Visual Builder
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-medium">
+                      <Sparkles className="w-3 h-3" />
+                      AI-Powered
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+                      <Box className="w-3 h-3" />
+                      Drag & Drop
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-6 max-w-xs mx-auto">
+                    Click elements on the canvas or use the AI chat to make changes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Code View */
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d14]">
+            {/* Code Editor Header */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0a0a0f]">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+                </div>
+                <span className="text-xs text-white/30 ml-3 font-mono">
+                  {site.subdomain}.mujeebproai.com — index.html
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-white/20 font-mono">
+                  HTML · CSS · JS
+                </span>
+                <button className="p-1 rounded text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors">
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+            {/* Code Editor Body */}
+            <div className="flex-1 overflow-auto p-4 font-mono text-sm leading-relaxed">
+              <div className="space-y-1">
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">1</span>
+                  <span className="text-gray-400">&lt;!DOCTYPE html&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">2</span>
+                  <span className="text-gray-400">&lt;<span className="text-cyan-400">html</span> lang=<span className="text-green-400">&quot;en&quot;</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">3</span>
+                  <span className="text-gray-400">&lt;<span className="text-cyan-400">head</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">4</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> charset=<span className="text-green-400">&quot;UTF-8&quot;</span> /&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">5</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">title</span>&gt;{site.site_name}&lt;/<span className="text-cyan-400">title</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">6</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> name=<span className="text-green-400">&quot;viewport&quot;</span> content=<span className="text-green-400">&quot;width=device-width, initial-scale=1.0&quot;</span> /&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">7</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">link</span> rel=<span className="text-green-400">&quot;stylesheet&quot;</span> href=<span className="text-green-400">&quot;style.css&quot;</span> /&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">8</span>
+                  <span className="text-gray-400">&lt;/<span className="text-cyan-400">head</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">9</span>
+                  <span className="text-gray-400">&lt;<span className="text-cyan-400">body</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">10</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">div</span> id=<span className="text-green-400">&quot;app&quot;</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">11</span>
+                  <span className="text-gray-400">    &lt;<span className="text-cyan-400">h1</span>&gt;Welcome to {site.site_name}&lt;/<span className="text-cyan-400">h1</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">12</span>
+                  <span className="text-gray-400">    &lt;<span className="text-cyan-400">p</span>&gt;Built with MujeebProAI&lt;/<span className="text-cyan-400">p</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">13</span>
+                  <span className="text-gray-400">  &lt;/<span className="text-cyan-400">div</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">14</span>
+                  <span className="text-gray-400">&lt;/<span className="text-cyan-400">body</span>&gt;</span>
+                </div>
+                <div className="flex">
+                  <span className="text-white/20 w-8 text-right select-none mr-4">15</span>
+                  <span className="text-gray-400">&lt;/<span className="text-cyan-400">html</span>&gt;</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
