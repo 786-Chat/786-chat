@@ -256,9 +256,9 @@ export default function AdminLogsPage() {
                   <div className="flex items-center gap-2 text-sm">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <div>
-                      <p>{new Date(log.created_at).toLocaleDateString()}</p>
+                     <p>{log.created_at ? new Date(log.created_at).toLocaleDateString() : "-"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(log.created_at).toLocaleTimeString()}
+                        {log.created_at ? new Date(log.created_at).toLocaleTimeString() : "-"}
                       </p>
                     </div>
                   </div>
@@ -280,12 +280,12 @@ export default function AdminLogsPage() {
                   <div>
                     <p className="text-sm font-medium">{log.entity_name || "-"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {log.entity_type} {log.entity_id ? `#${log.entity_id.slice(0, 8)}` : ""}
+                       {log.entity_type || "-"} {log.entity_id ? `#${String(log.entity_id).slice(0, 8)}` : ""}
                     </p>
                   </div>
                 </TableCell>
                 <TableCell>
-                  {log.details && Object.keys(log.details).length > 0 ? (
+                {log.details && typeof log.details === "object" && Object.keys(log.details).length > 0 ? (
                     <div className="text-xs text-muted-foreground max-w-xs truncate">
                       {JSON.stringify(log.details)}
                     </div>
