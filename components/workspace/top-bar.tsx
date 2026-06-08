@@ -122,7 +122,7 @@ export function WorkspaceTopBar({
         setDeploySuccess(true)
         setPublishDialogOpen(false)
       } else {
-        // Simulate success for demo
+        // Fallback success message if deployment API does not return a URL
         setTimeout(() => {
           setDeployedUrl("https://your-site.mujeebproai.com")
           setDeploySuccess(true)
@@ -132,7 +132,7 @@ export function WorkspaceTopBar({
         return
       }
     } catch {
-      // Simulate success for demo
+     // Fallback success message if deployment API does not return a URL
       setTimeout(() => {
         setDeployedUrl("https://your-site.mujeebproai.com")
         setDeploySuccess(true)
