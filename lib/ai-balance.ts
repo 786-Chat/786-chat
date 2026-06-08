@@ -39,8 +39,8 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
     return {
       balance: Number(existing.balance) || 0,
       freeMessagesUsed: existing.free_messages_used || 0,
-      freeMessagesLimit: existing.free_messages_limit || 10,
-      freeMessagesRemaining: Math.max(0, (existing.free_messages_limit || 10) - (existing.free_messages_used || 0)),
+      freeMessagesLimit: 10,
+       freeMessagesRemaining: Math.max(0, 10 - (existing.free_messages_used || 0)),
       totalMessagesSent: existing.total_messages_sent || 0,
       totalSpent: Number(existing.total_spent) || 0,
     }
