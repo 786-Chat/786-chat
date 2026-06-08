@@ -72,13 +72,20 @@ const token = await createToken({
 
     // Set auth cookie directly in response
     const cookieStore = await cookies()
-    cookieStore.set("auth_token", token, {
+    
+    // Set both cookie names so all routes work:
+    // - auth_token (underscore) used by getSession() and newer routes
+    // - auth-token (hyphen) used by middleware and many API routes
+    const cookieOptions = {
       httpOnly: true,
       secure: true,
-      sameSite: "none",
+      sameSite: "none" as const,
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
-    })
+    }
+    
+    cookieStore.set("auth_token", token, cookieOptions)
+    cookieStore.set("auth-token", token, cookieOptions)
 
     return NextResponse.json({
       message: "Login successful",
