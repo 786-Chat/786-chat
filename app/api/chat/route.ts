@@ -237,21 +237,23 @@ if (!protectionResult.allowed) {
     // Check if using extra credits
     const useExtraCredit = protectionResult.canUseExtraCredits || false
 
-    // Check each additional file
-    for (const file of files.slice(1)) {
-      const fileCheck = await checkAIProtection({
-        userId: session.id,
-        plan: userPlan,
-        fileSize: file.size,
-        fileType: file.type,
-        pdfPages: file.pdfPages,
-      })
-      if (!fileCheck.allowed) {
-        return createProtectionError(fileCheck)
-      }
+  // Check each additional file
+if (!isAdminRequest) {
+  for (const file of files.slice(1)) {
+    const fileCheck = await checkAIProtection({
+      userId: session.id,
+      plan: userPlan,
+      fileSize: file.size,
+      fileType: file.type,
+      pdfPages: file.pdfPages,
+    })
+    if (!fileCheck.allowed) {
+      return createProtectionError(fileCheck)
     }
+  }
+}
 
-    // Get or create chat
+// Get or create chat
     let currentChatId = chatId
     if (!currentChatId) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
