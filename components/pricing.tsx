@@ -11,7 +11,7 @@ const packages = [
     id: "basic",
     name: "Basic Website",
     description: "Perfect for local businesses",
-    price: "49",
+    price: "10",
     icon: Globe,
     gradient: "from-blue-500 to-cyan-500",
     popular: false,
