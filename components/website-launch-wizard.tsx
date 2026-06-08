@@ -1498,7 +1498,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
+          className="bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[calc(90vh-180px)] shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
