@@ -46,7 +46,7 @@ export async function verifyToken(token: string): Promise<UserPayload | null> {
 
 export async function getSession(): Promise<UserPayload | null> {
   const cookieStore = await cookies()
-  const token = cookieStore.get("auth-token")?.value
+  const token = cookieStore.get("auth_token")?.value
 
   if (!token) return null
 
@@ -55,7 +55,7 @@ export async function getSession(): Promise<UserPayload | null> {
 
 export async function setAuthCookie(token: string): Promise<void> {
   const cookieStore = await cookies()
-  cookieStore.set("auth-token", token, {
+  cookieStore.set("auth_token", token, {
     httpOnly: true,
     secure: true,
     sameSite: "none",
