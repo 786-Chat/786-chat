@@ -9,14 +9,12 @@ import {
   Trash2,
   Search,
   Zap,
-  X,
   Palette,
   Upload,
   Globe,
   ExternalLink,
   FileText,
   Rocket,
-  CreditCard
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -337,11 +335,11 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
             <p className="text-[10px] uppercase tracking-wider text-white/30 px-1 mb-2">Quick Links</p>
             <div className="space-y-1">
               <Link
-                href="/themes"
+                href="/marketplace"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
               >
                 <Palette className="w-3.5 h-3.5" />
-                <span>Theme Marketplace</span>
+                <span>Marketplace</span>
                 <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
               </Link>
               <Link
