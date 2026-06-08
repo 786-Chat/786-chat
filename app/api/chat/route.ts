@@ -214,14 +214,7 @@ if (isAdminRequest) {
   } as ProtectionResult
 } else {
   protectionResult = await checkAIProtection({
-    userId: session.id,
-    plan: userPlan,
-    messageContent: userText,
-    fileSize: files[0]?.size,
-    fileType: files[0]?.type,
-    pdfPages: files[0]?.pdfPages,
-    imageCount,
-  })
+   
 }
       userId: session.id,
       plan: userPlan,
