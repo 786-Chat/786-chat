@@ -13,7 +13,6 @@ export async function GET() {
       )
     }
 
-    // Get fresh user data from database
     const users = await sql`
       SELECT id, name, email, plan, role, avatar, created_at
       FROM users
@@ -29,18 +28,22 @@ export async function GET() {
 
     const user = users[0]
 
-    // Get subscription info
+    const isOwnerAdmin =
+      user.email?.toLowerCase().trim() === "mujeeb@job4u.com"
+
+    const userRole = isOwnerAdmin ? "admin" : user.role
+
     const subscriptions = await sql`
       SELECT plan, tokens_used, tokens_limit, status
       FROM subscriptions
       WHERE user_id = ${user.id}
     `
 
-    const subscription = subscriptions[0] || { 
-      plan: 'starter', 
-      tokens_used: 0, 
+    const subscription = subscriptions[0] || {
+      plan: "starter",
+      tokens_used: 0,
       tokens_limit: 10000,
-      status: 'active'
+      status: "active",
     }
 
     return NextResponse.json({
@@ -49,7 +52,7 @@ export async function GET() {
         name: user.name,
         email: user.email,
         plan: subscription.plan,
-        role: user.role,
+        role: userRole,
         avatar: user.avatar,
         tokensUsed: subscription.tokens_used,
         tokensLimit: subscription.tokens_limit,
@@ -57,7 +60,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("[v0] Get user error:", error)
+    console.error("[MujeebProAI] Get user error:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
