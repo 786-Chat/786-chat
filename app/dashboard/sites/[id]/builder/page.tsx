@@ -1,776 +1,368 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { 
-  Eye, 
-  Loader2, 
-  ArrowLeft,
+import { useAuth } from "@/contexts/auth-context"
+import {
+  Pencil,
+  Globe,
+  ExternalLink,
+  Loader2,
+  ChevronLeft,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Eye,
+  Code,
+  Save,
+  Undo2,
+  Redo2,
+  Sparkles,
+  MessageSquare,
+  Layout,
   Palette,
   Type,
-  Layout,
   Image as ImageIcon,
   Settings,
-  Monitor,
-  Tablet,
-  Smartphone,
-  Undo,
-  Redo,
+  Layers,
+  Box,
+  X,
+  Check,
   Copy,
-  Check
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
-import { useAuth } from "@/contexts/auth-context"
+import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 import Link from "next/link"
-
-interface SiteConfig {
-  primaryColor: string
-  secondaryColor: string
-  backgroundColor: string
-  textColor: string
-  fontFamily: string
-  borderRadius: string
-}
-
-interface SiteContent {
-  hero: {
-    title: string
-    subtitle: string
-    ctaText: string
-    ctaLink: string
-    backgroundImage?: string
-  }
-  about: {
-    title: string
-    description: string
-    image?: string
-  }
-  features: Array<{
-    title: string
-    description: string
-    icon: string
-  }>
-  contact: {
-    email: string
-    phone: string
-    address: string
-  }
-  footer: {
-    copyright: string
-    socialLinks: {
-      twitter?: string
-      facebook?: string
-      linkedin?: string
-      instagram?: string
-    }
-  }
-}
+import { cn } from "@/lib/utils"
 
 interface Site {
   id: string
   site_name: string
   subdomain: string
   custom_domain: string | null
-  site_config: SiteConfig
-  site_content: SiteContent
-  logo_url: string | null
-  favicon_url: string | null
   is_published: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
   theme_name: string
   theme_slug: string
+  theme_thumbnail: string
+  logo_url: string | null
+  site_config: any
+  site_content: any
 }
 
-const defaultConfig: SiteConfig = {
-  primaryColor: "#3b82f6",
-  secondaryColor: "#10b981",
-  backgroundColor: "#ffffff",
-  textColor: "#1f2937",
-  fontFamily: "Inter",
-  borderRadius: "8px"
-}
-
-const defaultContent: SiteContent = {
-  hero: {
-    title: "Welcome to My Site",
-    subtitle: "Built with MujeebProAI Themes",
-    ctaText: "Get Started",
-    ctaLink: "#contact"
-  },
-  about: {
-    title: "About Us",
-    description: "We are a company dedicated to providing excellent services."
-  },
-  features: [
-    { title: "Feature 1", description: "Description of feature 1", icon: "star" },
-    { title: "Feature 2", description: "Description of feature 2", icon: "zap" },
-    { title: "Feature 3", description: "Description of feature 3", icon: "shield" }
-  ],
-  contact: {
-    email: "contact@example.com",
-    phone: "+1 234 567 890",
-    address: "123 Main Street"
-  },
-  footer: {
-    copyright: "© 2024 My Company. All rights reserved.",
-    socialLinks: {}
-  }
-}
+const builderTools = [
+  { id: "layout", label: "Layout", icon: Layout },
+  { id: "content", label: "Content", icon: Type },
+  { id: "design", label: "Design", icon: Palette },
+  { id: "media", label: "Media", icon: ImageIcon },
+  { id: "settings", label: "Settings", icon: Settings },
+  { id: "components", label: "Components", icon: Layers },
+]
 
 export default function SiteBuilderPage() {
   const params = useParams()
   const router = useRouter()
+  const siteId = params.id as string
   const { user, isLoading: authLoading } = useAuth()
   const [site, setSite] = useState<Site | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [config, setConfig] = useState<SiteConfig>(defaultConfig)
-  const [content, setContent] = useState<SiteContent>(defaultContent)
+  const [error, setError] = useState<string | null>(null)
+  const [activeTool, setActiveTool] = useState("layout")
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
-  const [activeTab, setActiveTab] = useState("design")
-  const [copied, setCopied] = useState(false)
-  const [isDeploying, setIsDeploying] = useState(false)
-  const [deploySuccess, setDeploySuccess] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false) // Track unsaved changes
+  const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/login")
+      router.push("/login?redirect=/dashboard/sites")
     }
   }, [user, authLoading, router])
 
   useEffect(() => {
+    if (!user || !siteId) return
+
     const fetchSite = async () => {
       try {
-        const res = await fetch(`/api/customer/sites/${params.id}`, { credentials: "include" })
-        if (res.ok) {
-          const data = await res.json()
-          setSite(data.site)
-          setConfig({ ...defaultConfig, ...data.site.site_config })
-          setContent({ ...defaultContent, ...data.site.site_content })
-        } else {
-          router.push("/dashboard/sites")
+        const res = await fetch(`/api/customer/sites/${siteId}`, {
+          credentials: "include",
+        })
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError("Site not found")
+          } else {
+            setError("Failed to load site")
+          }
+          return
         }
-      } catch (error) {
-        console.error("Failed to fetch site:", error)
+        const data = await res.json()
+        setSite(data.site)
+      } catch (err) {
+        console.error("Failed to fetch site:", err)
+        setError("Failed to load site")
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (user && params.id) {
-      fetchSite()
-    }
-  }, [user, params.id, router])
-
-  const handleSave = async () => {
-    setIsSaving(true)
-    setSaveSuccess(false)
-    
-    try {
-      const res = await fetch(`/api/customer/sites/${params.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          site_config: config,
-          site_content: content,
-          is_published: true // Auto-publish on every save
-        }),
-        credentials: "include"
-      })
-
-      if (res.ok) {
-        setSaveSuccess(true)
-        // Update local site state to show as published
-        if (site) {
-          setSite({ ...site, is_published: true })
-        }
-        setTimeout(() => setSaveSuccess(false), 2000)
-      }
-    } catch (error) {
-      console.error("Failed to save:", error)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // Auto-save with debounce - saves 1 second after user stops typing
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  const triggerAutoSave = useCallback(() => {
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current)
-    }
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      handleSave()
-    }, 1000) // 1 second debounce
-  }, [config, content, params.id, site])
-
-  // Clean up timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  const copyUrl = () => {
-    if (site) {
-      navigator.clipboard.writeText(`https://${site.subdomain}.mujeebproai.com`)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  // Deploy/Publish function
-  const handleDeploy = async () => {
-    if (!site) return
-    setIsDeploying(true)
-    setDeploySuccess(false)
-    try {
-      const response = await fetch(`/api/customer/sites/${params.id}/deploy`, {
-        method: "POST",
-        credentials: "include"
-      })
-      if (response.ok) {
-        setDeploySuccess(true)
-        setSite({ ...site, is_published: true })
-        setHasChanges(false) // Reset changes after successful deploy
-        setTimeout(() => setDeploySuccess(false), 3000)
-      }
-    } catch (error) {
-      console.error("Deploy failed:", error)
-    } finally {
-      setIsDeploying(false)
-    }
-  }
-
-  const updateConfig = (key: keyof SiteConfig, value: string) => {
-    setConfig(prev => ({ ...prev, [key]: value }))
-    setHasChanges(true) // Mark as having changes
-    triggerAutoSave() // Auto-save after change
-  }
-
-  const updateContent = (section: keyof SiteContent, key: string, value: string) => {
-    setContent(prev => ({
-      ...prev,
-      [section]: {
-        ...(prev[section] as Record<string, unknown>),
-        [key]: value
-      }
-    }))
-    setHasChanges(true) // Mark as having changes
-    triggerAutoSave() // Auto-save after change
-  }
+    fetchSite()
+  }, [user, siteId])
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[150px] animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: "1s" }} />
+        </div>
+        <motion.div
+          className="flex flex-col items-center gap-6 relative z-10"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <motion.div
+            animate={{ rotateY: [0, 360] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          >
+            <MujeebProAILogo variant="icon" size="xl" animated={false} />
+          </motion.div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-cyan-500"
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                />
+              ))}
+            </div>
+            <p className="text-white/50 text-sm">Loading builder...</p>
+          </div>
+        </motion.div>
       </div>
     )
   }
 
-  if (!site) return null
-
-  const previewWidth = {
-    desktop: "100%",
-    tablet: "768px",
-    mobile: "375px"
+  if (error || !site) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <Pencil className="w-8 h-8 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            {error || "Project not found"}
+          </h1>
+          <p className="text-muted-foreground mb-6">
+            This project does not exist or you do not have access to it.
+          </p>
+          <Button onClick={() => router.push("/dashboard/sites")}>
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            Back to My Projects
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 flex flex-col">
-      {/* Top Bar */}
-      <header className="h-14 bg-background border-b border-border flex items-center justify-between px-4 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/dashboard/sites">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Link>
+    <div className="min-h-screen bg-[#0a0a0f] flex flex-col">
+      {/* Builder Top Bar */}
+      <div className="h-12 border-b border-white/[0.06] bg-[#0d0d14] flex items-center justify-between px-2 flex-shrink-0 z-50">
+        {/* Left */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/5"
+            onClick={() => router.push(`/dashboard/sites/${siteId}`)}
+            title="Back to project"
+          >
+            <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="h-6 w-px bg-border" />
-          <div>
-            <h1 className="font-semibold text-sm">{site.site_name}</h1>
-            <p className="text-xs text-muted-foreground">{site.theme_name}</p>
+          <div className="w-px h-5 bg-white/10 mx-1" />
+          <div className="flex items-center gap-2 px-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+              <Pencil className="w-3 h-3 text-white" />
+            </div>
+            <span className="text-sm font-medium text-white hidden sm:inline">
+              {site.site_name}
+            </span>
+          </div>
+          <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
+          <div className="hidden sm:flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-white/30 hover:text-white hover:bg-white/5"
+              title="Undo"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-white/30 hover:text-white hover:bg-white/5"
+              title="Redo"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Device Preview Toggle */}
-          <div className="flex items-center border rounded-lg p-1 bg-muted/50">
-            <Button
-              variant={previewDevice === "desktop" ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setPreviewDevice("desktop")}
+        {/* Center - Device Switcher */}
+        <div className="hidden md:flex items-center gap-1 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5">
+          {[
+            { id: "desktop" as const, icon: Monitor, label: "Desktop" },
+            { id: "tablet" as const, icon: Tablet, label: "Tablet" },
+            { id: "mobile" as const, icon: Smartphone, label: "Mobile" },
+          ].map((device) => (
+            <button
+              key={device.id}
+              onClick={() => setPreviewDevice(device.id)}
+              className={cn(
+                "px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5",
+                previewDevice === device.id
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+              )}
             >
-              <Monitor className="w-4 h-4" />
-            </Button>
-            <Button
-              variant={previewDevice === "tablet" ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setPreviewDevice("tablet")}
+              <device.icon className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{device.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right */}
+        <div className="flex items-center gap-1">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5 hidden sm:flex">
+            <button
+              onClick={() => setViewMode("preview")}
+              className={cn(
+                "px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5",
+                viewMode === "preview"
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+              )}
             >
-              <Tablet className="w-4 h-4" />
-            </Button>
-            <Button
-              variant={previewDevice === "mobile" ? "secondary" : "ghost"}
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setPreviewDevice("mobile")}
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Preview</span>
+            </button>
+            <button
+              onClick={() => setViewMode("code")}
+              className={cn(
+                "px-2.5 py-1 rounded-md transition-all text-xs flex items-center gap-1.5",
+                viewMode === "code"
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/40 hover:text-white/60 hover:bg-white/[0.04]"
+              )}
             >
-              <Smartphone className="w-4 h-4" />
-            </Button>
+              <Code className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Code</span>
+            </button>
           </div>
 
-          <div className="h-6 w-px bg-border" />
+          <div className="w-px h-5 bg-white/10 mx-1" />
 
-          {/* Site URL */}
-          <Button variant="outline" size="sm" onClick={copyUrl}>
-            {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-            {site.subdomain}.mujeebproai.com
-          </Button>
+          {/* AI Chat Button */}
+          <Link href={`/dashboard/sites/${siteId}/chat`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-white/50 hover:text-cyan-400 hover:bg-cyan-500/10 gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">AI Chat</span>
+            </Button>
+          </Link>
 
-          {/* Auto-save indicator */}
-          {isSaving && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving...
-            </div>
-          )}
-          {saveSuccess && (
-            <div className="flex items-center gap-2 text-sm text-green-500">
-              <Check className="w-4 h-4" />
-              Saved & Live!
-            </div>
-          )}
-
-          <div className="h-6 w-px bg-border" />
-
-          {/* Deploy/Publish Button */}
+          {/* Save Button */}
           <Button
             size="sm"
-            onClick={handleDeploy}
-            disabled={isDeploying}
-            className={`${
-              deploySuccess 
-                ? "bg-green-600 hover:bg-green-500 text-white" 
-                : hasChanges
-                  ? "bg-orange-600 hover:bg-orange-500 text-white animate-pulse" 
-                  : site.is_published 
-                    ? "bg-gray-600 hover:bg-gray-500 text-white" 
-                    : "bg-cyan-600 hover:bg-cyan-500 text-white"
-            }`}
+            className="h-8 text-xs bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white gap-1.5 px-3"
           >
-            {isDeploying ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Deploying...
-              </>
-            ) : deploySuccess ? (
-              <>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Deployed!
-              </>
-            ) : hasChanges ? (
-              <>
-                <Rocket className="w-4 h-4 mr-2" />
-                Republish Changes
-              </>
-            ) : (
-              <>
-                <Rocket className="w-4 h-4 mr-2" />
-                {site.is_published ? "Published" : "Publish"}
-              </>
-            )}
-          </Button>
-
-          {/* Preview Button - always show since auto-published */}
-          <Button size="sm" variant="outline" asChild>
-            <a 
-              href={`https://${site.subdomain}.mujeebproai.com`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Eye className="w-4 h-4 mr-2" />
-              View Live Site
-            </a>
+            <Save className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Save</span>
           </Button>
         </div>
-      </header>
+      </div>
 
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <aside className="w-80 bg-background border-r border-border overflow-y-auto">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full grid grid-cols-3 p-1 m-2">
-              <TabsTrigger value="design" className="text-xs">
-                <Palette className="w-3 h-3 mr-1" />
-                Design
-              </TabsTrigger>
-              <TabsTrigger value="content" className="text-xs">
-                <Type className="w-3 h-3 mr-1" />
-                Content
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="text-xs">
-                <Settings className="w-3 h-3 mr-1" />
-                Settings
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="p-4">
-              {/* Design Tab */}
-              <TabsContent value="design" className="mt-0 space-y-4">
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Colors</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Primary Color</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="color"
-                          value={config.primaryColor}
-                          onChange={(e) => updateConfig("primaryColor", e.target.value)}
-                          className="w-12 h-8 p-0 border-0"
-                        />
-                        <Input
-                          value={config.primaryColor}
-                          onChange={(e) => updateConfig("primaryColor", e.target.value)}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Secondary Color</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="color"
-                          value={config.secondaryColor}
-                          onChange={(e) => updateConfig("secondaryColor", e.target.value)}
-                          className="w-12 h-8 p-0 border-0"
-                        />
-                        <Input
-                          value={config.secondaryColor}
-                          onChange={(e) => updateConfig("secondaryColor", e.target.value)}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Background Color</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="color"
-                          value={config.backgroundColor}
-                          onChange={(e) => updateConfig("backgroundColor", e.target.value)}
-                          className="w-12 h-8 p-0 border-0"
-                        />
-                        <Input
-                          value={config.backgroundColor}
-                          onChange={(e) => updateConfig("backgroundColor", e.target.value)}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Text Color</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="color"
-                          value={config.textColor}
-                          onChange={(e) => updateConfig("textColor", e.target.value)}
-                          className="w-12 h-8 p-0 border-0"
-                        />
-                        <Input
-                          value={config.textColor}
-                          onChange={(e) => updateConfig("textColor", e.target.value)}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Typography</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <Label className="text-xs">Font Family</Label>
-                    <select
-                      value={config.fontFamily}
-                      onChange={(e) => updateConfig("fontFamily", e.target.value)}
-                      className="w-full h-8 mt-1 text-xs rounded-md border border-input bg-background px-2"
-                    >
-                      <option value="Inter">Inter</option>
-                      <option value="Roboto">Roboto</option>
-                      <option value="Open Sans">Open Sans</option>
-                      <option value="Poppins">Poppins</option>
-                      <option value="Montserrat">Montserrat</option>
-                      <option value="Playfair Display">Playfair Display</option>
-                    </select>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Content Tab */}
-              <TabsContent value="content" className="mt-0 space-y-4">
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Hero Section</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Title</Label>
-                      <Input
-                        value={content.hero.title}
-                        onChange={(e) => updateContent("hero", "title", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Subtitle</Label>
-                      <Textarea
-                        value={content.hero.subtitle}
-                        onChange={(e) => updateContent("hero", "subtitle", e.target.value)}
-                        className="mt-1 text-xs min-h-[60px]"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Button Text</Label>
-                      <Input
-                        value={content.hero.ctaText}
-                        onChange={(e) => updateContent("hero", "ctaText", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Button Link</Label>
-                      <Input
-                        value={content.hero.ctaLink}
-                        onChange={(e) => updateContent("hero", "ctaLink", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                        placeholder="#contact"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">About Section</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Title</Label>
-                      <Input
-                        value={content.about.title}
-                        onChange={(e) => updateContent("about", "title", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Description</Label>
-                      <Textarea
-                        value={content.about.description}
-                        onChange={(e) => updateContent("about", "description", e.target.value)}
-                        className="mt-1 text-xs min-h-[80px]"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Contact Info</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Email</Label>
-                      <Input
-                        value={content.contact.email}
-                        onChange={(e) => updateContent("contact", "email", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Phone</Label>
-                      <Input
-                        value={content.contact.phone}
-                        onChange={(e) => updateContent("contact", "phone", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Address</Label>
-                      <Input
-                        value={content.contact.address}
-                        onChange={(e) => updateContent("contact", "address", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Footer</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Copyright Text</Label>
-                      <Input
-                        value={content.footer.copyright}
-                        onChange={(e) => updateContent("footer", "copyright", e.target.value)}
-                        className="h-8 mt-1 text-xs"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* Settings Tab */}
-              <TabsContent value="settings" className="mt-0 space-y-4">
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Site Info</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-3">
-                    <div>
-                      <Label className="text-xs">Site Name</Label>
-                      <Input
-                        value={site.site_name}
-                        className="h-8 mt-1 text-xs"
-                        disabled
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Subdomain</Label>
-                      <Input
-                        value={`${site.subdomain}.mujeebproai.com`}
-                        className="h-8 mt-1 text-xs"
-                        disabled
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-sm">Publishing</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label className="text-xs">Site Published</Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Make your site visible to the public
-                        </p>
-                      </div>
-                      <Switch
-                        checked={site.is_published}
-                        onCheckedChange={handlePublish}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </div>
-          </Tabs>
-        </aside>
-
-        {/* Preview Area */}
-        <main className="flex-1 p-4 overflow-auto">
-          <div 
-            className="mx-auto bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300"
-            style={{ 
-              width: previewWidth[previewDevice],
-              maxWidth: "100%",
-              minHeight: "calc(100vh - 120px)"
-            }}
-          >
-            {/* Live Preview with applied styles */}
-            <div 
-              style={{ 
-                fontFamily: config.fontFamily,
-                backgroundColor: config.backgroundColor,
-                color: config.textColor
-              }}
+      {/* Builder Workspace */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Toolbar */}
+        <div className="w-12 border-r border-white/[0.06] bg-[#0d0d14] flex flex-col items-center py-2 gap-1 flex-shrink-0">
+          {builderTools.map((tool) => (
+            <button
+              key={tool.id}
+              onClick={() => setActiveTool(tool.id)}
+              className={cn(
+                "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
+                activeTool === tool.id
+                  ? "bg-cyan-500/20 text-cyan-400"
+                  : "text-white/30 hover:text-white/60 hover:bg-white/[0.04]"
+              )}
+              title={tool.label}
             >
-              {/* Hero Preview */}
-              <section 
-                className="py-20 px-8 text-center"
-                style={{ backgroundColor: config.primaryColor }}
-              >
-                <h1 className="text-4xl font-bold text-white mb-4">
-                  {content.hero.title}
-                </h1>
-                <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-                  {content.hero.subtitle}
-                </p>
-                <button 
-                  className="px-8 py-3 rounded-lg font-semibold text-white"
-                  style={{ backgroundColor: config.secondaryColor }}
-                >
-                  {content.hero.ctaText}
-                </button>
-              </section>
+              <tool.icon className="w-4 h-4" />
+            </button>
+          ))}
+        </div>
 
-              {/* About Preview */}
-              <section className="py-16 px-8">
-                <h2 className="text-3xl font-bold text-center mb-6">
-                  {content.about.title}
-                </h2>
-                <p className="text-lg text-center max-w-3xl mx-auto opacity-80">
-                  {content.about.description}
-                </p>
-              </section>
-
-              {/* Contact Preview */}
-              <section 
-                className="py-16 px-8"
-                style={{ backgroundColor: config.primaryColor + "10" }}
-              >
-                <h2 className="text-3xl font-bold text-center mb-8">Contact Us</h2>
-                <div className="flex flex-wrap justify-center gap-8 text-center">
-                  <div>
-                    <p className="font-semibold">Email</p>
-                    <p className="opacity-80">{content.contact.email}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">Phone</p>
-                    <p className="opacity-80">{content.contact.phone}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold">Address</p>
-                    <p className="opacity-80">{content.contact.address}</p>
-                  </div>
-                </div>
-              </section>
-
-              {/* Footer Preview */}
-              <footer 
-                className="py-6 px-8 text-center text-sm"
-                style={{ backgroundColor: config.textColor, color: config.backgroundColor }}
-              >
-                {content.footer.copyright}
-              </footer>
+        {/* Tool Panel */}
+        <div className="w-64 border-r border-white/[0.06] bg-[#0a0a0f] overflow-y-auto flex-shrink-0 hidden md:block">
+          <div className="p-4">
+            <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
+              {builderTools.find(t => t.id === activeTool)?.label || "Tools"}
+            </h3>
+            <div className="space-y-2">
+              <p className="text-xs text-white/30 text-center py-8">
+                Select elements on the canvas to edit their properties.
+              </p>
             </div>
           </div>
-        </main>
+        </div>
+
+        {/* Canvas Area */}
+        <div className="flex-1 flex items-start justify-center overflow-auto bg-[#08080d] p-4">
+          <div
+            className={cn(
+              "bg-white rounded-lg shadow-2xl transition-all duration-300",
+              previewDevice === "desktop" && "w-full max-w-5xl min-h-[600px]",
+              previewDevice === "tablet" && "w-[768px] min-h-[900px]",
+              previewDevice === "mobile" && "w-[375px] min-h-[667px]",
+            )}
+          >
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center p-8">
+                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Layout className="w-8 h-8 text-cyan-400" />
+                </div>
+                <h3 className="text-sm font-medium text-gray-900 mb-1">
+                  {site.site_name}
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  {site.theme_name || "Custom Theme"} — Visual Builder
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-medium">
+                    <Sparkles className="w-3 h-3" />
+                    AI-Powered
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+                    <Box className="w-3 h-3" />
+                    Drag & Drop
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-6 max-w-xs mx-auto">
+                  Click elements on the canvas or use the AI chat to make changes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
