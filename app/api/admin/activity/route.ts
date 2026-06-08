@@ -9,14 +9,14 @@ const ADMIN_EMAILS = ["mujeeb@job4u.com", "admin@mujeebproai.com"]
 export async function GET() {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get("auth-token")?.value
+    const token = cookieStore.get("auth_token")?.value || cookieStore.get("auth-token")?.value
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const payload = await verifyToken(token)
-    if (!payload || !ADMIN_EMAILS.includes(payload.email)) {
+    if (!payload || !ADMIN_EMAILS.includes(String(payload.email).toLowerCase().trim())) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
