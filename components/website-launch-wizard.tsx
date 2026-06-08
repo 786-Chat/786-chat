@@ -454,7 +454,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
                   id="category"
                   value={businessInfo.category}
                   onChange={(e) => setBusinessInfo(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-white/10 bg-white/5 px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-white/10 bg-[#0b0b10] px-3 text-sm text-white"
                 >
                   <option value="restaurant">Restaurant</option>
                   <option value="cafe">Cafe</option>
@@ -1498,7 +1498,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[calc(90vh-180px)] shadow-2xl"
+          className="bg-[#0a0a0f] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -1558,7 +1558,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
           )}
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="p-6 overflow-y-auto flex-1 min-h-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentStep}
@@ -1574,7 +1574,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
 
           {/* Footer Navigation */}
           {currentStep <= 5 && currentStep !== 6 && (
-             <div className="sticky bottom-0 z-50 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
+             <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
               <Button
                 variant="outline"
                 onClick={prevStep}
