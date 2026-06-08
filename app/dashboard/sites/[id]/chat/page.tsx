@@ -1,34 +1,35 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useChat } from "@ai-sdk/react"
-import { motion, AnimatePresence } from "framer-motion"
-import { 
-  Send, 
-  Loader2, 
-  ArrowLeft,
+import { motion } from "framer-motion"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  MessageSquare,
   Globe,
+  ExternalLink,
+  Loader2,
+  ChevronLeft,
   Bot,
   User,
+  ArrowUp,
   Sparkles,
-  ExternalLink,
-  Monitor,
-  Tablet,
-  Smartphone,
+  StopCircle,
+  Copy,
+  Check,
   RefreshCw,
-  MessageSquare,
-  Rocket,
-  CheckCircle
+  ImagePlus,
+  Paperclip,
+  FileText,
+  X,
+  Eye,
+  Code,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { useAuth } from "@/contexts/auth-context"
+import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 import Link from "next/link"
-import ReactMarkdown from "react-markdown"
-import useSWR from "swr"
-
-const fetcher = (url: string) => fetch(url, { credentials: "include" }).then(r => r.json())
+import { cn } from "@/lib/utils"
 
 interface Site {
   id: string
@@ -36,387 +37,302 @@ interface Site {
   subdomain: string
   custom_domain: string | null
   is_published: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
   theme_name: string
-  site_config: Record<string, unknown>
-  site_content: Record<string, unknown>
+  theme_slug: string
+  theme_thumbnail: string
+  logo_url: string | null
+  site_config: any
+  site_content: any
 }
 
-export default function ProjectChatPage() {
+export default function SiteChatPage() {
   const params = useParams()
   const router = useRouter()
   const siteId = params.id as string
   const { user, isLoading: authLoading } = useAuth()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
-  const [previewKey, setPreviewKey] = useState(0)
-  const [isDeploying, setIsDeploying] = useState(false)
-  const [deploySuccess, setDeploySuccess] = useState(false)
-  const [hasChanges, setHasChanges] = useState(false) // Track when AI makes changes
-
-  // Fetch site data
-  const { data: siteData, mutate: mutateSite } = useSWR(
-    siteId ? `/api/customer/sites/${siteId}` : null,
-    fetcher
-  )
-  const site: Site | null = siteData?.site || null
-
-  // Chat with project context
-  const { 
-    messages, 
-    input, 
-    setInput, 
-    handleSubmit, 
-    isLoading: chatLoading,
-    setMessages
-  } = useChat({
-    api: "/api/project-chat",
-    body: {
-      siteId,
-      siteName: site?.site_name,
-      subdomain: site?.subdomain,
-      siteConfig: site?.site_config,
-      siteContent: site?.site_content
-    },
-    onFinish: () => {
-      // Refresh site data after AI makes changes
-      mutateSite()
-      // Refresh preview
-      setPreviewKey(prev => prev + 1)
-      // Mark that changes were made - needs republish
-      setHasChanges(true)
-    }
-  })
+  const [site, setSite] = useState<Site | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/login")
+      router.push("/login?redirect=/dashboard/sites")
     }
   }, [user, authLoading, router])
 
-  // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    if (!user || !siteId) return
 
-  // Deploy/Publish function
-  const handleDeploy = async () => {
-    setIsDeploying(true)
-    setDeploySuccess(false)
-    try {
-      const response = await fetch(`/api/customer/sites/${siteId}/deploy`, {
-        method: "POST",
-        credentials: "include"
-      })
-      if (response.ok) {
-        setDeploySuccess(true)
-        setHasChanges(false) // Reset changes after successful deploy
-        mutateSite() // Refresh site data
-        // Reset success state after 3 seconds
-        setTimeout(() => setDeploySuccess(false), 3000)
-      }
-    } catch (error) {
-      console.error("Deploy failed:", error)
-    } finally {
-      setIsDeploying(false)
-    }
-  }
-
-  // Handle textarea auto-resize
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
-    e.target.style.height = "auto"
-    e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"
-  }
-
-  // Handle keyboard submit
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      if (input.trim() && !chatLoading) {
-        handleSubmit(e as unknown as React.FormEvent)
+    const fetchSite = async () => {
+      try {
+        const res = await fetch(`/api/customer/sites/${siteId}`, {
+          credentials: "include",
+        })
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError("Site not found")
+          } else {
+            setError("Failed to load site")
+          }
+          return
+        }
+        const data = await res.json()
+        setSite(data.site)
+      } catch (err) {
+        console.error("Failed to fetch site:", err)
+        setError("Failed to load site")
+      } finally {
+        setIsLoading(false)
       }
     }
-  }
 
-  const previewWidth = {
-    desktop: "100%",
-    tablet: "768px",
-    mobile: "375px"
-  }
+    fetchSite()
+  }, [user, siteId])
 
-  const previewUrl = site?.is_published 
-    ? `https://${site.subdomain}.mujeebproai.com`
-    : `/api/preview/site/${siteId}`
-
-  if (authLoading || !site) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[150px] animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: "1s" }} />
+        </div>
+        <motion.div
+          className="flex flex-col items-center gap-6 relative z-10"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <motion.div
+            animate={{ rotateY: [0, 360] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          >
+            <MujeebProAILogo variant="icon" size="xl" animated={false} />
+          </motion.div>
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex gap-1">
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-cyan-500"
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                />
+              ))}
+            </div>
+            <p className="text-white/50 text-sm">Loading project workspace...</p>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  if (error || !site) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <MessageSquare className="w-8 h-8 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">
+            {error || "Project not found"}
+          </h1>
+          <p className="text-muted-foreground mb-6">
+            This project does not exist or you do not have access to it.
+          </p>
+          <Button onClick={() => router.push("/dashboard/sites")}>
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            Back to My Projects
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen bg-[#0a0a0f] flex flex-col overflow-hidden">
-      {/* Top Bar */}
-      <header className="h-12 bg-[#0d0d14] border-b border-white/10 flex items-center justify-between px-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" className="text-white/70 hover:text-white" asChild>
-            <Link href="/dashboard/sites">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Sites
-            </Link>
-          </Button>
-          <div className="h-5 w-px bg-white/20" />
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-              <Globe className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-medium text-white">{site.site_name}</h1>
-              <p className="text-[10px] text-white/50">{site.subdomain}.mujeebproai.com</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Device Preview Toggle */}
-          <div className="flex items-center border border-white/10 rounded-lg p-0.5 bg-white/5">
+    <div className="min-h-screen bg-[#0a0a0f] flex flex-col">
+      {/* Project Context Header */}
+      <div className="border-b border-white/[0.06] bg-[#0d0d14]">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
             <Button
               variant="ghost"
               size="icon"
-              className={`h-6 w-6 ${previewDevice === "desktop" ? "bg-white/10 text-white" : "text-white/40"}`}
-              onClick={() => setPreviewDevice("desktop")}
+              className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/5 flex-shrink-0"
+              onClick={() => router.push("/dashboard/sites")}
+              title="Back to My Projects"
             >
-              <Monitor className="w-3.5 h-3.5" />
+              <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-6 w-6 ${previewDevice === "tablet" ? "bg-white/10 text-white" : "text-white/40"}`}
-              onClick={() => setPreviewDevice("tablet")}
-            >
-              <Tablet className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-6 w-6 ${previewDevice === "mobile" ? "bg-white/10 text-white" : "text-white/40"}`}
-              onClick={() => setPreviewDevice("mobile")}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-white/50 hover:text-white"
-            onClick={() => setPreviewKey(prev => prev + 1)}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </Button>
-
-          {site.is_published && (
-            <Button size="sm" variant="outline" className="h-7 text-xs border-white/20 text-white/70 hover:text-white" asChild>
-              <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="w-3 h-3 mr-1" />
-                View Live
-              </a>
-            </Button>
-          )}
-
-          {/* Deploy/Publish Button */}
-          <Button
-            size="sm"
-            onClick={handleDeploy}
-            disabled={isDeploying}
-            className={`h-7 text-xs ${
-              deploySuccess 
-                ? "bg-green-600 hover:bg-green-500" 
-                : hasChanges
-                  ? "bg-orange-600 hover:bg-orange-500 animate-pulse" 
-                  : site.is_published 
-                    ? "bg-gray-600 hover:bg-gray-500" 
-                    : "bg-cyan-600 hover:bg-cyan-500"
-            }`}
-          >
-            {isDeploying ? (
-              <>
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                Deploying...
-              </>
-            ) : deploySuccess ? (
-              <>
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Deployed!
-              </>
-            ) : hasChanges ? (
-              <>
-                <Rocket className="w-3 h-3 mr-1" />
-                Republish Changes
-              </>
-            ) : (
-              <>
-                <Rocket className="w-3 h-3 mr-1" />
-                {site.is_published ? "Published" : "Publish"}
-              </>
-            )}
-          </Button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Chat Panel */}
-        <div className="w-[450px] flex flex-col border-r border-white/10 bg-[#0d0d14]">
-          {/* Chat Header */}
-          <div className="p-4 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="w-4 h-4 text-white" />
               </div>
-              <div>
-                <h2 className="text-sm font-semibold text-white">AI Assistant</h2>
-                <p className="text-xs text-white/50">Edit your site with AI</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-purple-600/20 flex items-center justify-center mx-auto mb-4">
-                  <MessageSquare className="w-8 h-8 text-cyan-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Chat with your site</h3>
-                <p className="text-sm text-white/50 max-w-xs mx-auto">
-                  Ask me to change colors, update text, add sections, or anything else about your website.
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-white truncate">
+                  {site.site_name}
+                </h1>
+                <p className="text-xs text-white/40 truncate flex items-center gap-1">
+                  <Globe className="w-3 h-3" />
+                  {site.subdomain}.mujeebproai.com
+                  {site.is_published && (
+                    <span className="text-green-400 ml-1">• Live</span>
+                  )}
                 </p>
-                <div className="mt-6 space-y-2">
-                  {[
-                    "Change the primary color to blue",
-                    "Update the hero title",
-                    "Make the font larger",
-                    "Add a testimonials section"
-                  ].map((suggestion, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setInput(suggestion)}
-                      className="block w-full text-left px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-white/70 hover:text-white transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
               </div>
-            )}
-
-            <AnimatePresence initial={false}>
-              {messages.map((message, index) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}
-                >
-                  {message.role === "assistant" && (
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                      <Bot className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                      message.role === "user"
-                        ? "bg-cyan-600 text-white"
-                        : "bg-white/10 text-white/90"
-                    }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <div className="prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <p className="text-sm">{message.content}</p>
-                    )}
-                  </div>
-                  {message.role === "user" && (
-                    <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                      <User className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-
-            {chatLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex gap-3"
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link href={`/dashboard/sites/${siteId}`}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-white/50 hover:text-white hover:bg-white/5"
               >
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
-                </div>
-                <div className="bg-white/10 rounded-2xl px-4 py-3">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 rounded-full bg-white/50 animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </div>
-                </div>
-              </motion.div>
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                Overview
+              </Button>
+            </Link>
+            {site.is_published && (
+              <a
+                href={`https://${site.subdomain}.mujeebproai.com`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs border-white/10 text-white/50 hover:text-white hover:bg-white/5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                  View Live
+                </Button>
+              </a>
             )}
-            <div ref={messagesEndRef} />
+            <Link href={`/dashboard/sites/${siteId}/builder`}>
+              <Button
+                size="sm"
+                className="h-8 text-xs bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+              >
+                <Code className="w-3.5 h-3.5 mr-1.5" />
+                Builder
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Project Info Bar */}
+      <div className="border-b border-white/[0.06] bg-[#0a0a0f]/80">
+        <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-4 text-xs text-white/30">
+          <span>
+            Theme: <span className="text-white/50">{site.theme_name || "Custom"}</span>
+          </span>
+          <span className="w-px h-3 bg-white/10" />
+          <span>
+            Status:{" "}
+            <span className={site.is_published ? "text-green-400" : "text-yellow-400"}>
+              {site.is_published ? "Published" : "Draft"}
+            </span>
+          </span>
+          {site.custom_domain && (
+            <>
+              <span className="w-px h-3 bg-white/10" />
+              <span>
+                Domain: <span className="text-white/50">{site.custom_domain}</span>
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Workspace Area */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Chat Area */}
+        <div className="flex-1 flex flex-col relative" 
+          style={{ 
+            background: 'linear-gradient(180deg, rgba(6, 182, 212, 0.08) 0%, rgba(10, 15, 30, 0.98) 100%)',
+          }}
+        >
+          {/* Empty Chat State */}
+          <div className="flex-1 flex flex-col items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex flex-col items-center text-center max-w-lg w-full"
+            >
+              <div className="flex justify-center mb-6">
+                <MujeebProAILogo variant="icon" size="xl" />
+              </div>
+              <h2 className="text-2xl font-semibold text-white mb-2">
+                Building <span className="text-cyan-400">{site.site_name}</span>
+              </h2>
+              <p className="text-sm text-white/40 mb-2">
+                Ask MujeebProAI to edit your website content, design, or code.
+              </p>
+              <p className="text-xs text-white/25 mb-8">
+                Project: {site.subdomain}.mujeebproai.com
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
+                {[
+                  "Update the hero section",
+                  "Change color scheme",
+                  "Add a new page",
+                  "Optimize for mobile",
+                ].map((prompt, index) => (
+                  <motion.button
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="p-3 text-left text-xs rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-cyan-500/30 text-white/60 hover:text-white/90 transition-all"
+                  >
+                    {prompt}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
           </div>
 
-          {/* Input */}
-          <form onSubmit={handleSubmit} className="p-4 border-t border-white/10">
-            <div className="relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleTextareaChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask AI to change your site..."
-                className="min-h-[52px] max-h-[200px] pr-12 bg-white/5 border-white/10 text-white placeholder:text-white/30 resize-none rounded-xl"
-                rows={1}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!input.trim() || chatLoading}
-                className="absolute right-2 bottom-2 h-8 w-8 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50"
-              >
-                {chatLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </Button>
+          {/* Input Area */}
+          <div className="border-t border-white/[0.06] p-3 sm:p-4 bg-[#0a0a0f] relative z-10 flex-shrink-0">
+            <div className="max-w-3xl mx-auto">
+              <div className="relative flex items-end bg-white/[0.03] border border-white/[0.08] rounded-2xl focus-within:border-cyan-500/30 transition-colors overflow-hidden">
+                <div className="flex items-center gap-0.5 pl-2 pb-2 pt-2">
+                  <button
+                    type="button"
+                    className="p-1.5 rounded-lg text-white/40 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                    title="Attach image"
+                  >
+                    <ImagePlus className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="p-1.5 rounded-lg text-white/40 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                    title="Attach file"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  placeholder={`Ask AI to edit ${site.site_name}...`}
+                  className="flex-1 min-h-[44px] max-h-[200px] px-3 sm:px-2 py-3 bg-transparent text-sm text-white placeholder:text-white/30 resize-none focus:outline-none overflow-y-auto"
+                  rows={1}
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="h-8 w-8 rounded-xl m-1.5 flex-shrink-0 bg-cyan-500 hover:bg-cyan-400 transition-all duration-300"
+                >
+                  <ArrowUp className="w-4 h-4 text-white" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-white/25 text-center mt-2">
+                MujeebProAI may produce inaccurate information.
+              </p>
             </div>
-          </form>
-        </div>
-
-        {/* Preview Panel */}
-        <div className="flex-1 bg-[#1a1a24] flex items-center justify-center p-6 overflow-hidden">
-          <div 
-            className="bg-white rounded-lg shadow-2xl overflow-hidden transition-all duration-300"
-            style={{ 
-              width: previewWidth[previewDevice],
-              maxWidth: "100%",
-              height: previewDevice === "mobile" ? "667px" : "100%"
-            }}
-          >
-            <iframe
-              key={previewKey}
-              src={previewUrl}
-              className="w-full h-full border-0"
-              title="Site Preview"
-            />
           </div>
         </div>
       </div>
