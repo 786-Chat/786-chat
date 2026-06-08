@@ -182,7 +182,7 @@ export function WorkspaceTopBar({
           <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
         </div>
 
-        {/* v0-style URL Bar - Center */}
+        {/* MujeebProAI URL Bar - Center */}
         <div className="hidden md:flex items-center gap-2 flex-1 max-w-xl mx-4">
           {/* Traffic Lights */}
           <div className="flex items-center gap-1.5">
