@@ -16,9 +16,11 @@ export async function GET() {
     }
 
     const payload = await verifyToken(token)
-    if (!payload || !ADMIN_EMAILS.includes(String(payload.email).toLowerCase().trim())) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+const email = String(payload?.email || "").toLowerCase().trim()
+
+if (!payload || !ADMIN_EMAILS.includes(email)) {
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+}
 
     // Fetch recent activity logs with user info
     let activities: Record<string, unknown>[] = []
