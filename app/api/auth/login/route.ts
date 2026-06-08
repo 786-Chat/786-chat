@@ -72,7 +72,7 @@ const token = await createToken({
 
     // Set auth cookie directly in response
     const cookieStore = await cookies()
-    cookieStore.set("auth-token", token, {
+    cookieStore.set("auth_token", token, {
       httpOnly: true,
       secure: true,
       sameSite: "none",
