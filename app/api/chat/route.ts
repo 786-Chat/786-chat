@@ -480,7 +480,12 @@ Focus on helping customers:
           }
           try {
             const result = await sql.unsafe(sqlQuery)
-            return { success: true, rows: result.slice(0, 100), totalRows: result.length }
+            const rows = Array.isArray(result)
+              ? result
+              : Array.isArray((result as any)?.rows)
+              ? (result as any).rows
+              : []
+            return { success: true, rows: rows.slice(0, 100), totalRows: rows.length }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Query failed" }
           }
