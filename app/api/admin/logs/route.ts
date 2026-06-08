@@ -10,14 +10,21 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const logs = await sql`
-      SELECT *
-      FROM admin_logs
-      ORDER BY created_at DESC
-      LIMIT 500
-    `
+    let logs: Record<string, unknown>[] = []
 
-    return NextResponse.json({ logs })
+try {
+  logs = await sql`
+    SELECT *
+    FROM admin_logs
+    ORDER BY created_at DESC
+    LIMIT 500
+  `
+} catch (e) {
+  console.error("admin_logs table missing or query failed:", e)
+  logs = []
+}
+
+return NextResponse.json({ logs })
   } catch (error) {
     console.error("Failed to fetch logs:", error)
     return NextResponse.json({ error: "Failed to fetch logs" }, { status: 500 })
