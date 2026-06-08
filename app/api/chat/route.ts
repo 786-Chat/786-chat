@@ -198,7 +198,17 @@ export async function POST(request: Request) {
     const imageCount = lastUserMessage ? getImageCount(lastUserMessage) : 0
 
     // === AI PROTECTION CHECKS ===
-    const protectionResult = await checkAIProtection({
+    const protectionResult = isAdminRequest
+  ? {
+      allowed: true,
+      remaining: {
+        dailyMessages: 999999,
+        monthlyMessages: 999999,
+        extraCredits: 999999,
+      },
+      canUseExtraCredits: false,
+    }
+  : await checkAIProtection({
       userId: session.id,
       plan: userPlan,
       messageContent: userText,
