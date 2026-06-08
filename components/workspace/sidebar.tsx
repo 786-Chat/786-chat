@@ -66,15 +66,15 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         if (balanceResponse.ok) {
           const balanceData = await balanceResponse.json()
           setUsage({
-            used: balanceData.freeMessagesUsed || 0,
-            limit: balanceData.freeMessagesLimit || 100,
-            plan: data.usage?.plan || "free",
-            balance: balanceData.balance || 0,
-            freeMessagesUsed: balanceData.freeMessagesUsed || 0,
-            freeMessagesLimit: balanceData.freeMessagesLimit || 100,
-            freeMessagesRemaining: balanceData.freeMessagesRemaining || 100,
-            costPerMessage: balanceData.pricing?.costPerMessage || 0.0005
-          })
+  used: balanceData.freeMessagesUsed || 0,
+  limit: balanceData.freeMessagesLimit || 10,
+  plan: data.usage?.plan || "free",
+  balance: balanceData.balance || 0,
+  freeMessagesUsed: balanceData.freeMessagesUsed || 0,
+  freeMessagesLimit: balanceData.freeMessagesLimit || 10,
+  freeMessagesRemaining: balanceData.freeMessagesRemaining ?? 10,
+  costPerMessage: balanceData.pricing?.costPerMessage || 0.0005
+})
         } else if (data.usage) {
           setUsage(data.usage)
         }
