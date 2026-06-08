@@ -68,7 +68,7 @@ const token = await createToken({
   role: userRole,
 })
 
-    console.log("[MujeebProAI] Login successful, setting cookie for:", email, "role:", user.role)
+    console.log("[MujeebProAI] Login successful, setting cookie for:", email, "role:", userRole)
 
     // Set auth cookie directly in response
     const cookieStore = await cookies()
