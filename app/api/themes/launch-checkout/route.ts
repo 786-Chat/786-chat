@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
-import { stripe, getStripe } from "@/lib/stripe"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
+function makeSlug(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+}
 
 export async function POST(request: NextRequest) {
   try {
     const payload = await getSession()
+
     if (!payload) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
+
     const {
       themeId,
       themeName,
@@ -31,17 +40,31 @@ export async function POST(request: NextRequest) {
       currency,
     } = body
 
-    // Validate subdomain availability
-    if (subdomain) {
-      const [existing] = await sql`
-        SELECT id FROM customer_sites WHERE LOWER(subdomain) = LOWER(${subdomain})
-      `
-      if (existing) {
-        return NextResponse.json({ error: "Subdomain is already taken" }, { status: 400 })
-      }
+    if (!themeId || !themeName || !businessInfo?.businessName) {
+      return NextResponse.json({ error: "Missing required data" }, { status: 400 })
     }
 
-    // Create the site record first (in pending status)
+    const finalSubdomain =
+      subdomain && subdomain.trim()
+        ? makeSlug(subdomain)
+        : `${makeSlug(businessInfo.businessName)}-${Date.now().toString().slice(-5)}`
+
+    if (!finalSubdomain || finalSubdomain.length < 3) {
+      return NextResponse.json({ error: "Invalid subdomain" }, { status: 400 })
+    }
+
+    const currencyCode = (currency || "GBP").toLowerCase()
+    const themeAmount = Number(themePrice || 0)
+    const moduleAmount = Number(modulesPrice || 0)
+
+    const [existing] = await sql`
+      SELECT id FROM customer_sites WHERE LOWER(subdomain) = LOWER(${finalSubdomain})
+    `
+
+    if (existing) {
+      return NextResponse.json({ error: "Subdomain is already taken" }, { status: 400 })
+    }
+
     const [site] = await sql`
       INSERT INTO customer_sites (
         user_id,
@@ -60,24 +83,25 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${payload.id},
         ${businessInfo.businessName},
-        ${subdomain.toLowerCase()},
+        ${finalSubdomain},
         ${customDomain || null},
         ${themeId},
         ${themeName},
         'pending_payment',
         false,
         false,
-        ${JSON.stringify(selectedModules)}::jsonb,
+        ${JSON.stringify(selectedModules || [])}::jsonb,
         ${JSON.stringify({
           themeOptions,
           selectedPayments,
           billingCycle,
           googleBusiness,
+          openingHours,
         })}::jsonb,
         ${JSON.stringify({
           theme: themeOptions,
-          modules: selectedModules,
-          payments: selectedPayments,
+          modules: selectedModules || [],
+          payments: selectedPayments || [],
         })}::jsonb,
         ${JSON.stringify({
           hero: {
@@ -89,7 +113,6 @@ export async function POST(request: NextRequest) {
       RETURNING id
     `
 
-    // Create site settings
     await sql`
       INSERT INTO customer_site_settings (
         site_id,
@@ -110,76 +133,77 @@ export async function POST(request: NextRequest) {
         ${site.id},
         ${businessInfo.businessName},
         ${payload.name || businessInfo.businessName},
-        ${businessInfo.country},
-        ${currency},
-        ${businessInfo.address},
-        ${businessInfo.phone},
-        ${businessInfo.whatsapp || businessInfo.phone},
-        ${businessInfo.email},
-        ${businessInfo.category},
-        ${JSON.stringify(selectedPayments)}::jsonb,
-        ${googleBusiness.assistedSetup},
-        ${googleBusiness.assistedSetup ? new Date().toISOString() : null},
-        ${googleBusiness.existingProfileUrl || null}
+        ${businessInfo.country || "United Kingdom"},
+        ${currency || "GBP"},
+        ${businessInfo.address || ""},
+        ${businessInfo.phone || ""},
+        ${businessInfo.whatsapp || businessInfo.phone || ""},
+        ${businessInfo.email || payload.email || ""},
+        ${businessInfo.category || "restaurant"},
+        ${JSON.stringify(selectedPayments || [])}::jsonb,
+        ${Boolean(googleBusiness?.assistedSetup)},
+        ${googleBusiness?.assistedSetup ? new Date().toISOString() : null},
+        ${googleBusiness?.existingProfileUrl || null}
       )
     `
 
-    // Calculate total
-    const totalAmount = themePrice + modulesPrice
+    const stripe = getStripe()
 
-    // Create Stripe checkout session line items
     const themePriceData = {
       price_data: {
-        currency: currency.toLowerCase(),
+        currency: currencyCode,
         product_data: {
           name: `${themeName} Theme`,
           description: `Website theme for ${businessInfo.businessName}`,
         },
-        unit_amount: themePrice,
+        unit_amount: themeAmount,
       },
       quantity: 1,
     }
 
-    // Add modules subscription if any
-    const modulesPriceData = modulesPrice > 0 ? {
-      price_data: {
-        currency: currency.toLowerCase(),
-        product_data: {
-          name: "Website Modules",
-          description: `${selectedModules.length} modules (${billingCycle})`,
-        },
-        unit_amount: modulesPrice,
-        recurring: {
-          interval: billingCycle === "yearly" ? "year" as const : "month" as const,
-        },
-      },
-      quantity: 1,
-    } : null
+    const modulesPriceData =
+      moduleAmount > 0
+        ? {
+            price_data: {
+              currency: currencyCode,
+              product_data: {
+                name: "Website Modules",
+                description: `${(selectedModules || []).length} modules (${billingCycle})`,
+              },
+              unit_amount: moduleAmount,
+              recurring: {
+                interval: billingCycle === "yearly" ? ("year" as const) : ("month" as const),
+              },
+            },
+            quantity: 1,
+          }
+        : null
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"
 
     const session = await stripe.checkout.sessions.create({
-      mode: modulesPrice > 0 ? "subscription" : "payment",
+      mode: moduleAmount > 0 ? "subscription" : "payment",
       customer_email: payload.email,
-      line_items: modulesPrice > 0 
-        ? [themePriceData, modulesPriceData!] 
-        : [themePriceData],
+      line_items: moduleAmount > 0 ? [themePriceData, modulesPriceData!] : [themePriceData],
       metadata: {
-        userId: payload.id,
-        siteId: site.id,
-        themeId,
-        themeName,
-        subdomain: subdomain.toLowerCase(),
-        businessName: businessInfo.businessName,
+        userId: String(payload.id),
+        siteId: String(site.id),
+        themeId: String(themeId),
+        themeName: String(themeName),
+        subdomain: String(finalSubdomain),
+        businessName: String(businessInfo.businessName),
       },
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"}/generate-website?session_id={CHECKOUT_SESSION_ID}&site_id=${site.id}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"}/themes/${themeId}`,
+      success_url: `${appUrl}/generate-website?session_id={CHECKOUT_SESSION_ID}&site_id=${site.id}`,
+      cancel_url: `${appUrl}/themes/${themeId}`,
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       url: session.url,
       siteId: site.id,
     })
   } catch (error) {
     console.error("Launch checkout error:", error)
+
     return NextResponse.json(
       { error: "Failed to create checkout session" },
       { status: 500 }
