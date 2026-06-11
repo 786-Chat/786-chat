@@ -417,13 +417,9 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
     }
   }
 
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      toast.success("Copied to clipboard!")
-    } catch {
-      toast.error("Could not copy to clipboard")
-    }
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success("Copied to clipboard!")
   }
 
   const renderStepContent = () => {
