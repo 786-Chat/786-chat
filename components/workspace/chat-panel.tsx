@@ -38,6 +38,7 @@ interface UsageData {
   balance?: number
   freeMessagesRemaining?: number
   canSend?: boolean
+unlimited?: boolean
 }
 
 interface ChatPanelProps {
@@ -262,11 +263,12 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
             balance: balance,
             freeMessagesRemaining: freeRemaining,
             // User can send if they have free messages OR have balance
-            canSend: freeRemaining > 0 || balance > 0.001
+            unlimited: data.usage.unlimited || isOwnerAdmin,
+canSend: data.usage.unlimited || isOwnerAdmin || freeRemaining > 0 || balance > 0.001
           }
           setUsage(usageData)
           // Only show error if they truly cannot send (no free messages AND no balance)
-          setNoCreditsError(freeRemaining <= 0 && balance < 0.001)
+         setNoCreditsError(!data.usage.unlimited && !isOwnerAdmin && freeRemaining <= 0 && balance < 0.001)
         }
       }
     } catch {
@@ -898,15 +900,20 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
             </div>
             <p className="text-[10px] text-white/25 text-center mt-2">
               {"MujeebProAI may produce inaccurate information. "}
-              {usage && (
-                <span className="text-cyan-500/50">
-                  {usage.freeMessagesRemaining !== undefined 
-                    ? `${usage.freeMessagesRemaining} free messages remaining`
-                    : `${Math.max(0, usage.limit - usage.used)} messages remaining`
-                  }
-                  {(usage.balance ?? 0) > 0 && ` | Balance: $${usage.balance?.toFixed(2)}`}
-                </span>
-              )}
+       {usage && (
+  <span className="text-cyan-500/50">
+    {usage.unlimited ? (
+      <>Unlimited Messages | Unlimited Balance</>
+    ) : (
+      <>
+        {usage.freeMessagesRemaining !== undefined
+          ? `${usage.freeMessagesRemaining} free messages remaining`
+          : `${Math.max(0, usage.limit - usage.used)} messages remaining`}
+        {(usage.balance ?? 0) > 0 && ` | Balance: $${usage.balance?.toFixed(2)}`}
+      </>
+    )}
+  </span>
+)}
             </p>
           </form>
         </div>
