@@ -162,8 +162,10 @@ export async function POST(request: NextRequest) {
     }
 
     const modulesPriceData =
-      moduleAmount > 0
-        ? {
+  moduleAmount > 0
+    ? {
+...
+    : null
             price_data: {
               currency: currencyCode,
               product_data: {
@@ -181,10 +183,10 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"
 
-    const session = await stripe.checkout.sessions.create({
-      mode: moduleAmount > 0 ? "subscription" : "payment",
-      customer_email: payload.email,
-      line_items: moduleAmount > 0 ? [themePriceData, modulesPriceData!] : [themePriceData],
+  const session = await stripe.checkout.sessions.create({
+  mode: "payment",
+  customer_email: payload.email,
+  line_items: [themePriceData],
       metadata: {
         userId: String(payload.id),
         siteId: String(site.id),
