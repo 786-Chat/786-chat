@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useRouter } from "next/navigation"
 import { 
   X, 
   ChevronRight, 
@@ -30,8 +29,6 @@ import {
   Loader2,
   Star,
   Clock,
-  Phone,
-  Mail,
   Image as ImageIcon,
   Bell,
   Receipt,
@@ -41,8 +38,6 @@ import {
   ExternalLink,
   Copy,
   Eye,
-  Plus,
-  Minus,
   Sparkles,
   Search
 } from "lucide-react"
@@ -161,7 +156,6 @@ const STEPS = [
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps) {
-  const router = useRouter()
   const { user } = useAuth()
   const [currentStep, setCurrentStep] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -400,7 +394,7 @@ const processPayment = async () => {
 
       // Fetch created site details
       const siteRes = await fetch(`/api/customer/sites/${siteId}`)
-      const siteData = await siteRes.json()
+      await siteRes.json()
       
       setCreatedSite({
         id: siteId,
