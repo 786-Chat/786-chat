@@ -331,10 +331,10 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
   }
 
   // Process payment and create site
-const processPayment = async () => {
-  if (isProcessing) return
+  const processPayment = async () => {
+    if (isProcessing) return
 
-  setIsProcessing(true)
+    setIsProcessing(true)
     setCurrentStep(6) // Move to creating step
     
     try {
@@ -417,9 +417,13 @@ const processPayment = async () => {
     }
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast.success("Copied to clipboard!")
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("Copied to clipboard!")
+    } catch {
+      toast.error("Could not copy to clipboard")
+    }
   }
 
   const renderStepContent = () => {
@@ -1569,7 +1573,7 @@ const processPayment = async () => {
           </div>
 
           {/* Footer Navigation */}
-         {currentStep !== 8 && (
+         {currentStep < 5 && (
             <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
               <Button
                 variant="outline"
