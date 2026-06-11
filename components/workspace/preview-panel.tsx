@@ -340,7 +340,7 @@ export function WorkspacePreviewPanel({
                     }
                   }
                 } catch (e) {
-                  console.log("[v0] No customer site found, using default")
+                  console.log("[MujeebProAI] No customer site found, using default")
                 }
                 // Fallback: prompt user to enter URL
                 const url = prompt("Enter your website URL to preview:")
