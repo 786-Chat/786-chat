@@ -171,7 +171,7 @@ export async function POST(request: Request) {
     const subStatus = subscription.status || "active"
 
     // Check subscription status
-    if (subStatus === "cancelled" || subStatus === "expired") {
+    if (!isAdminRequest && (subStatus === "cancelled" || subStatus === "expired")) {
       return new Response(
         JSON.stringify({
           error: "SUBSCRIPTION_INACTIVE",
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (subStatus === "past_due" || subStatus === "unpaid") {
+    if (!isAdminRequest && (subStatus === "past_due" || subStatus === "unpaid")) {
       return new Response(
         JSON.stringify({
           error: "PAYMENT_FAILED",
@@ -542,8 +542,10 @@ Focus on helping customers:
         // Track cost for admin dashboard
         await trackUsage(session.id, inputTokens, outputTokens, aiSettings.model as DeepSeekModel)
 
-        // Deduct message cost from balance
-        await deductMessageCost(session.id, balanceCheck.usingFreeMessage, balanceCheck.messageCost)
+        // Deduct message cost from balance (skip for admin)
+        if (!isAdminRequest) {
+          await deductMessageCost(session.id, balanceCheck.usingFreeMessage, balanceCheck.messageCost)
+        }
       },
       consumeSseStream: consumeStream,
       headers: {
@@ -588,6 +590,7 @@ export async function GET(request: Request) {
       })
     }
 
+    const isAdminRequest = isAdminUser(session.email)
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
@@ -612,6 +615,26 @@ export async function GET(request: Request) {
         ORDER BY c.updated_at DESC
         LIMIT 50
       `
+
+      // For admin, return unlimited usage
+      if (isAdminRequest) {
+        return new Response(
+          JSON.stringify({
+            chats,
+            usage: {
+              plan: "admin",
+              unlimited: true,
+              monthly: { used: 0, limit: 0, remaining: 0 },
+              daily: { used: 0, limit: 0, remaining: 0 },
+              balance: 0,
+              freeMessagesRemaining: 0,
+              extraCredits: 0,
+              status: "active",
+            },
+          }),
+          { headers: { "Content-Type": "application/json" } }
+        )
+      }
 
       // Get comprehensive usage info
       const subscriptions = await sql`
@@ -649,6 +672,7 @@ export async function GET(request: Request) {
           chats,
           usage: {
             plan: subscription.plan || "starter",
+            unlimited: false,
             monthly: {
               used: userBalance.free_messages_used || 0,
               limit: userBalance.free_messages_limit || 100,
