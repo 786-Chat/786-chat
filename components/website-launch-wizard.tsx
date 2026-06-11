@@ -1587,16 +1587,10 @@ const processPayment = async () => {
                 Back
               </Button>
               
-              {currentStep < 5 ? (
-  <Button onClick={nextStep} className="gap-2 bg-gradient-to-r from-primary to-accent">
-    Continue
-    <ChevronRight className="w-4 h-4" />
-  </Button>
-) : (
-  <Button onClick={processPayment} className="gap-2 bg-gradient-to-r from-primary to-accent">
-    Pay & Launch Website
-    <ChevronRight className="w-4 h-4" />
-  </Button>
+   <Button onClick={nextStep} className="gap-2 bg-gradient-to-r from-primary to-accent">
+  Continue
+  <ChevronRight className="w-4 h-4" />
+</Button>
 )}
             </div>
           )}
