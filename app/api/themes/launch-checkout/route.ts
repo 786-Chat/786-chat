@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
     }
 
     const currencyCode = (currency || "GBP").toLowerCase()
-    const themeAmount = Number(themePrice || 0)
-    const moduleAmount = Number(modulesPrice || 0)
+   const themeAmount = Math.round(Number(themePrice || 0))
+  const moduleAmount = Math.round(Number(modulesPrice || 0))
 
     const [existing] = await sql`
       SELECT id FROM customer_sites WHERE LOWER(subdomain) = LOWER(${finalSubdomain})
