@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     // 5. Extract settings from site_config
     const siteConfig = site.site_config || {}
     const siteContent = site.site_content || {}
-    const settings = site.settings || {}
+    const existingSettings = site.settings || {}
     
     // Build the site content structure with all pages
     const generatedContent = {
@@ -167,10 +167,10 @@ export async function POST(request: NextRequest) {
         whatsapp: site.whatsapp,
         email: site.email,
         address: site.address,
-        openingHours: siteConfig.openingHours || settings.openingHours || {},
+        openingHours: siteConfig.openingHours || existingSettings.openingHours || {},
         mapLocation: {
-          lat: settings.latitude || null,
-          lng: settings.longitude || null,
+          lat: existingSettings.latitude || null,
+          lng: existingSettings.longitude || null,
         },
       },
       gallery: {
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    // 6. Activate the site: update status, save stripe_session_id, payment details
+    // 6. Build payment details to store inside the existing settings JSON column
     const paymentIntentId = typeof session.payment_intent === 'string'
       ? session.payment_intent
       : session.payment_intent?.id || null
@@ -187,25 +187,33 @@ export async function POST(request: NextRequest) {
     const amountPaid = session.amount_total ? (session.amount_total / 100).toFixed(2) : "0.00"
     const currencyCode = session.currency?.toUpperCase() || "GBP"
 
+    // Merge payment details into existing settings (safe — no new columns needed)
+    const updatedSettings = {
+      ...existingSettings,
+      stripe: {
+        sessionId: sessionId,
+        paymentIntentId: paymentIntentId,
+        subscriptionId: session.subscription || null,
+        amount: parseFloat(amountPaid),
+        currency: currencyCode,
+        status: "paid",
+        paidAt: new Date().toISOString(),
+      },
+    }
+
+    // 7. Activate the site — only use columns we KNOW exist
     await sql`
       UPDATE customer_sites 
       SET 
         status = 'active',
         is_active = true,
         is_published = true,
-        activated_at = NOW(),
         site_content = ${JSON.stringify(generatedContent)},
-        stripe_session_id = ${sessionId},
-        stripe_payment_intent_id = ${paymentIntentId},
-        stripe_subscription_id = ${session.subscription || session.payment_intent},
-        payment_status = 'paid',
-        payment_amount = ${parseFloat(amountPaid)},
-        payment_currency = ${currencyCode},
-        paid_at = NOW()
+        settings = ${JSON.stringify(updatedSettings)}
       WHERE id = ${siteId}
     `
 
-    // 7. Update settings with payment status
+    // 8. Update customer_site_settings with payment status (column confirmed to exist)
     await sql`
       UPDATE customer_site_settings 
       SET 
@@ -214,11 +222,11 @@ export async function POST(request: NextRequest) {
       WHERE site_id = ${siteId}
     `
 
-    // 8. Build response data
+    // 9. Build response data
     const siteUrl = `https://${site.subdomain}.mujeebproai.com`
     const dashboardUrl = `/dashboard/sites/${siteId}`
 
-    // 9. Send customer confirmation email
+    // 10. Send customer confirmation email (safe — gracefully skips if RESEND_API_KEY missing)
     const customerEmail = site.email || payload.email
     if (customerEmail) {
       await sendEmail({
@@ -274,7 +282,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 10. Send admin notification email to mujeeb@job4u.com
+    // 11. Send admin notification email to mujeeb@job4u.com (safe — gracefully skips if RESEND_API_KEY missing)
     await sendEmail({
       to: "mujeeb@job4u.com",
       subject: `🔔 New Website Launched: ${site.business_name || site.site_name}`,
