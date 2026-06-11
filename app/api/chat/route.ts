@@ -581,9 +581,7 @@ Focus on helping customers:
 }
 
 // Get chat history
-const isAdminRequest =
-  isAdminUser(session.email) ||
-  session.email?.toLowerCase() === "mujeeb@job4u.com" {
+export async function GET(request: Request) {
   try {
     const session = await getSession()
 
@@ -595,119 +593,134 @@ const isAdminRequest =
     }
 
     const isAdminRequest =
-  isAdminUser(session.email) ||
-  session.email?.toLowerCase
+      isAdminUser(session.email) ||
+      session.email?.toLowerCase() === "mujeeb@job4u.com"
+
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
     if (chatId) {
-      // Get specific chat messages
       const dbMessages = await sql`
         SELECT id, role, content, created_at
         FROM messages
         WHERE chat_id = ${chatId}
         ORDER BY created_at ASC
       `
+
       return new Response(JSON.stringify({ messages: dbMessages }), {
         headers: { "Content-Type": "application/json" },
       })
-    } else {
-      // Get all chats for user
-      const chats = await sql`
-        SELECT c.id, c.title, c.created_at, c.updated_at,
-               (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
-        FROM chats c
-        WHERE c.user_id = ${session.id}
-        ORDER BY c.updated_at DESC
-        LIMIT 50
-      `
+    }
 
-      // For admin, return unlimited usage
-      if (isAdminRequest) {
-        return new Response(
-          JSON.stringify({
-            chats,
-            usage: {
-              plan: "admin",
-              unlimited: true,
-             monthly: { used: 0, limit: 999999999, remaining: 999999999 },
-daily: { used: 0, limit: 999999999, remaining: 999999999 },
-balance: 999999999,
-freeMessagesRemaining: 999999999,
-canSend: true,
-extraCredits: 999999999,
-              status: "active",
-            },
-          }),
-          { headers: { "Content-Type": "application/json" } }
-        )
-      }
+    const chats = await sql`
+      SELECT c.id, c.title, c.created_at, c.updated_at,
+             (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
+      FROM chats c
+      WHERE c.user_id = ${session.id}
+      ORDER BY c.updated_at DESC
+      LIMIT 50
+    `
 
-      // Get comprehensive usage info
-      const subscriptions = await sql`
-        SELECT 
-          plan, 
-          messages_used, 
-          messages_limit, 
-          daily_messages_used,
-          extra_credits,
-          status
-        FROM subscriptions
-        WHERE user_id = ${session.id}
-      `
-      const subscription = subscriptions[0] || {
-        plan: "starter",
-        messages_used: 0,
-        messages_limit: 5,
-        daily_messages_used: 0,
-        extra_credits: 0,
-      }
-
-      // Get user balance data
-      const balanceData = await sql`
-        SELECT balance, free_messages_used, free_messages_limit 
-        FROM user_balances 
-        WHERE user_id = ${session.id}
-      `
-      const userBalance = balanceData[0] || { balance: 0, free_messages_used: 0, free_messages_limit: 100 }
-      const freeMessagesRemaining = Math.max(0, (userBalance.free_messages_limit || 100) - (userBalance.free_messages_used || 0))
-
-      const planLimits = AI_LIMITS.dailyLimits[subscription.plan as PlanType] || AI_LIMITS.dailyLimits.starter
-
+    if (isAdminRequest) {
       return new Response(
         JSON.stringify({
           chats,
           usage: {
-            plan: subscription.plan || "starter",
-            unlimited: false,
-            monthly: {
-              used: userBalance.free_messages_used || 0,
-              limit: userBalance.free_messages_limit || 100,
-              remaining: freeMessagesRemaining,
-            },
-            daily: {
-              used: subscription.daily_messages_used || 0,
-              limit: planLimits.messagesPerDay,
-              remaining: Math.max(0, planLimits.messagesPerDay - (subscription.daily_messages_used || 0)),
-            },
-            balance: Number(userBalance.balance) || 0,
-            freeMessagesRemaining: freeMessagesRemaining,
-            extraCredits: subscription.extra_credits || 0,
-            status: subscription.status || "active",
+            plan: "admin",
+            unlimited: true,
+            monthly: { used: 0, limit: 999999999, remaining: 999999999 },
+            daily: { used: 0, limit: 999999999, remaining: 999999999 },
+            balance: 999999999,
+            freeMessagesRemaining: 999999999,
+            canSend: true,
+            extraCredits: 999999999,
+            status: "active",
           },
         }),
         { headers: { "Content-Type": "application/json" } }
       )
     }
+
+    const subscriptions = await sql`
+      SELECT 
+        plan, 
+        messages_used, 
+        messages_limit, 
+        daily_messages_used,
+        extra_credits,
+        status
+      FROM subscriptions
+      WHERE user_id = ${session.id}
+    `
+
+    const subscription = subscriptions[0] || {
+      plan: "starter",
+      messages_used: 0,
+      messages_limit: 5,
+      daily_messages_used: 0,
+      extra_credits: 0,
+    }
+
+    const balanceData = await sql`
+      SELECT balance, free_messages_used, free_messages_limit 
+      FROM user_balances 
+      WHERE user_id = ${session.id}
+    `
+
+    const userBalance = balanceData[0] || {
+      balance: 0,
+      free_messages_used: 0,
+      free_messages_limit: 100,
+    }
+
+    const freeMessagesRemaining = Math.max(
+      0,
+      (userBalance.free_messages_limit || 100) -
+        (userBalance.free_messages_used || 0)
+    )
+
+    const planLimits =
+      AI_LIMITS.dailyLimits[subscription.plan as PlanType] ||
+      AI_LIMITS.dailyLimits.starter
+
+    return new Response(
+      JSON.stringify({
+        chats,
+        usage: {
+          plan: subscription.plan || "starter",
+          unlimited: false,
+          monthly: {
+            used: userBalance.free_messages_used || 0,
+            limit: userBalance.free_messages_limit || 100,
+            remaining: freeMessagesRemaining,
+          },
+          daily: {
+            used: subscription.daily_messages_used || 0,
+            limit: planLimits.messagesPerDay,
+            remaining: Math.max(
+              0,
+              planLimits.messagesPerDay -
+                (subscription.daily_messages_used || 0)
+            ),
+          },
+          balance: Number(userBalance.balance) || 0,
+          freeMessagesRemaining,
+          canSend: freeMessagesRemaining > 0 || Number(userBalance.balance) > 0.001,
+          extraCredits: subscription.extra_credits || 0,
+          status: subscription.status || "active",
+        },
+      }),
+      { headers: { "Content-Type": "application/json" } }
+    )
   } catch (error) {
     console.error("[Chat API] Get chats error:", error)
+
     return new Response(JSON.stringify({ error: "Failed to get chats" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })
   }
 }
-
 // Delete a chat
 export async function DELETE(request: Request) {
   try {
