@@ -561,12 +561,14 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     setAttachedFiles([])
   }
 
- if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
-  setShowUpgradePopup(true)
-  return
-}
-    sendMessage({ text: prompt })
+ const handlePromptClick = (prompt: string) => {
+  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
+    setShowUpgradePopup(true)
+    return
   }
+
+  sendMessage({ text: prompt })
+}
 
   const copyToClipboard = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text)
@@ -574,8 +576,8 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const regenerateResponse = () => {
-    if (usage && usage.used >= usage.limit) {
+ const regenerateResponse = () => {
+  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
       setShowUpgradePopup(true)
       return
     }
@@ -587,7 +589,8 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
   }
 
   // User can send if: has free messages OR has balance OR no usage data yet (give benefit of doubt)
-  const canSendMessage = !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
+  const canSendMessage =
+  isOwnerAdmin || !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
 
   return (
     <div 
