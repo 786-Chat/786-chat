@@ -11,7 +11,7 @@ export default function DashboardError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error("[v0] Dashboard error caught:", error)
+    console.error("[MujeebProAI] Dashboard error caught:", error)
   }, [error])
 
   return (
