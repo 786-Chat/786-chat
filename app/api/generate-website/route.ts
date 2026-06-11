@@ -6,7 +6,12 @@ import Stripe from "stripe"
 import bcrypt from "bcryptjs"
 
 
-// Generate a random password for manager
+// Generate a random 4-digit PIN for restaurant_users.pin (varchar(10))
+function generatePin(): string {
+  return String(Math.floor(1000 + Math.random() * 9000))
+}
+
+// Generate a random password for manager (displayed to user, not stored in varchar column)
 function generatePassword(length = 12): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
   let password = ""
@@ -105,9 +110,11 @@ export async function POST(request: NextRequest) {
     // 3. Generate manager credentials
     const managerEmail = `manager@${site.subdomain}.mujeebproai.com`
     const managerPassword = generatePassword()
-    const hashedPassword = await bcrypt.hash(managerPassword, 10)
+    // pin column is varchar(10) — store a short 4-digit PIN, NOT a bcrypt hash
+    const managerPin = generatePin()
 
     // 4. Create manager user in restaurant_users table
+    //    pin column is varchar(10) — only short values allowed
     const [existingManager] = await sql`
       SELECT id FROM restaurant_users 
       WHERE site_id = ${siteId} AND role = 'manager'
@@ -126,7 +133,7 @@ export async function POST(request: NextRequest) {
           ${siteId},
           ${site.owner_name || 'Manager'},
           ${managerEmail},
-          ${hashedPassword},
+          ${managerPin},
           'manager',
           true
         )
@@ -254,6 +261,7 @@ export async function POST(request: NextRequest) {
                   <p style="margin: 0 0 8px 0; font-size: 14px; color: #94a3b8;">🔑 Manager Login Credentials</p>
                   <p style="margin: 4px 0;"><strong>Email:</strong> ${managerEmail}</p>
                   <p style="margin: 4px 0;"><strong>Password:</strong> ${managerPassword}</p>
+                  <p style="margin: 4px 0;"><strong>PIN:</strong> ${managerPin}</p>
                   <p style="margin: 12px 0 0 0; font-size: 12px; color: #f59e0b;">⚠️ Please save these credentials securely. You can change the password later.</p>
                 </div>
 
