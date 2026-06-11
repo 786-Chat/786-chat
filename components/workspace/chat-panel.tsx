@@ -176,6 +176,7 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
+  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
   const [input, setInput] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -383,10 +384,10 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
         // Check if user can send using ref
         const currentUsage = usageRef.current
         const canSend = currentUsage?.canSend ?? (currentUsage ? (currentUsage.limit - currentUsage.used > 0 || (currentUsage.balance ?? 0) > 0.001) : true)
-        if (!canSend) {
-          setShowUpgradePopup(true)
-          return
-        }
+ if (!isOwnerAdmin && !canSend) {
+  setShowUpgradePopup(true)
+  return
+}
         sendMessageRef.current({ text: detail.message })
       }
     }
@@ -560,11 +561,10 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
     setAttachedFiles([])
   }
 
-  const handlePromptClick = (prompt: string) => {
-    if (usage && usage.used >= usage.limit) {
-      setShowUpgradePopup(true)
-      return
-    }
+ if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
+  setShowUpgradePopup(true)
+  return
+}
     sendMessage({ text: prompt })
   }
 
