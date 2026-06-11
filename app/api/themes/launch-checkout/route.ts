@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
           billingCycle,
           googleBusiness,
           openingHours,
+          moduleAmount,
         })}::jsonb,
         ${JSON.stringify({
           theme: themeOptions,
@@ -148,6 +149,7 @@ export async function POST(request: NextRequest) {
     `
 
     const stripe = getStripe()
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"
 
     const themePriceData = {
       price_data: {
@@ -161,32 +163,10 @@ export async function POST(request: NextRequest) {
       quantity: 1,
     }
 
-    const modulesPriceData =
-  moduleAmount > 0
-    ? {
-...
-    : null
-            price_data: {
-              currency: currencyCode,
-              product_data: {
-                name: "Website Modules",
-                description: `${(selectedModules || []).length} modules (${billingCycle})`,
-              },
-              unit_amount: moduleAmount,
-              recurring: {
-                interval: billingCycle === "yearly" ? ("year" as const) : ("month" as const),
-              },
-            },
-            quantity: 1,
-          }
-        : null
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.mujeebproai.com"
-
-  const session = await stripe.checkout.sessions.create({
-  mode: "payment",
-  customer_email: payload.email,
-  line_items: [themePriceData],
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: payload.email,
+      line_items: [themePriceData],
       metadata: {
         userId: String(payload.id),
         siteId: String(site.id),
