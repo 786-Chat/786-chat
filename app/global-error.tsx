@@ -10,7 +10,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error("[v0] Global error caught:", error)
+    console.error("[MujeebProAI] Global error caught:", error)
   }, [error])
 
   return (
