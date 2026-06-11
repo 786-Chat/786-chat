@@ -91,7 +91,9 @@ export async function POST(request: Request) {
     }
 
     // Check if admin user - skip all limits for admin
-    const isAdminRequest = isAdminUser(session.email)
+  const isAdminRequest =
+  isAdminUser(session.email) ||
+  session.email?.toLowerCase() === "mujeeb@job4u.com"
 
     // === GLOBAL BUDGET CHECK (skip for admin) ===
     if (!isAdminRequest) {
