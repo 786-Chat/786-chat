@@ -1569,7 +1569,7 @@ const processPayment = async () => {
           </div>
 
           {/* Footer Navigation */}
-          {currentStep < 5 && (
+         {currentStep !== 8 && (
             <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
               <Button
                 variant="outline"
