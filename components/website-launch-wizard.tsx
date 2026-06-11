@@ -305,18 +305,29 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
           return false
         }
         return true
-      case 4:
-        if (domainOption === "subdomain" && !subdomain.trim()) {
-          toast.error("Please enter a subdomain")
-          return false
-        }
-        if (domainOption === "subdomain" && subdomainAvailable === false) {
-          toast.error("This subdomain is not available")
-          return false
-        }
-        return true
-      default:
-        return true
+    case 4:
+  if (domainOption === "subdomain") {
+    if (!subdomain.trim()) {
+      setSubdomain(
+        businessInfo.businessName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+      )
+      return true
+    }
+
+    if (subdomainAvailable === false) {
+      toast.error("This subdomain is not available")
+      return false
+    }
+  }
+
+  if (domainOption === "custom" && !customDomain.trim()) {
+    toast.error("Please enter your custom domain")
+    return false
+  }
+
+  return true
     }
   }
 
