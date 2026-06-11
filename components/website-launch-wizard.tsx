@@ -337,8 +337,10 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
   }
 
   // Process payment and create site
-  const processPayment = async () => {
-    setIsProcessing(true)
+const processPayment = async () => {
+  if (isProcessing) return
+
+  setIsProcessing(true)
     setCurrentStep(6) // Move to creating step
     
     try {
@@ -1573,7 +1575,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
           </div>
 
           {/* Footer Navigation */}
-          {currentStep <= 5 && currentStep !== 6 && (
+         {currentStep < 5 && (
              <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
               <Button
                 variant="outline"
