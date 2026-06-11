@@ -1167,7 +1167,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
 
             <Button 
               size="lg" 
-              className="w-full gap-2 bg-gradient-to-r from-primary to-accent"
+           className="w-full gap-2 bg-gradient-to-r from-primary to-accent sticky bottom-0"
               onClick={processPayment}
               disabled={isProcessing}
             >
