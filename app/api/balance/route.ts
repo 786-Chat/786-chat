@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { getUserBalance, getPricingSettings } from "@/lib/ai-balance"
+import { isAdminUser } from "@/lib/admin-config"
 
 export async function GET() {
   try {
@@ -9,15 +10,14 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const isOwnerAdmin =
-      session.email?.toLowerCase().trim() === "mujeeb@job4u.com"
+    const isOwnerAdmin = isAdminUser(session.email)
 
     if (isOwnerAdmin) {
       return NextResponse.json({
-        balance: 999999,
+        balance: 0,
         freeMessagesUsed: 0,
-        freeMessagesLimit: 999999,
-        freeMessagesRemaining: 999999,
+        freeMessagesLimit: 0,
+        freeMessagesRemaining: 0,
         totalMessagesSent: 0,
         totalSpent: 0,
         unlimited: true,
@@ -44,6 +44,7 @@ export async function GET() {
       freeMessagesRemaining: Math.max(0, customerFreeLimit - used),
       totalMessagesSent: balance.totalMessagesSent,
       totalSpent: balance.totalSpent,
+      unlimited: false,
       pricing: {
         costPerMessage: pricing.costPerMessage,
         costPer1000Messages: pricing.costPer1000Messages,
