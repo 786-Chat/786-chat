@@ -1574,23 +1574,24 @@ const processPayment = async () => {
             </AnimatePresence>
           </div>
 
-          {/* Footer Navigation */}
-         {currentStep < 5 && (
-             <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={prevStep}
-                disabled={currentStep === 1}
-                className="gap-2"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </Button>
-              
-   <Button onClick={nextStep} className="gap-2 bg-gradient-to-r from-primary to-accent">
-  Continue
-  <ChevronRight className="w-4 h-4" />
-</Button>
+{/* Footer Navigation */}
+{currentStep < 5 && (
+  <div className="shrink-0 bg-[#0b0b10] p-4 border-t border-white/10 flex items-center justify-between">
+    <Button
+      variant="outline"
+      onClick={prevStep}
+      disabled={currentStep === 1}
+      className="gap-2"
+    >
+      <ChevronLeft className="w-4 h-4" />
+      Back
+    </Button>
+
+    <Button onClick={nextStep} className="gap-2 bg-gradient-to-r from-primary to-accent">
+      Continue
+      <ChevronRight className="w-4 h-4" />
+    </Button>
+  </div>
 )}
             </div>
           )}
