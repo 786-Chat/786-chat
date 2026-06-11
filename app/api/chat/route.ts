@@ -592,7 +592,9 @@ export async function GET(request: Request) {
       })
     }
 
-    const isAdminRequest = isAdminUser(session.email)
+    const isAdminRequest =
+  isAdminUser(session.email) ||
+  session.email?.toLowerCase
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
