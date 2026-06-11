@@ -1522,7 +1522,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
                   const isActive = currentStep === step.id
                   const isComplete = currentStep > step.id
                   return (
-                    <div key={step.id} className="flex items-center">
+              <div key={step.id} className="flex items-center pointer-events-none">
                       <div className="flex flex-col items-center">
                         <div
                           className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
