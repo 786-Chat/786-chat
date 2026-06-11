@@ -36,6 +36,7 @@ interface UsageData {
   freeMessagesLimit?: number
   freeMessagesRemaining?: number
   costPerMessage?: number
+  unlimited?: boolean
 }
 
 interface SidebarProps {
@@ -66,15 +67,16 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         if (balanceResponse.ok) {
           const balanceData = await balanceResponse.json()
           setUsage({
-  used: balanceData.freeMessagesUsed || 0,
-  limit: balanceData.freeMessagesLimit || 10,
-  plan: data.usage?.plan || "free",
-  balance: balanceData.balance || 0,
-  freeMessagesUsed: balanceData.freeMessagesUsed || 0,
-  freeMessagesLimit: balanceData.freeMessagesLimit || 10,
-  freeMessagesRemaining: balanceData.freeMessagesRemaining ?? 10,
-  costPerMessage: balanceData.pricing?.costPerMessage || 0.0005
-})
+            used: balanceData.freeMessagesUsed || 0,
+            limit: balanceData.freeMessagesLimit || 10,
+            plan: data.usage?.plan || "free",
+            balance: balanceData.balance || 0,
+            freeMessagesUsed: balanceData.freeMessagesUsed || 0,
+            freeMessagesLimit: balanceData.freeMessagesLimit || 10,
+            freeMessagesRemaining: balanceData.freeMessagesRemaining ?? 10,
+            costPerMessage: balanceData.pricing?.costPerMessage || 0.0005,
+            unlimited: balanceData.unlimited || false,
+          })
         } else if (data.usage) {
           setUsage(data.usage)
         }
@@ -222,28 +224,30 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                 {/* Free Messages */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-white/40 uppercase tracking-wider">Free Messages</span>
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider">Messages</span>
                     <span className="text-[10px] font-medium text-cyan-400">
-                      {usage.freeMessagesRemaining || (usage.limit - usage.used)}/{usage.freeMessagesLimit || usage.limit}
+                      {usage.unlimited ? "Unlimited" : `${usage.freeMessagesRemaining || (usage.limit - usage.used)}/${usage.freeMessagesLimit || usage.limit}`}
                     </span>
                   </div>
-                  <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-500",
-                        (usage.freeMessagesRemaining || 0) <= 0
-                          ? "bg-red-500"
-                          : (usage.freeMessagesUsed || usage.used) >= (usage.freeMessagesLimit || usage.limit) * 0.8
-                          ? "bg-yellow-500"
-                          : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                      )}
-                      style={{ width: `${Math.min(100, ((usage.freeMessagesUsed || usage.used) / (usage.freeMessagesLimit || usage.limit)) * 100)}%` }}
-                    />
-                  </div>
+                  {!usage.unlimited && (
+                    <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          (usage.freeMessagesRemaining || 0) <= 0
+                            ? "bg-red-500"
+                            : (usage.freeMessagesUsed || usage.used) >= (usage.freeMessagesLimit || usage.limit) * 0.8
+                            ? "bg-yellow-500"
+                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                        )}
+                        style={{ width: `${Math.min(100, ((usage.freeMessagesUsed || usage.used) / (usage.freeMessagesLimit || usage.limit)) * 100)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
-                {/* Balance (only show if free messages used) */}
-                {usage.balance !== undefined && (
+                {/* Balance (only show if not unlimited) */}
+                {!usage.unlimited && usage.balance !== undefined && (
                   <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
                     <span className="text-[10px] text-white/40">Balance</span>
                     <span className={cn(
@@ -255,14 +259,16 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                   </div>
                 )}
 
-                {/* Add Credits Button */}
-                <Link
-                  href="/dashboard/top-up"
-                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
-                >
-                  <Zap className="w-3 h-3" />
-                  Add Credits
-                </Link>
+                {/* Add Credits Button - hidden for unlimited */}
+                {!usage.unlimited && (
+                  <Link
+                    href="/dashboard/top-up"
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
+                  >
+                    <Zap className="w-3 h-3" />
+                    Add Credits
+                  </Link>
+                )}
               </div>
             </div>
           )}
