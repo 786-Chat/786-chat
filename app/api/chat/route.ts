@@ -581,7 +581,9 @@ Focus on helping customers:
 }
 
 // Get chat history
-export async function GET(request: Request) {
+const isAdminRequest =
+  isAdminUser(session.email) ||
+  session.email?.toLowerCase() === "mujeeb@job4u.com" {
   try {
     const session = await getSession()
 
@@ -628,11 +630,12 @@ export async function GET(request: Request) {
             usage: {
               plan: "admin",
               unlimited: true,
-              monthly: { used: 0, limit: 0, remaining: 0 },
-              daily: { used: 0, limit: 0, remaining: 0 },
-              balance: 0,
-              freeMessagesRemaining: 0,
-              extraCredits: 0,
+             monthly: { used: 0, limit: 999999999, remaining: 999999999 },
+daily: { used: 0, limit: 999999999, remaining: 999999999 },
+balance: 999999999,
+freeMessagesRemaining: 999999999,
+canSend: true,
+extraCredits: 999999999,
               status: "active",
             },
           }),
