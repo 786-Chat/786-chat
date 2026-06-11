@@ -559,8 +559,8 @@ canSend: data.usage.unlimited || isOwnerAdmin || freeRemaining > 0 || balance > 
     }
     
     sendMessage({ text: messageText })
-    setInput("")
-    setAttachedFiles([])
+setInput("")
+setAttachedFiles([])
   }
 
  const handlePromptClick = (prompt: string) => {
