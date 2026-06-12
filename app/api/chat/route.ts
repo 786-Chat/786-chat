@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     // === USER BALANCE CHECK (skip for admin) ===
     const balanceCheck = isAdminRequest 
       ? { allowed: true, usingFreeMessage: false, messageCost: 0 }
-      : await canSendMessage(session.id)
+      : await canSendMessage(session.id, session.email)
     if (!balanceCheck.allowed) {
       return new Response(
         JSON.stringify({
@@ -641,26 +641,7 @@ export async function GET(request: Request) {
       )
     }
 
-    const subscriptions = await sql`
-      SELECT 
-        plan, 
-        messages_used, 
-        messages_limit, 
-        daily_messages_used,
-        extra_credits,
-        status
-      FROM subscriptions
-      WHERE user_id = ${session.id}
-    `
-
-    const subscription = subscriptions[0] || {
-      plan: "starter",
-      messages_used: 0,
-      messages_limit: 5,
-      daily_messages_used: 0,
-      extra_credits: 0,
-    }
-
+    // For normal customers: get actual balance from user_balances with correct limit
     const balanceData = await sql`
       SELECT balance, free_messages_used, free_messages_limit 
       FROM user_balances 
@@ -670,44 +651,35 @@ export async function GET(request: Request) {
     const userBalance = balanceData[0] || {
       balance: 0,
       free_messages_used: 0,
-      free_messages_limit: 100,
+      free_messages_limit: 10,
     }
 
-    const freeMessagesRemaining = Math.max(
-      0,
-      (userBalance.free_messages_limit || 100) -
-        (userBalance.free_messages_used || 0)
-    )
-
-    const planLimits =
-      AI_LIMITS.dailyLimits[subscription.plan as PlanType] ||
-      AI_LIMITS.dailyLimits.starter
+    const freeLimit = Number(userBalance.free_messages_limit) || 10
+    const freeUsed = Number(userBalance.free_messages_used) || 0
+    const freeMessagesRemaining = Math.max(0, freeLimit - freeUsed)
+    const paidBalance = Number(userBalance.balance) || 0
 
     return new Response(
       JSON.stringify({
         chats,
         usage: {
-          plan: subscription.plan || "starter",
+          plan: "free",
           unlimited: false,
           monthly: {
-            used: userBalance.free_messages_used || 0,
-            limit: userBalance.free_messages_limit || 100,
+            used: freeUsed,
+            limit: freeLimit,
             remaining: freeMessagesRemaining,
           },
           daily: {
-            used: subscription.daily_messages_used || 0,
-            limit: planLimits.messagesPerDay,
-            remaining: Math.max(
-              0,
-              planLimits.messagesPerDay -
-                (subscription.daily_messages_used || 0)
-            ),
+            used: 0,
+            limit: freeLimit,
+            remaining: freeMessagesRemaining,
           },
-          balance: Number(userBalance.balance) || 0,
+          balance: paidBalance,
           freeMessagesRemaining,
-          canSend: freeMessagesRemaining > 0 || Number(userBalance.balance) > 0.001,
-          extraCredits: subscription.extra_credits || 0,
-          status: subscription.status || "active",
+          canSend: freeMessagesRemaining > 0 || paidBalance > 0.001,
+          extraCredits: 0,
+          status: "active",
         },
       }),
       { headers: { "Content-Type": "application/json" } }
