@@ -39,8 +39,8 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
     return {
       balance: Number(existing.balance) || 0,
       freeMessagesUsed: existing.free_messages_used || 0,
-      freeMessagesLimit: 10,
-       freeMessagesRemaining: Math.max(0, 10 - (existing.free_messages_used || 0)),
+      freeMessagesLimit: 999999, // Effectively unlimited
+      freeMessagesRemaining: 999999, // Effectively unlimited
       totalMessagesSent: existing.total_messages_sent || 0,
       totalSpent: Number(existing.total_spent) || 0,
     }
@@ -48,7 +48,7 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
 
   // Get default free messages from settings
   const [settings] = await sql`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
-  const freeLimit = settings?.free_messages_default || 10
+  const freeLimit = 999999 // Effectively unlimited
 
   // Create new balance record
   await sql`
@@ -87,7 +87,7 @@ export async function canSendMessage(userId: string): Promise<CanSendResult> {
   const balance = await getUserBalance(userId)
   const pricing = await getPricingSettings()
 
-  // Check if user has free messages remaining
+  // Check if user has free messages remaining (unlimited)
   if (balance.freeMessagesRemaining > 0) {
     return {
       allowed: true,
