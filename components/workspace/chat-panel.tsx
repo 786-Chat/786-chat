@@ -908,9 +908,10 @@ setAttachedFiles([])
       <>Unlimited Messages | Unlimited Balance</>
     ) : (
       <>
-        {usage.freeMessagesRemaining !== undefined
-          ? `${usage.freeMessagesRemaining} free messages remaining`
-          : `${Math.max(0, usage.limit - usage.used)} messages remaining`}
+       {`${Math.min(
+  usage.freeMessagesRemaining ?? Math.max(0, usage.limit - usage.used),
+  10
+)} free messages remaining`}
         {(usage.balance ?? 0) > 0 && ` | Balance: $${usage.balance?.toFixed(2)}`}
       </>
     )}
