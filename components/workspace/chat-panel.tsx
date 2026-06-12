@@ -524,75 +524,44 @@ canSend: data.usage.unlimited || isOwnerAdmin || freeRemaining > 0 || balance > 
   }
 
   // Remove attached file
-  const removeFile = (id: string) => {
-    setAttachedFiles(prev => {
-      const file = prev.find(f => f.id === id)
-      if (file?.preview) URL.revokeObjectURL(file.preview)
-      return prev.filter(f => f.id !== id)
-    })
-  }
+const removeFile = (id: string) => {
+  setAttachedFiles(prev => {
+    const file = prev.find(f => f.id === id)
+    if (file?.preview) URL.revokeObjectURL(file.preview)
+    return prev.filter(f => f.id !== id)
+  })
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
-    
-    // Check if user can send: has free messages OR has balance
-    const canSend = usage?.canSend ?? (usage ? (usage.limit - usage.used > 0 || (usage.balance ?? 0) > 0.001) : true)
-    
-    if (!canSend) {
-      setShowUpgradePopup(true)
-      return
-    }
-    setNoCreditsError(false)
-    
-    // Build message with file descriptions
-    let messageText = input.trim()
-    
-    if (attachedFiles.length > 0) {
-      const fileDescriptions = attachedFiles.map(f => {
-        if (f.type === "image") {
-          return `[Attached Image: ${f.file.name}${f.url ? ` - ${f.url}` : ""}]`
-        } else {
-          return `[Attached PDF: ${f.file.name}${f.url ? ` - ${f.url}` : ""}] Please analyze this document.`
-        }
-      }).join("\n")
-      
-      messageText = fileDescriptions + (messageText ? "\n\n" + messageText : "\n\nPlease analyze the attached files.")
-    }
-    
-    sendMessage({ text: messageText })
-setInput("")
-setAttachedFiles([])
-  }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
- const handlePromptClick = (prompt: string) => {
-  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
+  const canSend = usage?.canSend ?? (usage ? (usage.limit - usage.used > 0 || (usage.balance ?? 0) > 0.001) : true)
+
+  if (!canSend) {
     setShowUpgradePopup(true)
     return
   }
 
-  sendMessage({ text: prompt })
+  setNoCreditsError(false)
+
+  const messageText = input.trim() || "Please analyze the attached file."
+  const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
+
+  sendMessage({
+    text: messageText,
+    files: uploadedFiles.map((f) => ({
+      name: f.file.name,
+      mediaType: f.file.type,
+      url: f.url!,
+    })),
+  } as any)
+
+  setInput("")
+  setAttachedFiles([])
 }
 
-  const copyToClipboard = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
-  }
-
- const regenerateResponse = () => {
-  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
-      setShowUpgradePopup(true)
-      return
-    }
-    const lastUserMsg = messages.filter(m => m.role === "user").pop()
-    if (lastUserMsg) {
-      const text = getMessageText(lastUserMsg)
-      if (text) sendMessage({ text })
-    }
-  }
-
-  // User can send if: has free messages OR has balance OR no usage data yet (give benefit of doubt)
+// User can send if: has free messages OR has balance OR no usage data yet (give benefit of doubt)
   const canSendMessage =
   isOwnerAdmin || !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
 
