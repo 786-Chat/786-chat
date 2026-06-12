@@ -192,14 +192,14 @@ export default function AdminUsersPage() {
       return <span className="font-medium text-primary">Unlimited</span>
     }
 
-    // Normal customers: free_messages_used / free_messages_limit
+    // Normal customers: always show /10 as the limit
+    // free_messages_used from user_balances, default to 0 if null
     const used = user.free_messages_used ?? 0
-    const limit = user.free_messages_limit ?? 10
 
     return (
       <>
         <span className="font-medium">{used}</span>
-        <span className="text-muted-foreground">/{limit}</span>
+        <span className="text-muted-foreground">/10</span>
       </>
     )
   }
