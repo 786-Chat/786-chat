@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db"
+import { isAdminUser } from "@/lib/admin-config"
 
 
 export interface UserBalance {
@@ -29,18 +30,32 @@ export interface CanSendResult {
 }
 
 // Get or create user balance record
-export async function getUserBalance(userId: string): Promise<UserBalance> {
+export async function getUserBalance(userId: string, userEmail?: string): Promise<UserBalance> {
+  const isOwner = userEmail ? isAdminUser(userEmail) : false
+
   // Try to get existing balance
   const [existing] = await sql`
     SELECT * FROM user_balances WHERE user_id = ${userId}::uuid
   `
 
   if (existing) {
+    if (isOwner) {
+      return {
+        balance: Number(existing.balance) || 0,
+        freeMessagesUsed: existing.free_messages_used || 0,
+        freeMessagesLimit: 999999,
+        freeMessagesRemaining: 999999,
+        totalMessagesSent: existing.total_messages_sent || 0,
+        totalSpent: Number(existing.total_spent) || 0,
+      }
+    }
+    const limit = existing.free_messages_limit || 10
+    const used = existing.free_messages_used || 0
     return {
       balance: Number(existing.balance) || 0,
-      freeMessagesUsed: existing.free_messages_used || 0,
-      freeMessagesLimit: 999999, // Effectively unlimited
-      freeMessagesRemaining: 999999, // Effectively unlimited
+      freeMessagesUsed: used,
+      freeMessagesLimit: limit,
+      freeMessagesRemaining: Math.max(0, limit - used),
       totalMessagesSent: existing.total_messages_sent || 0,
       totalSpent: Number(existing.total_spent) || 0,
     }
@@ -48,7 +63,7 @@ export async function getUserBalance(userId: string): Promise<UserBalance> {
 
   // Get default free messages from settings
   const [settings] = await sql`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
-  const freeLimit = 999999 // Effectively unlimited
+  const freeLimit = isOwner ? 999999 : (settings?.free_messages_default ?? 10)
 
   // Create new balance record
   await sql`
@@ -83,26 +98,75 @@ export async function getPricingSettings(): Promise<PricingSettings> {
 }
 
 // Check if user can send a message
-export async function canSendMessage(userId: string): Promise<CanSendResult> {
-  // All users have unlimited access
+export async function canSendMessage(userId: string, userEmail?: string): Promise<CanSendResult> {
+  const isOwner = userEmail ? isAdminUser(userEmail) : false
+
+  // Owner (mujeeb@job4u.com) always has unlimited access
+  if (isOwner) {
+    return {
+      allowed: true,
+      usingFreeMessage: true,
+      messageCost: 0,
+      freeMessagesRemaining: 999999,
+    }
+  }
+
+  // For normal customers: check their actual free message balance
+  const balance = await getUserBalance(userId, userEmail)
+
+  if (balance.freeMessagesRemaining > 0) {
+    return {
+      allowed: true,
+      usingFreeMessage: true,
+      messageCost: 0,
+      freeMessagesRemaining: balance.freeMessagesRemaining,
+    }
+  }
+
+  // If they have paid balance, allow using that
+  if (balance.balance > 0.001) {
+    const pricing = await getPricingSettings()
+    return {
+      allowed: true,
+      usingFreeMessage: false,
+      messageCost: pricing.costPerMessage,
+      balanceAfter: balance.balance - pricing.costPerMessage,
+      freeMessagesRemaining: 0,
+    }
+  }
+
+  // No free messages left and no balance
   return {
-    allowed: true,
-    usingFreeMessage: true,
+    allowed: false,
+    reason: "You've used all your free messages. Please upgrade to continue.",
+    usingFreeMessage: false,
     messageCost: 0,
-    freeMessagesRemaining: 999999,
+    freeMessagesRemaining: 0,
   }
 }
 
 // Deduct cost after successful message
 export async function deductMessageCost(userId: string, usingFreeMessage: boolean, cost: number): Promise<void> {
-  // Track message usage without enforcing limits
-  await sql`
-    UPDATE user_balances 
-    SET free_messages_used = free_messages_used + 1,
-        total_messages_sent = total_messages_sent + 1,
-        updated_at = NOW()
-    WHERE user_id = ${userId}::uuid
-  `
+  if (usingFreeMessage) {
+    // Track free message usage
+    await sql`
+      UPDATE user_balances 
+      SET free_messages_used = free_messages_used + 1,
+          total_messages_sent = total_messages_sent + 1,
+          updated_at = NOW()
+      WHERE user_id = ${userId}::uuid
+    `
+  } else {
+    // Deduct from paid balance
+    await sql`
+      UPDATE user_balances 
+      SET balance = balance - ${cost},
+          total_messages_sent = total_messages_sent + 1,
+          total_spent = total_spent + ${cost},
+          updated_at = NOW()
+      WHERE user_id = ${userId}::uuid
+    `
+  }
 }
 
 // Add credits to user balance (after successful payment)
