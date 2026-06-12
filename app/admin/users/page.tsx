@@ -60,6 +60,8 @@ interface User {
   daily_messages_used: number | null
   stripe_customer_id: string | null
   current_period_end: string | null
+  free_messages_used: number | null
+  free_messages_limit: number | null
   chat_count: number
   message_count: number
 }
@@ -70,6 +72,8 @@ interface Stats {
   new_users_30d: number
   new_users_7d: number
 }
+
+const OWNER_EMAIL = "mujeeb@job4u.com"
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
@@ -179,6 +183,25 @@ export default function AdminUsersPage() {
       month: "short",
       day: "numeric"
     })
+  }
+
+  // Format the Messages column display
+  const formatMessages = (user: User) => {
+    // Owner gets "Unlimited"
+    if (user.email === OWNER_EMAIL) {
+      return <span className="font-medium text-primary">Unlimited</span>
+    }
+
+    // Normal customers: free_messages_used / free_messages_limit
+    const used = user.free_messages_used ?? 0
+    const limit = user.free_messages_limit ?? 10
+
+    return (
+      <>
+        <span className="font-medium">{used}</span>
+        <span className="text-muted-foreground">/{limit}</span>
+      </>
+    )
   }
 
   return (
@@ -339,8 +362,7 @@ export default function AdminUsersPage() {
                           </span>
                         </td>
                         <td className="p-4">
-                          <span className="font-medium">{user.messages_used || 0}</span>
-                          <span className="text-muted-foreground">/{user.messages_limit || 10}</span>
+                          {formatMessages(user)}
                         </td>
                         <td className="p-4">
                           <span className="font-medium">{user.extra_credits || 0}</span>
