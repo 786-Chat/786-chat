@@ -72,10 +72,13 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
             plan: data.usage?.plan || "free",
             balance: balanceData.balance || 0,
             freeMessagesUsed: balanceData.freeMessagesUsed || 0,
-            freeMessagesLimit: balanceData.freeMessagesLimit || 10,
-            freeMessagesRemaining: balanceData.freeMessagesRemaining ?? 10,
+            freeMessagesLimit: user?.email?.toLowerCase() === "mujeeb@job4u.com" ? 999999999 : 10,
+freeMessagesRemaining:
+  user?.email?.toLowerCase() === "mujeeb@job4u.com"
+    ? 999999999
+    : Math.min(balanceData.freeMessagesRemaining ?? 10, 10),
             costPerMessage: balanceData.pricing?.costPerMessage || 0.0005,
-            unlimited: balanceData.unlimited || false,
+             unlimited: user?.email?.toLowerCase() === "mujeeb@job4u.com",
           })
         } else if (data.usage) {
           setUsage(data.usage)
