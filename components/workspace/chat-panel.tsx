@@ -567,7 +567,15 @@ const regenerateResponse = () => {
     setShowUpgradePopup(true)
     return
   }
+const handlePromptClick = (prompt: string) => {
+  sendMessage({ text: prompt })
+}
 
+const copyToClipboard = async (text: string, id: string) => {
+  await navigator.clipboard.writeText(text)
+  setCopiedId(id)
+  setTimeout(() => setCopiedId(null), 2000)
+}
   const lastUserMsg = messages.filter(m => m.role === "user").pop()
 
   if (lastUserMsg) {
