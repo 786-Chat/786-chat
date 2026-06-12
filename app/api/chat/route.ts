@@ -523,7 +523,7 @@ headers: { "Content-Type": "application/json" },
 
 const result = await streamText({
 model: hasImages
-?google(aiSettings.visionModel || "gemini-2.5-flash")
+? google(aiSettings.visionModel || "gemini-2.5-flash")
 : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
 system: isAdmin ? adminSystemPrompt : userSystemPrompt,
 messages: modelMessages,
