@@ -84,62 +84,25 @@ export async function getPricingSettings(): Promise<PricingSettings> {
 
 // Check if user can send a message
 export async function canSendMessage(userId: string): Promise<CanSendResult> {
-  const balance = await getUserBalance(userId)
-  const pricing = await getPricingSettings()
-
-  // Check if user has free messages remaining (unlimited)
-  if (balance.freeMessagesRemaining > 0) {
-    return {
-      allowed: true,
-      usingFreeMessage: true,
-      messageCost: 0,
-      freeMessagesRemaining: balance.freeMessagesRemaining - 1,
-    }
-  }
-
-  // No free messages - check balance
-  const messageCost = pricing.costPerMessage
-
-  if (balance.balance >= messageCost) {
-    return {
-      allowed: true,
-      usingFreeMessage: false,
-      messageCost: messageCost,
-      balanceAfter: balance.balance - messageCost,
-    }
-  }
-
-  // Not enough balance
+  // All users have unlimited access
   return {
-    allowed: false,
-    reason: "Insufficient balance. Please top up to continue using AI.",
-    usingFreeMessage: false,
-    messageCost: messageCost,
+    allowed: true,
+    usingFreeMessage: true,
+    messageCost: 0,
+    freeMessagesRemaining: 999999,
   }
 }
 
 // Deduct cost after successful message
 export async function deductMessageCost(userId: string, usingFreeMessage: boolean, cost: number): Promise<void> {
-  if (usingFreeMessage) {
-    // Increment free messages used
-    await sql`
-      UPDATE user_balances 
-      SET free_messages_used = free_messages_used + 1,
-          total_messages_sent = total_messages_sent + 1,
-          updated_at = NOW()
-      WHERE user_id = ${userId}::uuid
-    `
-  } else {
-    // Deduct from balance
-    await sql`
-      UPDATE user_balances 
-      SET balance = balance - ${cost},
-          total_messages_sent = total_messages_sent + 1,
-          total_spent = total_spent + ${cost},
-          updated_at = NOW()
-      WHERE user_id = ${userId}::uuid
-    `
-  }
+  // Track message usage without enforcing limits
+  await sql`
+    UPDATE user_balances 
+    SET free_messages_used = free_messages_used + 1,
+        total_messages_sent = total_messages_sent + 1,
+        updated_at = NOW()
+    WHERE user_id = ${userId}::uuid
+  `
 }
 
 // Add credits to user balance (after successful payment)
