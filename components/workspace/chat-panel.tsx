@@ -562,7 +562,21 @@ const handleSubmit = async (e: React.FormEvent) => {
   setInput("")
   setAttachedFiles([])
 }
+const regenerateResponse = () => {
+  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
+    setShowUpgradePopup(true)
+    return
+  }
 
+  const lastUserMsg = messages.filter(m => m.role === "user").pop()
+
+  if (lastUserMsg) {
+    const text = getMessageText(lastUserMsg)
+    if (text) {
+      sendMessage({ text })
+    }
+  }
+}
 // User can send if: has free messages OR has balance OR no usage data yet (give benefit of doubt)
   const canSendMessage =
   isOwnerAdmin || !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
