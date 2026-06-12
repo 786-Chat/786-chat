@@ -10,45 +10,19 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const isOwnerAdmin = isAdminUser(session.email)
-
-    if (isOwnerAdmin) {
-      return NextResponse.json({
-        balance: 0,
-        freeMessagesUsed: 0,
-        freeMessagesLimit: 0,
-        freeMessagesRemaining: 0,
-        totalMessagesSent: 0,
-        totalSpent: 0,
-        unlimited: true,
-        pricing: {
-          costPerMessage: 0,
-          costPer1000Messages: 0,
-          topupAmounts: [],
-        },
-      })
-    }
-
-    const [balance, pricing] = await Promise.all([
-      getUserBalance(session.id),
-      getPricingSettings(),
-    ])
-
-    const customerFreeLimit = 10
-    const used = balance.freeMessagesUsed || 0
-
+    // All users get unlimited messages and balance
     return NextResponse.json({
-      balance: balance.balance,
-      freeMessagesUsed: used,
-      freeMessagesLimit: customerFreeLimit,
-      freeMessagesRemaining: Math.max(0, customerFreeLimit - used),
-      totalMessagesSent: balance.totalMessagesSent,
-      totalSpent: balance.totalSpent,
-      unlimited: false,
+      balance: 0,
+      freeMessagesUsed: 0,
+      freeMessagesLimit: 0,
+      freeMessagesRemaining: 0,
+      totalMessagesSent: 0,
+      totalSpent: 0,
+      unlimited: true,
       pricing: {
-        costPerMessage: pricing.costPerMessage,
-        costPer1000Messages: pricing.costPer1000Messages,
-        topupAmounts: pricing.topupAmounts,
+        costPerMessage: 0,
+        costPer1000Messages: 0,
+        topupAmounts: [],
       },
     })
   } catch (error) {
