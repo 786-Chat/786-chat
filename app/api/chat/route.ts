@@ -498,20 +498,41 @@ Focus on helping customers:
       }),
     }
 
-    // Stream response - DeepSeek for all users
-    const result = await streamText({
-      model: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-      system: isAdmin ? adminSystemPrompt : userSystemPrompt,
-      messages: modelMessages,
-      temperature: isAdmin ? 0.7 : aiSettings.temperature,
-      maxOutputTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-      // Admin gets file-editing tools that commit directly to the live site
-      tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
-      // AI SDK v6: allow multiple steps so the model can call a tool, read the
-      // result, and keep going (read file -> answer, edit file -> confirm, etc.)
-      stopWhen: isAdmin ? stepCountIs(10) : undefined,
-      abortSignal: request.signal,
-    })
+   // Stream response - DeepSeek for text, Gemini for images
+const hasImages = messages.some(msg =>
+msg.parts?.some(
+p =>
+p.type === "file" &&
+"mediaType" in p &&
+(p as { mediaType?: string }).mediaType?.startsWith("image/")
+)
+)
+
+if (hasImages && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+return new Response(
+JSON.stringify({
+error: "VISION_NOT_CONFIGURED",
+message: "Image analysis requires Gemini Vision API key to be configured.",
+}),
+{
+status: 500,
+headers: { "Content-Type": "application/json" },
+}
+)
+}
+
+const result = await streamText({
+model: hasImages
+? google(aiSettings.visionModel || "gemini-1.5-flash")
+: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+system: isAdmin ? adminSystemPrompt : userSystemPrompt,
+messages: modelMessages,
+temperature: isAdmin ? 0.7 : aiSettings.temperature,
+maxOutputTokens: isAdmin ? 8192 : aiSettings.maxTokens,
+tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
+stopWhen: isAdmin ? stepCountIs(10) : undefined,
+abortSignal: request.signal,
+})
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
