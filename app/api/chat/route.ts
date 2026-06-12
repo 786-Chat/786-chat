@@ -1,5 +1,6 @@
 import { streamText, convertToModelMessages, consumeStream, UIMessage, tool, stepCountIs } from "ai"
 import { createDeepSeek } from "@ai-sdk/deepseek"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
@@ -17,7 +18,9 @@ import * as github from "@/lib/github-api"
 const deepseek = createDeepSeek({
   apiKey: process.env.DEEPSEEK_API_KEY || "",
 })
-
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+})
 export const maxDuration = 60
 
 // Helper to extract text from UIMessage parts
