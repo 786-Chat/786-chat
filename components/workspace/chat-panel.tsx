@@ -253,7 +253,9 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode = "preview", onVi
         const data = await response.json()
         if (data.usage) {
           // Get balance data from the response
-         const freeRemaining = data.usage.monthly?.remaining ?? data.usage.freeMessagesRemaining ?? 0
+         const freeRemaining = isOwnerAdmin
+  ? 999999999
+  : Math.min(data.usage.monthly?.remaining ?? data.usage.freeMessagesRemaining ?? 10, 10)
           const balance = data.usage.balance ?? 0
           
           const usageData: UsageData = {
