@@ -58,7 +58,7 @@ export async function getAISettings(): Promise<AISettings> {
     return {
       id: "",
       model: "deepseek-chat",
-      visionModel: "claude-3-5-sonnet-latest",
+      visionModel: "gemini-1.5-flash",
       temperature: 0.7,
       maxTokens: 4096,
       systemPrompt: "You are MujeebProAI, an advanced AI assistant created by Mujeeb Sardar.",
@@ -76,7 +76,7 @@ export async function getAISettings(): Promise<AISettings> {
     temperature: Number(settings.temperature),
     monthlyBudgetUsd: Number(settings.monthlyBudgetUsd),
     budgetAlertThreshold: Number(settings.budgetAlertThreshold),
-    visionModel: settings.visionModel || "claude-3-5-sonnet-latest",
+    visionModel: settings.visionModel || "gemini-1.5-flash",
   }
 }
 
