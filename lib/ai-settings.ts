@@ -21,6 +21,7 @@ export type DeepSeekModel = keyof typeof DEEPSEEK_PRICING
 export interface AISettings {
   id: string
   model: DeepSeekModel
+  visionModel: string
   temperature: number
   maxTokens: number
   systemPrompt: string
@@ -38,6 +39,7 @@ export async function getAISettings(): Promise<AISettings> {
     SELECT 
       id,
       model,
+      vision_model as "visionModel",
       temperature,
       max_tokens as "maxTokens",
       system_prompt as "systemPrompt",
@@ -56,6 +58,7 @@ export async function getAISettings(): Promise<AISettings> {
     return {
       id: "",
       model: "deepseek-chat",
+      visionModel: "claude-3-5-sonnet-latest",
       temperature: 0.7,
       maxTokens: 4096,
       systemPrompt: "You are MujeebProAI, an advanced AI assistant created by Mujeeb Sardar.",
@@ -73,6 +76,7 @@ export async function getAISettings(): Promise<AISettings> {
     temperature: Number(settings.temperature),
     monthlyBudgetUsd: Number(settings.monthlyBudgetUsd),
     budgetAlertThreshold: Number(settings.budgetAlertThreshold),
+    visionModel: settings.visionModel || "claude-3-5-sonnet-latest",
   }
 }
 
@@ -86,6 +90,7 @@ export async function updateAISettings(
       UPDATE ai_settings
       SET 
         model = COALESCE(${settings.model}, model),
+        vision_model = COALESCE(${settings.visionModel}, vision_model),
         temperature = COALESCE(${settings.temperature}, temperature),
         max_tokens = COALESCE(${settings.maxTokens}, max_tokens),
         system_prompt = COALESCE(${settings.systemPrompt}, system_prompt),
