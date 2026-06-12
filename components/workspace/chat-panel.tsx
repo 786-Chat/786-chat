@@ -549,12 +549,14 @@ const handleSubmit = async (e: React.FormEvent) => {
   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
   sendMessage({
-    text: messageText,
-    files: uploadedFiles.map((f) => ({
-      name: f.file.name,
-      mediaType: f.file.type,
-      url: f.url!,
-    })),
+    parts: [
+      { type: "text", text: messageText },
+      ...uploadedFiles.map((f) => ({
+        type: "file" as const,
+        url: f.url!,
+        mediaType: f.file.type,
+      })),
+    ],
   } as any)
 
   setInput("")
