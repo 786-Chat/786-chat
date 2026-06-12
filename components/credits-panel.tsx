@@ -13,7 +13,8 @@ import {
   CreditCard,
   Loader2,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Infinity
 } from "lucide-react"
 import {
   Dialog,
@@ -30,6 +31,7 @@ interface BalanceData {
   freeMessagesRemaining: number
   totalMessagesSent: number
   totalSpent: number
+  unlimited?: boolean
   pricing: {
     costPerMessage: number
     costPer1000Messages: number
@@ -96,7 +98,7 @@ export function CreditsPanel() {
 
   if (!balance) return null
 
-  const freePercentage = (balance.freeMessagesUsed / balance.freeMessagesLimit) * 100
+  const freePercentage = balance.freeMessagesLimit > 0 ? (balance.freeMessagesUsed / balance.freeMessagesLimit) * 100 : 0
   const hasFreeMsgs = balance.freeMessagesRemaining > 0
   const lowBalance = !hasFreeMsgs && balance.balance < 0.10
 
@@ -109,53 +111,90 @@ export function CreditsPanel() {
               <Coins className="w-5 h-5 text-amber-400" />
               AI Credits
             </CardTitle>
-            <Button
-              size="sm"
-              onClick={() => setTopupOpen(true)}
-              className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
-            >
-              <Zap className="w-3.5 h-3.5 mr-1.5" />
-              Add Credits
-            </Button>
+            {!balance.unlimited && (
+              <Button
+                size="sm"
+                onClick={() => setTopupOpen(true)}
+                className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white"
+              >
+                <Zap className="w-3.5 h-3.5 mr-1.5" />
+                Add Credits
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Balance Display */}
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-              <div className="text-xs text-white/50 mb-1">Balance</div>
-              <div className="text-xl font-bold text-white">${balance.balance.toFixed(2)}</div>
+              <div className="text-xs text-white/50 mb-1">Status</div>
+              <div className="text-xl font-bold text-green-400 flex items-center gap-2">
+                {balance.unlimited ? (
+                  <>
+                    <Infinity className="w-5 h-5" />
+                    Unlimited
+                  </>
+                ) : (
+                  <>${balance.balance.toFixed(2)}</>
+                )}
+              </div>
             </div>
             <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-              <div className="text-xs text-white/50 mb-1">Cost/Message</div>
-              <div className="text-xl font-bold text-white">${balance.pricing.costPerMessage.toFixed(4)}</div>
+              <div className="text-xs text-white/50 mb-1">Messages</div>
+              <div className="text-xl font-bold text-cyan-400 flex items-center gap-2">
+                {balance.unlimited ? (
+                  <>
+                    <Infinity className="w-5 h-5" />
+                    Unlimited
+                  </>
+                ) : (
+                  <>${balance.pricing.costPerMessage.toFixed(4)}</>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Free Messages Progress */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/60">Free Messages</span>
-              <span className="text-white font-medium">
-                {balance.freeMessagesRemaining} / {balance.freeMessagesLimit}
-              </span>
+          {/* Free Messages Progress - only show if not unlimited */}
+          {!balance.unlimited && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/60">Free Messages</span>
+                <span className="text-white font-medium">
+                  {balance.freeMessagesRemaining} / {balance.freeMessagesLimit}
+                </span>
+              </div>
+              <Progress value={freePercentage} className="h-2 bg-white/10" />
+              {hasFreeMsgs ? (
+                <p className="text-xs text-green-400 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  {balance.freeMessagesRemaining} free messages remaining
+                </p>
+              ) : (
+                <p className="text-xs text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Free messages used - using paid credits
+                </p>
+              )}
             </div>
-            <Progress value={freePercentage} className="h-2 bg-white/10" />
-            {hasFreeMsgs ? (
-              <p className="text-xs text-green-400 flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" />
-                {balance.freeMessagesRemaining} free messages remaining
-              </p>
-            ) : (
-              <p className="text-xs text-amber-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                Free messages used - using paid credits
-              </p>
-            )}
-          </div>
+          )}
 
-          {/* Low Balance Warning */}
-          {lowBalance && (
+          {/* Unlimited Status */}
+          {balance.unlimited && (
+            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-green-300">Unlimited Access</p>
+                  <p className="text-xs text-green-300/70 mt-0.5">
+                    You have unlimited AI messages and no usage restrictions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Low Balance Warning - only for non-unlimited */}
+          {!balance.unlimited && lowBalance && (
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-red-400 mt-0.5" />
@@ -177,13 +216,13 @@ export function CreditsPanel() {
             </span>
             <span className="flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
-              ${balance.totalSpent.toFixed(2)} spent
+              {balance.unlimited ? "Unlimited" : `$${balance.totalSpent.toFixed(2)} spent`}
             </span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Top-up Dialog */}
+      {/* Top-up Dialog - only show for non-unlimited */}
       <Dialog open={topupOpen} onOpenChange={setTopupOpen}>
         <DialogContent className="bg-[#14141f] border-white/10 text-white max-w-md">
           <DialogHeader>
