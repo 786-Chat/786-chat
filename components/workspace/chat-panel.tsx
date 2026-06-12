@@ -900,24 +900,24 @@ setAttachedFiles([])
                 )}
               </Button>
             </div>
-            <p className="text-[10px] text-white/25 text-center mt-2">
-              {"MujeebProAI may produce inaccurate information. "}
-       {usage && (
-  <span className="text-cyan-500/50">
-    {usage.unlimited ? (
-      <>Unlimited Messages | Unlimited Balance</>
-    ) : (
-      <>
-       {`${Math.min(
-  usage.freeMessagesRemaining ?? Math.max(0, usage.limit - usage.used),
-  10
-)} free messages remaining`}
-        {(usage.balance ?? 0) > 0 && ` | Balance: $${usage.balance?.toFixed(2)}`}
-      </>
-    )}
-  </span>
-)}
-            </p>
+           <p className="text-[10px] text-white/25 text-center mt-2">
+  {"MujeebProAI may produce inaccurate information. "}
+  {usage && (
+    <span className="text-cyan-500/50">
+      {isOwnerAdmin ? (
+        <>Unlimited Messages | Unlimited Balance</>
+      ) : (
+        <>
+          {`${Math.min(
+            usage.freeMessagesRemaining ?? 10,
+            10
+          )} free messages remaining`}
+          {(usage.balance ?? 0) > 0 && ` | Balance: $${usage.balance?.toFixed(2)}`}
+        </>
+      )}
+    </span>
+  )}
+</p>
           </form>
         </div>
       </div>
