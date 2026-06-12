@@ -23,7 +23,7 @@ async function verifyAdmin() {
   return { payload }
 }
 
-// GET - Fetch all users with subscription info
+// GET - Fetch all users with subscription and balance info
 export async function GET() {
   try {
     const auth = await verifyAdmin()
@@ -31,7 +31,7 @@ export async function GET() {
       return NextResponse.json({ error: auth.error }, { status: auth.status })
     }
 
-    // Fetch users with their subscription and usage data
+    // Fetch users with their subscription and user_balance data
     const users = await sql`
       SELECT 
         u.id,
@@ -49,10 +49,13 @@ export async function GET() {
         s.daily_messages_used,
         s.stripe_customer_id,
         s.current_period_end,
+        ub.free_messages_used,
+        ub.free_messages_limit,
         (SELECT COUNT(*) FROM chats WHERE user_id = u.id) as chat_count,
         (SELECT COUNT(*) FROM messages m JOIN chats c ON m.chat_id = c.id WHERE c.user_id = u.id) as message_count
       FROM users u
       LEFT JOIN subscriptions s ON s.user_id = u.id
+      LEFT JOIN user_balances ub ON ub.user_id = u.id
       ORDER BY u.created_at DESC
     `
 
