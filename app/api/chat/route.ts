@@ -717,7 +717,7 @@ export async function GET(request: Request) {
     })
   }
 }
-// Delete a chat
+// Delete a chat or clear all chats
 export async function DELETE(request: Request) {
   try {
     const session = await getSession()
@@ -731,7 +731,24 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
+    const clearAll = searchParams.get("clearAll")
 
+    // Clear all chats for the current user
+    if (clearAll === "true") {
+      // Delete all messages for this user's chats
+      await sql`
+        DELETE FROM messages 
+        WHERE chat_id IN (SELECT id FROM chats WHERE user_id = ${session.id})
+      `
+      // Then delete all chats
+      await sql`DELETE FROM chats WHERE user_id = ${session.id}`
+
+      return new Response(JSON.stringify({ success: true, cleared: true }), {
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Original single chat delete
     if (!chatId) {
       return new Response(JSON.stringify({ error: "Chat ID required" }), {
         status: 400,
