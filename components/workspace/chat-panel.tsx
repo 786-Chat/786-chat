@@ -523,7 +523,7 @@ canSend: data.usage.unlimited || isOwnerAdmin || freeRemaining > 0 || balance > 
     }
   }
 
-  // Remove attached file
+ // Remove attached file
 const removeFile = (id: string) => {
   setAttachedFiles(prev => {
     const file = prev.find(f => f.id === id)
@@ -562,11 +562,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   setInput("")
   setAttachedFiles([])
 }
-const regenerateResponse = () => {
-  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
-    setShowUpgradePopup(true)
-    return
-  }
+
 const handlePromptClick = (prompt: string) => {
   sendMessage({ text: prompt })
 }
@@ -576,6 +572,13 @@ const copyToClipboard = async (text: string, id: string) => {
   setCopiedId(id)
   setTimeout(() => setCopiedId(null), 2000)
 }
+
+const regenerateResponse = () => {
+  if (!isOwnerAdmin && usage && usage.used >= usage.limit) {
+    setShowUpgradePopup(true)
+    return
+  }
+
   const lastUserMsg = messages.filter(m => m.role === "user").pop()
 
   if (lastUserMsg) {
@@ -585,6 +588,7 @@ const copyToClipboard = async (text: string, id: string) => {
     }
   }
 }
+
 // User can send if: has free messages OR has balance OR no usage data yet (give benefit of doubt)
   const canSendMessage =
   isOwnerAdmin || !usage || usage.canSend || (usage.limit - usage.used > 0) || ((usage.balance ?? 0) > 0.001)
