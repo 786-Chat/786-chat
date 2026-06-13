@@ -201,7 +201,53 @@ export async function POST(request: Request) {
     const userText = lastUserMessage ? getMessageText(lastUserMessage) : ""
     const files = lastUserMessage ? getMessageFiles(lastUserMessage) : []
     const imageCount = lastUserMessage ? getImageCount(lastUserMessage) : 0
+const hasVisionFiles =
+  imageCount > 0 || files.some((file) => file.type === "application/pdf")
 
+if (!isAdminRequest && hasVisionFiles) {
+  const plan = String(subscription.plan || "free").toLowerCase()
+
+  const monthlyVisionLimit =
+    plan.includes("20") || plan.includes("pro") || plan.includes("business")
+      ? 15
+      : plan.includes("10") || plan.includes("starter")
+      ? 5
+      : 0
+
+  if (monthlyVisionLimit <= 0) {
+    return new Response(
+      JSON.stringify({
+        error: "VISION_PLAN_REQUIRED",
+        message: "Image and PDF analysis is available on paid plans only.",
+      }),
+      { status: 402, headers: { "Content-Type": "application/json" } }
+    )
+  }
+
+  const monthStart = new Date()
+  monthStart.setUTCDate(1)
+  monthStart.setUTCHours(0, 0, 0, 0)
+
+  const usedRows = await sql`
+    SELECT COUNT(*)::int AS count
+    FROM usage_logs
+    WHERE user_id = ${session.id}
+      AND action = 'vision_analysis'
+      AND created_at >= ${monthStart.toISOString()}
+  `
+
+  const usedVision = Number(usedRows[0]?.count || 0)
+
+  if (usedVision >= monthlyVisionLimit) {
+    return new Response(
+      JSON.stringify({
+        error: "VISION_LIMIT_REACHED",
+        message: `You have reached your monthly image/PDF analysis limit (${monthlyVisionLimit}). Please upgrade your plan.`,
+      }),
+      { status: 402, headers: { "Content-Type": "application/json" } }
+    )
+  }
+}
     // === AI PROTECTION CHECKS ===
 let protectionResult: ProtectionResult
 
@@ -498,33 +544,36 @@ Focus on helping customers:
       }),
     }
 
-   // Stream response - DeepSeek for text, Gemini for images
-const hasImages = messages.some(msg =>
-msg.parts?.some(
-p =>
-p.type === "file" &&
-"mediaType" in p &&
-(p as { mediaType?: string }).mediaType?.startsWith("image/")
-)
+// Stream response - DeepSeek for text, Gemini for images/PDFs
+const hasVisionInput = messages.some(msg =>
+  msg.parts?.some(
+    p =>
+      p.type === "file" &&
+      "mediaType" in p &&
+      (
+        (p as { mediaType?: string }).mediaType?.startsWith("image/") ||
+        (p as { mediaType?: string }).mediaType === "application/pdf"
+      )
+  )
 )
 
-if (hasImages && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-return new Response(
-JSON.stringify({
-error: "VISION_NOT_CONFIGURED",
-message: "Image analysis requires Gemini Vision API key to be configured.",
-}),
-{
-status: 500,
-headers: { "Content-Type": "application/json" },
-}
-)
+if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  return new Response(
+    JSON.stringify({
+      error: "VISION_NOT_CONFIGURED",
+      message: "Image/PDF analysis requires Gemini Vision API key to be configured.",
+    }),
+    {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    }
+  )
 }
 
 const result = await streamText({
-model: hasImages
-? google(aiSettings.visionModel || "gemini-2.5-flash")
-: deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+  model: hasVisionInput
+    ? google(aiSettings.visionModel || "gemini-2.5-flash")
+    : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
 system: isAdmin ? adminSystemPrompt : userSystemPrompt,
 messages: modelMessages,
 temperature: isAdmin ? 0.7 : aiSettings.temperature,
@@ -537,6 +586,7 @@ abortSignal: request.signal,
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
+        
         // Save assistant response to database
         const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
         if (lastAssistant) {
@@ -564,7 +614,16 @@ abortSignal: request.signal,
           totalPdfPages,
           useExtraCredit
         )
-
+if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
+  await sql`
+    INSERT INTO usage_logs (user_id, action, metadata)
+    VALUES (${session.id}, 'vision_analysis', ${JSON.stringify({
+      imageCount,
+      pdfPages: totalPdfPages,
+      model: aiSettings.visionModel || "gemini-2.5-flash",
+    })})
+  `
+}
         // Track cost for admin dashboard
         await trackUsage(session.id, inputTokens, outputTokens, aiSettings.model as DeepSeekModel)
 
