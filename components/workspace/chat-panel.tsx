@@ -182,7 +182,7 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 </html>`
 }
 
-export default function ChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
+export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
