@@ -195,16 +195,16 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const [showScrollButton, setShowScrollButton] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit: originalHandleSubmit,
-    isLoading,
-    stop,
-    reload,
-    error,
-  } = useChat({
+  const [input, setInput] = useState("")
+
+const {
+  messages,
+  sendMessage,
+  status,
+  stop,
+  reload,
+  error,
+} = useChat({
     api: "/api/chat",
     body: {
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
@@ -260,17 +260,31 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   }
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() && attachedFiles.length === 0) return
+  e.preventDefault()
+  if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
-    if (usage && !usage.canSend && !isLoading) {
-      setShowUpgrade(true)
-      return
-    }
-
-    originalHandleSubmit(e)
+  if (usage && !usage.canSend && !isLoading) {
+    setShowUpgrade(true)
+    return
   }
 
+  const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
+  const messageText = input.trim() || "Please analyze the attached file."
+
+  sendMessage({
+    parts: [
+      { type: "text", text: messageText },
+      ...uploadedFiles.map((f) => ({
+        type: "file" as const,
+        url: f.url!,
+        mediaType: f.file.type,
+      })),
+    ],
+  } as any)
+
+  setInput("")
+  setAttachedFiles([])
+}
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text)
     setCopiedId(id)
@@ -616,7 +630,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={handleInputChange}
+                onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask me anything..."
                 rows={1}
