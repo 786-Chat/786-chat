@@ -214,7 +214,7 @@ const {
       console.error("Chat error:", err)
     },
   })
-
+const isLoading = status === "streaming" || status === "submitted"
   // Fetch usage on mount
   useEffect(() => {
     fetch("/api/usage")
