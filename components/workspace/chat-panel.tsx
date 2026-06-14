@@ -276,11 +276,23 @@ if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
 }
 
   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-  const messageText = input.trim() || "Please analyze the attached file."
+const savedPreview = localStorage.getItem("mujeebproai_last_preview_html")
+const messageText =
+  input.trim() +
+  (savedPreview
+    ? `
+
+CURRENT_PREVIEW_HTML:
+${savedPreview}
+
+Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Do not ask for URL unless the user is asking about an external website.`
+    : "")
+
+const finalMessageText = messageText.trim() || "Please analyze the attached file."
 
   sendMessage({
     parts: [
-      { type: "text", text: messageText },
+     { type: "text", text: finalMessageText },
       ...uploadedFiles.map((f) => ({
         type: "file" as const,
         url: f.url!,
