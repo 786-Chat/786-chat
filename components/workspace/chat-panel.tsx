@@ -238,7 +238,7 @@ useEffect(() => {
 })
         .catch(() => {})
     }
-  }, [messages.length])
+  }, [messages.length, status])
 
   // Scroll to bottom on new messages
   useEffect(() => {
