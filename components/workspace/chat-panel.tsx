@@ -358,38 +358,7 @@ const isLoading = status === "streaming" || status === "submitted"
     setAttachedFiles(prev => prev.filter(f => f.id !== id))
   }
 
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-
-    const imageFiles: File[] = []
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item.type.startsWith("image/")) {
-        e.preventDefault()
-        const file = item.getAsFile()
-        if (file) {
-          imageFiles.push(file)
-        }
-      }
-    }
-
-    if (imageFiles.length === 0) return
-
-    // Process each pasted image like a file select
-    for (const file of imageFiles) {
-      const id = Math.random().toString(36).substring(7)
-      const newFile: AttachedFile = {
-        id,
-        file,
-        type: "image",
-        preview: URL.createObjectURL(file),
-        uploading: true,
-      }
-
-      setAttachedFiles(prev => [...prev, newFile])
-
+  
       // Upload the file
       const formData = new FormData()
       formData.append("file", file)
