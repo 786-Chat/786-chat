@@ -35,7 +35,7 @@ export async function GET() {
     const balanceData = await getUserBalance(session.userId)
 
     const used = Number(balanceData?.freeMessagesUsed ?? balanceData?.totalMessagesSent ?? 0)
-    const limit = Number(balanceData?.freeMessagesLimit ?? FREE_MESSAGES_LIMIT)
+   const limit = FREE_MESSAGES_LIMIT
     const remaining = Math.max(limit - used, 0)
 
     return NextResponse.json({
