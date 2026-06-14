@@ -184,6 +184,7 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
+  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -263,10 +264,10 @@ const isLoading = status === "streaming" || status === "submitted"
   e.preventDefault()
   if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
-  if (usage && !usage.canSend && !isLoading) {
-    setShowUpgrade(true)
-    return
-  }
+ if (!isOwnerAdmin && usage && !usage.canSend && !isLoading) {
+  setShowUpgrade(true)
+  return
+}
 
   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
   const messageText = input.trim() || "Please analyze the attached file."
@@ -699,14 +700,14 @@ const isLoading = status === "streaming" || status === "submitted"
               <div className="flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-purple-400" />
                 <span className="text-xs text-gray-500">
-                  {usage.plan === "unlimited" ? (
-                    "Unlimited"
-                  ) : (
-                    `${usage.used} / ${usage.limit} messages`
-                  )}
+                  {isOwnerAdmin || usage.unlimited ? (
+  "Unlimited"
+) : (
+  `${usage.used} / ${usage.limit} messages`
+)}
                 </span>
               </div>
-              {usage.plan !== "unlimited" && usage.used >= usage.limit && (
+              {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
                 <button
                   onClick={() => setShowUpgrade(true)}
                   className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
