@@ -185,6 +185,9 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+  const previewStorageKey = user?.email
+  ? `mujeebproai_last_preview_html_${user.email.toLowerCase()}`
+  : "mujeebproai_last_preview_html_guest"
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -476,7 +479,7 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
       const text = getMessageText(lastMsg)
       const html = buildPreviewHtml(text)
 if (html) {
-  localStorage.setItem("mujeebproai_last_preview_html", html)
+ localStorage.setItem(previewStorageKey, html)
   onPreviewUpdate(html)
 }
     }
@@ -485,13 +488,14 @@ if (html) {
   useEffect(() => {
     if (!onPreviewUpdate) return
 
-    const savedPreview = localStorage.getItem("mujeebproai_last_preview_html")
+    localStorage.removeItem(previewStorageKey)
+const savedPreview = localStorage.getItem(previewStorageKey)
     if (savedPreview) {
       onPreviewUpdate(savedPreview)
     }
 
     const handleNewChat = () => {
-      localStorage.removeItem("mujeebproai_last_preview_html")
+      localStorage.removeItem(previewStorageKey)
       onPreviewUpdate("")
     }
 
