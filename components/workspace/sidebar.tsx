@@ -229,8 +229,10 @@ freeMessagesRemaining:
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-white/40 uppercase tracking-wider">Messages</span>
                     <span className="text-[10px] font-medium text-cyan-400">
-                      {usage.unlimited ? "Unlimited" : `${usage.freeMessagesRemaining || (usage.limit - usage.used)}/${usage.freeMessagesLimit || usage.limit}`}
-                    </span>
+  {usage.unlimited
+    ? "Unlimited"
+    : `Used: ${usage.freeMessagesUsed ?? usage.used ?? 0}/${usage.freeMessagesLimit ?? usage.limit ?? 10}`}
+</span>
                   </div>
                   {!usage.unlimited && (
                     <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
