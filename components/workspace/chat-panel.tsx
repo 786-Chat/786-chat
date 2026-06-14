@@ -787,13 +787,16 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
             <div className="flex items-center justify-between mt-2 px-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-purple-400" />
-                <span className="text-xs text-gray-500">
-                  {isOwnerAdmin || usage.unlimited ? (
-  "Unlimited"
-) : (
-  `${usage.used ?? 0} / ${usage.limit ?? 10} messages`
-)}
-                </span>
+               <span className="text-xs text-gray-500">
+  {isOwnerAdmin || usage?.unlimited ? (
+    "Unlimited"
+  ) : (
+    `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
+      usage?.freeMessagesRemaining ??
+      Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
+    }`
+  )}
+</span>
               </div>
               {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
                 <button
