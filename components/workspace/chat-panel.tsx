@@ -326,11 +326,27 @@ const isLoading = status === "streaming" || status === "submitted"
           setAttachedFiles(prev =>
             prev.map(f => f.id === id ? { ...f, url: data.url, uploading: false } : f)
           )
+        } else {
+          // If upload fails, try using base64 data URL as fallback
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            const dataUrl = e.target?.result as string
+            setAttachedFiles(prev =>
+              prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+            )
+          }
+          reader.readAsDataURL(file)
         }
       } catch {
-        setAttachedFiles(prev =>
-          prev.map(f => f.id === id ? { ...f, uploading: false } : f)
-        )
+        // On network error, try base64 fallback
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const dataUrl = e.target?.result as string
+          setAttachedFiles(prev =>
+            prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+          )
+        }
+        reader.readAsDataURL(file)
       }
     }
 
@@ -720,11 +736,10 @@ const isLoading = status === "streaming" || status === "submitted"
         </div>
       </div>
 
-      {/* Upgrade popup */}
+      {/* Upgrade popup - FIXED: Using onOpenChange instead of onClose */}
       <UpgradePopup
         open={showUpgrade}
-        onClose={() => setShowUpgrade(false)}
-        plan={usage?.plan || "free"}
+        onOpenChange={(open) => setShowUpgrade(open)}
       />
     </div>
   )
