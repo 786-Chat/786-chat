@@ -429,34 +429,6 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
     }
   }, [])
 
-
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("type", "image")
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      })
-      const data = await res.json()
-
-      if (data.url) {
-        setAttachedFiles((prev) =>
-          prev.map((f) =>
-            f.id === id ? { ...f, url: data.url, uploading: false } : f
-          )
-        )
-      }
-    } catch {
-      setAttachedFiles((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, uploading: false } : f
-        )
-      )
-    }
-  }
-}
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
