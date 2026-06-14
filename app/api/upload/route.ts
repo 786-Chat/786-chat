@@ -43,6 +43,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if Vercel Blob is configured
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.warn('[Upload] BLOB_READ_WRITE_TOKEN not configured, falling back to base64')
+      // Return a signal that tells the client to use base64 instead
+      return NextResponse.json({ 
+        error: 'BLOB_NOT_CONFIGURED',
+        message: 'File storage not configured. Please use base64 fallback.',
+        useBase64Fallback: true
+      }, { status: 501 })
+    }
+
     // Generate unique filename
     const timestamp = Date.now()
     const extension = file.name.split('.').pop() || ''
@@ -62,7 +73,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Upload error:', error)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    // Return a structured error so the client can fallback to base64
+    return NextResponse.json({ 
+      error: 'Upload failed', 
+      message: error instanceof Error ? error.message : 'Unknown upload error',
+      useBase64Fallback: true
+    }, { status: 500 })
   }
 }
 
