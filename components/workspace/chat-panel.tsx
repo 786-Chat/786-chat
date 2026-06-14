@@ -229,7 +229,10 @@ const isLoading = status === "streaming" || status === "submitted"
     if (messages.length > 0) {
       fetch("/api/usage")
         .then((res) => res.json())
-        .then((data) => setUsage(data))
+       .then((data) => {
+  setUsage(data)
+  window.dispatchEvent(new Event("chat-updated"))
+})
         .catch(() => {})
     }
   }, [messages.length])
