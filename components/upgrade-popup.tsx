@@ -56,13 +56,13 @@ export function UpgradePopup({ open, onOpenChange, currency = "GBP" }: UpgradePo
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#14141f] rounded-2xl border border-cyan-500/30 p-6 md:p-8"
+            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-[#14141f] rounded-2xl border border-cyan-500/30 p-6 md:p-8"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close Button */}
             <button
               onClick={() => onOpenChange(false)}
-              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 transition-colors"
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 transition-colors z-10"
             >
               <X className="w-5 h-5 text-white/70" />
             </button>
