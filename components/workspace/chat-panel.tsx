@@ -428,7 +428,60 @@ const isLoading = status === "streaming" || status === "submitted"
       }
     }
   }, [])
+const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  const items = e.clipboardData?.items
+  if (!items) return
 
+  const imageItems = Array.from(items).filter((item) =>
+    item.type.startsWith("image/")
+  )
+
+  if (imageItems.length === 0) return
+
+  e.preventDefault()
+
+  for (const item of imageItems) {
+    const file = item.getAsFile()
+    if (!file) continue
+
+    const id = Math.random().toString(36).substring(7)
+    const newFile: AttachedFile = {
+      id,
+      file,
+      type: "image",
+      preview: URL.createObjectURL(file),
+      uploading: true,
+    }
+
+    setAttachedFiles((prev) => [...prev, newFile])
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("type", "image")
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
+      const data = await res.json()
+
+      if (data.url) {
+        setAttachedFiles((prev) =>
+          prev.map((f) =>
+            f.id === id ? { ...f, url: data.url, uploading: false } : f
+          )
+        )
+      }
+    } catch {
+      setAttachedFiles((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, uploading: false } : f
+        )
+      )
+    }
+  }
+}
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -720,13 +773,13 @@ const isLoading = status === "streaming" || status === "submitted"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
+               onPaste={handlePaste}
                 placeholder="Ask me anything... (Ctrl+V to paste images)"
                 rows={1}
-                className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
+               className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-16 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
                 disabled={isLoading}
               />
-              <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <div className="absolute left-2 bottom-2 flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => imageInputRef.current?.click()}
