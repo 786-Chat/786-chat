@@ -485,23 +485,26 @@ if (html) {
     }
     }, [messages, onPreviewUpdate])
 
-  useEffect(() => {
-    if (!onPreviewUpdate) return
+ useEffect(() => {
+  if (!onPreviewUpdate) return
 
+  localStorage.removeItem("mujeebproai_last_preview_html")
+  const savedPreview = localStorage.getItem(previewStorageKey)
+
+  if (savedPreview) {
+    onPreviewUpdate(savedPreview)
+  } else {
+    onPreviewUpdate("")
+  }
+
+  const handleNewChat = () => {
     localStorage.removeItem(previewStorageKey)
-const savedPreview = localStorage.getItem(previewStorageKey)
-    if (savedPreview) {
-      onPreviewUpdate(savedPreview)
-    }
+    onPreviewUpdate("")
+  }
 
-    const handleNewChat = () => {
-      localStorage.removeItem(previewStorageKey)
-      onPreviewUpdate("")
-    }
-
-    window.addEventListener("new-chat", handleNewChat)
-    return () => window.removeEventListener("new-chat", handleNewChat)
-  }, [onPreviewUpdate])
+  window.addEventListener("new-chat", handleNewChat)
+  return () => window.removeEventListener("new-chat", handleNewChat)
+}, [onPreviewUpdate, previewStorageKey])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
