@@ -463,11 +463,29 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
     if (lastMsg && lastMsg.role === "assistant") {
       const text = getMessageText(lastMsg)
       const html = buildPreviewHtml(text)
-      if (html) {
-        onPreviewUpdate(html)
-      }
+if (html) {
+  localStorage.setItem("mujeebproai_last_preview_html", html)
+  onPreviewUpdate(html)
+}
     }
-  }, [messages, onPreviewUpdate])
+    }, [messages, onPreviewUpdate])
+
+  useEffect(() => {
+    if (!onPreviewUpdate) return
+
+    const savedPreview = localStorage.getItem("mujeebproai_last_preview_html")
+    if (savedPreview) {
+      onPreviewUpdate(savedPreview)
+    }
+
+    const handleNewChat = () => {
+      localStorage.removeItem("mujeebproai_last_preview_html")
+      onPreviewUpdate("")
+    }
+
+    window.addEventListener("new-chat", handleNewChat)
+    return () => window.removeEventListener("new-chat", handleNewChat)
+  }, [onPreviewUpdate])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
