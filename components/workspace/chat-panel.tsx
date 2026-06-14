@@ -264,7 +264,7 @@ const isLoading = status === "streaming" || status === "submitted"
   e.preventDefault()
   if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
- if (!isOwnerAdmin && usage && !usage.canSend && !isLoading) {
+if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
   setShowUpgrade(true)
   return
 }
@@ -791,7 +791,7 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
                   {isOwnerAdmin || usage.unlimited ? (
   "Unlimited"
 ) : (
-  `${usage.used} / ${usage.limit} messages`
+  `${usage.used ?? 0} / ${usage.limit ?? 10} messages`
 )}
                 </span>
               </div>
