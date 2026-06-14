@@ -216,13 +216,16 @@ const {
     },
   })
 const isLoading = status === "streaming" || status === "submitted"
-  // Fetch usage on mount
-  useEffect(() => {
-    fetch("/api/usage")
-      .then((res) => res.json())
-      .then((data) => setUsage(data))
-      .catch(() => {})
-  }, [])
+// Fetch usage on mount
+useEffect(() => {
+  fetch("/api/usage")
+    .then((res) => res.json())
+    .then((data) => {
+      setUsage(data)
+      window.dispatchEvent(new Event("chat-updated"))
+    })
+    .catch(() => {})
+}, [])
 
   // Refresh usage after each message
   useEffect(() => {
