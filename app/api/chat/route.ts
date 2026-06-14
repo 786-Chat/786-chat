@@ -627,10 +627,25 @@ if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
         // Track cost for admin dashboard
         await trackUsage(session.id, inputTokens, outputTokens, aiSettings.model as DeepSeekModel)
 
-        // Deduct message cost from balance (skip for admin)
-        if (!isAdminRequest) {
-          await deductMessageCost(session.id, balanceCheck.usingFreeMessage, balanceCheck.messageCost)
-        }
+        // Deduct one text message from free customer allowance
+if (!isAdminRequest) {
+  await sql`
+    INSERT INTO user_balances (
+      user_id,
+      balance,
+      free_messages_used,
+      free_messages_limit,
+      total_messages_sent,
+      total_spent
+    )
+    VALUES (${session.id}, 0, 1, 10, 1, 0)
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+      free_messages_used = COALESCE(user_balances.free_messages_used, 0) + 1,
+      free_messages_limit = COALESCE(user_balances.free_messages_limit, 10),
+      total_messages_sent = COALESCE(user_balances.total_messages_sent, 0) + 1
+  `
+}
       },
       consumeSseStream: consumeStream,
       headers: {
