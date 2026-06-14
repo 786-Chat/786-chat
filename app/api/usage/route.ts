@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { BILLING_PLANS, type PlanId } from "@/lib/billing"
 
+const FREE_MESSAGE_LIMIT = 10; // New constant for free message limit
 
 // GET - Get user's current usage
 export async function GET() {
@@ -29,14 +30,14 @@ export async function GET() {
       // Create default subscription for user
       await sql`
         INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
-        VALUES (${payload.id}, 'starter', 0, 5, 'active')
+        VALUES (${payload.id}, 'starter', 0, ${FREE_MESSAGE_LIMIT}, 'active')
       `
       
       return NextResponse.json({
         plan: "starter",
         messagesUsed: 0,
-        messagesLimit: 5,
-        messagesRemaining: 5,
+        messagesLimit: FREE_MESSAGE_LIMIT,
+        messagesRemaining: FREE_MESSAGE_LIMIT,
         extraUsageCost: 0,
         canSendMessage: true,
         requiresUpgrade: false
@@ -47,12 +48,12 @@ export async function GET() {
     const plan = subscription.plan as PlanId
     const planConfig = BILLING_PLANS[plan]
     const messagesUsed = subscription.messages_used || 0
-    const messagesLimit = planConfig.messagesIncluded
+    const messagesLimit = plan === "starter" ? FREE_MESSAGE_LIMIT : planConfig.messagesIncluded; // Use constant for starter plan
     const messagesRemaining = Math.max(0, messagesLimit - messagesUsed)
     
     // Check if user can send messages
     const canSendMessage = plan === "starter" 
-      ? messagesUsed < 5 
+      ? messagesUsed < FREE_MESSAGE_LIMIT 
       : planConfig.allowExtraMessages || messagesRemaining > 0
 
     return NextResponse.json({
@@ -62,7 +63,7 @@ export async function GET() {
       messagesRemaining,
       extraUsageCost: subscription.extra_usage_cost || 0,
       canSendMessage,
-      requiresUpgrade: plan === "starter" && messagesUsed >= 5
+      requiresUpgrade: plan === "starter" && messagesUsed >= FREE_MESSAGE_LIMIT
     })
   } catch (error) {
     console.error("[v0] Usage fetch error:", error)
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       // Create default subscription
       const newSub = await sql`
         INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
-        VALUES (${payload.id}, 'starter', 0, 5, 'active')
+        VALUES (${payload.id}, 'starter', 0, ${FREE_MESSAGE_LIMIT}, 'active')
         RETURNING *
       `
       subscription = newSub[0]
@@ -109,12 +110,12 @@ export async function POST(request: NextRequest) {
     const currentUsed = subscription.messages_used || 0
 
     // Check if starter plan user has exceeded limit
-    if (plan === "starter" && currentUsed >= 5) {
+    if (plan === "starter" && currentUsed >= FREE_MESSAGE_LIMIT) {
       return NextResponse.json({
         error: "Free trial exceeded",
         requiresUpgrade: true,
         messagesUsed: currentUsed,
-        messagesLimit: 5
+        messagesLimit: FREE_MESSAGE_LIMIT
       }, { status: 403 })
     }
 
@@ -143,14 +144,16 @@ export async function POST(request: NextRequest) {
       VALUES (${payload.id}, ${action}, ${tokensUsed}, ${extraCost})
     `
 
-    const messagesRemaining = Math.max(0, planConfig.messagesIncluded - newMessagesUsed)
+    const messagesLimitForPlan = plan === "starter" ? FREE_MESSAGE_LIMIT : planConfig.messagesIncluded;
+    const messagesRemaining = Math.max(0, messagesLimitForPlan - newMessagesUsed);
+
 
     return NextResponse.json({
       success: true,
       messagesUsed: newMessagesUsed,
       messagesRemaining,
       extraCost,
-      requiresUpgrade: plan === "starter" && newMessagesUsed >= 5
+      requiresUpgrade: plan === "starter" && newMessagesUsed >= FREE_MESSAGE_LIMIT
     })
   } catch (error) {
     console.error("[v0] Usage record error:", error)
