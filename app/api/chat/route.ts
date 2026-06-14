@@ -752,7 +752,7 @@ export async function GET(request: Request) {
       free_messages_limit: 10,
     }
 
-    const freeLimit = Number(userBalance.free_messages_limit) || 10
+    const freeLimit = 10
     const freeUsed = Number(userBalance.free_messages_used) || 0
     const freeMessagesRemaining = Math.max(0, freeLimit - freeUsed)
     const paidBalance = Number(userBalance.balance) || 0
