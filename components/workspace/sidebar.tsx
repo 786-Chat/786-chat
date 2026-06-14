@@ -221,63 +221,91 @@ freeMessagesRemaining:
           </div>
 
           {/* Usage Bar */}
-          {usage && (
-            <div className="px-3 pb-3">
-              <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-2">
-                {/* Free Messages */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-white/40 uppercase tracking-wider">Messages</span>
-                    <span className="text-[10px] font-medium text-cyan-400">
-  {usage.unlimited
-    ? "Unlimited"
-    : `Used: ${usage.freeMessagesUsed ?? usage.used ?? 0}/${usage.freeMessagesLimit ?? usage.limit ?? 10}`}
-</span>
-                  </div>
-                  {!usage.unlimited && (
-                    <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          (usage.freeMessagesRemaining || 0) <= 0
-                            ? "bg-red-500"
-                            : (usage.freeMessagesUsed || usage.used) >= (usage.freeMessagesLimit || usage.limit) * 0.8
-                            ? "bg-yellow-500"
-                            : "bg-gradient-to-r from-cyan-500 to-blue-500"
-                        )}
-                        style={{ width: `${Math.min(100, ((usage.freeMessagesUsed || usage.used) / (usage.freeMessagesLimit || usage.limit)) * 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
+{usage && (
+  <div className="px-3 pb-3">
+    <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-2">
+      {/* Free Messages */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider">
+            Messages
+          </span>
+          <span className="text-[10px] font-medium text-cyan-400">
+            {usage.unlimited
+              ? "Unlimited"
+              : `Used: ${usage.freeMessagesUsed ?? usage.used ?? 0}/${usage.freeMessagesLimit ?? usage.limit ?? 10}`}
+          </span>
+        </div>
 
-                {/* Balance (only show if not unlimited) */}
-                {!usage.unlimited && usage.balance !== undefined && (
-                  <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
-                    <span className="text-[10px] text-white/40">Balance</span>
-                    <span className={cn(
-                      "text-[10px] font-medium",
-                      usage.balance > 0.10 ? "text-green-400" : usage.balance > 0 ? "text-yellow-400" : "text-red-400"
-                    )}>
-                      ${usage.balance.toFixed(2)}
-                    </span>
-                  </div>
+        {!usage.unlimited && (
+          <>
+            <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  (usage.freeMessagesRemaining ?? 0) <= 0
+                    ? "bg-red-500"
+                    : (usage.freeMessagesUsed ?? usage.used ?? 0) >=
+                        (usage.freeMessagesLimit ?? usage.limit ?? 10) * 0.8
+                    ? "bg-yellow-500"
+                    : "bg-gradient-to-r from-cyan-500 to-blue-500"
                 )}
-
-                {/* Add Credits Button - hidden for unlimited */}
-                {!usage.unlimited && (
-                  <Link
-                    href="/dashboard/top-up"
-                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
-                  >
-                    <Zap className="w-3 h-3" />
-                    Add Credits
-                  </Link>
-                )}
-              </div>
+                style={{
+                  width: `${Math.min(
+                    100,
+                    ((usage.freeMessagesUsed ?? usage.used ?? 0) /
+                      (usage.freeMessagesLimit ?? usage.limit ?? 10)) *
+                      100
+                  )}%`,
+                }}
+              />
             </div>
-          )}
 
+            <p className="mt-1 text-[10px] text-white/40">
+              Remaining:{" "}
+              {usage.freeMessagesRemaining ??
+                Math.max(
+                  (usage.freeMessagesLimit ?? usage.limit ?? 10) -
+                    (usage.freeMessagesUsed ?? usage.used ?? 0),
+                  0
+                )}
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Balance (only show if not unlimited) */}
+      {!usage.unlimited && usage.balance !== undefined && (
+        <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+          <span className="text-[10px] text-white/40">Balance</span>
+          <span
+            className={cn(
+              "text-[10px] font-medium",
+              usage.balance > 0.1
+                ? "text-green-400"
+                : usage.balance > 0
+                ? "text-yellow-400"
+                : "text-red-400"
+            )}
+          >
+            ${usage.balance.toFixed(2)}
+          </span>
+        </div>
+      )}
+
+      {/* Add Credits Button - hidden for unlimited */}
+      {!usage.unlimited && (
+        <Link
+          href="/dashboard/top-up"
+          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
+        >
+          <Zap className="w-3 h-3" />
+          Add Credits
+        </Link>
+      )}
+    </div>
+  </div>
+)}
           {/* Chat List */}
           <div className="flex-1 overflow-y-auto px-2 scrollbar-thin">
             {todayChats.length > 0 && (
