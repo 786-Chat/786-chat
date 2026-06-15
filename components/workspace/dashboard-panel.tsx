@@ -150,7 +150,9 @@ export function WorkspaceDashboardPanel({ isOpen, onClose }: DashboardPanelProps
                     <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                       <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1">Messages Used</p>
                       <p className="text-lg font-bold text-white">{subscription?.messagesUsed || 0}</p>
-                      <p className="text-[10px] text-white/30">of {subscription?.messagesLimit || 5}</p>
+                      <p className="text-[10px] text-white/30">
+  of {subscription?.messagesLimit || 10}
+</p>
                     </div>
                     <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                       <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1">Plan</p>
@@ -260,7 +262,9 @@ export function WorkspaceDashboardPanel({ isOpen, onClose }: DashboardPanelProps
                     <h3 className="text-sm font-semibold text-white mb-3">AI Messages</h3>
                     <div className="flex items-end gap-2 mb-3">
                       <span className="text-3xl font-bold text-white">{subscription?.messagesUsed || 0}</span>
-                      <span className="text-sm text-white/30 mb-1">/ {subscription?.messagesLimit || 5}</span>
+                      <span className="text-sm text-white/30 mb-1">
+  / {subscription?.messagesLimit || 10}
+</span>
                     </div>
                     <div className="w-full h-3 bg-white/[0.06] rounded-full overflow-hidden">
                       <motion.div
@@ -274,8 +278,14 @@ export function WorkspaceDashboardPanel({ isOpen, onClose }: DashboardPanelProps
                       />
                     </div>
                     <p className="text-[10px] text-white/30 mt-2">
-                      {subscription?.messagesLimit ? subscription.messagesLimit - (subscription?.messagesUsed || 0) : 5} messages remaining this period
-                    </p>
+  {subscription?.messagesLimit
+    ? Math.max(
+        subscription.messagesLimit -
+          (subscription?.messagesUsed || 0),
+        0
+      )
+    : 10} messages remaining this period
+</p>
                   </div>
                   <Link href="/dashboard/usage" onClick={onClose}>
                     <Button variant="outline" className="w-full h-9 text-xs border-white/10 text-white/70 hover:text-white hover:bg-white/5">
