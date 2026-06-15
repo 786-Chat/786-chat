@@ -143,17 +143,19 @@ export default function AIControlPage() {
   }
 
 return (
-  <div className="w-full max-w-full overflow-x-hidden space-y-6 px-1">
+  <div className="w-full space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
-            <Bot className="w-7 h-7 text-cyan-400" />
-            AI Control Center
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-3">
+            <Bot className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-400 flex-shrink-0" />
+            <span className="break-words">AI Control Center</span>
           </h1>
-          <p className="text-white/60 mt-1 overflow-hidden text-ellipsis whitespace-nowrap">Manage your MujeebProAI settings, limits, and costs</p>
+          <p className="text-white/60 mt-1 text-sm sm:text-base">
+            Manage your MujeebProAI settings, limits, and costs
+          </p>
         </div>
-        <Button onClick={fetchData} variant="outline" size="sm" className="flex-shrink-0">
+        <Button onClick={fetchData} variant="outline" size="sm" className="flex-shrink-0 w-full sm:w-auto">
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
@@ -162,15 +164,15 @@ return (
       {/* API Key Status */}
       <Card className="bg-[#14141f] border-white/10">
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Key className="w-5 h-5 text-amber-400" />
-              <div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Key className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              <div className="min-w-0">
                 <p className="text-white font-medium">DeepSeek API Key</p>
                 <p className="text-sm text-white/50">Required for AI functionality</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0 w-full sm:w-auto">
               {hasApiKey ? (
                 <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                   <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -182,7 +184,7 @@ return (
                   Not Set
                 </Badge>
               )}
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" asChild className="flex-shrink-0">
                 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">
                   Get API Key
                 </a>
@@ -191,8 +193,8 @@ return (
           </div>
           {!hasApiKey && (
             <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-              <p className="text-sm text-amber-300">
-                Add your DeepSeek API key in the Vercel project settings (Environment Variables) as <code className="bg-black/30 px-1.5 py-0.5 rounded">DEEPSEEK_API_KEY</code>
+              <p className="text-sm text-amber-300 break-words">
+                Add your DeepSeek API key in the Vercel project settings (Environment Variables) as <code className="bg-black/30 px-1.5 py-0.5 rounded break-all">DEEPSEEK_API_KEY</code>
               </p>
             </div>
           )}
@@ -201,58 +203,58 @@ return (
 
       {/* Cost Summary Cards */}
       {costSummary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-[#14141f] border-white/10">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/20 rounded-lg">
+                <div className="p-2 bg-green-500/20 rounded-lg flex-shrink-0">
                   <DollarSign className="w-5 h-5 text-green-400" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-white/50">Today&apos;s Cost</p>
-                  <p className="text-2xl font-bold text-white">${costSummary.today.cost.toFixed(4)}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white truncate">${costSummary.today.cost.toFixed(4)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-[#14141f] border-white/10">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-lg">
+                <div className="p-2 bg-blue-500/20 rounded-lg flex-shrink-0">
                   <TrendingUp className="w-5 h-5 text-blue-400" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-white/50">This Month</p>
-                  <p className="text-2xl font-bold text-white">${costSummary.thisMonth.cost.toFixed(4)}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white truncate">${costSummary.thisMonth.cost.toFixed(4)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-[#14141f] border-white/10">
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500/20 rounded-lg">
+                <div className="p-2 bg-purple-500/20 rounded-lg flex-shrink-0">
                   <MessageSquare className="w-5 h-5 text-purple-400" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-white/50">Messages Today</p>
-                  <p className="text-2xl font-bold text-white">{costSummary.today.messages}</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white truncate">{costSummary.today.messages}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className={`bg-[#14141f] border-white/10 ${costSummary.budget.alert ? "border-red-500/50" : ""}`}>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 sm:pt-6">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${costSummary.budget.alert ? "bg-red-500/20" : "bg-amber-500/20"}`}>
+                <div className={`p-2 rounded-lg flex-shrink-0 ${costSummary.budget.alert ? "bg-red-500/20" : "bg-amber-500/20"}`}>
                   <AlertTriangle className={`w-5 h-5 ${costSummary.budget.alert ? "text-red-400" : "text-amber-400"}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-white/50">Budget Used</p>
-                  <p className="text-2xl font-bold text-white">{costSummary.budget.percentage.toFixed(1)}%</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white truncate">{costSummary.budget.percentage.toFixed(1)}%</p>
                 </div>
               </div>
               <div className="mt-3 w-full h-2 bg-white/10 rounded-full overflow-hidden">
@@ -261,7 +263,7 @@ return (
                   style={{ width: `${Math.min(100, costSummary.budget.percentage)}%` }}
                 />
               </div>
-              <p className="text-xs text-white/40 mt-1">
+              <p className="text-xs text-white/40 mt-1 truncate">
                 ${costSummary.budget.used.toFixed(2)} / ${costSummary.budget.limit.toFixed(2)}
               </p>
             </CardContent>
@@ -271,44 +273,46 @@ return (
 
       {/* Main Settings Tabs */}
       <Tabs defaultValue="model" className="space-y-4">
-       <TabsList className="w-full max-w-full overflow-x-auto bg-white/5 border border-white/10">
-          <TabsTrigger value="model" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
-            <Bot className="w-4 h-4 mr-2" />
-            Model Settings
-          </TabsTrigger>
-          <TabsTrigger value="limits" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
-            <Zap className="w-4 h-4 mr-2" />
-            Usage Limits
-          </TabsTrigger>
-          <TabsTrigger value="budget" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
-            <DollarSign className="w-4 h-4 mr-2" />
-            Budget
-          </TabsTrigger>
-          <TabsTrigger value="users" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
-            <Users className="w-4 h-4 mr-2" />
-            User Costs
-          </TabsTrigger>
-        </TabsList>
+        <div className="relative w-full overflow-hidden">
+          <TabsList className="w-full inline-flex overflow-x-auto overflow-y-hidden scrollbar-thin bg-white/5 border border-white/10 p-1 gap-0.5 flex-nowrap -mb-px">
+            <TabsTrigger value="model" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 whitespace-nowrap flex-shrink-0">
+              <Bot className="w-4 h-4 mr-1.5 sm:mr-2" />
+              <span className="text-xs sm:text-sm">Model</span>
+            </TabsTrigger>
+            <TabsTrigger value="limits" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 whitespace-nowrap flex-shrink-0">
+              <Zap className="w-4 h-4 mr-1.5 sm:mr-2" />
+              <span className="text-xs sm:text-sm">Limits</span>
+            </TabsTrigger>
+            <TabsTrigger value="budget" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 whitespace-nowrap flex-shrink-0">
+              <DollarSign className="w-4 h-4 mr-1.5 sm:mr-2" />
+              <span className="text-xs sm:text-sm">Budget</span>
+            </TabsTrigger>
+            <TabsTrigger value="users" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400 whitespace-nowrap flex-shrink-0">
+              <Users className="w-4 h-4 mr-1.5 sm:mr-2" />
+              <span className="text-xs sm:text-sm">Users</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Model Settings Tab */}
         <TabsContent value="model">
           <Card className="bg-[#14141f] border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">AI Model Configuration</CardTitle>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-white text-lg sm:text-xl">AI Model Configuration</CardTitle>
               <CardDescription>Configure the AI model and parameters</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 px-4 sm:px-6">
               {settings && (
                 <>
                   {/* Model Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Model</Label>
                       <Select
                         value={settings.model}
                         onValueChange={(value) => setSettings({ ...settings, model: value })}
                       >
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                        <SelectTrigger className="bg-white/5 border-white/10 text-white w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -326,20 +330,20 @@ return (
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-white/50">
+                      <p className="text-xs text-white/50 break-words">
                         {settings.model === "deepseek-chat" 
                           ? "Fast, cost-effective general-purpose model ($0.14/1M input, $0.28/1M output)"
                           : "Advanced reasoning model for complex tasks ($0.55/1M input, $2.19/1M output)"}
                       </p>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Max Tokens</Label>
                       <Input
                         type="number"
                         value={settings.maxTokens}
                         onChange={(e) => setSettings({ ...settings, maxTokens: parseInt(e.target.value) || 4096 })}
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white w-full"
                         min={256}
                         max={32768}
                       />
@@ -359,7 +363,7 @@ return (
                       min={0}
                       max={1}
                       step={0.05}
-                      className="py-2"
+                      className="py-2 w-full"
                     />
                     <div className="flex justify-between text-xs text-white/50">
                       <span>Precise (0.0)</span>
@@ -374,7 +378,7 @@ return (
                     <Textarea
                       value={settings.systemPrompt}
                       onChange={(e) => setSettings({ ...settings, systemPrompt: e.target.value })}
-                      className="bg-white/5 border-white/10 text-white min-h-[150px] font-mono text-sm"
+                      className="bg-white/5 border-white/10 text-white min-h-[150px] font-mono text-sm w-full"
                       placeholder="Enter the system prompt for your AI..."
                     />
                     <p className="text-xs text-white/50">
@@ -383,8 +387,8 @@ return (
                   </div>
 
                   {/* Active Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white/5 rounded-lg">
+                    <div className="min-w-0">
                       <Label className="text-white">AI Service Active</Label>
                       <p className="text-xs text-white/50">Enable or disable AI chat for all users</p>
                     </div>
@@ -402,34 +406,34 @@ return (
         {/* Usage Limits Tab */}
         <TabsContent value="limits">
           <Card className="bg-[#14141f] border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Usage Limits</CardTitle>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-white text-lg sm:text-xl">Usage Limits</CardTitle>
               <CardDescription>Control how much customers can use the AI</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 px-4 sm:px-6">
               {settings && (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Daily Message Limit (per user)</Label>
                       <Input
                         type="number"
                         value={settings.dailyMessageLimit}
                         onChange={(e) => setSettings({ ...settings, dailyMessageLimit: parseInt(e.target.value) || 100 })}
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white w-full"
                         min={1}
                         max={10000}
                       />
                       <p className="text-xs text-white/50">Maximum messages each user can send per day</p>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Monthly Token Limit (per user)</Label>
                       <Input
                         type="number"
                         value={settings.monthlyTokenLimit}
                         onChange={(e) => setSettings({ ...settings, monthlyTokenLimit: parseInt(e.target.value) || 1000000 })}
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white w-full"
                         min={1000}
                         max={100000000}
                       />
@@ -437,8 +441,8 @@ return (
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
-                    <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white/5 rounded-lg">
+                    <div className="min-w-0">
                       <Label className="text-white">Auto-Block on Limit</Label>
                       <p className="text-xs text-white/50">Automatically block users when they reach their limits</p>
                     </div>
@@ -456,15 +460,15 @@ return (
         {/* Budget Tab */}
         <TabsContent value="budget">
           <Card className="bg-[#14141f] border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Budget Settings</CardTitle>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-white text-lg sm:text-xl">Budget Settings</CardTitle>
               <CardDescription>Set spending limits and alerts</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 px-4 sm:px-6">
               {settings && (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Monthly Budget (USD)</Label>
                       <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
@@ -472,7 +476,7 @@ return (
                           type="number"
                           value={settings.monthlyBudgetUsd}
                           onChange={(e) => setSettings({ ...settings, monthlyBudgetUsd: parseFloat(e.target.value) || 100 })}
-                          className="bg-white/5 border-white/10 text-white pl-9"
+                          className="bg-white/5 border-white/10 text-white pl-9 w-full"
                           min={1}
                           step={10}
                         />
@@ -480,13 +484,13 @@ return (
                       <p className="text-xs text-white/50">Maximum DeepSeek API spend per month</p>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 min-w-0">
                       <Label className="text-white">Alert Threshold (%)</Label>
                       <Input
                         type="number"
                         value={settings.budgetAlertThreshold * 100}
                         onChange={(e) => setSettings({ ...settings, budgetAlertThreshold: (parseFloat(e.target.value) || 80) / 100 })}
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white w-full"
                         min={10}
                         max={100}
                       />
@@ -497,7 +501,7 @@ return (
                   {/* DeepSeek Pricing Reference */}
                   <div className="p-4 bg-white/5 rounded-lg space-y-3">
                     <h4 className="text-white font-medium">DeepSeek Pricing Reference</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-cyan-400 font-medium">DeepSeek Chat</p>
                         <p className="text-white/60">Input: $0.14 / 1M tokens</p>
@@ -519,57 +523,61 @@ return (
         {/* User Costs Tab */}
         <TabsContent value="users">
           <Card className="bg-[#14141f] border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Cost Per User</CardTitle>
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-white text-lg sm:text-xl">Cost Per User</CardTitle>
               <CardDescription>See how much each user is costing you</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/10">
-                    <TableHead className="text-white/60">User</TableHead>
-                    <TableHead className="text-white/60 text-right">Today&apos;s Messages</TableHead>
-                    <TableHead className="text-white/60 text-right">Today&apos;s Cost</TableHead>
-                    <TableHead className="text-white/60 text-right">Month Messages</TableHead>
-                    <TableHead className="text-white/60 text-right">Month Cost</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {userCosts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-white/40 py-8">
-                        No usage data yet
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    userCosts.map((user) => (
-                      <TableRow key={user.userId} className="border-white/10">
-                        <TableCell>
-                          <div>
-                            <p className="text-white font-medium">{user.userName || "Unknown"}</p>
-                            <p className="text-xs text-white/50">{user.userEmail}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right text-white">{user.todayMessages}</TableCell>
-                        <TableCell className="text-right text-green-400">${user.todayCost.toFixed(4)}</TableCell>
-                        <TableCell className="text-right text-white">{user.monthMessages}</TableCell>
-                        <TableCell className="text-right text-cyan-400">${user.monthCost.toFixed(4)}</TableCell>
+            <CardContent className="px-4 sm:px-6">
+              <div className="overflow-x-auto -mx-4 sm:-mx-6">
+                <div className="inline-block min-w-full align-middle px-4 sm:px-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10">
+                        <TableHead className="text-white/60 whitespace-nowrap">User</TableHead>
+                        <TableHead className="text-white/60 text-right whitespace-nowrap">Today Msgs</TableHead>
+                        <TableHead className="text-white/60 text-right whitespace-nowrap">Today Cost</TableHead>
+                        <TableHead className="text-white/60 text-right whitespace-nowrap">Month Msgs</TableHead>
+                        <TableHead className="text-white/60 text-right whitespace-nowrap">Month Cost</TableHead>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {userCosts.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-white/40 py-8">
+                            No usage data yet
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        userCosts.map((user) => (
+                          <TableRow key={user.userId} className="border-white/10">
+                            <TableCell>
+                              <div className="min-w-0 max-w-[180px] sm:max-w-[250px]">
+                                <p className="text-white font-medium truncate">{user.userName || "Unknown"}</p>
+                                <p className="text-xs text-white/50 truncate">{user.userEmail}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right text-white whitespace-nowrap">{user.todayMessages}</TableCell>
+                            <TableCell className="text-right text-green-400 whitespace-nowrap">${user.todayCost.toFixed(4)}</TableCell>
+                            <TableCell className="text-right text-white whitespace-nowrap">{user.monthMessages}</TableCell>
+                            <TableCell className="text-right text-cyan-400 whitespace-nowrap">${user.monthCost.toFixed(4)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
       {/* Save Button */}
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-end gap-3">
         <Button
           onClick={saveSettings}
           disabled={saving}
-          className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700"
+          className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 w-full sm:w-auto"
         >
           {saving ? (
             <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
