@@ -279,7 +279,7 @@ if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
 }
 
   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-const savedPreview = localStorage.getItem("mujeebproai_last_preview_html")
+const savedPreview = localStorage.getItem(previewStorageKey)
 const messageText =
   input.trim() +
   (savedPreview
@@ -488,7 +488,7 @@ if (html) {
  useEffect(() => {
   if (!onPreviewUpdate) return
 
-  localStorage.removeItem("mujeebproai_last_preview_html")
+   
   const savedPreview = localStorage.getItem(previewStorageKey)
 
   if (savedPreview) {
