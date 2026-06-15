@@ -33,7 +33,9 @@ import {
   UtensilsCrossed,
   Package,
   Share2,
-  Bot
+  Bot,
+  Menu,
+  X
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -79,6 +81,7 @@ export default function AdminLayout({
   const { user, isLoading, logout } = useAuth()
   const router = useRouter()
   const [isAuthorized, setIsAuthorized] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false) // State for mobile sidebar
 
   const handleLogout = async () => {
     await logout()
@@ -86,6 +89,9 @@ export default function AdminLayout({
   }
 
   useEffect(() => {
+    // Close sidebar on navigation
+    setIsSidebarOpen(false)
+
     // Skip auth check for admin login page
     if (pathname === "/admin-login") {
       setIsAuthorized(true)
@@ -147,21 +153,45 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Mobile Sidebar Backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 sm:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Admin Sidebar */}
-      <aside className="w-64 bg-card border-r border-border flex flex-col">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-64 max-w-[80vw] bg-card border-r border-border flex flex-col",
+          "transform -translate-x-full transition-transform duration-300 ease-in-out",
+          isSidebarOpen ? "translate-x-0" : "",
+          "sm:relative sm:translate-x-0 sm:w-64"
+        )}
+      >
         {/* Header */}
         <div className="h-16 flex items-center px-4 border-b border-border">
-          <Link href="/admin" className="flex items-center gap-3">
+          <Link href="/admin" className="flex items-center gap-3" onClick={() => setIsSidebarOpen(false)}>
             <MujeebProAILogo variant="icon" size="sm" animated={false} />
             <div>
               <span className="font-bold text-lg">Admin Panel</span>
               <p className="text-xs text-muted-foreground">MujeebProAI</p>
             </div>
           </Link>
+          {/* Close button for mobile sidebar */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-auto sm:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          >
+            <X className="w-5 h-5" />
+          </Button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
           <ul className="space-y-1">
             {adminNavItems.map((item) => {
               const isActive = pathname === item.href
@@ -175,9 +205,10 @@ export default function AdminLayout({
                         ? "bg-red-500 text-white shadow-lg shadow-red-500/20"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     )}
+                    onClick={() => setIsSidebarOpen(false)} // Close sidebar on item click
                   >
                     <item.icon className="w-5 h-5 flex-shrink-0" />
-                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
                   </Link>
                 </li>
               )
@@ -190,6 +221,7 @@ export default function AdminLayout({
           <Link 
             href="/dashboard"
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-sm font-medium"
+            onClick={() => setIsSidebarOpen(false)}
           >
             <ChevronLeft className="w-4 h-4" />
             Back to Dashboard
@@ -205,10 +237,40 @@ export default function AdminLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Admin Header */}
-        <header className="h-16 bg-background/80 backdrop-blur-xl border-b border-border flex items-center px-6">
+      {/* Main Content Wrapper */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile Header (visible only on small screens) */}
+        <header className="h-16 bg-background/80 backdrop-blur-xl border-b border-border flex items-center px-4 sm:hidden z-30">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="mr-3"
+            onClick={() => setIsSidebarOpen(true)}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2 min-w-0">
+              <Shield className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <span className="font-semibold text-white truncate">Admin Dashboard</span>
+          </div>
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-sm font-bold text-white">
+                  {user?.name?.charAt(0).toUpperCase() || "A"}
+              </div>
+              <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-red-500"
+                  onClick={handleLogout}
+                  title="Logout"
+              >
+                  <LogOut className="w-4 h-4" />
+              </Button>
+          </div>
+        </header>
+
+        {/* Desktop Header (hidden on small screens) */}
+        <header className="h-16 bg-background/80 backdrop-blur-xl border-b border-border hidden sm:flex items-center px-6 z-30">
           <div className="flex items-center gap-3">
             <Shield className="w-5 h-5 text-red-500" />
             <span className="font-semibold">Admin Dashboard</span>
@@ -235,7 +297,7 @@ export default function AdminLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-4 sm:p-6 overflow-auto">
           {children}
         </main>
       </div>
