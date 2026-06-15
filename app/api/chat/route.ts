@@ -747,7 +747,7 @@ export async function GET(request: Request) {
       )
     }
 
-    // For normal customers: get actual balance from user_balances with correct limit
+     // For normal customers: get actual balance from user_balances with correct limit
     const balanceData = await sql`
       SELECT balance, free_messages_used, free_messages_limit 
       FROM user_balances 
@@ -782,22 +782,22 @@ export async function GET(request: Request) {
             remaining: freeMessagesRemaining,
           },
           balance: paidBalance,
-freeMessagesUsed: freeUsed,
-freeMessagesLimit: freeLimit,
-freeMessagesRemaining,
-used: freeUsed,
-limit: freeLimit,
-canSend: freeMessagesRemaining > 0 || paidBalance > 0.001,
+          freeMessagesUsed: freeUsed,
+          freeMessagesLimit: freeLimit,
+          freeMessagesRemaining,
+          used: freeUsed,
+          limit: freeLimit,
+          canSend: freeMessagesRemaining > 0 || paidBalance > 0.001,
           extraCredits: 0,
           status: "active",
         },
       }),
       {
-  headers: {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  },
-}
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
     )
   } catch (error) {
     console.error("[Chat API] Get chats error:", error)
