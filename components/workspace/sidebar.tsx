@@ -113,7 +113,7 @@ freeMessagesRemaining:
     return () => window.removeEventListener("chat-updated", handler)
   }, [fetchChatHistory])
 
-   // Listen for chat selection
+    // Listen for chat selection
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
@@ -135,40 +135,18 @@ freeMessagesRemaining:
     if (window.innerWidth < 768) onClose()
   }
 
-  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+  const deleteChat = (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation()
 
-    const ok = confirm("Delete this chat from sidebar history?")
-    if (!ok) return
+    const deletedIds = JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+    const nextDeletedIds = Array.from(new Set([...deletedIds, chatId]))
 
-    const oldHistory = chatHistory
+    localStorage.setItem(deletedChatKey, JSON.stringify(nextDeletedIds))
 
     setChatHistory((prev) => prev.filter((c) => c.id !== chatId))
 
-    try {
-      const response = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store",
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Delete failed:", errorText)
-        setChatHistory(oldHistory)
-        alert("Chat delete failed. Check Vercel logs.")
-        return
-      }
-
-      if (currentChatId === chatId) {
-        setCurrentChatId(null)
-      }
-
-      window.dispatchEvent(new Event("chat-updated"))
-    } catch (error) {
-      console.error("Failed to delete chat:", error)
-      setChatHistory(oldHistory)
-      alert("Chat delete failed. Network error.")
+    if (currentChatId === chatId) {
+      setCurrentChatId(null)
     }
   }
 
@@ -202,6 +180,7 @@ freeMessagesRemaining:
           />
         )}
       </AnimatePresence>
+
       {/* Sidebar */}
       <motion.div
         initial={false}
