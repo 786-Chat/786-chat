@@ -81,10 +81,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 })
   }
 }
-
-// Configure body size limit
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
