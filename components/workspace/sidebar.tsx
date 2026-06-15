@@ -65,7 +65,14 @@ const deletedChatKey = user?.email
 
       if (chatResponse.ok) {
         const data = await chatResponse.json()
-        setChatHistory(data.chats || [])
+       const deletedIds =
+  typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+    : []
+
+setChatHistory(
+  (data.chats || []).filter((chat: ChatHistory) => !deletedIds.includes(chat.id))
+)
         
         // Merge balance data with usage
         if (balanceResponse.ok) {
