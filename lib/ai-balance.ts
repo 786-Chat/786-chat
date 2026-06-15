@@ -49,7 +49,7 @@ export async function getUserBalance(userId: string, userEmail?: string): Promis
         totalSpent: Number(existing.total_spent) || 0,
       }
     }
-    const limit = existing.free_messages_limit || 10
+    const limit = 10
     const used = existing.free_messages_used || 0
     return {
       balance: Number(existing.balance) || 0,
@@ -62,8 +62,7 @@ export async function getUserBalance(userId: string, userEmail?: string): Promis
   }
 
   // Get default free messages from settings
-  const [settings] = await sql`SELECT free_messages_default FROM ai_pricing_settings LIMIT 1`
-  const freeLimit = isOwner ? 999999 : (settings?.free_messages_default ?? 10)
+ const freeLimit = isOwner ? 999999 : 10
 
   // Create new balance record
   await sql`
