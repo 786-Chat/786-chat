@@ -485,10 +485,14 @@ if (html) {
     }
     }, [messages, onPreviewUpdate, previewStorageKey])
 
- useEffect(() => {
+useEffect(() => {
   if (!onPreviewUpdate) return
 
-   
+  if (!user?.email) {
+    onPreviewUpdate("")
+    return
+  }
+
   const savedPreview = localStorage.getItem(previewStorageKey)
 
   if (savedPreview) {
@@ -504,7 +508,7 @@ if (html) {
 
   window.addEventListener("new-chat", handleNewChat)
   return () => window.removeEventListener("new-chat", handleNewChat)
-}, [onPreviewUpdate, previewStorageKey])
+}, [onPreviewUpdate, previewStorageKey, user?.email])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
