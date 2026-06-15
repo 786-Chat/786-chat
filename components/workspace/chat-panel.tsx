@@ -488,10 +488,10 @@ if (html) {
 useEffect(() => {
   if (!onPreviewUpdate) return
 
-  if (!user?.email) {
-    onPreviewUpdate("")
-    return
-  }
+ if (!user?.email) {
+  onPreviewUpdate("")
+  return
+}
 
   const savedPreview = localStorage.getItem(previewStorageKey)
 
