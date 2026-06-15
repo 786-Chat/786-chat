@@ -819,7 +819,10 @@ export async function DELETE(request: Request) {
     if (!session) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
       })
     }
 
@@ -827,30 +830,34 @@ export async function DELETE(request: Request) {
     const chatId = searchParams.get("chatId")
     const clearAll = searchParams.get("clearAll")
 
-    // Clear all chats for the current user
     if (clearAll === "true") {
-      // Delete all messages for this user's chats
       await sql`
         DELETE FROM messages 
         WHERE chat_id IN (SELECT id FROM chats WHERE user_id = ${session.id})
       `
-      // Then delete all chats
-      await sql`DELETE FROM chats WHERE user_id = ${session.id}`
+
+      await sql`
+        DELETE FROM chats WHERE user_id = ${session.id}
+      `
 
       return new Response(JSON.stringify({ success: true, cleared: true }), {
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
       })
     }
 
-    // Original single chat delete
     if (!chatId) {
       return new Response(JSON.stringify({ error: "Chat ID required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
       })
     }
 
-    // First verify the chat belongs to this user
     const chat = await sql`
       SELECT id FROM chats WHERE id = ${chatId} AND user_id = ${session.id}
     `
@@ -858,24 +865,31 @@ export async function DELETE(request: Request) {
     if (chat.length === 0) {
       return new Response(JSON.stringify({ error: "Chat not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
       })
     }
 
-    // Delete messages first (foreign key constraint)
     await sql`DELETE FROM messages WHERE chat_id = ${chatId}`
-    
-    // Then delete the chat
     await sql`DELETE FROM chats WHERE id = ${chatId} AND user_id = ${session.id}`
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     })
   } catch (error) {
     console.error("[Chat API] Delete chat error:", error)
+
     return new Response(JSON.stringify({ error: "Failed to delete chat" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     })
   }
 }
