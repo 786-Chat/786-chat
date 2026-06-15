@@ -208,11 +208,9 @@ if (!isAdminRequest && hasVisionFiles) {
   const plan = String(subscription.plan || "free").toLowerCase()
 
   const monthlyVisionLimit =
-    plan.includes("20") || plan.includes("pro") || plan.includes("business")
-      ? 15
-      : plan.includes("10") || plan.includes("starter")
-      ? 5
-      : 0
+  plan.includes("pro") || plan.includes("business")
+    ? 15
+    : 0
 
   if (monthlyVisionLimit <= 0) {
     return new Response(
