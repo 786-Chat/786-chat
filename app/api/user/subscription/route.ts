@@ -23,8 +23,7 @@ export async function GET() {
     const userId = payload.id
 
     const subscriptions = await sql`
-      SELECT plan, messages_used, messages_limit, status, stripe_subscription_id,
-             current_period_end
+      SELECT plan, messages_used, messages_limit, status, stripe_subscription_id, current_period_end
       FROM subscriptions
       WHERE user_id = ${userId}::uuid
     `
