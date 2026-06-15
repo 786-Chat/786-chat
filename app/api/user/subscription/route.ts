@@ -6,14 +6,16 @@ import { verifyToken } from "@/lib/auth"
 export async function GET() {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get("auth_token")?.value
-    
+    const token =
+      cookieStore.get("auth_token")?.value ||
+      cookieStore.get("auth-token")?.value
+
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const payload = await verifyToken(token)
-    
+
     if (!payload) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
@@ -28,24 +30,25 @@ export async function GET() {
     `
 
     if (subscriptions.length === 0) {
-      // Create default subscription if none exists
-   await sql`
-  INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
-  VALUES (${userId}::uuid, 'starter', 0, 10, 'active')
-`
+      await sql`
+        INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
+        VALUES (${userId}::uuid, 'starter', 0, 10, 'active')
       `
-      
-     return NextResponse.json({
-  plan: "starter",
-  messages_used: 0,
-  messages_limit: 10,
-  status: "active"
-})
+
+      return NextResponse.json({
+        plan: "starter",
+        messages_used: 0,
+        messages_limit: 10,
+        status: "active",
+      })
     }
 
     return NextResponse.json(subscriptions[0])
   } catch (error) {
     console.error("Subscription fetch error:", error)
-    return NextResponse.json({ error: "Failed to fetch subscription" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch subscription" },
+      { status: 500 }
+    )
   }
 }
