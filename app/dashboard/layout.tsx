@@ -106,10 +106,17 @@ useEffect(() => {
     const detail = (e as CustomEvent).detail
     if (!detail?.url) return
 
+    // If AI already generated HTML, keep showing that preview.
+    // Do NOT open MujeebProAI /login or /dashboard inside iframe.
+    if (detail.url.startsWith("/") && previewHtml) {
+      setPreviewUrl(detail.url)
+      setPreviewOpen(true)
+      setActiveView("preview")
+      return
+    }
+
     let finalUrl = detail.url
 
-    // If user types /login, /menu, /welcome, etc.
-    // open that route on the customer's own published site.
     if (detail.url.startsWith("/")) {
       try {
         const res = await fetch("/api/sites/my-site", {
@@ -136,7 +143,7 @@ useEffect(() => {
 
   window.addEventListener("top-bar-preview-url", handlePreviewUrl)
   return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
-}, [])
+}, [previewHtml])
 
   if (isLoading) {
     return (
