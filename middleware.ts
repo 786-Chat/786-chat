@@ -48,7 +48,9 @@ export async function middleware(request: NextRequest) {
 
   // Protect admin API routes
   if (pathname.startsWith("/api/admin")) {
-    const token = request.cookies.get("auth-token")?.value
+    const token =
+  request.cookies.get("auth_token")?.value ||
+  request.cookies.get("auth-token")?.value
 
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
