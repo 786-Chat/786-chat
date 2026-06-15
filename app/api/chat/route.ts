@@ -687,7 +687,10 @@ export async function GET(request: Request) {
     if (!session) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
       })
     }
 
@@ -698,21 +701,21 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
-   if (chatId) {
-  const dbMessages = await sql`
-    SELECT id, role, content, created_at
-    FROM messages
-    WHERE chat_id = ${chatId}
-    ORDER BY created_at ASC
-  `
+    if (chatId) {
+      const dbMessages = await sql`
+        SELECT id, role, content, created_at
+        FROM messages
+        WHERE chat_id = ${chatId}
+        ORDER BY created_at ASC
+      `
 
-  return new Response(JSON.stringify({ messages: dbMessages }), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-    },
-  })
-}
+      return new Response(JSON.stringify({ messages: dbMessages }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      })
+    }
 
     const chats = await sql`
       SELECT c.id, c.title, c.created_at, c.updated_at,
@@ -739,22 +742,21 @@ export async function GET(request: Request) {
             status: "active",
           },
         }),
-       {
-  headers: {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  },
-}
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
       )
     }
 
-     // For normal customers: get actual balance from user_balances with correct limit
     const balanceData = await sql`
       SELECT balance, free_messages_used, free_messages_limit 
       FROM user_balances 
       WHERE user_id = ${session.id}
     `
-}
+
     const userBalance = balanceData[0] || {
       balance: 0,
       free_messages_used: 0,
@@ -772,16 +774,8 @@ export async function GET(request: Request) {
         usage: {
           plan: "free",
           unlimited: false,
-          monthly: {
-            used: freeUsed,
-            limit: freeLimit,
-            remaining: freeMessagesRemaining,
-          },
-          daily: {
-            used: 0,
-            limit: freeLimit,
-            remaining: freeMessagesRemaining,
-          },
+          monthly: { used: freeUsed, limit: freeLimit, remaining: freeMessagesRemaining },
+          daily: { used: 0, limit: freeLimit, remaining: freeMessagesRemaining },
           balance: paidBalance,
           freeMessagesUsed: freeUsed,
           freeMessagesLimit: freeLimit,
@@ -804,88 +798,6 @@ export async function GET(request: Request) {
     console.error("[Chat API] Get chats error:", error)
 
     return new Response(JSON.stringify({ error: "Failed to get chats" }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    })
-  }
-}
-// Delete a chat or clear all chats
-export async function DELETE(request: Request) {
-  try {
-    const session = await getSession()
-
-    if (!session) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
-    const { searchParams } = new URL(request.url)
-    const chatId = searchParams.get("chatId")
-    const clearAll = searchParams.get("clearAll")
-
-    if (clearAll === "true") {
-      await sql`
-        DELETE FROM messages 
-        WHERE chat_id IN (SELECT id FROM chats WHERE user_id = ${session.id})
-      `
-
-      await sql`
-        DELETE FROM chats WHERE user_id = ${session.id}
-      `
-
-      return new Response(JSON.stringify({ success: true, cleared: true }), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
-    if (!chatId) {
-      return new Response(JSON.stringify({ error: "Chat ID required" }), {
-        status: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
-    const chat = await sql`
-      SELECT id FROM chats WHERE id = ${chatId} AND user_id = ${session.id}
-    `
-
-    if (chat.length === 0) {
-      return new Response(JSON.stringify({ error: "Chat not found" }), {
-        status: 404,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
-    await sql`DELETE FROM messages WHERE chat_id = ${chatId}`
-    await sql`DELETE FROM chats WHERE id = ${chatId} AND user_id = ${session.id}`
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    })
-  } catch (error) {
-    console.error("[Chat API] Delete chat error:", error)
-
-    return new Response(JSON.stringify({ error: "Failed to delete chat" }), {
       status: 500,
       headers: {
         "Content-Type": "application/json",
