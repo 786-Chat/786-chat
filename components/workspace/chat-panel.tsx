@@ -562,7 +562,10 @@ if (html) {
 
           <AnimatePresence initial={false}>
             {messages.map((message) => {
-              const text = getMessageText(message)
+          const rawText = getMessageText(message)
+const text = rawText.includes("CURRENT_PREVIEW_HTML:")
+  ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
+  : rawText
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
