@@ -215,9 +215,10 @@ export function WorkspaceTopBar({
                 if (isUrl) {
                   // It's a URL - show in preview panel
                   let url = value
-                  if (value.startsWith('/')) {
-                    // Relative path - use current origin
-                    url = window.location.origin + value
+                if (value.startsWith('/')) {
+  // Relative project path. Dashboard layout will attach customer site URL.
+  url = value
+}
                   } else if (!value.startsWith('http')) {
                     // Domain without protocol
                     url = 'https://' + value
