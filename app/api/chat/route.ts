@@ -698,20 +698,21 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
-    if (chatId) {
-      const dbMessages = await sql`
-        SELECT id, role, content, created_at
-        FROM messages
-        WHERE chat_id = ${chatId}
-        ORDER BY created_at ASC
-      `
+   if (chatId) {
+  const dbMessages = await sql`
+    SELECT id, role, content, created_at
+    FROM messages
+    WHERE chat_id = ${chatId}
+    ORDER BY created_at ASC
+  `
 
-    return new Response(JSON.stringify({ messages: dbMessages }), {
-  headers: {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  },
-})
+  return new Response(JSON.stringify({ messages: dbMessages }), {
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  })
+}
 
     const chats = await sql`
       SELECT c.id, c.title, c.created_at, c.updated_at,
