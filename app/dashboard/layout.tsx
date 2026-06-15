@@ -100,20 +100,43 @@ export default function DashboardLayout({
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
-  // Listen for top-bar URL preview requests
-  useEffect(() => {
-    const handlePreviewUrl = (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      if (detail?.url) {
-        setPreviewUrl(detail.url)
-        setPreviewHtml("") // Clear any generated HTML so URL preview shows
-        setPreviewOpen(true) // Open preview panel if closed
-        setActiveView("preview") // Switch to preview view on mobile
+ // Listen for top-bar URL preview requests
+useEffect(() => {
+  const handlePreviewUrl = async (e: Event) => {
+    const detail = (e as CustomEvent).detail
+    if (!detail?.url) return
+
+    let finalUrl = detail.url
+
+    // If user types /login, /menu, /welcome, etc.
+    // open that route on the customer's own published site.
+    if (detail.url.startsWith("/")) {
+      try {
+        const res = await fetch("/api/sites/my-site", {
+          credentials: "include",
+          cache: "no-store",
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          if (data.siteUrl) {
+            finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
+          }
+        }
+      } catch {
+        finalUrl = detail.url
       }
     }
-    window.addEventListener("top-bar-preview-url", handlePreviewUrl)
-    return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
-  }, [])
+
+    setPreviewUrl(finalUrl)
+    setPreviewHtml("")
+    setPreviewOpen(true)
+    setActiveView("preview")
+  }
+
+  window.addEventListener("top-bar-preview-url", handlePreviewUrl)
+  return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
+}, [])
 
   if (isLoading) {
     return (
