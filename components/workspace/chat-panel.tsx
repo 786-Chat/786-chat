@@ -483,7 +483,7 @@ if (html) {
   onPreviewUpdate(html)
 }
     }
-    }, [messages, onPreviewUpdate])
+    }, [messages, onPreviewUpdate, previewStorageKey])
 
  useEffect(() => {
   if (!onPreviewUpdate) return
