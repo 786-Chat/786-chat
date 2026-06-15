@@ -117,67 +117,15 @@ freeMessagesRemaining:
     window.dispatchEvent(new CustomEvent("new-chat"))
   }
 
-  const loadChat = (chatId: string) => {
-    setCurrentChatId(chatId)
-    window.dispatchEvent(new CustomEvent("load-chat", { detail: { chatId } }))
-
-    if (window.innerWidth < 768) onClose()
-  }
-
   const deleteChat = async (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm("Are you sure you want to delete this chat from history?")) return
+  e.stopPropagation()
 
-    const oldHistory = chatHistory
+  const ok = confirm("Delete this chat from sidebar history?")
+  if (!ok) return
 
-    // Remove from sidebar immediately
-    setChatHistory((prev) => prev.filter((c) => c.id !== chatId))
+  const oldHistory = chatHistory
 
-    try {
-      const response = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
-        method: "DELETE",
-        credentials: "include",
-        cache: "no-store",
-      })
 
-      if (!response.ok) {
-        setChatHistory(oldHistory)
-        console.error("Failed to delete chat:", await response.text())
-        return
-      }
-
-      // Do NOT call startNewChat here.
-      // That clears preview/code localStorage.
-      if (currentChatId === chatId) {
-        setCurrentChatId(null)
-      }
-
-      window.dispatchEvent(new Event("chat-updated"))
-    } catch (error) {
-      setChatHistory(oldHistory)
-      console.error("Failed to delete chat:", error)
-    }
-  }
-
-  const filteredChats = chatHistory.filter((chat) =>
-    chat.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const todayChats = filteredChats.filter((c) => {
-    const d = new Date(c.createdAt)
-    const now = new Date()
-    return d.toDateString() === now.toDateString()
-  })
-
-  const olderChats = filteredChats.filter((c) => {
-    const d = new Date(c.createdAt)
-    const now = new Date()
-    return d.toDateString() !== now.toDateString()
-  })
-
-  return (
-    <>
-      {/* Mobile overlay */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
