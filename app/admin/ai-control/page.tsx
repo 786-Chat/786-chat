@@ -142,8 +142,8 @@ export default function AIControlPage() {
     )
   }
 
-  return (
-    <div className="space-y-6">
+return (
+  <div className="w-full max-w-full overflow-x-hidden space-y-6 px-1">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -201,7 +201,7 @@ export default function AIControlPage() {
 
       {/* Cost Summary Cards */}
       {costSummary && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <Card className="bg-[#14141f] border-white/10">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -271,7 +271,7 @@ export default function AIControlPage() {
 
       {/* Main Settings Tabs */}
       <Tabs defaultValue="model" className="space-y-4">
-        <TabsList className="bg-white/5 border border-white/10">
+       <TabsList className="w-full max-w-full overflow-x-auto bg-white/5 border border-white/10">
           <TabsTrigger value="model" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
             <Bot className="w-4 h-4 mr-2" />
             Model Settings
