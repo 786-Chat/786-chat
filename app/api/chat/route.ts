@@ -802,13 +802,13 @@ canSend: freeMessagesRemaining > 0 || paidBalance > 0.001,
   } catch (error) {
     console.error("[Chat API] Get chats error:", error)
 
-   return new Response(JSON.stringify({ error: "Failed to get chats" }), {
-  status: 500,
-  headers: {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store, no-cache, must-revalidate",
-  },
-})
+    return new Response(JSON.stringify({ error: "Failed to get chats" }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    })
   }
 }
 // Delete a chat or clear all chats
