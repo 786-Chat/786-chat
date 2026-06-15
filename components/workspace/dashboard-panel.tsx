@@ -51,7 +51,7 @@ export function WorkspaceDashboardPanel({ isOpen, onClose }: DashboardPanelProps
           plan: data.plan || "starter",
           status: data.status || "active",
           messagesUsed: data.messagesUsed ?? data.messages_used ?? 0,
-          messagesLimit: data.messagesLimit ?? data.messages_limit ?? 5,
+          messagesLimit: data.messagesLimit ?? data.messages_limit ?? 10,
           currentPeriodEnd: data.currentPeriodEnd ?? data.current_period_end ?? null,
         })
       }
