@@ -120,44 +120,56 @@ freeMessagesRemaining:
   const loadChat = (chatId: string) => {
     setCurrentChatId(chatId)
     window.dispatchEvent(new CustomEvent("load-chat", { detail: { chatId } }))
-    // On mobile, close sidebar after selecting
+
     if (window.innerWidth < 768) onClose()
   }
 
   const deleteChat = async (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent loading the chat when clicking delete
-    if (!confirm("Are you sure you want to delete this chat?")) return
-    
+    e.stopPropagation()
+    if (!confirm("Are you sure you want to delete this chat from history?")) return
+
+    const oldHistory = chatHistory
+
+    // Remove from sidebar immediately
+    setChatHistory((prev) => prev.filter((c) => c.id !== chatId))
+
     try {
-      const response = await fetch(`/api/chat?chatId=${chatId}`, {
+      const response = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
         method: "DELETE",
-        credentials: "include"
+        credentials: "include",
+        cache: "no-store",
       })
-      
-      if (response.ok) {
-        // Remove from local state
-        setChatHistory(prev => prev.filter(c => c.id !== chatId))
-        // If we deleted the current chat, start a new one
-        if (currentChatId === chatId) {
-          startNewChat()
-        }
+
+      if (!response.ok) {
+        setChatHistory(oldHistory)
+        console.error("Failed to delete chat:", await response.text())
+        return
       }
+
+      // Do NOT call startNewChat here.
+      // That clears preview/code localStorage.
+      if (currentChatId === chatId) {
+        setCurrentChatId(null)
+      }
+
+      window.dispatchEvent(new Event("chat-updated"))
     } catch (error) {
+      setChatHistory(oldHistory)
       console.error("Failed to delete chat:", error)
     }
   }
 
-  const filteredChats = chatHistory.filter(chat =>
+  const filteredChats = chatHistory.filter((chat) =>
     chat.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const todayChats = filteredChats.filter(c => {
+  const todayChats = filteredChats.filter((c) => {
     const d = new Date(c.createdAt)
     const now = new Date()
     return d.toDateString() === now.toDateString()
   })
 
-  const olderChats = filteredChats.filter(c => {
+  const olderChats = filteredChats.filter((c) => {
     const d = new Date(c.createdAt)
     const now = new Date()
     return d.toDateString() !== now.toDateString()
@@ -190,8 +202,9 @@ freeMessagesRemaining:
           "flex-shrink-0 border-r border-purple-500/20 flex flex-col overflow-hidden backdrop-blur-xl",
           "md:relative fixed left-0 top-12 bottom-0 z-40"
         )}
-        style={{ 
-          background: 'linear-gradient(180deg, rgba(88, 28, 135, 0.15) 0%, rgba(15, 10, 35, 0.98) 100%)',
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(88, 28, 135, 0.15) 0%, rgba(15, 10, 35, 0.98) 100%)",
         }}
       >
         <div className="w-[260px] h-full flex flex-col">
