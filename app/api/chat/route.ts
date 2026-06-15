@@ -753,7 +753,7 @@ export async function GET(request: Request) {
       FROM user_balances 
       WHERE user_id = ${session.id}
     `
-
+}
     const userBalance = balanceData[0] || {
       balance: 0,
       free_messages_used: 0,
