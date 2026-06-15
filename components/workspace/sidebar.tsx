@@ -100,7 +100,7 @@ freeMessagesRemaining:
     } catch {
       // Network error, silently ignore on mount
     }
-  }, [user])
+  }, [user, deletedChatKey])
 
   useEffect(() => {
     if (user) fetchChatHistory()
