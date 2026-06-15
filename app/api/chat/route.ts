@@ -706,10 +706,12 @@ export async function GET(request: Request) {
         ORDER BY created_at ASC
       `
 
-      return new Response(JSON.stringify({ messages: dbMessages }), {
-        headers: { "Content-Type": "application/json" },
-      })
-    }
+    return new Response(JSON.stringify({ messages: dbMessages }), {
+  headers: {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+  },
+})
 
     const chats = await sql`
       SELECT c.id, c.title, c.created_at, c.updated_at,
