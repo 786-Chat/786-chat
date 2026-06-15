@@ -146,14 +146,14 @@ export default function AIControlPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-white flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
             <Bot className="w-7 h-7 text-cyan-400" />
             AI Control Center
           </h1>
-          <p className="text-white/60 mt-1">Manage your MujeebProAI settings, limits, and costs</p>
+          <p className="text-white/60 mt-1 overflow-hidden text-ellipsis whitespace-nowrap">Manage your MujeebProAI settings, limits, and costs</p>
         </div>
-        <Button onClick={fetchData} variant="outline" size="sm">
+        <Button onClick={fetchData} variant="outline" size="sm" className="flex-shrink-0">
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
