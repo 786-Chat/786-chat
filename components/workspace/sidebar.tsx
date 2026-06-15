@@ -51,6 +51,10 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
 
+const deletedChatKey = user?.email
+  ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
+  : "mujeebproai_deleted_chats_guest"
+
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
     try {
