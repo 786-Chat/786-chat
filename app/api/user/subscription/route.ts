@@ -29,17 +29,18 @@ export async function GET() {
 
     if (subscriptions.length === 0) {
       // Create default subscription if none exists
-      await sql`
-        INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
-        VALUES (${userId}::uuid, 'starter', 0, 5, 'active')
+   await sql`
+  INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
+  VALUES (${userId}::uuid, 'starter', 0, 10, 'active')
+`
       `
       
-      return NextResponse.json({
-        plan: "starter",
-        messages_used: 0,
-        messages_limit: 5,
-        status: "active"
-      })
+     return NextResponse.json({
+  plan: "starter",
+  messages_used: 0,
+  messages_limit: 10,
+  status: "active"
+})
     }
 
     return NextResponse.json(subscriptions[0])
