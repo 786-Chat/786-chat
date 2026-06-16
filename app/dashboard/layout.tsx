@@ -106,15 +106,6 @@ useEffect(() => {
     const detail = (e as CustomEvent).detail
     if (!detail?.url) return
 
-    // If AI already generated HTML, keep showing that preview.
-    // Do NOT open MujeebProAI /login or /dashboard inside iframe.
-    if (detail.url.startsWith("/") && previewHtml) {
-      setPreviewUrl(detail.url)
-      setPreviewOpen(true)
-      setActiveView("preview")
-      return
-    }
-
     let finalUrl = detail.url
 
     if (detail.url.startsWith("/")) {
@@ -126,12 +117,15 @@ useEffect(() => {
 
         if (res.ok) {
           const data = await res.json()
-          if (data.siteUrl) {
+
+          if (data.subdomain) {
+            finalUrl = `/site/${data.subdomain}${detail.url}`
+          } else if (data.siteUrl) {
             finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
           }
         }
       } catch {
-        finalUrl = detail.url
+        finalUrl = ""
       }
     }
 
@@ -143,7 +137,7 @@ useEffect(() => {
 
   window.addEventListener("top-bar-preview-url", handlePreviewUrl)
   return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
-}, [previewHtml])
+}, [])
 
   if (isLoading) {
     return (
