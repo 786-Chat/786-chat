@@ -30,6 +30,26 @@ interface PreviewPanelProps {
   onViewModeChange?: (mode: "preview" | "code") => void
 }
 
+function hasVisibleHtmlContent(html: string): boolean {
+  if (!html || !html.trim()) return false
+
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  const content = bodyMatch ? bodyMatch[1] : html
+
+  const textOnly = content
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim()
+
+  const hasVisibleTags =
+    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
+
+  return textOnly.length > 3 || hasVisibleTags
+}
+
 export function WorkspacePreviewPanel({
   device,
   setDevice,
@@ -46,12 +66,14 @@ export function WorkspacePreviewPanel({
   const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
 
-  const hasPreviewHtml = Boolean(previewHtml && previewHtml.trim().length > 0)
+  const safePreviewHtml =
+    previewHtml && hasVisibleHtmlContent(previewHtml) ? previewHtml : ""
+
+  const hasPreviewHtml = Boolean(safePreviewHtml)
 
   const normalizeCustomerPreviewUrl = (url: string) => {
     const cleanUrl = url.trim()
     if (!cleanUrl) return ""
-
     if (cleanUrl === "about:blank") return ""
     if (cleanUrl.startsWith("/site/")) return cleanUrl
 
@@ -140,9 +162,9 @@ export function WorkspacePreviewPanel({
   const frameDims = getFrameDimensions()
 
   const copyCode = async () => {
-    if (!previewHtml) return
+    if (!safePreviewHtml) return
 
-    await navigator.clipboard.writeText(previewHtml)
+    await navigator.clipboard.writeText(safePreviewHtml)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -160,7 +182,6 @@ export function WorkspacePreviewPanel({
       }
 
       const data = await response.json()
-
       let nextUrl = ""
 
       if (data.subdomain) {
@@ -361,14 +382,14 @@ export function WorkspacePreviewPanel({
             </div>
 
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {previewHtml}
+              {safePreviewHtml}
             </pre>
           </div>
         ) : hasPreviewHtml ? (
           isFullSize ? (
             <iframe
               key={`html-${refreshKey}-${device}`}
-              srcDoc={previewHtml}
+              srcDoc={safePreviewHtml}
               className="absolute inset-0 w-full h-full bg-white"
               title="Generated Preview"
               sandbox="allow-scripts allow-forms allow-popups"
@@ -382,16 +403,14 @@ export function WorkspacePreviewPanel({
                 <div className="bg-white rounded-[1.25rem] sm:rounded-[2rem] overflow-hidden">
                   <iframe
                     key={`html-${refreshKey}-${device}`}
-                    srcDoc={previewHtml}
+                    srcDoc={safePreviewHtml}
                     className="w-full h-full border-0"
                     title="Generated Preview"
                     sandbox="allow-scripts allow-forms allow-popups"
                     style={{
                       width: Math.min(
                         frameDims ? frameDims.width : 390,
-                        typeof window !== "undefined"
-                          ? window.innerWidth - 48
-                          : 390
+                        typeof window !== "undefined" ? window.innerWidth - 48 : 390
                       ),
                       height: frameDims ? frameDims.height : 844,
                       maxWidth: "100%",
@@ -426,9 +445,7 @@ export function WorkspacePreviewPanel({
                     style={{
                       width: Math.min(
                         frameDims ? frameDims.width : 390,
-                        typeof window !== "undefined"
-                          ? window.innerWidth - 48
-                          : 390
+                        typeof window !== "undefined" ? window.innerWidth - 48 : 390
                       ),
                       height: frameDims ? frameDims.height : 844,
                       maxWidth: "100%",
