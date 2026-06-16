@@ -30,21 +30,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      console.log("[MujeebProAI] Refreshing user data...")
       const response = await fetch("/api/auth/me", {
         credentials: "include",
+        cache: "no-store",
       })
-      console.log("[MujeebProAI] Auth me response status:", response.status)
+
       if (response.ok) {
         const data = await response.json()
-        console.log("[MujeebProAI] User data received:", data.user?.email, "role:", data.user?.role)
         setUser(data.user)
       } else {
-        console.log("[MujeebProAI]Auth me failed, clearing user")
         setUser(null)
       }
-    } catch (err) {
-      console.log("[MujeebProAI] Auth me error:", err)
+    } catch {
       setUser(null)
     } finally {
       setIsLoading(false)
@@ -57,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      console.log("[MujeebProAI]Auth context login called for:", email)
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,17 +62,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       const data = await response.json()
-      console.log("[MujeebProAI] Login response:", response.status, data)
 
       if (response.ok) {
-        console.log("[MujeebProAI]Login successful, setting user:", data.user?.email)
         setUser(data.user)
         return { success: true }
-      } else {
-        return { success: false, error: data.error }
       }
-    } catch (err) {
-      console.log("[MujeebProAI]Login error:", err)
+
+      return { success: false, error: data.error }
+    } catch {
       return { success: false, error: "Network error. Please try again." }
     }
   }
@@ -95,9 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         setUser(data.user)
         return { success: true }
-      } else {
-        return { success: false, error: data.error }
       }
+
+      return { success: false, error: data.error }
     } catch {
       return { success: false, error: "Network error. Please try again." }
     }
@@ -105,11 +98,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      })
+    } finally {
       setUser(null)
       router.push("/")
-    } catch (error) {
-      console.error("Logout error:", error)
     }
   }
 
@@ -122,8 +117,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
+
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
+
   return context
 }
