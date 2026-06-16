@@ -21,6 +21,7 @@ export default function DashboardLayout({
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [previewOpen, setPreviewOpen] = useState(true)
   const [dashboardOpen, setDashboardOpen] = useState(false)
@@ -31,8 +32,7 @@ export default function DashboardLayout({
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
 
-  // Resizer state
-  const [chatWidthPercent, setChatWidthPercent] = useState(50) // percentage of available space
+  const [chatWidthPercent, setChatWidthPercent] = useState(50)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -46,10 +46,11 @@ export default function DashboardLayout({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
+
       const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const percent = (x / rect.width) * 100
-      // Clamp between 25% and 75%
+
       setChatWidthPercent(Math.min(75, Math.max(25, percent)))
     }
 
@@ -63,20 +64,27 @@ export default function DashboardLayout({
 
     window.addEventListener("mousemove", handleMouseMove)
     window.addEventListener("mouseup", handleMouseUp)
+
     return () => {
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
   }, [])
 
-  // Determine if we're on a sub-page that needs an overlay
-  const isWorkspaceRoot = pathname === "/dashboard" || pathname === "/dashboard/chat"
-  // Settings, billing, usage, and profile have their own layout - render them directly
-  const isSettingsPage = pathname.startsWith("/dashboard/settings") || 
-                         pathname === "/dashboard/billing" || 
-                         pathname === "/dashboard/usage" || 
-                         pathname === "/dashboard/profile"
-  const isSubPage = !isWorkspaceRoot && pathname.startsWith("/dashboard/") && !isSettingsPage
+  const isProjectsHome = pathname === "/dashboard"
+  const isWorkspaceRoot = pathname === "/dashboard/chat"
+
+  const isSettingsPage =
+    pathname.startsWith("/dashboard/settings") ||
+    pathname === "/dashboard/billing" ||
+    pathname === "/dashboard/usage" ||
+    pathname === "/dashboard/profile"
+
+  const isSubPage =
+    !isProjectsHome &&
+    !isWorkspaceRoot &&
+    pathname.startsWith("/dashboard/") &&
+    !isSettingsPage
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -95,57 +103,63 @@ export default function DashboardLayout({
         setPreviewOpen(true)
       }
     }
+
     handleResize()
     window.addEventListener("resize", handleResize)
+
     return () => window.removeEventListener("resize", handleResize)
   }, [])
 
- // Listen for top-bar URL preview requests
-useEffect(() => {
-  const handlePreviewUrl = async (e: Event) => {
-    const detail = (e as CustomEvent).detail
-    if (!detail?.url) return
+  useEffect(() => {
+    const handlePreviewUrl = async (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (!detail?.url) return
 
-    let finalUrl = detail.url
+      let finalUrl = detail.url
 
-    if (detail.url.startsWith("/")) {
-      try {
-        const res = await fetch("/api/sites/my-site", {
-          credentials: "include",
-          cache: "no-store",
-        })
+      if (detail.url.startsWith("/")) {
+        try {
+          const res = await fetch("/api/sites/my-site", {
+            credentials: "include",
+            cache: "no-store",
+          })
 
-        if (res.ok) {
-          const data = await res.json()
+          if (res.ok) {
+            const data = await res.json()
 
-          if (data.subdomain) {
-            finalUrl = `/site/${data.subdomain}${detail.url}`
-          } else if (data.siteUrl) {
-            finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
+            if (data.subdomain) {
+              finalUrl = `/site/${data.subdomain}${detail.url}`
+            } else if (data.siteUrl) {
+              finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
+            }
           }
+        } catch {
+          finalUrl = ""
         }
-      } catch {
-        finalUrl = ""
       }
+
+      setPreviewUrl(finalUrl)
+      setPreviewHtml("")
+      setPreviewOpen(true)
+      setActiveView("preview")
     }
 
-    setPreviewUrl(finalUrl)
-    setPreviewHtml("")
-    setPreviewOpen(true)
-    setActiveView("preview")
-  }
+    window.addEventListener("top-bar-preview-url", handlePreviewUrl)
 
-  window.addEventListener("top-bar-preview-url", handlePreviewUrl)
-  return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
-}, [])
+    return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
+  }, [])
 
   if (isLoading) {
     return (
       <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[150px] animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: "1s" }} />
+          <div
+            className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] animate-pulse"
+            style={{ animationDelay: "1s" }}
+          />
         </div>
+
         <motion.div
           className="flex flex-col items-center gap-6 relative z-10"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -157,6 +171,7 @@ useEffect(() => {
           >
             <MujeebProAILogo variant="icon" size="xl" animated={false} />
           </motion.div>
+
           <div className="flex flex-col items-center gap-2">
             <div className="flex gap-1">
               {[0, 1, 2].map((i) => (
@@ -177,18 +192,16 @@ useEffect(() => {
 
   if (!user) return null
 
-  // Render settings pages with their own layout (full page, no workspace)
+  if (isProjectsHome) {
+    return <div className="min-h-screen bg-[#05070d]">{children}</div>
+  }
+
   if (isSettingsPage) {
-    return (
-      <div className="min-h-screen bg-background">
-        {children}
-      </div>
-    )
+    return <div className="min-h-screen bg-background">{children}</div>
   }
 
   return (
     <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
-      {/* Top Bar */}
       <WorkspaceTopBar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -204,50 +217,49 @@ useEffect(() => {
         onViewModeChange={setViewMode}
       />
 
-      {/* Main Workspace */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar */}
         <WorkspaceSidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />
 
-        {/* Resizable panels container */}
         <div ref={containerRef} className="flex-1 flex overflow-hidden relative w-full max-w-full">
-          {/* Center - Chat Panel */}
           <div
-            className={`flex flex-col min-w-0 overflow-hidden ${activeView !== "chat" ? "hidden md:flex" : "flex w-full md:w-auto"}`}
+            className={`flex flex-col min-w-0 overflow-hidden ${
+              activeView !== "chat" ? "hidden md:flex" : "flex w-full md:w-auto"
+            }`}
             style={{
-              width: activeView === "chat" && typeof window !== "undefined" && window.innerWidth < 768 
-                ? "100%" 
-                : previewOpen ? `${chatWidthPercent}%` : "100%",
+              width:
+                activeView === "chat" &&
+                typeof window !== "undefined" &&
+                window.innerWidth < 768
+                  ? "100%"
+                  : previewOpen
+                    ? `${chatWidthPercent}%`
+                    : "100%",
               flexShrink: 0,
             }}
           >
-            <WorkspaceChatPanel 
+            <WorkspaceChatPanel
               onPreviewUpdate={setPreviewHtml}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
             />
           </div>
 
-          {/* Draggable Resizer Handle - hidden on mobile */}
           {previewOpen && (
             <div
               className="relative z-10 flex-shrink-0 group hidden md:block"
               style={{ width: "6px" }}
             >
-              {/* Hover / active highlight bar */}
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-white/[0.06] group-hover:bg-cyan-500/50 group-active:bg-cyan-400 transition-colors" />
 
-              {/* Drag grip dots */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <div className="w-1 h-1 rounded-full bg-cyan-400" />
                 <div className="w-1 h-1 rounded-full bg-cyan-400" />
                 <div className="w-1 h-1 rounded-full bg-cyan-400" />
               </div>
 
-              {/* Wide invisible hit area for easy grabbing */}
               <div
                 className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
                 onMouseDown={handleMouseDown}
@@ -255,14 +267,18 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Right - Preview Panel */}
           {previewOpen && (
             <div
-              className={`${activeView !== "preview" ? "hidden lg:flex" : "flex w-full md:w-auto"} flex-col min-w-0 overflow-hidden`}
+              className={`${
+                activeView !== "preview" ? "hidden lg:flex" : "flex w-full md:w-auto"
+              } flex-col min-w-0 overflow-hidden`}
               style={{
-                width: activeView === "preview" && typeof window !== "undefined" && window.innerWidth < 768
-                  ? "100%"
-                  : `${100 - chatWidthPercent}%`,
+                width:
+                  activeView === "preview" &&
+                  typeof window !== "undefined" &&
+                  window.innerWidth < 768
+                    ? "100%"
+                    : `${100 - chatWidthPercent}%`,
                 flexShrink: 0,
               }}
             >
@@ -282,13 +298,11 @@ useEffect(() => {
           )}
         </div>
 
-        {/* Dashboard Slide-in */}
         <WorkspaceDashboardPanel
           isOpen={dashboardOpen}
           onClose={() => setDashboardOpen(false)}
         />
 
-        {/* Sub-page Overlay (billing, settings, profile, etc.) */}
         <AnimatePresence>
           {isSubPage && (
             <>
@@ -299,6 +313,7 @@ useEffect(() => {
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
                 onClick={() => router.push("/dashboard")}
               />
+
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -310,6 +325,7 @@ useEffect(() => {
                   <h2 className="text-sm font-semibold text-white capitalize">
                     {pathname.split("/").pop()?.replace(/-/g, " ")}
                   </h2>
+
                   <Button
                     variant="ghost"
                     size="icon"
@@ -319,9 +335,8 @@ useEffect(() => {
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6">
-                  {children}
-                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">{children}</div>
               </motion.div>
             </>
           )}
