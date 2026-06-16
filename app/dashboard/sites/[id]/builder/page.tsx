@@ -12,7 +12,7 @@ import {
   ChevronLeft,
   Monitor,
   Smartphone,
-  Tablet,
+  Tablet, // Tablet icon is already imported here
   Eye,
   Code,
   Save,
@@ -217,7 +217,7 @@ export default function SiteBuilderPage() {
           <div className="hidden md:flex items-center gap-1 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5">
             {[
               { id: "desktop" as const, icon: Monitor, label: "Desktop" },
-              { id: "tablet" as const, icon: Tablet, label: "Tablet" },
+              { id: "tablet" as const, icon: Tablet, label: "Tablet" }, // This is the tablet icon
               { id: "mobile" as const, icon: Smartphone, label: "Mobile" },
             ].map((device) => (
               <button
@@ -401,7 +401,7 @@ export default function SiteBuilderPage() {
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">2</span>
-                  <span className="text-gray-400">&lt;<span className="text-cyan-400">html</span> lang=<span className="text-green-400">&quot;en&quot;</span>&gt;</span>
+                  <span className="text-gray-400">&lt;<span className="text-cyan-400">html</span> lang=<span className="text-green-400">"en"</span>&gt;</span>
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">3</span>
@@ -409,7 +409,7 @@ export default function SiteBuilderPage() {
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">4</span>
-                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> charset=<span className="text-green-400">&quot;UTF-8&quot;</span> /&gt;</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> charset=<span className="text-green-400">"UTF-8"</span> /&gt;</span>
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">5</span>
@@ -417,11 +417,11 @@ export default function SiteBuilderPage() {
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">6</span>
-                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> name=<span className="text-green-400">&quot;viewport&quot;</span> content=<span className="text-green-400">&quot;width=device-width, initial-scale=1.0&quot;</span> /&gt;</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">meta</span> name=<span className="text-green-400">"viewport"</span> content=<span className="text-green-400">"width=device-width, initial-scale=1.0"</span> /&gt;</span>
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">7</span>
-                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">link</span> rel=<span className="text-green-400">&quot;stylesheet&quot;</span> href=<span className="text-green-400">&quot;style.css&quot;</span> /&gt;</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">link</span> rel=<span className="text-green-400">"stylesheet"</span> href=<span className="text-green-400">"style.css"</span> /&gt;</span>
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">8</span>
@@ -433,7 +433,7 @@ export default function SiteBuilderPage() {
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">10</span>
-                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">div</span> id=<span className="text-green-400">&quot;app&quot;</span>&gt;</span>
+                  <span className="text-gray-400">  &lt;<span className="text-cyan-400">div</span> id=<span className="text-green-400">"app"</span>&gt;</span>
                 </div>
                 <div className="flex">
                   <span className="text-white/20 w-8 text-right select-none mr-4">11</span>
