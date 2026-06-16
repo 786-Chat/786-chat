@@ -173,7 +173,10 @@ export function WorkspacePreviewPanel({
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
-              onClick={() => window.open(liveUrl, "_blank")}
+              onClick={() => {
+  if (isBlockedCustomerUrl(liveUrl)) return
+  window.open(liveUrl, "_blank")
+}}
               title="Open in new tab"
             >
               <ExternalLink className="w-3 h-3" />
