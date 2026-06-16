@@ -23,6 +23,7 @@ import {
   X,
   Eye,
   Sparkles,
+  RotateCcw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -216,10 +217,12 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const previewStorageKey = user?.email
     ? `mujeebproai_last_preview_html_${user.email.toLowerCase()}`
     : "mujeebproai_last_preview_html_guest"
+  const previewBackupStorageKey = `${previewStorageKey}_backup`
 
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+  const [hasBackupPreview, setHasBackupPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -228,6 +231,39 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const [showScrollButton, setShowScrollButton] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState("")
+
+  const savePreviewWithBackup = useCallback(
+    (nextHtml: string) => {
+      const currentPreview = localStorage.getItem(previewStorageKey) || ""
+
+      if (
+        currentPreview &&
+        hasVisibleHtmlContent(currentPreview) &&
+        currentPreview.trim() !== nextHtml.trim()
+      ) {
+        localStorage.setItem(previewBackupStorageKey, currentPreview)
+        setHasBackupPreview(true)
+      }
+
+      localStorage.setItem(previewStorageKey, nextHtml)
+      onPreviewUpdate?.(nextHtml)
+    },
+    [onPreviewUpdate, previewBackupStorageKey, previewStorageKey]
+  )
+
+  const restorePreviousPreview = useCallback(() => {
+    if (!onPreviewUpdate) return
+
+    const backupPreview = localStorage.getItem(previewBackupStorageKey) || ""
+    const safeBackup = isOwnerAdmin ? backupPreview : sanitizeCustomerPreview(backupPreview)
+
+    if (safeBackup && hasVisibleHtmlContent(safeBackup)) {
+      localStorage.setItem(previewStorageKey, safeBackup)
+      localStorage.removeItem(previewBackupStorageKey)
+      setHasBackupPreview(false)
+      onPreviewUpdate(safeBackup)
+    }
+  }, [isOwnerAdmin, onPreviewUpdate, previewBackupStorageKey, previewStorageKey])
 
   const {
     messages,
@@ -315,7 +351,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 CURRENT_PREVIEW_HTML:
 ${savedPreview}
 
-Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Do not ask for URL unless the user is asking about an external website.`
+Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Before changing, assume the current preview has been backed up by MujeebProAI. Do not ask for URL unless the user is asking about an external website.`
         : "")
 
     const finalMessageText = messageText.trim() || "Please analyze the attached file."
@@ -506,14 +542,13 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
       const safeHtml = isOwnerAdmin ? html : sanitizeCustomerPreview(html)
 
       if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
-        localStorage.setItem(previewStorageKey, safeHtml)
-        onPreviewUpdate(safeHtml)
+        savePreviewWithBackup(safeHtml)
       } else {
         localStorage.removeItem(previewStorageKey)
         onPreviewUpdate("")
       }
     }
-  }, [messages, onPreviewUpdate, previewStorageKey, isOwnerAdmin])
+  }, [messages, onPreviewUpdate, previewStorageKey, isOwnerAdmin, savePreviewWithBackup])
 
   useEffect(() => {
     if (!onPreviewUpdate) return
@@ -525,6 +560,9 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
 
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+    const storedBackup = localStorage.getItem(previewBackupStorageKey) || ""
+
+    setHasBackupPreview(Boolean(storedBackup && hasVisibleHtmlContent(storedBackup)))
 
     if (savedPreview && hasVisibleHtmlContent(savedPreview)) {
       onPreviewUpdate(savedPreview)
@@ -540,10 +578,36 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
 
     window.addEventListener("new-chat", handleNewChat)
     return () => window.removeEventListener("new-chat", handleNewChat)
-  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
+  }, [onPreviewUpdate, previewBackupStorageKey, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
+      {onPreviewUpdate && (
+        <div className="border-b border-gray-800/50 bg-gray-900/70 backdrop-blur-sm px-4 py-2">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-2">
+            <span className="text-xs text-gray-500">
+              Preview safety: previous version is saved before new AI preview changes.
+            </span>
+
+            <button
+              type="button"
+              onClick={restorePreviousPreview}
+              disabled={!hasBackupPreview}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all",
+                hasBackupPreview
+                  ? "border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
+                  : "border-gray-700/40 bg-gray-800/40 text-gray-600 cursor-not-allowed"
+              )}
+              title="Rollback / Restore Previous Version"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Rollback
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         ref={chatContainerRef}
         onScroll={handleScroll}
@@ -697,8 +761,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
                                 : sanitizeCustomerPreview(previewHtml)
 
                               if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
-                                localStorage.setItem(previewStorageKey, safeHtml)
-                                onPreviewUpdate(safeHtml)
+                                savePreviewWithBackup(safeHtml)
                               }
                             }}
                             className="text-gray-500 hover:text-gray-300 transition-colors"
