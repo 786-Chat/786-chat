@@ -3,14 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { X } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
 import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
-import { Button } from "@/components/ui/button"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
 export default function DashboardLayout({
@@ -31,10 +29,14 @@ export default function DashboardLayout({
   const [previewExpanded, setPreviewExpanded] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
-
   const [chatWidthPercent, setChatWidthPercent] = useState(50)
+
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const isChatWorkspace =
+    pathname === "/dashboard/chat" ||
+    /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -44,20 +46,28 @@ export default function DashboardLayout({
   }, [])
 
   useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, isLoading, router])
+
+  useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
+
       const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const percent = (x / rect.width) * 100
+
       setChatWidthPercent(Math.min(75, Math.max(25, percent)))
     }
 
     const handleMouseUp = () => {
-      if (isDragging.current) {
-        isDragging.current = false
-        document.body.style.cursor = ""
-        document.body.style.userSelect = ""
-      }
+      if (!isDragging.current) return
+
+      isDragging.current = false
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
     }
 
     window.addEventListener("mousemove", handleMouseMove)
@@ -68,25 +78,6 @@ export default function DashboardLayout({
       window.removeEventListener("mouseup", handleMouseUp)
     }
   }, [])
-
-  const isWorkspaceRoot = pathname === "/dashboard" || pathname === "/dashboard/chat"
-
-  const isSettingsPage =
-    pathname.startsWith("/dashboard/settings") ||
-    pathname === "/dashboard/billing" ||
-    pathname === "/dashboard/usage" ||
-    pathname === "/dashboard/profile"
-
-  const isSubPage =
-    !isWorkspaceRoot &&
-    pathname.startsWith("/dashboard/") &&
-    !isSettingsPage
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, isLoading, router])
 
   useEffect(() => {
     const handleResize = () => {
@@ -141,7 +132,9 @@ export default function DashboardLayout({
     }
 
     window.addEventListener("top-bar-preview-url", handlePreviewUrl)
-    return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
+
+    return () =>
+      window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
   }, [])
 
   if (isLoading) {
@@ -161,8 +154,8 @@ export default function DashboardLayout({
 
   if (!user) return null
 
-  if (isSettingsPage) {
-    return <div className="min-h-screen bg-background">{children}</div>
+  if (!isChatWorkspace) {
+    return <>{children}</>
   }
 
   return (
@@ -183,9 +176,15 @@ export default function DashboardLayout({
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <WorkspaceSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <WorkspaceSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
 
-        <div ref={containerRef} className="flex-1 flex overflow-hidden relative w-full max-w-full">
+        <div
+          ref={containerRef}
+          className="flex-1 flex overflow-hidden relative w-full max-w-full"
+        >
           <div
             className={`flex flex-col min-w-0 overflow-hidden ${
               activeView !== "chat" ? "hidden md:flex" : "flex w-full md:w-auto"
@@ -225,7 +224,9 @@ export default function DashboardLayout({
           {previewOpen && (
             <div
               className={`${
-                activeView !== "preview" ? "hidden lg:flex" : "flex w-full md:w-auto"
+                activeView !== "preview"
+                  ? "hidden lg:flex"
+                  : "flex w-full md:w-auto"
               } flex-col min-w-0 overflow-hidden`}
               style={{
                 width:
@@ -257,45 +258,6 @@ export default function DashboardLayout({
           isOpen={dashboardOpen}
           onClose={() => setDashboardOpen(false)}
         />
-
-        <AnimatePresence>
-          {isSubPage && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-                onClick={() => router.push("/dashboard")}
-              />
-
-              <motion.div
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 40 }}
-                transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                className="fixed inset-4 md:inset-8 lg:inset-12 bg-[#0d0d14] border border-white/[0.08] rounded-2xl z-50 flex flex-col overflow-hidden shadow-2xl"
-              >
-                <div className="h-12 border-b border-white/[0.06] flex items-center justify-between px-4 flex-shrink-0">
-                  <h2 className="text-sm font-semibold text-white capitalize">
-                    {pathname.split("/").pop()?.replace(/-/g, " ")}
-                  </h2>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/5"
-                    onClick={() => router.push("/dashboard")}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6">{children}</div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   )
