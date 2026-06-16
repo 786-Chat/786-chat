@@ -11,6 +11,8 @@ import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
+const OWNER_EMAILS = ["mujeeb@job4u.com"]
+
 export default function DashboardLayout({
   children,
 }: {
@@ -34,9 +36,14 @@ export default function DashboardLayout({
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const userEmail = String(user?.email || "").trim().toLowerCase()
+  const isOwner = OWNER_EMAILS.includes(userEmail)
+
   const isChatWorkspace =
     pathname === "/dashboard/chat" ||
     /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
+
+  const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -47,9 +54,15 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/login")
+      router.replace("/login")
     }
   }, [user, isLoading, router])
+
+  useEffect(() => {
+    if (!isLoading && shouldRedirectOwnerToChat) {
+      router.replace("/dashboard/chat")
+    }
+  }, [isLoading, shouldRedirectOwnerToChat, router])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -137,7 +150,7 @@ export default function DashboardLayout({
       window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
   }, [])
 
-  if (isLoading) {
+  if (isLoading || shouldRedirectOwnerToChat) {
     return (
       <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
         <motion.div
