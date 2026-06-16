@@ -38,11 +38,11 @@ export async function GET() {
         : null
 
       return NextResponse.json({
-        siteUrl,
-        siteName: site.name,
-        siteId: site.id
-      })
-    }
+  siteUrl,
+  siteName: site.name,
+  siteId: site.id,
+  subdomain: site.subdomain,
+})
 
     // Check domains table as fallback
     const domains = await sql`
