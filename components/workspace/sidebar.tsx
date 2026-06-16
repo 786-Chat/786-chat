@@ -51,51 +51,68 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
 
-const deletedChatKey = user?.email
-  ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
-  : "mujeebproai_deleted_chats_guest"
+  const deletedChatKey = user?.email
+    ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
+    : "mujeebproai_deleted_chats_guest"
 
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
+
     try {
-      const [chatResponse, balanceResponse] = await Promise.all([
+      const [chatResponse, usageResponse, balanceResponse] = await Promise.all([
         fetch("/api/chat", { credentials: "include" }),
-        fetch("/api/balance", { credentials: "include" })
+        fetch("/api/usage", { credentials: "include", cache: "no-store" }),
+        fetch("/api/balance", { credentials: "include", cache: "no-store" }),
       ])
 
       if (chatResponse.ok) {
         const data = await chatResponse.json()
-       const deletedIds =
-  typeof window !== "undefined"
-    ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
-    : []
 
-setChatHistory(
-  (data.chats || []).filter((chat: ChatHistory) => !deletedIds.includes(chat.id))
-)
-        
-        // Merge balance data with usage
-        if (balanceResponse.ok) {
-          const balanceData = await balanceResponse.json()
-          setUsage({
-            used: balanceData.freeMessagesUsed || 0,
-            limit: balanceData.freeMessagesLimit || 10,
-            plan: data.usage?.plan || "free",
-            balance: balanceData.balance || 0,
-            freeMessagesUsed: balanceData.freeMessagesUsed || 0,
-            freeMessagesLimit: user?.email?.toLowerCase() === "mujeeb@job4u.com" ? 999999999 : 10,
-freeMessagesRemaining:
-  user?.email?.toLowerCase() === "mujeeb@job4u.com"
-    ? 999999999
-    : Math.min(balanceData.freeMessagesRemaining ?? 10, 10),
-            costPerMessage: balanceData.pricing?.costPerMessage || 0.0005,
-             unlimited: user?.email?.toLowerCase() === "mujeeb@job4u.com",
-          })
-        } else if (data.usage) {
-          setUsage(data.usage)
-        }
+        const deletedIds =
+          typeof window !== "undefined"
+            ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+            : []
+
+        setChatHistory(
+          (data.chats || []).filter(
+            (chat: ChatHistory) => !deletedIds.includes(chat.id)
+          )
+        )
       } else if (chatResponse.status === 401) {
-        // Session expired, silently ignore
+        return
+      }
+
+      const isOwner = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+
+      let usageData: any = null
+      let balanceData: any = null
+
+      if (usageResponse.ok) {
+        usageData = await usageResponse.json()
+      }
+
+      if (balanceResponse.ok) {
+        balanceData = await balanceResponse.json()
+      }
+
+      if (usageData) {
+        const used = Number(usageData.used ?? 0)
+        const limit = Number(usageData.limit ?? 10)
+        const remaining =
+          usageData.freeMessagesRemaining ??
+          Math.max(limit - used, 0)
+
+        setUsage({
+          used,
+          limit: isOwner ? 999999999 : limit,
+          plan: usageData.plan || "free",
+          balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
+          freeMessagesUsed: used,
+          freeMessagesLimit: isOwner ? 999999999 : limit,
+          freeMessagesRemaining: isOwner ? 999999999 : remaining,
+          costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
+          unlimited: Boolean(isOwner || usageData.unlimited),
+        })
       }
     } catch {
       // Network error, silently ignore on mount
@@ -106,14 +123,12 @@ freeMessagesRemaining:
     if (user) fetchChatHistory()
   }, [user, fetchChatHistory])
 
-  // Listen for chat updates
   useEffect(() => {
     const handler = () => fetchChatHistory()
     window.addEventListener("chat-updated", handler)
     return () => window.removeEventListener("chat-updated", handler)
   }, [fetchChatHistory])
 
-    // Listen for chat selection
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
@@ -142,7 +157,6 @@ freeMessagesRemaining:
     const nextDeletedIds = Array.from(new Set([...deletedIds, chatId]))
 
     localStorage.setItem(deletedChatKey, JSON.stringify(nextDeletedIds))
-
     setChatHistory((prev) => prev.filter((c) => c.id !== chatId))
 
     if (currentChatId === chatId) {
@@ -168,7 +182,6 @@ freeMessagesRemaining:
 
   return (
     <>
-      {/* Mobile overlay */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -181,7 +194,6 @@ freeMessagesRemaining:
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
       <motion.div
         initial={false}
         animate={{
@@ -199,7 +211,6 @@ freeMessagesRemaining:
         }}
       >
         <div className="w-[260px] h-full flex flex-col">
-          {/* New Chat Button */}
           <div className="p-3">
             <Button
               onClick={startNewChat}
@@ -210,7 +221,6 @@ freeMessagesRemaining:
             </Button>
           </div>
 
-          {/* Search */}
           <div className="px-3 pb-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
@@ -224,97 +234,88 @@ freeMessagesRemaining:
             </div>
           </div>
 
-          {/* Usage Bar */}
-{usage && (
-  <div className="px-3 pb-3">
-    <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-2">
-      {/* Free Messages */}
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider">
-            Messages
-          </span>
-          <span className="text-[10px] font-medium text-cyan-400">
-            {usage.unlimited
-              ? "Unlimited"
-              : `Used: ${usage.freeMessagesUsed ?? usage.used ?? 0}/${usage.freeMessagesLimit ?? usage.limit ?? 10}`}
-          </span>
-        </div>
+          {usage && (
+            <div className="px-3 pb-3">
+              <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider">
+                      Messages
+                    </span>
+                    <span className="text-[10px] font-medium text-cyan-400">
+                      {usage.unlimited
+                        ? "Unlimited"
+                        : `Used: ${usage.used}/${usage.limit}`}
+                    </span>
+                  </div>
 
-        {!usage.unlimited && (
-          <>
-            <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  (usage.freeMessagesRemaining ?? 0) <= 0
-                    ? "bg-red-500"
-                    : (usage.freeMessagesUsed ?? usage.used ?? 0) >=
-                        (usage.freeMessagesLimit ?? usage.limit ?? 10) * 0.8
-                    ? "bg-yellow-500"
-                    : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                  {!usage.unlimited && (
+                    <>
+                      <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            (usage.freeMessagesRemaining ?? 0) <= 0
+                              ? "bg-red-500"
+                              : usage.used >= usage.limit * 0.8
+                              ? "bg-yellow-500"
+                              : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                          )}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (usage.used / usage.limit) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+
+                      <p className="mt-1 text-[10px] text-white/40">
+                        Remaining:{" "}
+                        {usage.freeMessagesRemaining ??
+                          Math.max(usage.limit - usage.used, 0)}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {!usage.unlimited && usage.balance !== undefined && (
+                  <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+                    <span className="text-[10px] text-white/40">Balance</span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        usage.balance > 0.1
+                          ? "text-green-400"
+                          : usage.balance > 0
+                          ? "text-yellow-400"
+                          : "text-red-400"
+                      )}
+                    >
+                      ${usage.balance.toFixed(2)}
+                    </span>
+                  </div>
                 )}
-                style={{
-                  width: `${Math.min(
-                    100,
-                    ((usage.freeMessagesUsed ?? usage.used ?? 0) /
-                      (usage.freeMessagesLimit ?? usage.limit ?? 10)) *
-                      100
-                  )}%`,
-                }}
-              />
+
+                {!usage.unlimited && (
+                  <Link
+                    href="/dashboard/top-up"
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
+                  >
+                    <Zap className="w-3 h-3" />
+                    Add Credits
+                  </Link>
+                )}
+              </div>
             </div>
+          )}
 
-            <p className="mt-1 text-[10px] text-white/40">
-              Remaining:{" "}
-              {usage.freeMessagesRemaining ??
-                Math.max(
-                  (usage.freeMessagesLimit ?? usage.limit ?? 10) -
-                    (usage.freeMessagesUsed ?? usage.used ?? 0),
-                  0
-                )}
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Balance (only show if not unlimited) */}
-      {!usage.unlimited && usage.balance !== undefined && (
-        <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
-          <span className="text-[10px] text-white/40">Balance</span>
-          <span
-            className={cn(
-              "text-[10px] font-medium",
-              usage.balance > 0.1
-                ? "text-green-400"
-                : usage.balance > 0
-                ? "text-yellow-400"
-                : "text-red-400"
-            )}
-          >
-            ${usage.balance.toFixed(2)}
-          </span>
-        </div>
-      )}
-
-      {/* Add Credits Button - hidden for unlimited */}
-      {!usage.unlimited && (
-        <Link
-          href="/dashboard/top-up"
-          className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
-        >
-          <Zap className="w-3 h-3" />
-          Add Credits
-        </Link>
-      )}
-    </div>
-  </div>
-)}
-          {/* Chat List */}
           <div className="flex-1 overflow-y-auto px-2 scrollbar-thin">
             {todayChats.length > 0 && (
               <div className="mb-3">
-                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">Today</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">
+                  Today
+                </p>
                 {todayChats.map((chat) => (
                   <button
                     key={chat.id}
@@ -328,7 +329,7 @@ freeMessagesRemaining:
                   >
                     <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="truncate flex-1">{chat.title}</span>
-                    <Trash2 
+                    <Trash2
                       className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
                       onClick={(e) => deleteChat(chat.id, e)}
                     />
@@ -336,10 +337,12 @@ freeMessagesRemaining:
                 ))}
               </div>
             )}
-            
+
             {olderChats.length > 0 && (
               <div className="mb-3">
-                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">Previous</p>
+                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">
+                  Previous
+                </p>
                 {olderChats.map((chat) => (
                   <button
                     key={chat.id}
@@ -353,7 +356,7 @@ freeMessagesRemaining:
                   >
                     <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
                     <span className="truncate flex-1">{chat.title}</span>
-                    <Trash2 
+                    <Trash2
                       className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
                       onClick={(e) => deleteChat(chat.id, e)}
                     />
@@ -368,17 +371,20 @@ freeMessagesRemaining:
                   <MessageSquare className="w-5 h-5 text-white/20" />
                 </div>
                 <p className="text-xs text-white/30 mb-1">No conversations</p>
-                <p className="text-[10px] text-white/20">Start a new chat to begin</p>
+                <p className="text-[10px] text-white/20">
+                  Start a new chat to begin
+                </p>
               </div>
             )}
           </div>
 
-          {/* Quick Links */}
           <div className="p-3 border-t border-white/[0.06]">
-            <p className="text-[10px] uppercase tracking-wider text-white/30 px-1 mb-2">Quick Links</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/30 px-1 mb-2">
+              Quick Links
+            </p>
             <div className="space-y-1">
               <Link
-              href="/themes"
+                href="/themes"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
               >
                 <Palette className="w-3.5 h-3.5" />
