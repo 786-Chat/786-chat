@@ -54,7 +54,6 @@ interface AttachedFile {
   url?: string
 }
 
-// Helper to extract text from UIMessage parts
 function getMessageText(message: { parts?: Array<{ type: string; text?: string }> }): string {
   if (!message.parts || !Array.isArray(message.parts)) return ""
   return message.parts
@@ -63,7 +62,6 @@ function getMessageText(message: { parts?: Array<{ type: string; text?: string }
     .join("")
 }
 
-// Helper to extract tool-call parts (file edits, searches, etc.) from a message
 function getToolParts(message: { parts?: Array<{ type: string }> }): ToolPart[] {
   if (!message.parts || !Array.isArray(message.parts)) return []
   return message.parts.filter((p): p is ToolPart =>
@@ -71,7 +69,6 @@ function getToolParts(message: { parts?: Array<{ type: string }> }): ToolPart[] 
   )
 }
 
-// Helper to extract file parts from a message (images, PDFs, GIFs)
 function getFileParts(message: { parts?: Array<{ type: string; url?: string; mediaType?: string }> }): Array<{ type: "file"; url: string; mediaType: string }> {
   if (!message.parts || !Array.isArray(message.parts)) return []
   return message.parts.filter((p): p is { type: "file"; url: string; mediaType: string } =>
@@ -86,33 +83,60 @@ const suggestedPrompts = [
   "React best practices for 2025",
 ]
 
-// Extract code blocks from AI text and build a sandboxed HTML preview
+function hasVisibleHtmlContent(html: string): boolean {
+  if (!html || !html.trim()) return false
+
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  const content = bodyMatch ? bodyMatch[1] : html
+
+  const withoutInvisible = content
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim()
+
+  const hasRealElements =
+    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
+
+  return withoutInvisible.length > 3 || hasRealElements
+}
+
 function buildPreviewHtml(text: string): string | null {
   const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g
   const blocks: { lang: string; code: string }[] = []
   let match
+
   while ((match = codeBlockRegex.exec(text)) !== null) {
     blocks.push({ lang: (match[1] || "").toLowerCase(), code: match[2].trim() })
   }
+
   if (blocks.length === 0) return null
 
-  const htmlBlock = blocks.find(b => b.lang === "html" || b.lang === "htm")
-  const cssBlock = blocks.find(b => b.lang === "css")
-  const jsBlock = blocks.find(b => b.lang === "javascript" || b.lang === "js" || b.lang === "typescript" || b.lang === "ts")
+  const htmlBlock = blocks.find((b) => b.lang === "html" || b.lang === "htm")
+  const cssBlock = blocks.find((b) => b.lang === "css")
+  const jsBlock = blocks.find(
+    (b) =>
+      b.lang === "javascript" ||
+      b.lang === "js" ||
+      b.lang === "typescript" ||
+      b.lang === "ts"
+  )
 
   if (htmlBlock && htmlBlock.code.includes("<html")) {
-    return htmlBlock.code
+    return hasVisibleHtmlContent(htmlBlock.code) ? htmlBlock.code : null
   }
 
   if (htmlBlock) {
-    return `<!DOCTYPE html>
+    const fullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #fff; color: #111; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #111; }
 ${cssBlock ? cssBlock.code : ""}
 </style>
 </head>
@@ -121,30 +145,18 @@ ${htmlBlock.code}
 ${jsBlock ? `<script>${jsBlock.code}<\/script>` : ""}
 </body>
 </html>`
+
+    return hasVisibleHtmlContent(fullHtml) ? fullHtml : null
   }
 
-  if (cssBlock || jsBlock) {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #fff; color: #111; }
-${cssBlock ? cssBlock.code : ""}
-</style>
-</head>
-<body>
-<div id="app"></div>
-${jsBlock ? `<script>${jsBlock.code}<\/script>` : ""}
-</body>
-</html>`
-  }
+  const reactBlock = blocks.find((b) => ["jsx", "tsx", "react"].includes(b.lang))
 
-  const reactBlock = blocks.find(b => ["jsx", "tsx", "react"].includes(b.lang))
   if (reactBlock) {
-    const escaped = reactBlock.code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    const escaped = reactBlock.code
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -156,30 +168,15 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 </style>
 </head>
 <body>
-<h3>Component Preview</h3>
+<h3>Component Code</h3>
 <pre>${escaped}</pre>
 </body>
 </html>`
   }
 
-  const firstBlock = blocks[0]
-  const escaped = firstBlock.code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<style>
-body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0d1117; color: #e6edf3; padding: 24px; margin: 0; }
-pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6; }
-h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px; font-size: 14px; font-weight: 500; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
-</style>
-</head>
-<body>
-<h3>${firstBlock.lang || "Code"} Preview</h3>
-<pre>${escaped}</pre>
-</body>
-</html>`
+  return null
 }
+
 function sanitizeCustomerPreview(html: string): string {
   if (!html) return ""
 
@@ -210,14 +207,16 @@ function sanitizeCustomerPreview(html: string): string {
     safeHtml = safeHtml.replace(pattern, "")
   }
 
-  return safeHtml
+  return hasVisibleHtmlContent(safeHtml) ? safeHtml : ""
 }
+
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
   const previewStorageKey = user?.email
-  ? `mujeebproai_last_preview_html_${user.email.toLowerCase()}`
-  : "mujeebproai_last_preview_html_guest"
+    ? `mujeebproai_last_preview_html_${user.email.toLowerCase()}`
+    : "mujeebproai_last_preview_html_guest"
+
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -228,57 +227,54 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
-
   const [input, setInput] = useState("")
 
-const {
-  messages,
-  sendMessage,
-  status,
-  stop,
-  reload,
-  error,
-} = useChat({
+  const {
+    messages,
+    sendMessage,
+    status,
+    stop,
+    reload,
+    error,
+  } = useChat({
     api: "/api/chat",
     body: {
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
-      files: attachedFiles.filter(f => f.url).map(f => ({ url: f.url!, type: f.type })),
+      files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
     onError: (err) => {
       console.error("Chat error:", err)
     },
   })
-const isLoading = status === "streaming" || status === "submitted"
-// Fetch usage on mount
-useEffect(() => {
-  fetch("/api/usage")
-    .then((res) => res.json())
-    .then((data) => {
-      setUsage(data)
-      window.dispatchEvent(new Event("chat-updated"))
-    })
-    .catch(() => {})
-}, [])
 
-  // Refresh usage after each message
+  const isLoading = status === "streaming" || status === "submitted"
+
+  useEffect(() => {
+    fetch("/api/usage")
+      .then((res) => res.json())
+      .then((data) => {
+        setUsage(data)
+        window.dispatchEvent(new Event("chat-updated"))
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     if (messages.length > 0) {
       fetch("/api/usage")
         .then((res) => res.json())
-       .then((data) => {
-  setUsage(data)
-  window.dispatchEvent(new Event("chat-updated"))
-})
+        .then((data) => {
+          setUsage(data)
+          window.dispatchEvent(new Event("chat-updated"))
+        })
         .catch(() => {})
     }
   }, [messages.length, status])
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -286,7 +282,6 @@ useEffect(() => {
     }
   }, [input])
 
-  // Track scroll position for scroll-to-bottom button
   const handleScroll = useCallback(() => {
     const container = chatContainerRef.current
     if (!container) return
@@ -300,45 +295,46 @@ useEffect(() => {
   }
 
   const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault()
-  if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
+    e.preventDefault()
+    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
-if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
-  setShowUpgrade(true)
-  return
-}
+    if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
+      setShowUpgrade(true)
+      return
+    }
 
-  const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-const savedPreview = isOwnerAdmin
-  ? localStorage.getItem(previewStorageKey)
-  : sanitizeCustomerPreview(localStorage.getItem(previewStorageKey) || "")
-const messageText =
-  input.trim() +
-  (savedPreview
-    ? `
+    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
+    const storedPreview = localStorage.getItem(previewStorageKey) || ""
+    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+
+    const messageText =
+      input.trim() +
+      (savedPreview && hasVisibleHtmlContent(savedPreview)
+        ? `
 
 CURRENT_PREVIEW_HTML:
 ${savedPreview}
 
 Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Do not ask for URL unless the user is asking about an external website.`
-    : "")
+        : "")
 
-const finalMessageText = messageText.trim() || "Please analyze the attached file."
+    const finalMessageText = messageText.trim() || "Please analyze the attached file."
 
-  sendMessage({
-    parts: [
-     { type: "text", text: finalMessageText },
-      ...uploadedFiles.map((f) => ({
-        type: "file" as const,
-        url: f.url!,
-        mediaType: f.file.type,
-      })),
-    ],
-  } as any)
+    sendMessage({
+      parts: [
+        { type: "text", text: finalMessageText },
+        ...uploadedFiles.map((f) => ({
+          type: "file" as const,
+          url: f.url!,
+          mediaType: f.file.type,
+        })),
+      ],
+    } as any)
 
-  setInput("")
-  setAttachedFiles([])
-}
+    setInput("")
+    setAttachedFiles([])
+  }
+
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text)
     setCopiedId(id)
@@ -362,9 +358,8 @@ const finalMessageText = messageText.trim() || "Please analyze the attached file
         newFile.preview = URL.createObjectURL(file)
       }
 
-      setAttachedFiles(prev => [...prev, newFile])
+      setAttachedFiles((prev) => [...prev, newFile])
 
-      // Upload the file
       const formData = new FormData()
       formData.append("file", file)
       formData.append("type", type)
@@ -375,42 +370,41 @@ const finalMessageText = messageText.trim() || "Please analyze the attached file
           body: formData,
         })
         const data = await res.json()
+
         if (data.url) {
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === id ? { ...f, url: data.url, uploading: false } : f)
+          setAttachedFiles((prev) =>
+            prev.map((f) => (f.id === id ? { ...f, url: data.url, uploading: false } : f))
           )
         } else {
-          // If upload fails, try using base64 data URL as fallback
           const reader = new FileReader()
           reader.onload = (e) => {
             const dataUrl = e.target?.result as string
-            setAttachedFiles(prev =>
-              prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+            setAttachedFiles((prev) =>
+              prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
             )
           }
           reader.readAsDataURL(file)
         }
       } catch {
-        // On network error, try base64 fallback
         const reader = new FileReader()
         reader.onload = (e) => {
           const dataUrl = e.target?.result as string
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+          setAttachedFiles((prev) =>
+            prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
           )
         }
         reader.readAsDataURL(file)
       }
     }
 
-    // Reset input
     e.target.value = ""
   }
 
   const removeFile = (id: string) => {
-    setAttachedFiles(prev => prev.filter(f => f.id !== id))
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id))
   }
-const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items
     if (!items) return
 
@@ -421,15 +415,12 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
       if (item.type.startsWith("image/")) {
         e.preventDefault()
         const file = item.getAsFile()
-        if (file) {
-          imageFiles.push(file)
-        }
+        if (file) imageFiles.push(file)
       }
     }
 
     if (imageFiles.length === 0) return
 
-    // Process each pasted image like a file select
     for (const file of imageFiles) {
       const id = Math.random().toString(36).substring(7)
       const newFile: AttachedFile = {
@@ -440,10 +431,8 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
         uploading: true,
       }
 
-      setAttachedFiles(prev => [...prev, newFile])
+      setAttachedFiles((prev) => [...prev, newFile])
 
-  
-      // Upload the file
       const formData = new FormData()
       formData.append("file", file)
       formData.append("type", "image")
@@ -454,17 +443,17 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
           body: formData,
         })
         const data = await res.json()
+
         if (data.url) {
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === id ? { ...f, url: data.url, uploading: false } : f)
+          setAttachedFiles((prev) =>
+            prev.map((f) => (f.id === id ? { ...f, url: data.url, uploading: false } : f))
           )
         } else {
-          // Fallback to base64
           const reader = new FileReader()
           reader.onload = (e) => {
             const dataUrl = e.target?.result as string
-            setAttachedFiles(prev =>
-              prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+            setAttachedFiles((prev) =>
+              prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
             )
           }
           reader.readAsDataURL(file)
@@ -473,8 +462,8 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
         const reader = new FileReader()
         reader.onload = (e) => {
           const dataUrl = e.target?.result as string
-          setAttachedFiles(prev =>
-            prev.map(f => f.id === id ? { ...f, url: dataUrl, uploading: false } : f)
+          setAttachedFiles((prev) =>
+            prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
           )
         }
         reader.readAsDataURL(file)
@@ -490,68 +479,71 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
   }
 
   const handleSuggestedPrompt = (prompt: string) => {
-    // Set the input and submit
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
       window.HTMLTextAreaElement.prototype,
       "value"
     )?.set
+
     nativeInputValueSetter?.call(textareaRef.current, prompt)
     textareaRef.current?.dispatchEvent(new Event("input", { bubbles: true }))
-    // Submit after a small delay
+
     setTimeout(() => {
       textareaRef.current?.form?.requestSubmit()
     }, 50)
   }
 
-  // Send preview updates when new assistant messages arrive
   useEffect(() => {
     if (!onPreviewUpdate) return
+
     const lastMsg = messages[messages.length - 1]
+
     if (lastMsg && lastMsg.role === "assistant") {
       const text = getMessageText(lastMsg)
       const html = buildPreviewHtml(text)
-if (html) {
-  const safeHtml = isOwnerAdmin ? html : sanitizeCustomerPreview(html)
 
-  if (safeHtml.trim()) {
-    localStorage.setItem(previewStorageKey, safeHtml)
-    onPreviewUpdate(safeHtml)
-  } else {
-    localStorage.removeItem(previewStorageKey)
-    onPreviewUpdate("")
-  }
-}
+      if (!html || !hasVisibleHtmlContent(html)) return
+
+      const safeHtml = isOwnerAdmin ? html : sanitizeCustomerPreview(html)
+
+      if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
+        localStorage.setItem(previewStorageKey, safeHtml)
+        onPreviewUpdate(safeHtml)
+      } else {
+        localStorage.removeItem(previewStorageKey)
+        onPreviewUpdate("")
+      }
     }
   }, [messages, onPreviewUpdate, previewStorageKey, isOwnerAdmin])
 
-useEffect(() => {
-  if (!onPreviewUpdate) return
+  useEffect(() => {
+    if (!onPreviewUpdate) return
 
- if (!user?.email) {
-  onPreviewUpdate("")
-  return
-}
+    if (!user?.email) {
+      onPreviewUpdate("")
+      return
+    }
 
- const savedPreview = isOwnerAdmin ? localStorage.getItem(previewStorageKey) : sanitizeCustomerPreview(localStorage.getItem(previewStorageKey) || "")
+    const storedPreview = localStorage.getItem(previewStorageKey) || ""
+    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
 
-  if (savedPreview) {
-    onPreviewUpdate(savedPreview)
-  } else {
-    onPreviewUpdate("")
-  }
+    if (savedPreview && hasVisibleHtmlContent(savedPreview)) {
+      onPreviewUpdate(savedPreview)
+    } else {
+      localStorage.removeItem(previewStorageKey)
+      onPreviewUpdate("")
+    }
 
-  const handleNewChat = () => {
-    localStorage.removeItem(previewStorageKey)
-    onPreviewUpdate("")
-  }
+    const handleNewChat = () => {
+      localStorage.removeItem(previewStorageKey)
+      onPreviewUpdate("")
+    }
 
-  window.addEventListener("new-chat", handleNewChat)
-  return () => window.removeEventListener("new-chat", handleNewChat)
-}, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
+    window.addEventListener("new-chat", handleNewChat)
+    return () => window.removeEventListener("new-chat", handleNewChat)
+  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
-      {/* Messages area */}
       <div
         ref={chatContainerRef}
         onScroll={handleScroll}
@@ -605,14 +597,16 @@ useEffect(() => {
 
           <AnimatePresence initial={false}>
             {messages.map((message) => {
-          const rawText = getMessageText(message)
-const text = rawText.includes("CURRENT_PREVIEW_HTML:")
-  ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-  : rawText
+              const rawText = getMessageText(message)
+              const text = rawText.includes("CURRENT_PREVIEW_HTML:")
+                ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
+                : rawText
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
               const isAssistant = message.role === "assistant"
+              const previewHtml = buildPreviewHtml(text)
+              const canPreview = Boolean(previewHtml && hasVisibleHtmlContent(previewHtml))
 
               return (
                 <motion.div
@@ -620,12 +614,8 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}
-                  className={cn(
-                    "flex gap-3",
-                    isUser ? "justify-end" : "justify-start"
-                  )}
+                  className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
                 >
-                  {/* Avatar */}
                   {isAssistant && (
                     <div className="flex-shrink-0 mt-1">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
@@ -634,15 +624,10 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                     </div>
                   )}
 
-                  {/* Message content */}
-                  <div className={cn(
-                    "max-w-[85%] space-y-2",
-                    isUser && "order-1"
-                  )}>
-                    {/* File parts (images, PDFs) */}
+                  <div className={cn("max-w-[85%] space-y-2", isUser && "order-1")}>
                     {fileParts.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {fileParts.map((fp, idx) => (
+                        {fileParts.map((fp, idx) =>
                           fp.mediaType.startsWith("image/") ? (
                             <img
                               key={idx}
@@ -651,23 +636,27 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                               className="max-w-[200px] rounded-lg border border-gray-700/50"
                             />
                           ) : (
-                            <div key={idx} className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50">
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50"
+                            >
                               <FileText className="w-4 h-4 text-blue-400" />
                               <span className="text-xs text-gray-400">Attached file</span>
                             </div>
                           )
-                        ))}
+                        )}
                       </div>
                     )}
 
-                    {/* Text content */}
                     {text && (
-                      <div className={cn(
-                        "rounded-2xl px-4 py-3",
-                        isUser
-                          ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
-                          : "bg-gray-800/50 border border-gray-700/30 text-gray-100"
-                      )}>
+                      <div
+                        className={cn(
+                          "rounded-2xl px-4 py-3",
+                          isUser
+                            ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
+                            : "bg-gray-800/50 border border-gray-700/30 text-gray-100"
+                        )}
+                      >
                         <div className="prose prose-invert prose-sm max-w-none">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {text}
@@ -676,12 +665,8 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                       </div>
                     )}
 
-                    {/* Tool activity */}
-                    {toolParts.length > 0 && (
-                      <ToolActivity parts={toolParts} />
-                    )}
+                    {toolParts.length > 0 && <ToolActivity parts={toolParts} />}
 
-                    {/* Action buttons for assistant messages */}
                     {isAssistant && text && (
                       <div className="flex items-center gap-2 px-2">
                         <button
@@ -695,6 +680,7 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                             <Copy className="w-3.5 h-3.5" />
                           )}
                         </button>
+
                         <button
                           onClick={() => reload()}
                           className="text-gray-500 hover:text-gray-300 transition-colors"
@@ -702,9 +688,19 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
                         </button>
-                        {onPreviewUpdate && text && buildPreviewHtml(text) && (
+
+                        {onPreviewUpdate && canPreview && previewHtml && (
                           <button
-                            onClick={() => onPreviewUpdate(buildPreviewHtml(text)!)}
+                            onClick={() => {
+                              const safeHtml = isOwnerAdmin
+                                ? previewHtml
+                                : sanitizeCustomerPreview(previewHtml)
+
+                              if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
+                                localStorage.setItem(previewStorageKey, safeHtml)
+                                onPreviewUpdate(safeHtml)
+                              }
+                            }}
                             className="text-gray-500 hover:text-gray-300 transition-colors"
                             title="Preview"
                           >
@@ -715,7 +711,6 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                     )}
                   </div>
 
-                  {/* User avatar */}
                   {isUser && (
                     <div className="flex-shrink-0 mt-1">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
@@ -728,7 +723,6 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
             })}
           </AnimatePresence>
 
-          {/* Loading indicator */}
           {isLoading && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -753,7 +747,6 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
         </div>
       </div>
 
-      {/* Scroll to bottom button */}
       <AnimatePresence>
         {showScrollButton && (
           <motion.button
@@ -768,10 +761,8 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
         )}
       </AnimatePresence>
 
-      {/* Input area */}
       <div className="border-t border-gray-800/50 bg-gray-900/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          {/* Attached files preview */}
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {attachedFiles.map((file) => (
@@ -784,9 +775,11 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                   ) : (
                     <FileText className="w-4 h-4 text-blue-400" />
                   )}
+
                   <span className="text-xs text-gray-400 truncate max-w-[100px]">
                     {file.file.name}
                   </span>
+
                   {file.uploading ? (
                     <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
                   ) : (
@@ -809,12 +802,13 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-               onPaste={handlePaste}
+                onPaste={handlePaste}
                 placeholder="Ask me anything... (Ctrl+V to paste images)"
                 rows={1}
-               className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-16 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
+                className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-16 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
                 disabled={isLoading}
               />
+
               <div className="absolute left-2 bottom-2 flex items-center gap-1">
                 <button
                   type="button"
@@ -824,6 +818,7 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                 >
                   <ImagePlus className="w-4 h-4" />
                 </button>
+
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -843,6 +838,7 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
               className="hidden"
               onChange={(e) => handleFileSelect(e, "image")}
             />
+
             <input
               ref={fileInputRef}
               type="file"
@@ -871,22 +867,20 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
             </Button>
           </form>
 
-          {/* Usage info */}
           {usage && (
             <div className="flex items-center justify-between mt-2 px-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-purple-400" />
-               <span className="text-xs text-gray-500">
-  {isOwnerAdmin || usage?.unlimited ? (
-    "Unlimited"
-  ) : (
-    `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
-      usage?.freeMessagesRemaining ??
-      Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
-    }`
-  )}
-</span>
+                <span className="text-xs text-gray-500">
+                  {isOwnerAdmin || usage?.unlimited
+                    ? "Unlimited"
+                    : `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
+                        usage?.freeMessagesRemaining ??
+                        Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
+                      }`}
+                </span>
               </div>
+
               {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
                 <button
                   onClick={() => setShowUpgrade(true)}
@@ -900,7 +894,6 @@ const text = rawText.includes("CURRENT_PREVIEW_HTML:")
         </div>
       </div>
 
-      {/* Upgrade popup - FIXED: Using onOpenChange instead of onClose */}
       <UpgradePopup
         open={showUpgrade}
         onOpenChange={(open) => setShowUpgrade(open)}
