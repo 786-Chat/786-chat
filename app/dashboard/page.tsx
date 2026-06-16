@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Globe, LayoutDashboard, Loader2, Plus, ExternalLink, Settings } from "lucide-react"
+import { useRouter } from "next/navigation"
+import {
+  Globe,
+  LayoutDashboard,
+  Loader2,
+  Plus,
+  ExternalLink,
+  Settings,
+} from "lucide-react"
+
+const OWNER_EMAIL = "mujeeb@job4u.com"
 
 interface CustomerSite {
   id: string
@@ -20,27 +30,44 @@ interface CustomerSite {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [sites, setSites] = useState<CustomerSite[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadSites = async () => {
+    const loadDashboard = async () => {
       try {
-        const res = await fetch("/api/customer/sites")
-        const data = await res.json()
+        const meRes = await fetch("/api/auth/me", { cache: "no-store" })
 
-        if (res.ok) {
-          setSites(data.sites || [])
+        if (!meRes.ok) {
+          router.replace("/login")
+          return
+        }
+
+        const meData = await meRes.json()
+        const user = meData.user || meData.session || meData
+        const email = String(user?.email || "").toLowerCase()
+
+        if (email === OWNER_EMAIL) {
+          router.replace("/dashboard/chat")
+          return
+        }
+
+        const sitesRes = await fetch("/api/customer/sites", { cache: "no-store" })
+        const sitesData = await sitesRes.json()
+
+        if (sitesRes.ok) {
+          setSites(sitesData.sites || [])
         }
       } catch (error) {
-        console.error("Failed to load customer sites:", error)
+        console.error("Failed to load dashboard:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadSites()
-  }, [])
+    loadDashboard()
+  }, [router])
 
   if (loading) {
     return (
@@ -57,7 +84,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold">My Projects</h1>
             <p className="text-white/50 mt-2">
-              Manage your websites, themes, domains, previews and customer dashboards.
+              Create, manage and edit your MujeebProAI projects.
             </p>
           </div>
 
