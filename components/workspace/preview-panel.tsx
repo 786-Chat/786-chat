@@ -48,6 +48,7 @@ function hasVisibleHtmlContent(html: string): boolean {
     .trim()
 
   const hasImageOrSvg = /<(img|svg|canvas|iframe)\b/i.test(noScriptsStyles)
+
   return textOnly.length > 3 || hasImageOrSvg
 }
 
@@ -55,17 +56,17 @@ function isBlockedPreviewHtml(html: string): boolean {
   const lower = html.toLowerCase()
 
   const blocked = [
-    "welcome back",
-    "sign in to your account",
-    "enter your password",
-    "forgot password",
-    "don't have an account",
-    "current-password",
-    "/login",
-    "admin dashboard",
-    "admin panel",
     "mujeeb@job4u.com",
     "admin@mujeebproai.com",
+    "admin dashboard",
+    "admin panel",
+    "/api/admin",
+    "stripe admin",
+    "vercel",
+    "neon",
+    "database password",
+    "secret key",
+    "private key",
   ]
 
   return blocked.some((word) => lower.includes(word))
@@ -134,11 +135,6 @@ export function WorkspacePreviewPanel({
       "mujeebproai.com/login",
       "mujeebproai.com/admin",
       "mujeebproai.com/dashboard",
-      "mujeebproai.com/settings",
-      "mujeebproai.com/users",
-      "mujeebproai.com/subscriptions",
-      "mujeebproai.com/balances",
-      "mujeebproai.com/logs",
       "mujeebproai.com/api/admin",
     ]
 
@@ -170,25 +166,8 @@ export function WorkspacePreviewPanel({
   const currentDevice =
     DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
 
-  const isFullSize = device === "full"
-
-  const getFrameDimensions = () => {
-    if (isFullSize) return null
-
-    const d = DEVICE_PRESETS.find((p) => p.id === device)
-    if (!d || d.width === "100%") return null
-
-    return {
-      width: parseInt(d.width),
-      height: parseInt(d.height),
-    }
-  }
-
-  const frameDims = getFrameDimensions()
-
   const copyCode = async () => {
     if (!safePreviewHtml) return
-
     await navigator.clipboard.writeText(safePreviewHtml)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -252,17 +231,32 @@ export function WorkspacePreviewPanel({
         </span>
 
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5" onClick={() => setRefreshKey((prev) => prev + 1)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
+            onClick={() => setRefreshKey((prev) => prev + 1)}
+          >
             <RefreshCw className="w-3 h-3" />
           </Button>
 
           {safeLiveUrl && (
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5" onClick={() => window.open(safeLiveUrl, "_blank")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
+              onClick={() => window.open(safeLiveUrl, "_blank")}
+            >
               <ExternalLink className="w-3 h-3" />
             </Button>
           )}
 
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
+            onClick={onClose}
+          >
             <X className="w-3 h-3" />
           </Button>
         </div>
@@ -282,15 +276,45 @@ export function WorkspacePreviewPanel({
       </div>
 
       <div className="px-3 py-1.5 border-b border-white/[0.06] flex items-center gap-1">
-        <Button variant="ghost" size="icon" className={cn("h-7 w-7", device === "full" ? "text-cyan-400 bg-cyan-500/10" : "text-white/30 hover:text-white hover:bg-white/5")} onClick={() => setDevice("full")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-7 w-7",
+            device === "full"
+              ? "text-cyan-400 bg-cyan-500/10"
+              : "text-white/30 hover:text-white hover:bg-white/5"
+          )}
+          onClick={() => setDevice("full")}
+        >
           <Monitor className="w-3.5 h-3.5" />
         </Button>
 
-        <Button variant="ghost" size="icon" className={cn("h-7 w-7", device === "ipad" || device === "ipad-pro" ? "text-cyan-400 bg-cyan-500/10" : "text-white/30 hover:text-white hover:bg-white/5")} onClick={() => setDevice("ipad")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-7 w-7",
+            device === "ipad" || device === "ipad-pro"
+              ? "text-cyan-400 bg-cyan-500/10"
+              : "text-white/30 hover:text-white hover:bg-white/5"
+          )}
+          onClick={() => setDevice("ipad")}
+        >
           <Tablet className="w-3.5 h-3.5" />
         </Button>
 
-        <Button variant="ghost" size="icon" className={cn("h-7 w-7", device !== "full" && device !== "ipad" && device !== "ipad-pro" ? "text-cyan-400 bg-cyan-500/10" : "text-white/30 hover:text-white hover:bg-white/5")} onClick={() => setDevice("iphone-17-pro")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-7 w-7",
+            device !== "full" && device !== "ipad" && device !== "ipad-pro"
+              ? "text-cyan-400 bg-cyan-500/10"
+              : "text-white/30 hover:text-white hover:bg-white/5"
+          )}
+          onClick={() => setDevice("iphone-17-pro")}
+        >
           <Smartphone className="w-3.5 h-3.5" />
         </Button>
       </div>
@@ -302,13 +326,20 @@ export function WorkspacePreviewPanel({
               <Monitor className="w-8 h-8 text-white/15" />
             </div>
 
-            <h3 className="text-sm font-medium text-white/50 mb-1">Preview is empty</h3>
+            <h3 className="text-sm font-medium text-white/50 mb-1">
+              Preview is empty
+            </h3>
 
             <p className="text-xs text-white/25 max-w-[280px] mb-4">
               Ask AI to generate or edit a website. The preview will appear here instead of a blank white page.
             </p>
 
-            <Button variant="outline" size="sm" className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20" onClick={loadMyCustomerSite}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+              onClick={loadMyCustomerSite}
+            >
               <Globe className="w-3 h-3 mr-1.5" />
               Preview My Site
             </Button>
@@ -317,8 +348,16 @@ export function WorkspacePreviewPanel({
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
-              <button onClick={copyCode} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors">
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+
+              <button
+                onClick={copyCode}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors"
+              >
+                {copied ? (
+                  <Check className="w-3 h-3 text-green-400" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
                 {copied ? "Copied!" : "Copy"}
               </button>
             </div>
