@@ -42,21 +42,44 @@ export function WorkspacePreviewPanel({
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
 
   const [refreshKey, setRefreshKey] = useState(0)
-  const [liveUrl, setLiveUrl] = useState(previewUrl || "")
+  const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
-  const [allowedCustomerSiteUrl, setAllowedCustomerSiteUrl] = useState("")
+
+  const normalizeCustomerPreviewUrl = (url: string) => {
+    const cleanUrl = url.trim()
+    if (!cleanUrl) return ""
+
+    if (cleanUrl.startsWith("/site/")) return cleanUrl
+
+    if (cleanUrl.startsWith("https://www.mujeebproai.com/site/")) {
+      return cleanUrl.replace("https://www.mujeebproai.com", "")
+    }
+
+    if (cleanUrl.startsWith("https://mujeebproai.com/site/")) {
+      return cleanUrl.replace("https://mujeebproai.com", "")
+    }
+
+    return cleanUrl
+  }
 
   const isBlockedCustomerUrl = (url: string) => {
     if (isOwnerAdmin) return false
 
     const cleanUrl = url.trim().toLowerCase()
-    const allowed = allowedCustomerSiteUrl.trim().toLowerCase()
-
     if (!cleanUrl) return false
-    if (allowed && cleanUrl === allowed) return false
-    if (cleanUrl.startsWith("/")) return true
+
+    if (cleanUrl.startsWith("/site/")) return false
 
     const blockedWords = [
+      "/login",
+      "/admin",
+      "/dashboard",
+      "/settings",
+      "/users",
+      "/subscriptions",
+      "/balances",
+      "/logs",
+      "/api/admin",
       "mujeebproai.com/login",
       "mujeebproai.com/admin",
       "mujeebproai.com/dashboard",
@@ -83,21 +106,25 @@ export function WorkspacePreviewPanel({
       return
     }
 
-    if (isBlockedCustomerUrl(previewUrl)) {
+    const normalizedUrl = normalizeCustomerPreviewUrl(previewUrl)
+
+    if (isBlockedCustomerUrl(normalizedUrl)) {
       clearPreview()
       return
     }
 
-    setLiveUrl(previewUrl)
-  }, [previewUrl, isOwnerAdmin, allowedCustomerSiteUrl])
+    setLiveUrl(normalizedUrl)
+  }, [previewUrl, isOwnerAdmin])
 
   const currentDevice = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
   const isFullSize = device === "full"
 
   const getFrameDimensions = () => {
     if (isFullSize) return null
+
     const d = DEVICE_PRESETS.find((p) => p.id === device)
     if (!d || d.width === "100%") return null
+
     return {
       width: parseInt(d.width),
       height: parseInt(d.height),
@@ -107,10 +134,45 @@ export function WorkspacePreviewPanel({
   const frameDims = getFrameDimensions()
 
   const copyCode = async () => {
-    if (previewHtml) {
-      await navigator.clipboard.writeText(previewHtml)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+    if (!previewHtml) return
+
+    await navigator.clipboard.writeText(previewHtml)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const loadMyCustomerSite = async () => {
+    try {
+      const response = await fetch("/api/sites/my-site", {
+        credentials: "include",
+        cache: "no-store",
+      })
+
+      if (!response.ok) {
+        clearPreview()
+        return
+      }
+
+      const data = await response.json()
+
+      let nextUrl = ""
+
+      if (data.subdomain) {
+        nextUrl = `/site/${data.subdomain}`
+      } else if (data.siteUrl) {
+        nextUrl = normalizeCustomerPreviewUrl(data.siteUrl)
+      }
+
+      if (!nextUrl || isBlockedCustomerUrl(nextUrl)) {
+        clearPreview()
+        return
+      }
+
+      setLiveUrl(nextUrl)
+      setPreviewUrl(nextUrl)
+      setRefreshKey((prev) => prev + 1)
+    } catch {
+      clearPreview()
     }
   }
 
@@ -135,9 +197,10 @@ export function WorkspacePreviewPanel({
                 ? "Generated Code"
                 : "Live Preview"
               : safeLiveUrl
-              ? currentDevice.label
-              : "Preview"}
+                ? currentDevice.label
+                : "Preview"}
           </span>
+
           {frameDims && (
             <span className="text-[10px] text-white/30">
               {frameDims.width} x {frameDims.height}
@@ -188,8 +251,8 @@ export function WorkspacePreviewPanel({
                 ? "Generated Code - Your AI Generated Project"
                 : "Live Preview - Your AI Generated Project"
               : safeLiveUrl
-              ? "Customer Site Preview"
-              : "Preview - Customer Website"}
+                ? "Customer Website Preview"
+                : "Preview - Customer Website"}
           </span>
         </div>
       </div>
@@ -233,6 +296,7 @@ export function WorkspacePreviewPanel({
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
+
               <button
                 onClick={copyCode}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors"
@@ -245,6 +309,7 @@ export function WorkspacePreviewPanel({
                 {copied ? "Copied!" : "Copy"}
               </button>
             </div>
+
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
               {previewHtml}
             </pre>
@@ -256,7 +321,7 @@ export function WorkspacePreviewPanel({
               srcDoc={previewHtml}
               className="absolute inset-0 w-full h-full bg-white"
               title="Generated Preview"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-forms allow-popups"
             />
           ) : (
             <div className="absolute inset-0 flex items-start justify-center overflow-auto p-2 sm:p-4 md:p-6">
@@ -270,7 +335,7 @@ export function WorkspacePreviewPanel({
                     srcDoc={previewHtml}
                     className="w-full h-full border-0"
                     title="Generated Preview"
-                    sandbox="allow-scripts"
+                    sandbox="allow-scripts allow-forms allow-popups"
                     style={{
                       width: Math.min(
                         frameDims ? frameDims.width : 390,
@@ -287,10 +352,10 @@ export function WorkspacePreviewPanel({
         ) : safeLiveUrl ? (
           isFullSize ? (
             <iframe
-              key={`${refreshKey}-${device}`}
+              key={`${refreshKey}-${device}-${safeLiveUrl}`}
               src={safeLiveUrl}
               className="absolute inset-0 w-full h-full bg-white"
-              title="Preview"
+              title="Customer Website Preview"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
           ) : (
@@ -301,10 +366,10 @@ export function WorkspacePreviewPanel({
               >
                 <div className="bg-white rounded-[1.25rem] sm:rounded-[2rem] overflow-hidden">
                   <iframe
-                    key={`${refreshKey}-${device}`}
+                    key={`${refreshKey}-${device}-${safeLiveUrl}`}
                     src={safeLiveUrl}
                     className="w-full h-full border-0"
-                    title="Preview"
+                    title="Customer Website Preview"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                     style={{
                       width: Math.min(
@@ -324,32 +389,20 @@ export function WorkspacePreviewPanel({
             <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
               <Monitor className="w-8 h-8 text-white/15" />
             </div>
-            <h3 className="text-sm font-medium text-white/40 mb-1">Your Project Preview</h3>
-            <p className="text-xs text-white/20 max-w-[240px] mb-4">
-              Ask AI to generate your website or preview your own customer site.
+
+            <h3 className="text-sm font-medium text-white/40 mb-1">
+              Your Customer Website Preview
+            </h3>
+
+            <p className="text-xs text-white/20 max-w-[260px] mb-4">
+              Ask AI to generate your website, or open the saved customer website preview.
             </p>
+
             <Button
               variant="outline"
               size="sm"
               className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-              onClick={async () => {
-                try {
-                  const response = await fetch("/api/sites/my-site")
-                  if (response.ok) {
-                    const data = await response.json()
-                    if (data.siteUrl && !isBlockedCustomerUrl(data.siteUrl)) {
-                      setAllowedCustomerSiteUrl(data.siteUrl)
-                      setLiveUrl(data.siteUrl)
-                      setPreviewUrl(data.siteUrl)
-                      return
-                    }
-                  }
-                } catch {
-                  console.log("[MujeebProAI] No customer site found")
-                }
-
-                clearPreview()
-              }}
+              onClick={loadMyCustomerSite}
             >
               <Globe className="w-3 h-3 mr-1.5" />
               Preview My Site
