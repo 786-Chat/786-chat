@@ -36,8 +36,6 @@ export default function DashboardLayout({
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
-
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
@@ -48,11 +46,9 @@ export default function DashboardLayout({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
-
       const rect = containerRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const percent = (x / rect.width) * 100
-
       setChatWidthPercent(Math.min(75, Math.max(25, percent)))
     }
 
@@ -73,7 +69,6 @@ export default function DashboardLayout({
     }
   }, [])
 
-  const isProjectsHome = pathname === "/dashboard"
   const isWorkspaceRoot = pathname === "/dashboard" || pathname === "/dashboard/chat"
 
   const isSettingsPage =
@@ -146,56 +141,25 @@ export default function DashboardLayout({
     }
 
     window.addEventListener("top-bar-preview-url", handlePreviewUrl)
-
     return () => window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
   }, [])
 
   if (isLoading) {
     return (
       <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[150px] animate-pulse" />
-          <div
-            className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] animate-pulse"
-            style={{ animationDelay: "1s" }}
-          />
-        </div>
-
         <motion.div
           className="flex flex-col items-center gap-6 relative z-10"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
         >
-          <motion.div
-            animate={{ rotateY: [0, 360] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-          >
-            <MujeebProAILogo variant="icon" size="xl" animated={false} />
-          </motion.div>
-
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex gap-1">
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-cyan-500"
-                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                />
-              ))}
-            </div>
-            <p className="text-white/50 text-sm">Loading workspace...</p>
-          </div>
+          <MujeebProAILogo variant="icon" size="xl" animated={false} />
+          <p className="text-white/50 text-sm">Loading workspace...</p>
         </motion.div>
       </div>
     )
   }
 
   if (!user) return null
-
-  if (isProjectsHome && !isOwnerAdmin) {
-    return <div className="min-h-screen bg-[#05070d]">{children}</div>
-  }
 
   if (isSettingsPage) {
     return <div className="min-h-screen bg-background">{children}</div>
@@ -251,13 +215,6 @@ export default function DashboardLayout({
               style={{ width: "6px" }}
             >
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-white/[0.06] group-hover:bg-cyan-500/50 group-active:bg-cyan-400 transition-colors" />
-
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="w-1 h-1 rounded-full bg-cyan-400" />
-                <div className="w-1 h-1 rounded-full bg-cyan-400" />
-                <div className="w-1 h-1 rounded-full bg-cyan-400" />
-              </div>
-
               <div
                 className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
                 onMouseDown={handleMouseDown}
