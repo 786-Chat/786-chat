@@ -36,18 +36,23 @@ function hasVisibleHtmlContent(html: string): boolean {
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
   const content = bodyMatch ? bodyMatch[1] : html
 
-  const textOnly = content
+  const noScriptsStyles = content
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "")
+    .trim()
+
+  const textOnly = noScriptsStyles
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .trim()
 
-  const hasVisibleTags =
-    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
+  const hasImageOrSvg =
+    /<(img|svg|canvas|iframe)\b/i.test(noScriptsStyles)
 
-  return textOnly.length > 3 || hasVisibleTags
+  const hasRealText = textOnly.length > 3
+
+  return hasRealText || hasImageOrSvg
 }
 
 export function WorkspacePreviewPanel({
