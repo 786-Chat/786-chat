@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { DEVICE_PRESETS } from "./top-bar"
-
+import { useAuth } from "@/contexts/auth-context"
 interface PreviewPanelProps {
   device: string
   setDevice: (device: string) => void
@@ -40,6 +40,8 @@ export function WorkspacePreviewPanel({
   viewMode = "preview",
   onViewModeChange,
 }: PreviewPanelProps) {
+    const { user } = useAuth()
+  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
   const [refreshKey, setRefreshKey] = useState(0)
   const [urlInput, setUrlInput] = useState(previewUrl || "")
   const [liveUrl, setLiveUrl] = useState(previewUrl || "")
@@ -67,19 +69,67 @@ export function WorkspacePreviewPanel({
   }
 
   const frameDims = getFrameDimensions()
+  const isBlockedCustomerUrl = (url: string) => {
+    if (isOwnerAdmin) return false
 
-  const handleUrlSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    let url = urlInput.trim()
-    if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url
-    }
-    if (url) {
-      setLiveUrl(url)
-      setPreviewUrl(url)
-      setRefreshKey(prev => prev + 1)
-    }
+    const cleanUrl = url.trim().toLowerCase()
+
+    return (
+      cleanUrl === "/admin" ||
+      cleanUrl.startsWith("/admin/") ||
+      cleanUrl === "admin" ||
+      cleanUrl.startsWith("admin/") ||
+      cleanUrl.includes("mujeebproai.com/admin") ||
+      cleanUrl.includes("/api/admin") ||
+      cleanUrl.includes("/settings") ||
+      cleanUrl.includes("/users") ||
+      cleanUrl.includes("/subscriptions") ||
+      cleanUrl.includes("/balances") ||
+      cleanUrl.includes("/logs")
+    )
   }
+ const handleUrlSubmit = (e: React.FormEvent) => {
+  e.preventDefault()
+
+  let url = urlInput.trim()
+  if (!url) return
+
+  if (isBlockedCustomerUrl(url)) {
+    setUrlInput("")
+    setLiveUrl("")
+    setPreviewUrl("")
+    setRefreshKey(prev => prev + 1)
+    return
+  }
+
+  if (url.startsWith("/")) {
+    if (!isOwnerAdmin) {
+      setUrlInput("")
+      setLiveUrl("")
+      setPreviewUrl("")
+      setRefreshKey(prev => prev + 1)
+      return
+    }
+
+    url = window.location.origin + url
+  }
+
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url
+  }
+
+  if (isBlockedCustomerUrl(url)) {
+    setUrlInput("")
+    setLiveUrl("")
+    setPreviewUrl("")
+    setRefreshKey(prev => prev + 1)
+    return
+  }
+
+  setLiveUrl(url)
+  setPreviewUrl(url)
+  setRefreshKey(prev => prev + 1)
+}
 
   const copyCode = async () => {
     if (previewHtml) {
@@ -271,7 +321,7 @@ export function WorkspacePreviewPanel({
           isFullSize ? (
             <iframe
               key={`${refreshKey}-${device}`}
-              src={liveUrl}
+             src={isBlockedCustomerUrl(liveUrl) ? "about:blank" : liveUrl}
               className="absolute inset-0 w-full h-full bg-white"
               title="Preview"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -300,7 +350,7 @@ export function WorkspacePreviewPanel({
                 >
                   <iframe
                     key={`${refreshKey}-${device}`}
-                    src={liveUrl}
+                 src={isBlockedCustomerUrl(liveUrl) ? "about:blank" : liveUrl}
                     className="w-full h-full border-0"
                     title="Preview"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -345,11 +395,26 @@ export function WorkspacePreviewPanel({
                 // Fallback: prompt user to enter URL
                 const url = prompt("Enter your website URL to preview:")
                 if (url) {
-                  const fullUrl = url.startsWith("http") ? url : `https://${url}`
-                  setLiveUrl(fullUrl)
-                  setUrlInput(fullUrl)
-                  setPreviewUrl(fullUrl)
-                }
+  if (isBlockedCustomerUrl(url)) {
+    setLiveUrl("")
+    setUrlInput("")
+    setPreviewUrl("")
+    return
+  }
+
+  const fullUrl = url.startsWith("http") ? url : `https://${url}`
+
+  if (isBlockedCustomerUrl(fullUrl)) {
+    setLiveUrl("")
+    setUrlInput("")
+    setPreviewUrl("")
+    return
+  }
+
+  setLiveUrl(fullUrl)
+  setUrlInput(fullUrl)
+  setPreviewUrl(fullUrl)
+}
               }}
             >
               <Globe className="w-3 h-3 mr-1.5" />
