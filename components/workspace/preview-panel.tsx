@@ -35,17 +35,13 @@ export function WorkspacePreviewPanel({
   previewUrl,
   setPreviewUrl,
   onClose,
-  expanded,
-  setExpanded,
   previewHtml,
   viewMode = "preview",
-  onViewModeChange,
 }: PreviewPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
 
   const [refreshKey, setRefreshKey] = useState(0)
-  const [urlInput, setUrlInput] = useState(previewUrl || "")
   const [liveUrl, setLiveUrl] = useState(previewUrl || "")
   const [copied, setCopied] = useState(false)
   const [allowedCustomerSiteUrl, setAllowedCustomerSiteUrl] = useState("")
@@ -58,7 +54,6 @@ export function WorkspacePreviewPanel({
 
     if (!cleanUrl) return false
     if (allowed && cleanUrl === allowed) return false
-
     if (cleanUrl.startsWith("/")) return true
 
     const blockedWords = [
@@ -76,19 +71,25 @@ export function WorkspacePreviewPanel({
     return blockedWords.some((word) => cleanUrl.includes(word))
   }
 
+  const clearPreview = () => {
+    setLiveUrl("")
+    setPreviewUrl("")
+    setRefreshKey((prev) => prev + 1)
+  }
+
   useEffect(() => {
-    if (!previewUrl) return
+    if (!previewUrl) {
+      setLiveUrl("")
+      return
+    }
 
     if (isBlockedCustomerUrl(previewUrl)) {
-      setLiveUrl("")
-      setUrlInput("")
-      setPreviewUrl("")
+      clearPreview()
       return
     }
 
     setLiveUrl(previewUrl)
-    setUrlInput(previewUrl)
-  }, [previewUrl, isOwnerAdmin, allowedCustomerSiteUrl, setPreviewUrl])
+  }, [previewUrl, isOwnerAdmin, allowedCustomerSiteUrl])
 
   const currentDevice = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
   const isFullSize = device === "full"
@@ -104,38 +105,6 @@ export function WorkspacePreviewPanel({
   }
 
   const frameDims = getFrameDimensions()
-
-  const clearPreview = () => {
-    setUrlInput("")
-    setLiveUrl("")
-    setPreviewUrl("")
-    setRefreshKey((prev) => prev + 1)
-  }
-
-  const handleUrlSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    let url = urlInput.trim()
-    if (!url) return
-
-    if (!isOwnerAdmin && url.startsWith("/")) {
-      clearPreview()
-      return
-    }
-
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url
-    }
-
-    if (isBlockedCustomerUrl(url)) {
-      clearPreview()
-      return
-    }
-
-    setLiveUrl(url)
-    setPreviewUrl(url)
-    setRefreshKey((prev) => prev + 1)
-  }
 
   const copyCode = async () => {
     if (previewHtml) {
@@ -161,7 +130,13 @@ export function WorkspacePreviewPanel({
       >
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-white/50 font-medium">
-            {safeLiveUrl ? currentDevice.label : previewHtml ? "Preview" : currentDevice.label}
+            {previewHtml
+              ? viewMode === "code"
+                ? "Generated Code"
+                : "Live Preview"
+              : safeLiveUrl
+              ? currentDevice.label
+              : "Preview"}
           </span>
           {frameDims && (
             <span className="text-[10px] text-white/30">
@@ -205,31 +180,18 @@ export function WorkspacePreviewPanel({
       </div>
 
       <div className="px-3 py-2 border-b border-white/[0.06]">
-        {previewHtml ? (
-          <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
-            <span className="text-[11px] text-cyan-400/80">
-              {viewMode === "code" ? "Generated Code" : "Live Preview"} - Your AI Generated Project
-            </span>
-          </div>
-        ) : (
-          <form onSubmit={handleUrlSubmit} className="flex items-center gap-2">
-            <div className="flex items-center flex-1 h-7 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5">
-              <Globe className="w-3 h-3 text-white/20 mr-2 flex-shrink-0" />
-              <input
-                type="text"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder={
-                  isOwnerAdmin
-                    ? "Enter URL or admin route..."
-                    : "Enter your own website URL only..."
-                }
-                className="flex-1 bg-transparent text-[11px] text-white/70 placeholder:text-white/20 focus:outline-none"
-              />
-            </div>
-          </form>
-        )}
+        <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
+          <span className="text-[11px] text-cyan-400/80">
+            {previewHtml
+              ? viewMode === "code"
+                ? "Generated Code - Your AI Generated Project"
+                : "Live Preview - Your AI Generated Project"
+              : safeLiveUrl
+              ? "Customer Site Preview"
+              : "Preview - Customer Website"}
+          </span>
+        </div>
       </div>
 
       <div className="px-3 py-1.5 border-b border-white/[0.06] flex items-center justify-between">
@@ -378,7 +340,6 @@ export function WorkspacePreviewPanel({
                     if (data.siteUrl && !isBlockedCustomerUrl(data.siteUrl)) {
                       setAllowedCustomerSiteUrl(data.siteUrl)
                       setLiveUrl(data.siteUrl)
-                      setUrlInput(data.siteUrl)
                       setPreviewUrl(data.siteUrl)
                       return
                     }
