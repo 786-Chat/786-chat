@@ -305,14 +305,32 @@ if (!isAdminRequest) {
   }
 }
 
-// Get or create chat
+    // Get or create chat - secure per user
     let currentChatId = chatId
+
+    if (currentChatId) {
+      const ownedChat = await sql`
+        SELECT id
+        FROM chats
+        WHERE id = ${currentChatId}
+          AND user_id = ${session.id}
+        LIMIT 1
+      `
+
+      if (!ownedChat[0]) {
+        return new Response(
+          JSON.stringify({ error: "CHAT_NOT_FOUND" }),
+          { status: 404, headers: { "Content-Type": "application/json" } }
+        )
+      }
+    }
+
     if (!currentChatId) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
 
       const newChat = await sql`
         INSERT INTO chats (user_id, title)
-        VALUES (${session.id}, ${title})
+        VALUES (${session.id}, ${title || "New chat"})
         RETURNING id
       `
       currentChatId = newChat[0].id
@@ -394,27 +412,40 @@ WORKING WITH IMAGES:
 
 Be helpful, friendly, and precise.`
 
-    // Customer system prompt - help them with THEIR projects
+        // Customer system prompt - help them with THEIR projects only
     const userSystemPrompt = aiSettings.systemPrompt + `
 
-IMPORTANT: You are helping a CUSTOMER with their OWN website projects.
+IMPORTANT: You are helping a CUSTOMER with their OWN website projects only.
+
+CUSTOMER SECURITY RULES:
+- Never show, mention, generate, or expose MujeebProAI owner/admin data.
+- Never include owner email, admin email, admin dashboard, admin settings, users, subscriptions, balances, logs, Stripe admin, GitHub, Vercel, Neon, database, or platform private data.
+- Never generate preview HTML for MujeebProAI admin pages.
+- Never generate pages like /admin, /owner, /super-admin, /settings, /users, /subscriptions, /balances, /logs, /api/admin, or internal platform dashboards.
+- Customers can only create and edit their own public website pages.
+- Customer previews must look like a normal customer business website, not the MujeebProAI platform.
+- If customer asks for admin/platform changes, politely say:
+"I can help you with your own website projects. MujeebProAI platform changes can only be made by the admin."
 
 Your role is to help customers:
 - Generate new websites for their business
 - Edit and customize their generated/imported websites
-- Answer questions about web development, design, and features
-- Help them manage their sites in the dashboard
+- Create safe public pages like Home, About, Contact, Services, Menu, Order, Gallery, Booking, Blog, FAQ
+- Customize colors, fonts, layouts, images, buttons, sections, and content
+- Help them manage their own sites in the dashboard
 
-If a customer asks to change the MujeebProAI platform itself (not their own website), politely explain:
-"I can help you with your own website projects! Changes to the MujeebProAI platform can only be made by the admin.
-What would you like to do with YOUR website today?"
+HTML PREVIEW RULES:
+- When generating or editing a website preview, return one full HTML document inside one \`\`\`html code block.
+- The HTML must be for the customer's business website only.
+- Do not include MujeebProAI admin navigation, owner dashboard, admin links, platform controls, private emails, internal routes, API routes, database names, or secret/provider names.
+- Do not ask for an external URL when CURRENT_PREVIEW_HTML is provided. Edit the provided current preview and return the full updated HTML.
 
 Focus on helping customers:
 1. Create beautiful websites using themes
 2. Customize colors, fonts, layouts
-3. Add pages and content
+3. Add public pages and content
 4. Set up their business information
-5. Deploy and manage their sites`
+5. Preview and improve their customer website`
 
     // Admin tools for file operations (only available to admin)
     const adminTools = {
@@ -701,12 +732,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
 
-    if (chatId) {
+        if (chatId) {
       const dbMessages = await sql`
-        SELECT id, role, content, created_at
-        FROM messages
-        WHERE chat_id = ${chatId}
-        ORDER BY created_at ASC
+        SELECT m.id, m.role, m.content, m.created_at
+        FROM messages m
+        JOIN chats c ON c.id = m.chat_id
+        WHERE m.chat_id = ${chatId}
+          AND c.user_id = ${session.id}
+        ORDER BY m.created_at ASC
       `
 
       return new Response(JSON.stringify({ messages: dbMessages }), {
