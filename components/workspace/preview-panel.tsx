@@ -7,6 +7,7 @@ import {
   X,
   Monitor,
   Smartphone,
+  Tablet,
   Globe,
   Copy,
   Check,
@@ -45,10 +46,13 @@ export function WorkspacePreviewPanel({
   const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
 
+  const hasPreviewHtml = Boolean(previewHtml && previewHtml.trim().length > 0)
+
   const normalizeCustomerPreviewUrl = (url: string) => {
     const cleanUrl = url.trim()
     if (!cleanUrl) return ""
 
+    if (cleanUrl === "about:blank") return ""
     if (cleanUrl.startsWith("/site/")) return cleanUrl
 
     if (cleanUrl.startsWith("https://www.mujeebproai.com/site/")) {
@@ -67,7 +71,7 @@ export function WorkspacePreviewPanel({
 
     const cleanUrl = url.trim().toLowerCase()
     if (!cleanUrl) return false
-
+    if (cleanUrl === "about:blank") return true
     if (cleanUrl.startsWith("/site/")) return false
 
     const blockedWords = [
@@ -101,14 +105,14 @@ export function WorkspacePreviewPanel({
   }
 
   useEffect(() => {
-    if (!previewUrl) {
+    if (!previewUrl || previewUrl.trim() === "" || previewUrl === "about:blank") {
       setLiveUrl("")
       return
     }
 
     const normalizedUrl = normalizeCustomerPreviewUrl(previewUrl)
 
-    if (isBlockedCustomerUrl(normalizedUrl)) {
+    if (!normalizedUrl || isBlockedCustomerUrl(normalizedUrl)) {
       clearPreview()
       return
     }
@@ -116,7 +120,9 @@ export function WorkspacePreviewPanel({
     setLiveUrl(normalizedUrl)
   }, [previewUrl, isOwnerAdmin])
 
-  const currentDevice = DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
+  const currentDevice =
+    DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
+
   const isFullSize = device === "full"
 
   const getFrameDimensions = () => {
@@ -176,7 +182,12 @@ export function WorkspacePreviewPanel({
     }
   }
 
-  const safeLiveUrl = isBlockedCustomerUrl(liveUrl) ? "" : liveUrl
+  const safeLiveUrl =
+    liveUrl && liveUrl !== "about:blank" && !isBlockedCustomerUrl(liveUrl)
+      ? liveUrl
+      : ""
+
+  const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
 
   return (
     <div
@@ -192,7 +203,7 @@ export function WorkspacePreviewPanel({
       >
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-white/50 font-medium">
-            {previewHtml
+            {hasPreviewHtml
               ? viewMode === "code"
                 ? "Generated Code"
                 : "Live Preview"
@@ -246,13 +257,13 @@ export function WorkspacePreviewPanel({
         <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
           <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
           <span className="text-[11px] text-cyan-400/80">
-            {previewHtml
+            {hasPreviewHtml
               ? viewMode === "code"
                 ? "Generated Code - Your AI Generated Project"
                 : "Live Preview - Your AI Generated Project"
               : safeLiveUrl
                 ? "Customer Website Preview"
-                : "Preview - Customer Website"}
+                : "Preview Ready - No Website Loaded"}
           </span>
         </div>
       </div>
@@ -266,10 +277,10 @@ export function WorkspacePreviewPanel({
               "h-7 w-7",
               device === "full"
                 ? "text-cyan-400 bg-cyan-500/10"
-                : "text-white/30 hover:text-white hover:bg-white/5",
+                : "text-white/30 hover:text-white hover:bg-white/5"
             )}
             onClick={() => setDevice("full")}
-            title="Full size"
+            title="Desktop"
           >
             <Monitor className="w-3.5 h-3.5" />
           </Button>
@@ -279,9 +290,24 @@ export function WorkspacePreviewPanel({
             size="icon"
             className={cn(
               "h-7 w-7",
-              device !== "full"
+              device === "ipad" || device === "ipad-pro"
                 ? "text-cyan-400 bg-cyan-500/10"
-                : "text-white/30 hover:text-white hover:bg-white/5",
+                : "text-white/30 hover:text-white hover:bg-white/5"
+            )}
+            onClick={() => setDevice("ipad")}
+            title="Tablet"
+          >
+            <Tablet className="w-3.5 h-3.5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-7 w-7",
+              device !== "full" && device !== "ipad" && device !== "ipad-pro"
+                ? "text-cyan-400 bg-cyan-500/10"
+                : "text-white/30 hover:text-white hover:bg-white/5"
             )}
             onClick={() => setDevice("iphone-17-pro")}
             title="Mobile"
@@ -292,7 +318,31 @@ export function WorkspacePreviewPanel({
       </div>
 
       <div className="flex-1 relative overflow-hidden bg-[#08080d] w-full max-w-full">
-        {viewMode === "code" && previewHtml ? (
+        {showEmptyPreview ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 bg-[#08080d]">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
+              <Monitor className="w-8 h-8 text-white/15" />
+            </div>
+
+            <h3 className="text-sm font-medium text-white/50 mb-1">
+              Preview is empty
+            </h3>
+
+            <p className="text-xs text-white/25 max-w-[280px] mb-4">
+              Ask AI to generate or edit a website. The preview will appear here instead of a blank white page.
+            </p>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+              onClick={loadMyCustomerSite}
+            >
+              <Globe className="w-3 h-3 mr-1.5" />
+              Preview My Site
+            </Button>
+          </div>
+        ) : viewMode === "code" && hasPreviewHtml ? (
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
@@ -314,7 +364,7 @@ export function WorkspacePreviewPanel({
               {previewHtml}
             </pre>
           </div>
-        ) : previewHtml ? (
+        ) : hasPreviewHtml ? (
           isFullSize ? (
             <iframe
               key={`html-${refreshKey}-${device}`}
@@ -339,7 +389,9 @@ export function WorkspacePreviewPanel({
                     style={{
                       width: Math.min(
                         frameDims ? frameDims.width : 390,
-                        typeof window !== "undefined" ? window.innerWidth - 48 : 390,
+                        typeof window !== "undefined"
+                          ? window.innerWidth - 48
+                          : 390
                       ),
                       height: frameDims ? frameDims.height : 844,
                       maxWidth: "100%",
@@ -374,7 +426,9 @@ export function WorkspacePreviewPanel({
                     style={{
                       width: Math.min(
                         frameDims ? frameDims.width : 390,
-                        typeof window !== "undefined" ? window.innerWidth - 48 : 390,
+                        typeof window !== "undefined"
+                          ? window.innerWidth - 48
+                          : 390
                       ),
                       height: frameDims ? frameDims.height : 844,
                       maxWidth: "100%",
@@ -384,31 +438,7 @@ export function WorkspacePreviewPanel({
               </div>
             </div>
           )
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
-              <Monitor className="w-8 h-8 text-white/15" />
-            </div>
-
-            <h3 className="text-sm font-medium text-white/40 mb-1">
-              Your Customer Website Preview
-            </h3>
-
-            <p className="text-xs text-white/20 max-w-[260px] mb-4">
-              Ask AI to generate your website, or open the saved customer website preview.
-            </p>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-              onClick={loadMyCustomerSite}
-            >
-              <Globe className="w-3 h-3 mr-1.5" />
-              Preview My Site
-            </Button>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   )
