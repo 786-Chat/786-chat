@@ -37,12 +37,15 @@ export async function GET() {
         ? `https://${site.subdomain}.mujeebproai.com`
         : null
 
-      return NextResponse.json({
-  siteUrl,
-  siteName: site.name,
-  siteId: site.id,
-  subdomain: site.subdomain,
-})
+    return NextResponse.json({ 
+      siteUrl: null,
+      message: "No published site found"
+    })
+  } catch (error) {
+    console.error("Error fetching site:", error)
+    return NextResponse.json({ error: "Failed to fetch site" }, { status: 500 })
+  }
+}
 
     // Check domains table as fallback
     const domains = await sql`
