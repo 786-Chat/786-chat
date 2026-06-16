@@ -7,13 +7,9 @@ export async function GET() {
     const session = await getSession()
 
     if (!session) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get customer's primary published site
     const sites = await sql`
       SELECT
         id,
@@ -30,39 +26,28 @@ export async function GET() {
     if (sites.length > 0) {
       const site = sites[0]
 
-      const siteUrl = site.custom_domain
+      const previewUrl = site.subdomain ? `/site/${site.subdomain}` : null
+
+      const liveUrl = site.custom_domain
         ? `https://${site.custom_domain}`
         : site.subdomain
         ? `https://${site.subdomain}.mujeebproai.com`
         : null
 
       return NextResponse.json({
-        siteUrl,
+        siteUrl: previewUrl,
+        previewUrl,
+        liveUrl,
         siteName: site.site_name,
         siteId: site.id,
         subdomain: site.subdomain,
       })
     }
 
-    // Fallback to verified custom domain
-    const domains = await sql`
-      SELECT domain
-      FROM user_domains
-      WHERE user_id = ${session.id}::uuid
-        AND status = 'verified'
-      ORDER BY is_primary DESC
-      LIMIT 1
-    `
-
-    if (domains.length > 0) {
-      return NextResponse.json({
-        siteUrl: `https://${domains[0].domain}`,
-        siteName: domains[0].domain,
-      })
-    }
-
     return NextResponse.json({
       siteUrl: null,
+      previewUrl: null,
+      liveUrl: null,
       message: "No published site found",
     })
   } catch (error) {
