@@ -36,6 +36,8 @@ export default function DashboardLayout({
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
@@ -72,7 +74,7 @@ export default function DashboardLayout({
   }, [])
 
   const isProjectsHome = pathname === "/dashboard"
-  const isWorkspaceRoot = pathname === "/dashboard/chat"
+  const isWorkspaceRoot = pathname === "/dashboard" || pathname === "/dashboard/chat"
 
   const isSettingsPage =
     pathname.startsWith("/dashboard/settings") ||
@@ -81,7 +83,6 @@ export default function DashboardLayout({
     pathname === "/dashboard/profile"
 
   const isSubPage =
-    !isProjectsHome &&
     !isWorkspaceRoot &&
     pathname.startsWith("/dashboard/") &&
     !isSettingsPage
@@ -192,7 +193,7 @@ export default function DashboardLayout({
 
   if (!user) return null
 
-  if (isProjectsHome) {
+  if (isProjectsHome && !isOwnerAdmin) {
     return <div className="min-h-screen bg-[#05070d]">{children}</div>
   }
 
@@ -218,10 +219,7 @@ export default function DashboardLayout({
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <WorkspaceSidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
+        <WorkspaceSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <div ref={containerRef} className="flex-1 flex overflow-hidden relative w-full max-w-full">
           <div
