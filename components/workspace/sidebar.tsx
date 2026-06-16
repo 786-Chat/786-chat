@@ -378,7 +378,7 @@ freeMessagesRemaining:
             <p className="text-[10px] uppercase tracking-wider text-white/30 px-1 mb-2">Quick Links</p>
             <div className="space-y-1">
               <Link
-                href="/marketplace"
+              href="/themes"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
               >
                 <Palette className="w-3.5 h-3.5" />
