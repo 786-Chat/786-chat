@@ -1,264 +1,179 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { motion } from "framer-motion"
-import { WorkspaceTopBar } from "@/components/workspace/top-bar"
-import { WorkspaceSidebar } from "@/components/workspace/sidebar"
-import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
-import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
-import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
-import { MujeebProAILogo } from "@/components/mujeebproai-logo"
+import React, { createContext, useContext, useEffect, useState } from "react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Utensils,
+  Gift,
+  CreditCard,
+  Settings,
+  LogOut,
+  Loader2,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 
-export default function DashboardLayout({
+interface ShopSite {
+  id: string
+  site_name?: string
+  name?: string
+  subdomain?: string
+  custom_domain?: string | null
+  is_locked?: boolean
+  is_active?: boolean
+  is_published?: boolean
+}
+
+interface ShopContextValue {
+  site: ShopSite | null
+  loading: boolean
+  refreshSite: () => Promise<void>
+}
+
+const ShopContext = createContext<ShopContextValue | undefined>(undefined)
+
+export function useShop() {
+  const context = useContext(ShopContext)
+
+  if (!context) {
+    throw new Error("useShop must be used inside ShopDashboardLayout")
+  }
+
+  return context
+}
+
+const navItems = [
+  { label: "Dashboard", href: "/shop-dashboard", icon: LayoutDashboard },
+  { label: "Orders", href: "/shop-dashboard/orders", icon: ShoppingBag },
+  { label: "Menu", href: "/shop-dashboard/menu", icon: Utensils },
+  { label: "Deals", href: "/shop-dashboard/deals", icon: Gift },
+  { label: "Billing", href: "/shop-dashboard/billing", icon: CreditCard },
+  { label: "Settings", href: "/shop-dashboard/settings", icon: Settings },
+]
+
+export default function ShopDashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, isLoading } = useAuth()
-  const router = useRouter()
   const pathname = usePathname()
+  const router = useRouter()
+  const [site, setSite] = useState<ShopSite | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [previewOpen, setPreviewOpen] = useState(true)
-  const [dashboardOpen, setDashboardOpen] = useState(false)
-  const [activeView, setActiveView] = useState<"chat" | "preview">("chat")
-  const [previewDevice, setPreviewDevice] = useState("full")
-  const [previewUrl, setPreviewUrl] = useState("")
-  const [previewExpanded, setPreviewExpanded] = useState(false)
-  const [previewHtml, setPreviewHtml] = useState("")
-  const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
-  const [chatWidthPercent, setChatWidthPercent] = useState(50)
+  const refreshSite = async () => {
+    try {
+      const res = await fetch("/api/sites/my-site", {
+        credentials: "include",
+        cache: "no-store",
+      })
 
-  const isDragging = useRef(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+      if (res.ok) {
+        const data = await res.json()
 
-  const isChatWorkspace =
-    pathname === "/dashboard/chat" ||
-    /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDragging.current = true
-    document.body.style.cursor = "col-resize"
-    document.body.style.userSelect = "none"
-  }, [])
-
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push("/login")
-    }
-  }, [user, isLoading, router])
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return
-
-      const rect = containerRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const percent = (x / rect.width) * 100
-
-      setChatWidthPercent(Math.min(75, Math.max(25, percent)))
-    }
-
-    const handleMouseUp = () => {
-      if (!isDragging.current) return
-
-      isDragging.current = false
-      document.body.style.cursor = ""
-      document.body.style.userSelect = ""
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) {
-        setSidebarOpen(false)
-        setPreviewOpen(false)
-      } else if (window.innerWidth < 1200) {
-        setPreviewOpen(false)
+        setSite({
+          id: data.id || data.site?.id || "shop-site",
+          site_name:
+            data.site_name ||
+            data.site?.site_name ||
+            data.name ||
+            data.site?.name ||
+            "My Shop",
+          name: data.name || data.site?.name || "My Shop",
+          subdomain: data.subdomain || data.site?.subdomain,
+          custom_domain: data.custom_domain || data.site?.custom_domain || null,
+          is_locked: Boolean(data.is_locked || data.site?.is_locked),
+          is_active: data.is_active ?? data.site?.is_active ?? true,
+          is_published: data.is_published ?? data.site?.is_published ?? false,
+        })
       } else {
-        setPreviewOpen(true)
+        setSite({
+          id: "shop-site",
+          site_name: "My Shop",
+          name: "My Shop",
+          is_locked: false,
+          is_active: true,
+          is_published: false,
+        })
       }
+    } catch {
+      setSite({
+        id: "shop-site",
+        site_name: "My Shop",
+        name: "My Shop",
+        is_locked: false,
+        is_active: true,
+        is_published: false,
+      })
+    } finally {
+      setLoading(false)
     }
-
-    handleResize()
-    window.addEventListener("resize", handleResize)
-
-    return () => window.removeEventListener("resize", handleResize)
-  }, [])
+  }
 
   useEffect(() => {
-    const handlePreviewUrl = async (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      if (!detail?.url) return
-
-      let finalUrl = detail.url
-
-      if (detail.url.startsWith("/")) {
-        try {
-          const res = await fetch("/api/sites/my-site", {
-            credentials: "include",
-            cache: "no-store",
-          })
-
-          if (res.ok) {
-            const data = await res.json()
-
-            if (data.subdomain) {
-              finalUrl = `/site/${data.subdomain}${detail.url}`
-            } else if (data.siteUrl) {
-              finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
-            }
-          }
-        } catch {
-          finalUrl = ""
-        }
-      }
-
-      setPreviewUrl(finalUrl)
-      setPreviewHtml("")
-      setPreviewOpen(true)
-      setActiveView("preview")
-    }
-
-    window.addEventListener("top-bar-preview-url", handlePreviewUrl)
-
-    return () =>
-      window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
+    refreshSite()
   }, [])
 
-  if (isLoading) {
+  const shopName = site?.site_name || site?.name || "Shop Dashboard"
+
+  if (loading) {
     return (
-      <div className="h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <motion.div
-          className="flex flex-col items-center gap-6 relative z-10"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-        >
-          <MujeebProAILogo variant="icon" size="xl" animated={false} />
-          <p className="text-white/50 text-sm">Loading workspace...</p>
-        </motion.div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
       </div>
     )
   }
 
-  if (!user) return null
-
-  if (!isChatWorkspace) {
-    return <>{children}</>
-  }
-
   return (
-    <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
-      <WorkspaceTopBar
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        previewOpen={previewOpen}
-        setPreviewOpen={setPreviewOpen}
-        dashboardOpen={dashboardOpen}
-        setDashboardOpen={setDashboardOpen}
-        previewDevice={previewDevice}
-        setPreviewDevice={setPreviewDevice}
-        activeView={activeView}
-        setActiveView={setActiveView}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
-
-      <div className="flex-1 flex overflow-hidden relative">
-        <WorkspaceSidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-
-        <div
-          ref={containerRef}
-          className="flex-1 flex overflow-hidden relative w-full max-w-full"
-        >
-          <div
-            className={`flex flex-col min-w-0 overflow-hidden ${
-              activeView !== "chat" ? "hidden md:flex" : "flex w-full md:w-auto"
-            }`}
-            style={{
-              width:
-                activeView === "chat" &&
-                typeof window !== "undefined" &&
-                window.innerWidth < 768
-                  ? "100%"
-                  : previewOpen
-                    ? `${chatWidthPercent}%`
-                    : "100%",
-              flexShrink: 0,
-            }}
-          >
-            <WorkspaceChatPanel
-              onPreviewUpdate={setPreviewHtml}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-            />
+    <ShopContext.Provider value={{ site, loading, refreshSite }}>
+      <div className="min-h-screen bg-slate-50 flex">
+        <aside className="w-64 bg-white border-r border-slate-200 min-h-screen flex flex-col">
+          <div className="p-5 border-b border-slate-200">
+            <h1 className="text-lg font-bold text-slate-900">{shopName}</h1>
+            <p className="text-xs text-slate-500 mt-1">Restaurant Dashboard</p>
           </div>
 
-          {previewOpen && (
-            <div
-              className="relative z-10 flex-shrink-0 group hidden md:block"
-              style={{ width: "6px" }}
-            >
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-white/[0.06] group-hover:bg-cyan-500/50 group-active:bg-cyan-400 transition-colors" />
-              <div
-                className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
-                onMouseDown={handleMouseDown}
-              />
-            </div>
-          )}
+          <nav className="flex-1 p-3 space-y-1">
+            {navItems.map((item) => {
+              const active =
+                pathname === item.href ||
+                (item.href !== "/shop-dashboard" && pathname.startsWith(item.href))
 
-          {previewOpen && (
-            <div
-              className={`${
-                activeView !== "preview"
-                  ? "hidden lg:flex"
-                  : "flex w-full md:w-auto"
-              } flex-col min-w-0 overflow-hidden`}
-              style={{
-                width:
-                  activeView === "preview" &&
-                  typeof window !== "undefined" &&
-                  window.innerWidth < 768
-                    ? "100%"
-                    : `${100 - chatWidthPercent}%`,
-                flexShrink: 0,
-              }}
-            >
-              <WorkspacePreviewPanel
-                device={previewDevice}
-                setDevice={setPreviewDevice}
-                previewUrl={previewUrl}
-                setPreviewUrl={setPreviewUrl}
-                onClose={() => setPreviewOpen(false)}
-                expanded={previewExpanded}
-                setExpanded={setPreviewExpanded}
-                previewHtml={previewHtml}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-              />
-            </div>
-          )}
-        </div>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                    active
+                      ? "bg-orange-50 text-orange-600"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )}
+                >
+                  <item.icon className="w-4 h-4" />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </nav>
 
-        <WorkspaceDashboardPanel
-          isOpen={dashboardOpen}
-          onClose={() => setDashboardOpen(false)}
-        />
+          <div className="p-3 border-t border-slate-200">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Back to Workspace
+            </button>
+          </div>
+        </aside>
+
+        <main className="flex-1 min-w-0">
+          <div className="p-6">{children}</div>
+        </main>
       </div>
-    </div>
+    </ShopContext.Provider>
   )
 }
