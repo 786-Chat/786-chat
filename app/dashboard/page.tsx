@@ -12,7 +12,7 @@ import {
   Settings,
 } from "lucide-react"
 
-const OWNER_EMAIL = "mujeeb@job4u.com"
+const OWNER_EMAILS = ["mujeeb@job4u.com"]
 
 interface CustomerSite {
   id: string
@@ -35,6 +35,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+
     const loadDashboard = async () => {
       try {
         const meRes = await fetch("/api/auth/me", { cache: "no-store" })
@@ -45,28 +47,39 @@ export default function DashboardPage() {
         }
 
         const meData = await meRes.json()
-        const user = meData.user || meData.session || meData
-        const email = String(user?.email || "").toLowerCase()
+        const user = meData?.user || meData?.session || meData
+        const email = String(user?.email || "").trim().toLowerCase()
 
-        if (email === OWNER_EMAIL) {
+        if (OWNER_EMAILS.includes(email)) {
           router.replace("/dashboard/chat")
           return
         }
 
         const sitesRes = await fetch("/api/customer/sites", { cache: "no-store" })
+
+        if (!sitesRes.ok) {
+          if (!cancelled) setSites([])
+          return
+        }
+
         const sitesData = await sitesRes.json()
 
-        if (sitesRes.ok) {
-          setSites(sitesData.sites || [])
+        if (!cancelled) {
+          setSites(Array.isArray(sitesData?.sites) ? sitesData.sites : [])
         }
       } catch (error) {
         console.error("Failed to load dashboard:", error)
+        if (!cancelled) setSites([])
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     loadDashboard()
+
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   if (loading) {
