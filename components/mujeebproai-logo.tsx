@@ -1,7 +1,6 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useState, useEffect } from "react"
 import useSWR from "swr"
 
 interface LogoProps {
@@ -27,25 +26,31 @@ const sizeMap = {
   xl: { icon: 110, text: "text-5xl" },
 }
 
-/* Each letter in "MujeebProAI" gets a distinct color - matching the rainbow brand style */
 const brandColors = [
-  "#ff4d6a", // M - red/pink
-  "#ff8c42", // u - orange
-  "#ffd000", // j - yellow
-  "#44cc66", // e - green
-  "#44cc66", // e - green
-  "#22aaff", // b - blue
-  "#6655ee", // P - purple
-  "#ff4d6a", // r - red/pink
-  "#ff8c42", // o - orange
-  "#22aaff", // A - blue
-  "#44cc66", // I - green
+  "#ff4d6a",
+  "#ff8c42",
+  "#ffd000",
+  "#44cc66",
+  "#44cc66",
+  "#22aaff",
+  "#6655ee",
+  "#ff4d6a",
+  "#ff8c42",
+  "#22aaff",
+  "#44cc66",
 ]
 
 const brandText = "MujeebProAI"
 
-// Fetcher for SWR
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { cache: "no-store" })
+
+  if (!res.ok) {
+    return { logo: null }
+  }
+
+  return res.json()
+}
 
 function ColorfulBrandText({ textClass }: { textClass: string }) {
   return (
@@ -63,10 +68,16 @@ function ColorfulBrandText({ textClass }: { textClass: string }) {
   )
 }
 
-function BrandLogo({ size, animated, customLogo }: { size: number; animated: boolean; customLogo?: ActiveLogo | null }) {
+function BrandLogo({
+  size,
+  animated,
+  customLogo,
+}: {
+  size: number
+  animated: boolean
+  customLogo?: ActiveLogo | null
+}) {
   const defaultLogoSrc = "/images/logo-animated.gif"
-  
-  // Use custom logo if available
   const logoSrc = customLogo?.url || defaultLogoSrc
   const isVideo = customLogo?.type === "video"
 
@@ -86,7 +97,6 @@ function BrandLogo({ size, animated, customLogo }: { size: number; animated: boo
           draggable={false}
         />
       ) : (
-        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           src={logoSrc}
           alt="MujeebProAI"
@@ -97,7 +107,6 @@ function BrandLogo({ size, animated, customLogo }: { size: number; animated: boo
         />
       )}
 
-      {/* Animated glow behind the logo */}
       {animated && (
         <motion.div
           className="absolute inset-[-4px] rounded-full pointer-events-none -z-10 blur-md"
@@ -121,16 +130,19 @@ export function MujeebProAILogo({
   className = "",
 }: LogoProps) {
   const dims = sizeMap[size]
-  
-  // Fetch active logo from API
-  const { data } = useSWR<{ logo: ActiveLogo | null }>("/api/admin/logo/active", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60000, // Cache for 1 minute
-  })
-  
-  const customLogo = data?.logo
 
-  /* Icon / Favicon - just the logo image, no text */
+  const { data } = useSWR<{ logo: ActiveLogo | null }>(
+    "/api/logo/active",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+      shouldRetryOnError: false,
+    }
+  )
+
+  const customLogo = data?.logo || null
+
   if (variant === "favicon" || variant === "icon") {
     return (
       <div className={`relative flex-shrink-0 ${className}`}>
@@ -139,7 +151,6 @@ export function MujeebProAILogo({
     )
   }
 
-  /* Compact - smaller gap, no animation */
   if (variant === "compact") {
     return (
       <div className={`flex items-center gap-3 relative z-20 ${className}`}>
@@ -149,7 +160,6 @@ export function MujeebProAILogo({
     )
   }
 
-  /* Full - logo + colorful bold text with glow */
   return (
     <div className={`flex items-center gap-4 group relative z-20 ${className}`}>
       <BrandLogo size={dims.icon} animated={animated} customLogo={customLogo} />
