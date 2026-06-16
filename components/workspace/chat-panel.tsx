@@ -22,7 +22,6 @@ import {
   FileText,
   X,
   Eye,
-  Code,
   Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -181,7 +180,38 @@ h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px
 </body>
 </html>`
 }
+function sanitizeCustomerPreview(html: string): string {
+  if (!html) return ""
 
+  const blockedPatterns = [
+    /mujeeb@job4u\.com/gi,
+    /admin@mujeebproai\.com/gi,
+    /owner/gi,
+    /super-admin/gi,
+    /admin dashboard/gi,
+    /admin panel/gi,
+    /\/admin/gi,
+    /\/api\/admin/gi,
+    /\/settings/gi,
+    /\/users/gi,
+    /\/subscriptions/gi,
+    /\/balances/gi,
+    /\/logs/gi,
+    /stripe admin/gi,
+    /github/gi,
+    /vercel/gi,
+    /neon/gi,
+    /database/gi,
+  ]
+
+  let safeHtml = html
+
+  for (const pattern of blockedPatterns) {
+    safeHtml = safeHtml.replace(pattern, "")
+  }
+
+  return safeHtml
+}
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
@@ -279,7 +309,9 @@ if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
 }
 
   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-const savedPreview = localStorage.getItem(previewStorageKey)
+const savedPreview = isOwnerAdmin
+  ? localStorage.getItem(previewStorageKey)
+  : sanitizeCustomerPreview(localStorage.getItem(previewStorageKey) || "")
 const messageText =
   input.trim() +
   (savedPreview
@@ -479,11 +511,18 @@ const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaEleme
       const text = getMessageText(lastMsg)
       const html = buildPreviewHtml(text)
 if (html) {
- localStorage.setItem(previewStorageKey, html)
-  onPreviewUpdate(html)
+  const safeHtml = isOwnerAdmin ? html : sanitizeCustomerPreview(html)
+
+  if (safeHtml.trim()) {
+    localStorage.setItem(previewStorageKey, safeHtml)
+    onPreviewUpdate(safeHtml)
+  } else {
+    localStorage.removeItem(previewStorageKey)
+    onPreviewUpdate("")
+  }
 }
     }
-    }, [messages, onPreviewUpdate, previewStorageKey])
+  }, [messages, onPreviewUpdate, previewStorageKey, isOwnerAdmin])
 
 useEffect(() => {
   if (!onPreviewUpdate) return
@@ -493,7 +532,7 @@ useEffect(() => {
   return
 }
 
-  const savedPreview = localStorage.getItem(previewStorageKey)
+ const savedPreview = isOwnerAdmin ? localStorage.getItem(previewStorageKey) : sanitizeCustomerPreview(localStorage.getItem(previewStorageKey) || "")
 
   if (savedPreview) {
     onPreviewUpdate(savedPreview)
@@ -508,7 +547,7 @@ useEffect(() => {
 
   window.addEventListener("new-chat", handleNewChat)
   return () => window.removeEventListener("new-chat", handleNewChat)
-}, [onPreviewUpdate, previewStorageKey, user?.email])
+}, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
