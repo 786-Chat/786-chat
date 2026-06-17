@@ -180,6 +180,15 @@ export function WorkspacePreviewPanel({
   const currentDevice =
     DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
 
+  const isDesktopDevice = device === "full"
+  const isTabletDevice = device === "ipad" || device === "ipad-pro"
+  const isMobileDevice = !isDesktopDevice && !isTabletDevice
+
+  const deviceWidth = isDesktopDevice ? "100%" : isTabletDevice ? "768px" : "390px"
+  const deviceHeight = isDesktopDevice ? "100%" : isTabletDevice ? "88%" : "86%"
+  const deviceRadius = isDesktopDevice ? "0px" : isTabletDevice ? "34px" : "42px"
+  const screenRadius = isDesktopDevice ? "0px" : isTabletDevice ? "26px" : "34px"
+
   const copyCode = async () => {
     if (!safePreviewHtml) return
     await navigator.clipboard.writeText(safePreviewHtml)
@@ -219,6 +228,77 @@ export function WorkspacePreviewPanel({
     } catch {
       clearPreview()
     }
+  }
+
+  const renderPreviewFrame = (content: "html" | "url") => {
+    const iframeProps =
+      content === "html"
+        ? {
+            key: `html-${refreshKey}-${device}-${safePreviewHtml.length}`,
+            srcDoc: safePreviewHtml,
+            title: "Generated Preview",
+            sandbox: "allow-scripts allow-forms allow-popups",
+          }
+        : {
+            key: `${refreshKey}-${device}-${safeLiveUrl}`,
+            src: safeLiveUrl,
+            title: "Customer Website Preview",
+            sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
+          }
+
+    if (isDesktopDevice) {
+      return (
+        <iframe
+          {...iframeProps}
+          className="absolute inset-0 h-full w-full bg-white"
+        />
+      )
+    }
+
+    return (
+      <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_35%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.18),transparent_35%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.12),transparent_40%)] p-6">
+        <div className="flex min-h-full items-center justify-center">
+          <div
+            className={cn(
+              "relative shrink-0 p-[3px]",
+              isMobileDevice ? "shadow-[0_0_70px_rgba(34,211,238,0.28)]" : "shadow-[0_0_90px_rgba(168,85,247,0.24)]"
+            )}
+            style={{
+              width: deviceWidth,
+              height: deviceHeight,
+              maxWidth: "96%",
+              borderRadius: deviceRadius,
+              background:
+                "linear-gradient(135deg, rgba(34,211,238,0.95), rgba(168,85,247,0.95), rgba(239,68,68,0.85), rgba(34,197,94,0.9))",
+            }}
+          >
+            <div
+              className="relative h-full w-full overflow-hidden bg-[#05070d]"
+              style={{ borderRadius: screenRadius }}
+            >
+              {isMobileDevice && (
+                <>
+                  <div className="absolute left-1/2 top-2 z-20 h-5 w-28 -translate-x-1/2 rounded-full bg-black/80 border border-white/10" />
+                  <div className="absolute right-3 top-20 z-20 h-20 w-1 rounded-full bg-white/15" />
+                  <div className="absolute left-3 top-24 z-20 h-14 w-1 rounded-full bg-white/15" />
+                </>
+              )}
+
+              {isTabletDevice && (
+                <div className="absolute left-1/2 top-3 z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-black/70 border border-white/10" />
+              )}
+
+              <iframe
+                {...iframeProps}
+                className="h-full w-full bg-white"
+              />
+
+              <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/15" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   const safeLiveUrl =
@@ -300,6 +380,7 @@ export function WorkspacePreviewPanel({
               : "text-white/30 hover:text-white hover:bg-white/5"
           )}
           onClick={() => setDevice("full")}
+          title="Desktop"
         >
           <Monitor className="w-3.5 h-3.5" />
         </Button>
@@ -310,10 +391,11 @@ export function WorkspacePreviewPanel({
           className={cn(
             "h-7 w-7",
             device === "ipad" || device === "ipad-pro"
-              ? "text-cyan-400 bg-cyan-500/10"
+              ? "text-purple-300 bg-purple-500/10"
               : "text-white/30 hover:text-white hover:bg-white/5"
           )}
           onClick={() => setDevice("ipad")}
+          title="Tablet"
         >
           <Tablet className="w-3.5 h-3.5" />
         </Button>
@@ -324,10 +406,11 @@ export function WorkspacePreviewPanel({
           className={cn(
             "h-7 w-7",
             device !== "full" && device !== "ipad" && device !== "ipad-pro"
-              ? "text-cyan-400 bg-cyan-500/10"
+              ? "text-emerald-300 bg-emerald-500/10"
               : "text-white/30 hover:text-white hover:bg-white/5"
           )}
           onClick={() => setDevice("iphone-17-pro")}
+          title="Mobile"
         >
           <Smartphone className="w-3.5 h-3.5" />
         </Button>
@@ -381,21 +464,9 @@ export function WorkspacePreviewPanel({
             </pre>
           </div>
         ) : hasPreviewHtml ? (
-          <iframe
-            key={`html-${refreshKey}-${device}-${safePreviewHtml.length}`}
-            srcDoc={safePreviewHtml}
-            className="absolute inset-0 w-full h-full bg-white"
-            title="Generated Preview"
-            sandbox="allow-scripts allow-forms allow-popups"
-          />
+          renderPreviewFrame("html")
         ) : safeLiveUrl ? (
-          <iframe
-            key={`${refreshKey}-${device}-${safeLiveUrl}`}
-            src={safeLiveUrl}
-            className="absolute inset-0 w-full h-full bg-white"
-            title="Customer Website Preview"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+          renderPreviewFrame("url")
         ) : null}
       </div>
     </div>
