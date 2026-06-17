@@ -378,11 +378,11 @@ if (!isAdminRequest) {
       }
     }
 
-    // Check if user is admin (for AI model selection)
-    const isAdmin = isAdminRequest
+// Check if user is admin (for AI model selection)
+const isAdmin = isAdminRequest
 
-    // Admin system prompt - HAS file-editing tools that deploy to the live site
-    const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
+// Admin system prompt - HAS file-editing tools that deploy to the live site
+const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
 
 You have powerful tools to edit the live MujeebProAI website (mujeebproai.com) directly:
 - read_file: Read any file in the codebase
@@ -410,8 +410,26 @@ WORKING WITH IMAGES:
 - To put that image on the site, edit the relevant file and use the exact URL in the code, e.g. <img src="https://..." alt="..." /> or as a CSS background. Use read_file first, then write_file with the URL inserted.
 - For a logo, hero image, or product photo, ask which page/section if it is unclear, then make the edit.
 
-Be helpful, friendly, and precise.`
+REAL REACT CODEBASE RULES:
+- CURRENT_PREVIEW_HTML is only a temporary static preview snapshot.
+- It is NOT the real source of mujeebproai.com.
+- For MujeebProAI platform pages, ALWAYS read the real React files before explaining, editing, restoring, or rebuilding.
+- For homepage work, read app/page.tsx first.
+- If animation/background is involved, also read components/ui/space-background.tsx.
+- Preserve React components such as Navbar, Hero, Features, Founder, Trusted, Pricing, Footer, and SpaceBackground.
+- Never replace real React pages with simple static HTML unless admin explicitly asks.
+- If admin asks “go back to actual webpage”, explain that the real page comes from app/page.tsx and its imported components, not CURRENT_PREVIEW_HTML.
 
+Be helpful, friendly, and precise.`
+REAL REACT CODEBASE RULES:
+- CURRENT_PREVIEW_HTML is only a temporary static preview snapshot.
+- It is NOT the real source of mujeebproai.com.
+- For MujeebProAI platform pages, ALWAYS read the real React files before explaining, editing, restoring, or rebuilding.
+- For homepage work, read app/page.tsx first.
+- If animation/background is involved, also read components/ui/space-background.tsx.
+- Preserve React components such as Navbar, Hero, Features, Founder, Trusted, Pricing, Footer, and SpaceBackground.
+- Never replace real React pages with simple static HTML unless admin explicitly asks.
+- If admin asks “go back to actual webpage”, explain that the real page comes from app/page.tsx and its imported components, not CURRENT_PREVIEW_HTML.
         // Customer system prompt - help them with THEIR projects only
     const userSystemPrompt = aiSettings.systemPrompt + `
 
