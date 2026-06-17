@@ -6,8 +6,6 @@ import { useAuth } from "@/contexts/auth-context"
 import { 
   PanelLeftClose, 
   PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Settings, 
   Share2, 
   Globe,
@@ -15,8 +13,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Monitor,
-  Smartphone,
   ExternalLink,
   LogOut,
   Rocket,
@@ -46,22 +42,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-
-const DEVICE_PRESETS = [
-  { id: "full", label: "Full Size", icon: Monitor, width: "100%", height: "100%" },
-  { id: "16:9", label: "16:9", icon: Monitor, width: "1280px", height: "720px" },
-  { id: "iphone-se", label: "iPhone SE", icon: Smartphone, width: "375px", height: "667px" },
-  { id: "iphone-air", label: "iPhone Air", icon: Smartphone, width: "390px", height: "844px" },
-  { id: "iphone-17", label: "iPhone 17", icon: Smartphone, width: "393px", height: "852px" },
-  { id: "iphone-17-pro", label: "iPhone 17 Pro", icon: Smartphone, width: "402px", height: "874px" },
-  { id: "iphone-17-pro-max", label: "iPhone 17 Pro Max", icon: Smartphone, width: "440px", height: "956px" },
-  { id: "pixel-10", label: "Pixel 10", icon: Smartphone, width: "412px", height: "915px" },
-  { id: "pixel-10-pro", label: "Pixel 10 Pro", icon: Smartphone, width: "412px", height: "915px" },
-  { id: "pixel-10-pro-xl", label: "Pixel 10 Pro XL", icon: Smartphone, width: "448px", height: "998px" },
-  { id: "galaxy-s25", label: "Samsung Galaxy S25", icon: Smartphone, width: "385px", height: "854px" },
-  { id: "galaxy-s25-plus", label: "Samsung Galaxy S25+", icon: Smartphone, width: "412px", height: "915px" },
-  { id: "galaxy-s25-ultra", label: "Samsung Galaxy S25 Ultra", icon: Smartphone, width: "440px", height: "960px" },
-]
 
 interface TopBarProps {
   sidebarOpen: boolean
@@ -99,7 +79,6 @@ export function WorkspaceTopBar({
   const [isDeploying, setIsDeploying] = useState(false)
   const [deploySuccess, setDeploySuccess] = useState(false)
   const [deployedUrl, setDeployedUrl] = useState("")
-  const currentDevice = DEVICE_PRESETS.find(d => d.id === previewDevice) || DEVICE_PRESETS[0]
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -122,7 +101,6 @@ export function WorkspaceTopBar({
         setDeploySuccess(true)
         setPublishDialogOpen(false)
       } else {
-        // Fallback success message if deployment API does not return a URL
         setTimeout(() => {
           setDeployedUrl("https://your-site.mujeebproai.com")
           setDeploySuccess(true)
@@ -132,7 +110,6 @@ export function WorkspaceTopBar({
         return
       }
     } catch {
-     // Fallback success message if deployment API does not return a URL
       setTimeout(() => {
         setDeployedUrl("https://your-site.mujeebproai.com")
         setDeploySuccess(true)
@@ -147,7 +124,7 @@ export function WorkspaceTopBar({
   return (
     <>
       <div className="h-12 border-b border-white/[0.06] bg-[#0d0d14] flex items-center justify-between px-2 flex-shrink-0 z-50">
-        {/* Left Section - More compact on mobile */}
+        {/* Left Section */}
         <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 min-w-0">
           {/* Sidebar Toggle */}
           <Button
@@ -159,12 +136,12 @@ export function WorkspaceTopBar({
             {sidebarOpen ? <PanelLeftClose className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <PanelLeftOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </Button>
 
-          {/* Logo - links to homepage - hidden on very small screens */}
+          {/* Logo */}
           <Link href="/" className="hidden xs:flex items-center hover:opacity-80 transition-opacity flex-shrink-0" title="Go to Homepage">
             <MujeebProAILogo variant="compact" size="sm" animated={false} />
           </Link>
 
-          {/* Home button - shown on mobile instead of logo */}
+          {/* Home button - mobile */}
           <Button
             variant="ghost"
             size="sm"
@@ -180,7 +157,7 @@ export function WorkspaceTopBar({
           <div className="w-px h-5 bg-white/10 mx-1 hidden sm:block" />
         </div>
 
-        {/* MujeebProAI URL Bar - Center */}
+        {/* URL Bar - Center */}
         <div className="hidden md:flex items-center gap-2 flex-1 max-w-xl mx-4">
           {/* Traffic Lights */}
           <div className="flex items-center gap-1.5">
@@ -197,7 +174,7 @@ export function WorkspaceTopBar({
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          {/* URL Input - Detects URLs vs chat messages */}
+          {/* URL Input */}
 <form
   className="flex-1 flex items-center h-7 bg-white/[0.05] border border-white/[0.1] rounded-lg px-2.5 hover:border-cyan-500/30 focus-within:border-cyan-500/50 transition-colors"
   onSubmit={(e) => {
@@ -249,57 +226,8 @@ export function WorkspaceTopBar({
 </form>
         </div>
 
-        {/* Center - Mobile View Switcher */}
-        <div className="flex items-center gap-0.5 md:hidden flex-shrink-0">
-          <Button
-            variant={activeView === "chat" ? "default" : "ghost"}
-            size="sm"
-            className={`h-6 px-2 text-[10px] sm:h-7 sm:px-3 sm:text-xs ${activeView === "chat" ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30" : "text-white/50"}`}
-            onClick={() => setActiveView("chat")}
-          >
-            Chat
-          </Button>
-          <Button
-            variant={activeView === "preview" ? "default" : "ghost"}
-            size="sm"
-            className={`h-6 px-2 text-[10px] sm:h-7 sm:px-3 sm:text-xs ${activeView === "preview" ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30" : "text-white/50"}`}
-            onClick={() => { setActiveView("preview"); setPreviewOpen(true) }}
-          >
-            View
-          </Button>
-        </div>
-
         {/* Right Section */}
         <div className="flex items-center gap-1">
-          {/* Device Preview Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 text-xs text-white/50 hover:text-white hover:bg-white/5 gap-1 hidden lg:flex">
-                <currentDevice.icon className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">{currentDevice.label}</span>
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-[#14141f] border-white/10">
-              <DropdownMenuLabel className="text-white/40 text-xs">Device Preview</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-white/10" />
-              {DEVICE_PRESETS.map((device) => (
-                <DropdownMenuItem
-                  key={device.id}
-                  className={`text-xs gap-3 cursor-pointer ${previewDevice === device.id ? "text-cyan-400 bg-cyan-500/10" : "text-white/70 hover:text-white"}`}
-                  onClick={() => {
-                    setPreviewDevice(device.id)
-                    if (!previewOpen) setPreviewOpen(true)
-                  }}
-                >
-                  <device.icon className="w-3.5 h-3.5" />
-                  <span className="flex-1">{device.label}</span>
-                  <span className="text-white/30 text-[10px]">{device.width === "100%" ? "Auto" : `${device.width.replace("px","")}`}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* Preview/Code Toggle */}
           <div className="flex items-center gap-0.5 bg-white/[0.03] border border-white/[0.08] rounded-lg p-0.5 hidden sm:flex">
             <button
@@ -327,16 +255,6 @@ export function WorkspaceTopBar({
               <span className="hidden lg:inline">Code</span>
             </button>
           </div>
-
-          {/* Preview Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-white/50 hover:text-white hover:bg-white/5 hidden md:flex"
-            onClick={() => setPreviewOpen(!previewOpen)}
-          >
-            {previewOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-          </Button>
 
           <div className="w-px h-5 bg-white/10 mx-1" />
 
@@ -564,5 +482,3 @@ export function WorkspaceTopBar({
     </>
   )
 }
-
-export { DEVICE_PRESETS }
