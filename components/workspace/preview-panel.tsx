@@ -30,8 +30,39 @@ interface PreviewPanelProps {
   onViewModeChange?: (mode: "preview" | "code") => void
 }
 
+function looksLikeReactOrTsxCode(value: string): boolean {
+  const text = value.trim()
+
+  if (!text) return false
+
+  const codeSignals = [
+    /^["']use client["']/,
+    /\bimport\s+.+\s+from\s+["'][^"']+["']/,
+    /\bexport\s+default\s+function\b/,
+    /\bexport\s+function\b/,
+    /\bfunction\s+[A-Z][A-Za-z0-9_]*\s*\(/,
+    /\bconst\s+[A-Z][A-Za-z0-9_]*\s*=\s*\(/,
+    /interface\s+[A-Z][A-Za-z0-9_]*/,
+    /type\s+[A-Z][A-Za-z0-9_]*\s*=/,
+    /className=/,
+    /onClick=/,
+    /useState\s*\(/,
+    /useEffect\s*\(/,
+  ]
+
+  const hasRealHtmlDocument =
+    /<!doctype html/i.test(text) ||
+    /<html[\s>]/i.test(text) ||
+    /<body[\s>]/i.test(text)
+
+  if (hasRealHtmlDocument) return false
+
+  return codeSignals.some((pattern) => pattern.test(text))
+}
+
 function hasVisibleHtmlContent(html: string): boolean {
   if (!html || !html.trim()) return false
+  if (looksLikeReactOrTsxCode(html)) return false
 
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
   const content = bodyMatch ? bodyMatch[1] : html
@@ -99,8 +130,10 @@ export function WorkspacePreviewPanel({
   const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
 
+  const isReactCode = previewHtml ? looksLikeReactOrTsxCode(previewHtml) : false
+
   const cleanedPreviewHtml =
-    previewHtml && hasVisibleHtmlContent(previewHtml)
+    previewHtml && !isReactCode && hasVisibleHtmlContent(previewHtml)
       ? stripDangerousPreviewHtml(previewHtml)
       : ""
 
@@ -186,8 +219,10 @@ export function WorkspacePreviewPanel({
   const isMobileDevice = !isDesktopDevice && !isTabletDevice
 
   const copyCode = async () => {
-    if (!safePreviewHtml) return
-    await navigator.clipboard.writeText(safePreviewHtml)
+    const codeToCopy = safePreviewHtml || previewHtml || ""
+    if (!codeToCopy) return
+
+    await navigator.clipboard.writeText(codeToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -226,6 +261,13 @@ export function WorkspacePreviewPanel({
     }
   }
 
+  const safeLiveUrl =
+    liveUrl && liveUrl !== "about:blank" && !isBlockedCustomerUrl(liveUrl)
+      ? liveUrl
+      : ""
+
+  const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
+
   const renderPreviewFrame = (content: "html" | "url") => {
     const iframeProps =
       content === "html"
@@ -252,51 +294,41 @@ export function WorkspacePreviewPanel({
     }
 
     const frameClass = isMobileDevice
-      ? "h-[760px] w-[360px] max-h-[calc(100vh-190px)] max-w-[92vw] rounded-[46px]"
+      ? "h-[852px] w-[393px] max-h-[calc(100vh-170px)] max-w-[94vw] rounded-[58px]"
       : "h-[720px] w-[900px] max-h-[calc(100vh-190px)] max-w-[94vw] rounded-[34px]"
 
-    const screenClass = isMobileDevice
-      ? "rounded-[38px]"
-      : "rounded-[26px]"
+    const screenClass = isMobileDevice ? "rounded-[50px]" : "rounded-[26px]"
 
     return (
       <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.24),transparent_38%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.16),transparent_42%)] p-5">
         <div className="flex min-h-full items-center justify-center py-5">
           <div
             className={cn(
-              "relative shrink-0 p-[4px] shadow-2xl",
+              "relative shrink-0 shadow-2xl bg-[#111318]",
               frameClass,
-              isMobileDevice
-                ? "shadow-cyan-500/25"
-                : "shadow-purple-500/25"
+              isMobileDevice ? "p-[10px] shadow-cyan-500/25" : "p-[4px] shadow-purple-500/25"
             )}
-            style={{
-              background:
-                "linear-gradient(135deg, #22d3ee, #8b5cf6, #ef4444, #22c55e)",
-            }}
           >
+            {isMobileDevice && (
+              <>
+                <div className="absolute left-1/2 top-[18px] z-30 h-[31px] w-[118px] -translate-x-1/2 rounded-full bg-black border border-white/10" />
+                <div className="absolute right-[-3px] top-[190px] z-30 h-[92px] w-[4px] rounded-r-full bg-[#2a2d35]" />
+                <div className="absolute left-[-3px] top-[150px] z-30 h-[54px] w-[4px] rounded-l-full bg-[#2a2d35]" />
+                <div className="absolute left-[-3px] top-[220px] z-30 h-[78px] w-[4px] rounded-l-full bg-[#2a2d35]" />
+              </>
+            )}
+
             <div
               className={cn(
-                "relative h-full w-full overflow-hidden bg-[#05070d]",
+                "relative h-full w-full overflow-hidden bg-white",
                 screenClass
               )}
             >
-              {isMobileDevice && (
-                <>
-                  <div className="absolute left-1/2 top-3 z-20 h-6 w-32 -translate-x-1/2 rounded-full bg-black/90 border border-white/10" />
-                  <div className="absolute right-[-2px] top-28 z-20 h-20 w-1 rounded-full bg-white/20" />
-                  <div className="absolute left-[-2px] top-32 z-20 h-16 w-1 rounded-full bg-white/20" />
-                </>
-              )}
-
               {isTabletDevice && (
                 <div className="absolute left-1/2 top-3 z-20 h-3 w-3 -translate-x-1/2 rounded-full bg-black/80 border border-white/10" />
               )}
 
-              <iframe
-                {...iframeProps}
-                className="h-full w-full bg-white"
-              />
+              <iframe {...iframeProps} className="h-full w-full bg-white" />
 
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/15" />
             </div>
@@ -305,13 +337,6 @@ export function WorkspacePreviewPanel({
       </div>
     )
   }
-
-  const safeLiveUrl =
-    liveUrl && liveUrl !== "about:blank" && !isBlockedCustomerUrl(liveUrl)
-      ? liveUrl
-      : ""
-
-  const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
 
   return (
     <div
@@ -369,7 +394,9 @@ export function WorkspacePreviewPanel({
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
                 ? "Website Preview"
-                : "Preview Ready - No Website Loaded"}
+                : isReactCode
+                  ? "Code detected - switch to Code mode"
+                  : "Preview Ready - No Website Loaded"}
           </span>
         </div>
       </div>
@@ -429,24 +456,38 @@ export function WorkspacePreviewPanel({
             </div>
 
             <h3 className="text-sm font-medium text-white/50 mb-1">
-              Preview is empty
+              {isReactCode ? "Code is not preview HTML" : "Preview is empty"}
             </h3>
 
             <p className="text-xs text-white/25 max-w-[280px] mb-4">
-              Ask AI to generate or edit a website. The preview will appear here instead of a blank white page.
+              {isReactCode
+                ? "React/TSX code will only show in Code mode. Preview mode only renders real HTML or your live website."
+                : "Ask AI to generate or edit a website. The preview will appear here instead of a blank white page."}
             </p>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
-              onClick={loadMyCustomerSite}
-            >
-              <Globe className="w-3 h-3 mr-1.5" />
-              Preview My Site
-            </Button>
+            {isReactCode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                onClick={copyCode}
+              >
+                <Copy className="w-3 h-3 mr-1.5" />
+                {copied ? "Copied!" : "Copy Code"}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20"
+                onClick={loadMyCustomerSite}
+              >
+                <Globe className="w-3 h-3 mr-1.5" />
+                Preview My Site
+              </Button>
+            )}
           </div>
-        ) : viewMode === "code" && hasPreviewHtml ? (
+        ) : viewMode === "code" && (safePreviewHtml || previewHtml) ? (
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
@@ -465,7 +506,7 @@ export function WorkspacePreviewPanel({
             </div>
 
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {safePreviewHtml}
+              {safePreviewHtml || previewHtml}
             </pre>
           </div>
         ) : hasPreviewHtml ? (
