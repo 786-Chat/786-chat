@@ -83,8 +83,51 @@ const suggestedPrompts = [
   "React best practices for 2025",
 ]
 
+function looksLikeReactOrTsxCode(value: string): boolean {
+  const text = value.trim()
+  if (!text) return false
+
+  const hasHtmlDocument =
+    /<!doctype html/i.test(text) ||
+    /<html[\s>]/i.test(text) ||
+    /<body[\s>]/i.test(text)
+
+  if (hasHtmlDocument) return false
+
+  const reactSignals = [
+    /^["']use client["']/,
+    /\bimport\s+.+\s+from\s+["'][^"']+["']/,
+    /\bexport\s+default\s+function\b/,
+    /\bexport\s+function\b/,
+    /\bfunction\s+[A-Z][A-Za-z0-9_]*\s*\(/,
+    /\bconst\s+[A-Z][A-Za-z0-9_]*\s*=\s*\(/,
+    /\binterface\s+[A-Z][A-Za-z0-9_]*/,
+    /\btype\s+[A-Z][A-Za-z0-9_]*\s*=/,
+    /\buseState\s*\(/,
+    /\buseEffect\s*\(/,
+    /className=/,
+    /onClick=/,
+  ]
+
+  return reactSignals.some((pattern) => pattern.test(text))
+}
+
+function isFakeComponentCodePreview(html: string): boolean {
+  const text = html.trim().toLowerCase()
+
+  return (
+    text.includes("<h3>component code</h3>") ||
+    (text.includes("component code") &&
+      text.includes("<pre>") &&
+      text.includes("import ") &&
+      text.includes("export default"))
+  )
+}
+
 function hasVisibleHtmlContent(html: string): boolean {
   if (!html || !html.trim()) return false
+  if (isFakeComponentCodePreview(html)) return false
+  if (looksLikeReactOrTsxCode(html)) return false
 
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
   const content = bodyMatch ? bodyMatch[1] : html
@@ -116,13 +159,7 @@ function buildPreviewHtml(text: string): string | null {
 
   const htmlBlock = blocks.find((b) => b.lang === "html" || b.lang === "htm")
   const cssBlock = blocks.find((b) => b.lang === "css")
-  const jsBlock = blocks.find(
-    (b) =>
-      b.lang === "javascript" ||
-      b.lang === "js" ||
-      b.lang === "typescript" ||
-      b.lang === "ts"
-  )
+  const jsBlock = blocks.find((b) => b.lang === "javascript" || b.lang === "js")
 
   if (htmlBlock && htmlBlock.code.includes("<html")) {
     return hasVisibleHtmlContent(htmlBlock.code) ? htmlBlock.code : null
@@ -149,36 +186,13 @@ ${jsBlock ? `<script>${jsBlock.code}<\/script>` : ""}
     return hasVisibleHtmlContent(fullHtml) ? fullHtml : null
   }
 
-  const reactBlock = blocks.find((b) => ["jsx", "tsx", "react"].includes(b.lang))
-
-  if (reactBlock) {
-    const escaped = reactBlock.code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<style>
-body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0d1117; color: #e6edf3; padding: 24px; margin: 0; }
-pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6; }
-h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px; font-size: 14px; font-weight: 500; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
-</style>
-</head>
-<body>
-<h3>Component Code</h3>
-<pre>${escaped}</pre>
-</body>
-</html>`
-  }
-
   return null
 }
 
 function sanitizeCustomerPreview(html: string): string {
   if (!html) return ""
+  if (isFakeComponentCodePreview(html)) return ""
+  if (looksLikeReactOrTsxCode(html)) return ""
 
   const blockedPatterns = [
     /mujeeb@job4u\.com/gi,
@@ -219,7 +233,6 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
 
-  const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -234,14 +247,19 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 
   const savePreviewWithBackup = useCallback(
     (nextHtml: string) => {
+      if (!nextHtml || !hasVisibleHtmlContent(nextHtml)) {
+        onPreviewUpdate?.("")
+        return
+      }
+
+      localStorage.setItem(previewStorageKey, nextHtml)
       onPreviewUpdate?.(nextHtml)
     },
-    [onPreviewUpdate]
+    [onPreviewUpdate, previewStorageKey]
   )
 
   const {
     messages,
-    setMessages,
     sendMessage,
     status,
     stop,
@@ -250,7 +268,6 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   } = useChat({
     api: "/api/chat",
     body: {
-      chatId: activeChatId,
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
@@ -260,61 +277,6 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   })
 
   const isLoading = status === "streaming" || status === "submitted"
-
-  useEffect(() => {
-    const handleLoadChat = async (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      const chatId = detail?.chatId
-
-      if (!chatId) return
-
-      try {
-        const res = await fetch(`/api/chat?chatId=${chatId}`, {
-          credentials: "include",
-          cache: "no-store",
-        })
-
-        if (!res.ok) return
-
-        const data = await res.json()
-
-        const loadedMessages = (data.messages || []).map((msg: any) => ({
-          id: String(msg.id),
-          role: msg.role,
-          parts: [{ type: "text", text: msg.content || "" }],
-        }))
-
-        setActiveChatId(chatId)
-        setMessages(loadedMessages)
-        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
-      } catch (error) {
-        console.error("Failed to load chat:", error)
-      }
-    }
-
-    const handleNewChat = () => {
-      setActiveChatId(null)
-      setMessages([])
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate?.("")
-    }
-
-    window.addEventListener("load-chat", handleLoadChat)
-    window.addEventListener("new-chat", handleNewChat)
-
-    return () => {
-      window.removeEventListener("load-chat", handleLoadChat)
-      window.removeEventListener("new-chat", handleNewChat)
-    }
-  }, [
-    setMessages,
-    previewStorageKey,
-    previewBackupStorageKey,
-    previewHistoryStorageKey,
-    onPreviewUpdate,
-  ])
 
   useEffect(() => {
     fetch("/api/usage")
@@ -371,33 +333,11 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     }
 
     const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-    const userInputText = input.trim()
-    const wantsActualHomepage =
-      isOwnerAdmin &&
-      /actual homepage|real homepage|go back.*homepage|back to.*homepage|live homepage|mujeebproai homepage/i.test(
-        userInputText
-      )
-
-    if (wantsActualHomepage) {
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate?.("")
-      window.dispatchEvent(
-        new CustomEvent("top-bar-preview-url", {
-          detail: { url: "/" },
-        })
-      )
-    }
-
-    const storedPreview = wantsActualHomepage
-      ? ""
-      : localStorage.getItem(previewStorageKey) || ""
-
+    const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
 
     const messageText =
-      userInputText +
+      input.trim() +
       (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
@@ -613,13 +553,24 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
 
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+
     if (savedPreview && hasVisibleHtmlContent(savedPreview)) {
       onPreviewUpdate(savedPreview)
     } else {
       localStorage.removeItem(previewStorageKey)
       onPreviewUpdate("")
     }
-  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
+
+    const handleNewChat = () => {
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+      onPreviewUpdate("")
+    }
+
+    window.addEventListener("new-chat", handleNewChat)
+    return () => window.removeEventListener("new-chat", handleNewChat)
+  }, [onPreviewUpdate, previewBackupStorageKey, previewHistoryStorageKey, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
