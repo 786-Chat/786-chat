@@ -47,29 +47,40 @@ function hasVisibleHtmlContent(html: string): boolean {
     .replace(/&nbsp;/g, " ")
     .trim()
 
-  const hasImageOrSvg = /<(img|svg|canvas|iframe)\b/i.test(noScriptsStyles)
+  const hasRealPreviewElement =
+    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg|iframe)\b/i.test(
+      noScriptsStyles
+    )
 
-  return textOnly.length > 3 || hasImageOrSvg
+  return textOnly.length > 3 || hasRealPreviewElement
 }
 
-function isBlockedPreviewHtml(html: string): boolean {
-  const lower = html.toLowerCase()
+function stripDangerousPreviewHtml(html: string): string {
+  if (!html) return ""
 
-  const blocked = [
-    "mujeeb@job4u.com",
-    "admin@mujeebproai.com",
-    "admin dashboard",
-    "admin panel",
-    "/api/admin",
-    "stripe admin",
-    "vercel",
-    "neon",
-    "database password",
-    "secret key",
-    "private key",
-  ]
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (script) => {
+      const lower = script.toLowerCase()
 
-  return blocked.some((word) => lower.includes(word))
+      const looksDangerous =
+        lower.includes("localstorage") ||
+        lower.includes("sessionstorage") ||
+        lower.includes("document.cookie") ||
+        lower.includes("fetch(") ||
+        lower.includes("xmlhttprequest") ||
+        lower.includes("/api/admin") ||
+        lower.includes("/admin") ||
+        lower.includes("authorization") ||
+        lower.includes("bearer ") ||
+        lower.includes("secret") ||
+        lower.includes("private_key") ||
+        lower.includes("private key")
+
+      return looksDangerous ? "" : script
+    })
+    .replace(/\son\w+=["'][\s\S]*?["']/gi, "")
+    .replace(/\shref=["']javascript:[\s\S]*?["']/gi, ' href="#"')
+    .replace(/\ssrc=["']javascript:[\s\S]*?["']/gi, "")
 }
 
 export function WorkspacePreviewPanel({
@@ -88,11 +99,14 @@ export function WorkspacePreviewPanel({
   const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
 
+  const cleanedPreviewHtml =
+    previewHtml && hasVisibleHtmlContent(previewHtml)
+      ? stripDangerousPreviewHtml(previewHtml)
+      : ""
+
   const safePreviewHtml =
-    previewHtml &&
-    hasVisibleHtmlContent(previewHtml) &&
-    !isBlockedPreviewHtml(previewHtml)
-      ? previewHtml
+    cleanedPreviewHtml && hasVisibleHtmlContent(cleanedPreviewHtml)
+      ? cleanedPreviewHtml
       : ""
 
   const hasPreviewHtml = Boolean(safePreviewHtml)
@@ -368,7 +382,7 @@ export function WorkspacePreviewPanel({
           </div>
         ) : hasPreviewHtml ? (
           <iframe
-            key={`html-${refreshKey}-${device}`}
+            key={`html-${refreshKey}-${device}-${safePreviewHtml.length}`}
             srcDoc={safePreviewHtml}
             className="absolute inset-0 w-full h-full bg-white"
             title="Generated Preview"
