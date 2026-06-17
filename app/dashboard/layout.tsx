@@ -4,14 +4,12 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { motion } from "framer-motion"
-import { RotateCcw, Home } from "lucide-react"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
 import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
-import { cn } from "@/lib/utils"
 
 const OWNER_EMAILS = ["mujeeb@job4u.com"]
 
@@ -54,7 +52,6 @@ export default function DashboardLayout({
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
   const [chatWidthPercent, setChatWidthPercent] = useState(50)
-  const [hasPreviewBackup, setHasPreviewBackup] = useState(false)
 
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -93,11 +90,9 @@ export default function DashboardLayout({
       if (cleanHistory.length > 0) {
         localStorage.setItem(previewHistoryStorageKey, JSON.stringify(cleanHistory))
         localStorage.setItem(previewBackupStorageKey, cleanHistory[cleanHistory.length - 1])
-        setHasPreviewBackup(true)
       } else {
         localStorage.removeItem(previewHistoryStorageKey)
         localStorage.removeItem(previewBackupStorageKey)
-        setHasPreviewBackup(false)
       }
     },
     [previewBackupStorageKey, previewHistoryStorageKey]
@@ -151,29 +146,6 @@ export default function DashboardLayout({
     [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
 
-  const restorePreviousPreview = useCallback(() => {
-    const history = readPreviewHistory()
-    const backupHtml = history.pop() || localStorage.getItem(previewBackupStorageKey) || ""
-
-    if (!backupHtml || !hasVisibleHtmlContent(backupHtml)) return
-
-    localStorage.setItem(previewStorageKey, backupHtml)
-    writePreviewHistory(history)
-    setPreviewHtml(backupHtml)
-    setPreviewUrl("")
-    setPreviewOpen(true)
-    setActiveView("preview")
-  }, [previewBackupStorageKey, previewStorageKey, readPreviewHistory, writePreviewHistory])
-
-  const showActualHomepage = useCallback(() => {
-    localStorage.removeItem(previewStorageKey)
-    setPreviewHtml("")
-    setPreviewUrl("/")
-    setPreviewOpen(true)
-    setActiveView("preview")
-    setViewMode("preview")
-  }, [previewStorageKey])
-
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login")
@@ -190,17 +162,11 @@ export default function DashboardLayout({
     if (!userEmail) return
 
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
-    const storedBackup = localStorage.getItem(previewBackupStorageKey) || ""
-    const history = readPreviewHistory()
 
     if (storedPreview && hasVisibleHtmlContent(storedPreview)) {
       setPreviewHtml(storedPreview)
     }
-
-    setHasPreviewBackup(
-      history.length > 0 || Boolean(storedBackup && hasVisibleHtmlContent(storedBackup))
-    )
-  }, [previewBackupStorageKey, previewStorageKey, userEmail, readPreviewHistory])
+  }, [previewStorageKey, userEmail])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -327,41 +293,9 @@ export default function DashboardLayout({
       />
 
       <div className="border-b border-white/[0.06] bg-[#0f1118]/95 px-3 py-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="truncate text-xs text-white/45">
-            Preview safety is active. MujeebProAI saves the previous preview before applying a new AI preview.
-          </p>
-
-          <div className="flex items-center gap-2">
-            {isOwner && (
-              <button
-                type="button"
-                onClick={showActualHomepage}
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-all hover:bg-emerald-500/20"
-                title="Clear AI preview and show actual homepage"
-              >
-                <Home className="h-3.5 w-3.5" />
-                Actual Homepage
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={restorePreviousPreview}
-              disabled={!hasPreviewBackup}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
-                hasPreviewBackup
-                  ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
-                  : "border-white/10 bg-white/[0.03] text-white/25 cursor-not-allowed"
-              )}
-              title="Rollback / Restore Previous Version"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Rollback
-            </button>
-          </div>
-        </div>
+        <p className="truncate text-xs text-white/45">
+          Preview safety is active. MujeebProAI saves the previous preview before applying a new AI preview.
+        </p>
       </div>
 
       <div className="flex-1 flex overflow-hidden relative">
