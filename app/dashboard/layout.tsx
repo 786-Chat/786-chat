@@ -4,14 +4,36 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { motion } from "framer-motion"
+import { RotateCcw } from "lucide-react"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
 import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
+import { cn } from "@/lib/utils"
 
 const OWNER_EMAILS = ["mujeeb@job4u.com"]
+
+function hasVisibleHtmlContent(html: string): boolean {
+  if (!html || !html.trim()) return false
+
+  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+  const content = bodyMatch ? bodyMatch[1] : html
+
+  const withoutInvisible = content
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .trim()
+
+  const hasRealElements =
+    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
+
+  return withoutInvisible.length > 3 || hasRealElements
+}
 
 export default function DashboardLayout({
   children,
@@ -32,12 +54,18 @@ export default function DashboardLayout({
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
   const [chatWidthPercent, setChatWidthPercent] = useState(50)
+  const [hasPreviewBackup, setHasPreviewBackup] = useState(false)
 
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const userEmail = String(user?.email || "").trim().toLowerCase()
   const isOwner = OWNER_EMAILS.includes(userEmail)
+
+  const previewStorageKey = userEmail
+    ? `mujeebproai_last_preview_html_${userEmail}`
+    : "mujeebproai_last_preview_html_guest"
+  const previewBackupStorageKey = `${previewStorageKey}_backup`
 
   const isChatWorkspace =
     pathname === "/dashboard/chat" ||
@@ -52,6 +80,47 @@ export default function DashboardLayout({
     document.body.style.userSelect = "none"
   }, [])
 
+  const handlePreviewUpdate = useCallback(
+    (nextHtml: string) => {
+      const currentHtml = previewHtml || localStorage.getItem(previewStorageKey) || ""
+
+      if (
+        currentHtml &&
+        nextHtml &&
+        hasVisibleHtmlContent(currentHtml) &&
+        hasVisibleHtmlContent(nextHtml) &&
+        currentHtml.trim() !== nextHtml.trim()
+      ) {
+        localStorage.setItem(previewBackupStorageKey, currentHtml)
+        setHasPreviewBackup(true)
+      }
+
+      if (nextHtml && hasVisibleHtmlContent(nextHtml)) {
+        localStorage.setItem(previewStorageKey, nextHtml)
+      }
+
+      setPreviewHtml(nextHtml)
+      setPreviewUrl("")
+      setPreviewOpen(true)
+      setActiveView("preview")
+    },
+    [previewBackupStorageKey, previewHtml, previewStorageKey]
+  )
+
+  const restorePreviousPreview = useCallback(() => {
+    const backupHtml = localStorage.getItem(previewBackupStorageKey) || ""
+
+    if (!backupHtml || !hasVisibleHtmlContent(backupHtml)) return
+
+    localStorage.setItem(previewStorageKey, backupHtml)
+    localStorage.removeItem(previewBackupStorageKey)
+    setPreviewHtml(backupHtml)
+    setPreviewUrl("")
+    setHasPreviewBackup(false)
+    setPreviewOpen(true)
+    setActiveView("preview")
+  }, [previewBackupStorageKey, previewStorageKey])
+
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login")
@@ -63,6 +132,19 @@ export default function DashboardLayout({
       router.replace("/dashboard/chat")
     }
   }, [isLoading, shouldRedirectOwnerToChat, router])
+
+  useEffect(() => {
+    if (!userEmail) return
+
+    const storedPreview = localStorage.getItem(previewStorageKey) || ""
+    const storedBackup = localStorage.getItem(previewBackupStorageKey) || ""
+
+    if (storedPreview && hasVisibleHtmlContent(storedPreview)) {
+      setPreviewHtml(storedPreview)
+    }
+
+    setHasPreviewBackup(Boolean(storedBackup && hasVisibleHtmlContent(storedBackup)))
+  }, [previewBackupStorageKey, previewStorageKey, userEmail])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -188,6 +270,30 @@ export default function DashboardLayout({
         onViewModeChange={setViewMode}
       />
 
+      <div className="border-b border-white/[0.06] bg-[#0f1118]/95 px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="truncate text-xs text-white/45">
+            Preview safety is active. MujeebProAI saves the previous preview before applying a new AI preview.
+          </p>
+
+          <button
+            type="button"
+            onClick={restorePreviousPreview}
+            disabled={!hasPreviewBackup}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
+              hasPreviewBackup
+                ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
+                : "border-white/10 bg-white/[0.03] text-white/25 cursor-not-allowed"
+            )}
+            title="Rollback / Restore Previous Version"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Rollback
+          </button>
+        </div>
+      </div>
+
       <div className="flex-1 flex overflow-hidden relative">
         <WorkspaceSidebar
           isOpen={sidebarOpen}
@@ -215,7 +321,7 @@ export default function DashboardLayout({
             }}
           >
             <WorkspaceChatPanel
-              onPreviewUpdate={setPreviewHtml}
+              onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
             />
