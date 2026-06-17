@@ -115,14 +115,15 @@ export function WorkspacePreviewPanel({
     const cleanUrl = url.trim()
     if (!cleanUrl) return ""
     if (cleanUrl === "about:blank") return ""
+    if (cleanUrl === "/") return "/"
     if (cleanUrl.startsWith("/site/")) return cleanUrl
 
-    if (cleanUrl.startsWith("https://www.mujeebproai.com/site/")) {
-      return cleanUrl.replace("https://www.mujeebproai.com", "")
+    if (cleanUrl.startsWith("https://www.mujeebproai.com")) {
+      return cleanUrl.replace("https://www.mujeebproai.com", "") || "/"
     }
 
-    if (cleanUrl.startsWith("https://mujeebproai.com/site/")) {
-      return cleanUrl.replace("https://mujeebproai.com", "")
+    if (cleanUrl.startsWith("https://mujeebproai.com")) {
+      return cleanUrl.replace("https://mujeebproai.com", "") || "/"
     }
 
     return cleanUrl
@@ -184,11 +185,6 @@ export function WorkspacePreviewPanel({
   const isTabletDevice = device === "ipad" || device === "ipad-pro"
   const isMobileDevice = !isDesktopDevice && !isTabletDevice
 
-  const deviceWidth = isDesktopDevice ? "100%" : isTabletDevice ? "768px" : "390px"
-  const deviceHeight = isDesktopDevice ? "100%" : isTabletDevice ? "88%" : "86%"
-  const deviceRadius = isDesktopDevice ? "0px" : isTabletDevice ? "34px" : "42px"
-  const screenRadius = isDesktopDevice ? "0px" : isTabletDevice ? "26px" : "34px"
-
   const copyCode = async () => {
     if (!safePreviewHtml) return
     await navigator.clipboard.writeText(safePreviewHtml)
@@ -242,7 +238,7 @@ export function WorkspacePreviewPanel({
         : {
             key: `${refreshKey}-${device}-${safeLiveUrl}`,
             src: safeLiveUrl,
-            title: "Customer Website Preview",
+            title: "Website Preview",
             sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
           }
 
@@ -255,37 +251,46 @@ export function WorkspacePreviewPanel({
       )
     }
 
+    const frameClass = isMobileDevice
+      ? "h-[760px] w-[360px] max-h-[calc(100vh-190px)] max-w-[92vw] rounded-[46px]"
+      : "h-[720px] w-[900px] max-h-[calc(100vh-190px)] max-w-[94vw] rounded-[34px]"
+
+    const screenClass = isMobileDevice
+      ? "rounded-[38px]"
+      : "rounded-[26px]"
+
     return (
-      <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_35%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.18),transparent_35%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.12),transparent_40%)] p-6">
-        <div className="flex min-h-full items-center justify-center">
+      <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.24),transparent_38%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.16),transparent_42%)] p-5">
+        <div className="flex min-h-full items-center justify-center py-5">
           <div
             className={cn(
-              "relative shrink-0 p-[3px]",
-              isMobileDevice ? "shadow-[0_0_70px_rgba(34,211,238,0.28)]" : "shadow-[0_0_90px_rgba(168,85,247,0.24)]"
+              "relative shrink-0 p-[4px] shadow-2xl",
+              frameClass,
+              isMobileDevice
+                ? "shadow-cyan-500/25"
+                : "shadow-purple-500/25"
             )}
             style={{
-              width: deviceWidth,
-              height: deviceHeight,
-              maxWidth: "96%",
-              borderRadius: deviceRadius,
               background:
-                "linear-gradient(135deg, rgba(34,211,238,0.95), rgba(168,85,247,0.95), rgba(239,68,68,0.85), rgba(34,197,94,0.9))",
+                "linear-gradient(135deg, #22d3ee, #8b5cf6, #ef4444, #22c55e)",
             }}
           >
             <div
-              className="relative h-full w-full overflow-hidden bg-[#05070d]"
-              style={{ borderRadius: screenRadius }}
+              className={cn(
+                "relative h-full w-full overflow-hidden bg-[#05070d]",
+                screenClass
+              )}
             >
               {isMobileDevice && (
                 <>
-                  <div className="absolute left-1/2 top-2 z-20 h-5 w-28 -translate-x-1/2 rounded-full bg-black/80 border border-white/10" />
-                  <div className="absolute right-3 top-20 z-20 h-20 w-1 rounded-full bg-white/15" />
-                  <div className="absolute left-3 top-24 z-20 h-14 w-1 rounded-full bg-white/15" />
+                  <div className="absolute left-1/2 top-3 z-20 h-6 w-32 -translate-x-1/2 rounded-full bg-black/90 border border-white/10" />
+                  <div className="absolute right-[-2px] top-28 z-20 h-20 w-1 rounded-full bg-white/20" />
+                  <div className="absolute left-[-2px] top-32 z-20 h-16 w-1 rounded-full bg-white/20" />
                 </>
               )}
 
               {isTabletDevice && (
-                <div className="absolute left-1/2 top-3 z-20 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-black/70 border border-white/10" />
+                <div className="absolute left-1/2 top-3 z-20 h-3 w-3 -translate-x-1/2 rounded-full bg-black/80 border border-white/10" />
               )}
 
               <iframe
@@ -363,7 +368,7 @@ export function WorkspacePreviewPanel({
             {hasPreviewHtml
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
-                ? "Customer Website Preview"
+                ? "Website Preview"
                 : "Preview Ready - No Website Loaded"}
           </span>
         </div>
