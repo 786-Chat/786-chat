@@ -1,981 +1,426 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
-import { useChat } from "@ai-sdk/react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { MujeebProAILogo } from "@/components/mujeebproai-logo"
+import { motion, AnimatePresence } from "framer-motion"
 import {
-  Bot,
-  User,
-  Loader2,
-  Copy,
-  Check,
-  RefreshCw,
-  StopCircle,
+  Plus,
+  MessageSquare,
+  Trash2,
+  Search,
   Zap,
-  ArrowUp,
-  ImagePlus,
-  Paperclip,
+  Palette,
+  Upload,
+  Globe,
+  ExternalLink,
   FileText,
-  X,
-  Eye,
-  Sparkles,
+  Rocket,
 } from "lucide-react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { UpgradePopup } from "@/components/upgrade-popup"
-import { ToolActivity, type ToolPart } from "@/components/workspace/tool-activity"
+
+interface ChatHistory {
+  id: string
+  title: string
+  createdAt: string
+  messageCount: number
+}
 
 interface UsageData {
   used: number
   limit: number
   plan: string
   balance?: number
+  freeMessagesUsed?: number
+  freeMessagesLimit?: number
   freeMessagesRemaining?: number
-  canSend?: boolean
+  costPerMessage?: number
   unlimited?: boolean
 }
 
-interface ChatPanelProps {
-  onPreviewUpdate?: (html: string) => void
-  viewMode?: "preview" | "code"
-  onViewModeChange?: (mode: "preview" | "code") => void
+interface SidebarProps {
+  isOpen: boolean
+  onClose: () => void
 }
 
-interface AttachedFile {
-  id: string
-  file: File
-  type: "image" | "pdf"
-  preview?: string
-  uploading?: boolean
-  url?: string
-}
-
-function getMessageText(message: { parts?: Array<{ type: string; text?: string }> }): string {
-  if (!message.parts || !Array.isArray(message.parts)) return ""
-  return message.parts
-    .filter((p): p is { type: "text"; text: string } => p.type === "text")
-    .map((p) => p.text)
-    .join("")
-}
-
-function getToolParts(message: { parts?: Array<{ type: string }> }): ToolPart[] {
-  if (!message.parts || !Array.isArray(message.parts)) return []
-  return message.parts.filter((p): p is ToolPart =>
-    typeof p.type === "string" && p.type.startsWith("tool-")
-  )
-}
-
-function getFileParts(message: { parts?: Array<{ type: string; url?: string; mediaType?: string }> }): Array<{ type: "file"; url: string; mediaType: string }> {
-  if (!message.parts || !Array.isArray(message.parts)) return []
-  return message.parts.filter((p): p is { type: "file"; url: string; mediaType: string } =>
-    p.type === "file" && typeof p.url === "string"
-  )
-}
-
-const suggestedPrompts = [
-  "Explain quantum computing simply",
-  "Write a Python sort function",
-  "Help me write a professional email",
-  "React best practices for 2025",
-]
-
-function hasVisibleHtmlContent(html: string): boolean {
-  if (!html || !html.trim()) return false
-
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-  const content = bodyMatch ? bodyMatch[1] : html
-
-  const withoutInvisible = content
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .trim()
-
-  const hasRealElements =
-    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
-
-  return withoutInvisible.length > 3 || hasRealElements
-}
-
-function buildPreviewHtml(text: string): string | null {
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g
-  const blocks: { lang: string; code: string }[] = []
-  let match
-
-  while ((match = codeBlockRegex.exec(text)) !== null) {
-    blocks.push({ lang: (match[1] || "").toLowerCase(), code: match[2].trim() })
-  }
-
-  if (blocks.length === 0) return null
-
-  const htmlBlock = blocks.find((b) => b.lang === "html" || b.lang === "htm")
-  const cssBlock = blocks.find((b) => b.lang === "css")
-  const jsBlock = blocks.find(
-    (b) =>
-      b.lang === "javascript" ||
-      b.lang === "js" ||
-      b.lang === "typescript" ||
-      b.lang === "ts"
-  )
-
-  if (htmlBlock && htmlBlock.code.includes("<html")) {
-    return hasVisibleHtmlContent(htmlBlock.code) ? htmlBlock.code : null
-  }
-
-  if (htmlBlock) {
-    const fullHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #111; }
-${cssBlock ? cssBlock.code : ""}
-</style>
-</head>
-<body>
-${htmlBlock.code}
-${jsBlock ? `<script>${jsBlock.code}<\/script>` : ""}
-</body>
-</html>`
-
-    return hasVisibleHtmlContent(fullHtml) ? fullHtml : null
-  }
-
-  const reactBlock = blocks.find((b) => ["jsx", "tsx", "react"].includes(b.lang))
-
-  if (reactBlock) {
-    const escaped = reactBlock.code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<style>
-body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0d1117; color: #e6edf3; padding: 24px; margin: 0; }
-pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.6; }
-h3 { color: #58a6ff; font-family: -apple-system, sans-serif; margin-bottom: 16px; font-size: 14px; font-weight: 500; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
-</style>
-</head>
-<body>
-<h3>Component Code</h3>
-<pre>${escaped}</pre>
-</body>
-</html>`
-  }
-
-  return null
-}
-
-function sanitizeCustomerPreview(html: string): string {
-  if (!html) return ""
-
-  const blockedPatterns = [
-    /mujeeb@job4u\.com/gi,
-    /admin@mujeebproai\.com/gi,
-    /owner/gi,
-    /super-admin/gi,
-    /admin dashboard/gi,
-    /admin panel/gi,
-    /\/admin/gi,
-    /\/api\/admin/gi,
-    /\/settings/gi,
-    /\/users/gi,
-    /\/subscriptions/gi,
-    /\/balances/gi,
-    /\/logs/gi,
-    /stripe admin/gi,
-    /github/gi,
-    /vercel/gi,
-    /neon/gi,
-    /database/gi,
-  ]
-
-  let safeHtml = html
-
-  for (const pattern of blockedPatterns) {
-    safeHtml = safeHtml.replace(pattern, "")
-  }
-
-  return hasVisibleHtmlContent(safeHtml) ? safeHtml : ""
-}
-
-export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
+export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
-  const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
-  const previewStorageKey = user?.email
-    ? `mujeebproai_last_preview_html_${user.email.toLowerCase()}`
-    : "mujeebproai_last_preview_html_guest"
-  const previewBackupStorageKey = `${previewStorageKey}_backup`
-  const previewHistoryStorageKey = `${previewStorageKey}_history`
-
-  const [activeChatId, setActiveChatId] = useState<string | null>(null)
-  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [showScrollButton, setShowScrollButton] = useState(false)
-  const chatContainerRef = useRef<HTMLDivElement>(null)
-  const [input, setInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
 
-  const savePreviewWithBackup = useCallback(
-    (nextHtml: string) => {
-      onPreviewUpdate?.(nextHtml)
-    },
-    [onPreviewUpdate]
+  const deletedChatKey = user?.email
+    ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
+    : "mujeebproai_deleted_chats_guest"
+
+  const fetchChatHistory = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const [chatResponse, usageResponse, balanceResponse] = await Promise.all([
+        fetch("/api/chat", { credentials: "include" }),
+        fetch("/api/usage", { credentials: "include", cache: "no-store" }),
+        fetch("/api/balance", { credentials: "include", cache: "no-store" }),
+      ])
+
+      if (chatResponse.ok) {
+        const data = await chatResponse.json()
+
+        const deletedIds =
+          typeof window !== "undefined"
+            ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+            : []
+
+        setChatHistory(
+          (data.chats || []).filter(
+            (chat: ChatHistory) => !deletedIds.includes(chat.id)
+          )
+        )
+      }
+
+      const isOwner = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+
+      let usageData: any = null
+      let balanceData: any = null
+
+      if (usageResponse.ok) usageData = await usageResponse.json()
+      if (balanceResponse.ok) balanceData = await balanceResponse.json()
+
+      if (usageData) {
+        const used = Number(usageData.used ?? 0)
+        const limit = Number(usageData.limit ?? 10)
+        const remaining =
+          usageData.freeMessagesRemaining ??
+          Math.max(limit - used, 0)
+
+        setUsage({
+          used,
+          limit: isOwner ? 999999999 : limit,
+          plan: usageData.plan || "free",
+          balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
+          freeMessagesUsed: used,
+          freeMessagesLimit: isOwner ? 999999999 : limit,
+          freeMessagesRemaining: isOwner ? 999999999 : remaining,
+          costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
+          unlimited: Boolean(isOwner || usageData.unlimited),
+        })
+      }
+    } catch {
+      // ignore
+    }
+  }, [user, deletedChatKey])
+
+  useEffect(() => {
+    if (user) fetchChatHistory()
+  }, [user, fetchChatHistory])
+
+  useEffect(() => {
+    const handler = () => fetchChatHistory()
+    window.addEventListener("chat-updated", handler)
+    return () => window.removeEventListener("chat-updated", handler)
+  }, [fetchChatHistory])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.chatId) setCurrentChatId(detail.chatId)
+    }
+    window.addEventListener("chat-selected", handler)
+    return () => window.removeEventListener("chat-selected", handler)
+  }, [])
+
+  const startNewChat = () => {
+    setCurrentChatId(null)
+    window.dispatchEvent(new CustomEvent("new-chat"))
+  }
+
+  const loadChat = (chatId: string) => {
+    setCurrentChatId(chatId)
+    window.dispatchEvent(new CustomEvent("load-chat", { detail: { chatId } }))
+    if (window.innerWidth < 768) onClose()
+  }
+
+  const deleteChat = (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+
+    const deletedIds = JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+    const nextDeletedIds = Array.from(new Set([...deletedIds, chatId]))
+
+    localStorage.setItem(deletedChatKey, JSON.stringify(nextDeletedIds))
+    setChatHistory((prev) => prev.filter((c) => c.id !== chatId))
+
+    if (currentChatId === chatId) setCurrentChatId(null)
+  }
+
+  const filteredChats = chatHistory.filter((chat) =>
+    chat.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const {
-    messages,
-    setMessages,
-    sendMessage,
-    status,
-    stop,
-    reload,
-    error,
-  } = useChat({
-    api: "/api/chat",
-    body: {
-      chatId: activeChatId,
-      usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
-      files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
-    },
-    onError: (err) => {
-      console.error("Chat error:", err)
-    },
+  const todayChats = filteredChats.filter((c) => {
+    const d = new Date(c.createdAt)
+    const now = new Date()
+    return d.toDateString() === now.toDateString()
   })
 
-  const isLoading = status === "streaming" || status === "submitted"
-
-  useEffect(() => {
-    const handleLoadChat = async (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      const chatId = detail?.chatId
-
-      if (!chatId) return
-
-      try {
-        const res = await fetch(`/api/chat?chatId=${chatId}`, {
-          credentials: "include",
-          cache: "no-store",
-        })
-
-        if (!res.ok) return
-
-        const data = await res.json()
-
-        const loadedMessages = (data.messages || []).map((msg: any) => ({
-          id: String(msg.id),
-          role: msg.role,
-          parts: [{ type: "text", text: msg.content || "" }],
-        }))
-
-        setActiveChatId(chatId)
-        setMessages(loadedMessages)
-        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
-      } catch (error) {
-        console.error("Failed to load chat:", error)
-      }
-    }
-
-    const handleNewChat = () => {
-      setActiveChatId(null)
-      setMessages([])
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate?.("")
-    }
-
-    window.addEventListener("load-chat", handleLoadChat)
-    window.addEventListener("new-chat", handleNewChat)
-
-    return () => {
-      window.removeEventListener("load-chat", handleLoadChat)
-      window.removeEventListener("new-chat", handleNewChat)
-    }
-  }, [
-    setMessages,
-    previewStorageKey,
-    previewBackupStorageKey,
-    previewHistoryStorageKey,
-    onPreviewUpdate,
-  ])
-
-  useEffect(() => {
-    fetch("/api/usage")
-      .then((res) => res.json())
-      .then((data) => {
-        setUsage(data)
-        window.dispatchEvent(new Event("chat-updated"))
-      })
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      fetch("/api/usage")
-        .then((res) => res.json())
-        .then((data) => {
-          setUsage(data)
-          window.dispatchEvent(new Event("chat-updated"))
-        })
-        .catch(() => {})
-    }
-  }, [messages.length, status])
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px"
-    }
-  }, [input])
-
-  const handleScroll = useCallback(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-    const threshold = 100
-    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
-    setShowScrollButton(!atBottom)
-  }, [])
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
-
-    if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
-      setShowUpgrade(true)
-      return
-    }
-
-    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-    const userInputText = input.trim()
-    const wantsActualHomepage =
-      isOwnerAdmin &&
-      /actual homepage|real homepage|go back.*homepage|back to.*homepage|live homepage|mujeebproai homepage/i.test(
-        userInputText
-      )
-
-    if (wantsActualHomepage) {
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate?.("")
-      window.dispatchEvent(
-        new CustomEvent("top-bar-preview-url", {
-          detail: { url: "/" },
-        })
-      )
-    }
-
-    const storedPreview = wantsActualHomepage
-      ? ""
-      : localStorage.getItem(previewStorageKey) || ""
-
-    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
-
-    const messageText =
-      userInputText +
-      (savedPreview && hasVisibleHtmlContent(savedPreview)
-        ? `
-
-CURRENT_PREVIEW_HTML:
-${savedPreview}
-
-Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Before changing, assume the current preview has been backed up by MujeebProAI. Do not ask for URL unless the user is asking about an external website.`
-        : "")
-
-    const finalMessageText = messageText.trim() || "Please analyze the attached file."
-
-    sendMessage({
-      parts: [
-        { type: "text", text: finalMessageText },
-        ...uploadedFiles.map((f) => ({
-          type: "file" as const,
-          url: f.url!,
-          mediaType: f.file.type,
-        })),
-      ],
-    } as any)
-
-    setInput("")
-    setAttachedFiles([])
-  }
-
-  const handleCopy = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
-  }
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, type: "image" | "pdf") => {
-    const files = e.target.files
-    if (!files) return
-
-    for (const file of Array.from(files)) {
-      const id = Math.random().toString(36).substring(7)
-      const newFile: AttachedFile = {
-        id,
-        file,
-        type,
-        uploading: true,
-      }
-
-      if (type === "image") {
-        newFile.preview = URL.createObjectURL(file)
-      }
-
-      setAttachedFiles((prev) => [...prev, newFile])
-
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("type", type)
-
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        })
-        const data = await res.json()
-
-        if (data.url) {
-          setAttachedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, url: data.url, uploading: false } : f))
-          )
-        } else {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const dataUrl = e.target?.result as string
-            setAttachedFiles((prev) =>
-              prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
-            )
-          }
-          reader.readAsDataURL(file)
-        }
-      } catch {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string
-          setAttachedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
-          )
-        }
-        reader.readAsDataURL(file)
-      }
-    }
-
-    e.target.value = ""
-  }
-
-  const removeFile = (id: string) => {
-    setAttachedFiles((prev) => prev.filter((f) => f.id !== id))
-  }
-
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-
-    const imageFiles: File[] = []
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item.type.startsWith("image/")) {
-        e.preventDefault()
-        const file = item.getAsFile()
-        if (file) imageFiles.push(file)
-      }
-    }
-
-    if (imageFiles.length === 0) return
-
-    for (const file of imageFiles) {
-      const id = Math.random().toString(36).substring(7)
-      const newFile: AttachedFile = {
-        id,
-        file,
-        type: "image",
-        preview: URL.createObjectURL(file),
-        uploading: true,
-      }
-
-      setAttachedFiles((prev) => [...prev, newFile])
-
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("type", "image")
-
-      try {
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        })
-        const data = await res.json()
-
-        if (data.url) {
-          setAttachedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, url: data.url, uploading: false } : f))
-          )
-        } else {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const dataUrl = e.target?.result as string
-            setAttachedFiles((prev) =>
-              prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
-            )
-          }
-          reader.readAsDataURL(file)
-        }
-      } catch {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string
-          setAttachedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
-          )
-        }
-        reader.readAsDataURL(file)
-      }
-    }
-  }, [])
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit(e)
-    }
-  }
-
-  const handleSuggestedPrompt = (prompt: string) => {
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      "value"
-    )?.set
-
-    nativeInputValueSetter?.call(textareaRef.current, prompt)
-    textareaRef.current?.dispatchEvent(new Event("input", { bubbles: true }))
-
-    setTimeout(() => {
-      textareaRef.current?.form?.requestSubmit()
-    }, 50)
-  }
-
-  useEffect(() => {
-    if (!onPreviewUpdate) return
-
-    const lastMsg = messages[messages.length - 1]
-
-    if (lastMsg && lastMsg.role === "assistant") {
-      const text = getMessageText(lastMsg)
-      const html = buildPreviewHtml(text)
-
-      if (!html || !hasVisibleHtmlContent(html)) return
-
-      const safeHtml = isOwnerAdmin ? html : sanitizeCustomerPreview(html)
-
-      if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
-        savePreviewWithBackup(safeHtml)
-      } else {
-        localStorage.removeItem(previewStorageKey)
-        onPreviewUpdate("")
-      }
-    }
-  }, [messages, onPreviewUpdate, previewStorageKey, isOwnerAdmin, savePreviewWithBackup])
-
-  useEffect(() => {
-    if (!onPreviewUpdate) return
-
-    if (!user?.email) {
-      onPreviewUpdate("")
-      return
-    }
-
-    const storedPreview = localStorage.getItem(previewStorageKey) || ""
-    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
-    if (savedPreview && hasVisibleHtmlContent(savedPreview)) {
-      onPreviewUpdate(savedPreview)
-    } else {
-      localStorage.removeItem(previewStorageKey)
-      onPreviewUpdate("")
-    }
-  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
+  const olderChats = filteredChats.filter((c) => {
+    const d = new Date(c.createdAt)
+    const now = new Date()
+    return d.toDateString() !== now.toDateString()
+  })
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
-      <div
-        ref={chatContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
-      >
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-          {messages.length === 0 && !error && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-              <div className="mb-8">
-                <MujeebProAILogo className="w-16 h-16 mx-auto mb-4" />
-                <h1 className="text-3xl font-bold text-white mb-2">
-                  Welcome to Mujeeb Pro AI
-                </h1>
-                <p className="text-gray-400 text-lg">
-                  How can I help you today?
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-                {suggestedPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => handleSuggestedPrompt(prompt)}
-                    className="p-3 text-left text-sm text-gray-300 bg-gray-800/50 border border-gray-700/50 rounded-xl hover:bg-gray-700/50 hover:border-gray-600/50 transition-all duration-200"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="flex items-center justify-center py-8">
-              <div className="bg-red-900/20 border border-red-800/30 rounded-xl p-4 max-w-md text-center">
-                <p className="text-red-400 text-sm mb-3">
-                  Something went wrong. Please try again.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => reload()}
-                  className="border-red-800/30 text-red-400 hover:bg-red-900/20"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Retry
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <AnimatePresence initial={false}>
-            {messages.map((message) => {
-              const rawText = getMessageText(message)
-              const text = rawText.includes("CURRENT_PREVIEW_HTML:")
-                ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-                : rawText
-              const toolParts = getToolParts(message)
-              const fileParts = getFileParts(message)
-              const isUser = message.role === "user"
-              const isAssistant = message.role === "assistant"
-              const previewHtml = buildPreviewHtml(text)
-              const canPreview = Boolean(previewHtml && hasVisibleHtmlContent(previewHtml))
-
-              return (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
-                >
-                  {isAssistant && (
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
-                        <Bot className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className={cn("max-w-[85%] space-y-2", isUser && "order-1")}>
-                    {fileParts.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {fileParts.map((fp, idx) =>
-                          fp.mediaType.startsWith("image/") ? (
-                            <img
-                              key={idx}
-                              src={fp.url}
-                              alt="Attached image"
-                              className="max-w-[200px] rounded-lg border border-gray-700/50"
-                            />
-                          ) : (
-                            <div
-                              key={idx}
-                              className="flex items-center gap-2 bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50"
-                            >
-                              <FileText className="w-4 h-4 text-blue-400" />
-                              <span className="text-xs text-gray-400">Attached file</span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    )}
-
-                    {text && (
-                      <div
-                        className={cn(
-                          "rounded-2xl px-4 py-3",
-                          isUser
-                            ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
-                            : "bg-gray-800/50 border border-gray-700/30 text-gray-100"
-                        )}
-                      >
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {text}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-
-                    {toolParts.length > 0 && <ToolActivity parts={toolParts} />}
-
-                    {isAssistant && text && (
-                      <div className="flex items-center gap-2 px-2">
-                        <button
-                          onClick={() => handleCopy(text, message.id)}
-                          className="text-gray-500 hover:text-gray-300 transition-colors"
-                          title="Copy"
-                        >
-                          {copiedId === message.id ? (
-                            <Check className="w-3.5 h-3.5 text-green-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => reload()}
-                          className="text-gray-500 hover:text-gray-300 transition-colors"
-                          title="Regenerate"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-
-                        {onPreviewUpdate && canPreview && previewHtml && (
-                          <button
-                            onClick={() => {
-                              const safeHtml = isOwnerAdmin
-                                ? previewHtml
-                                : sanitizeCustomerPreview(previewHtml)
-
-                              if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
-                                savePreviewWithBackup(safeHtml)
-                              }
-                            }}
-                            className="text-gray-500 hover:text-gray-300 transition-colors"
-                            title="Preview"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {isUser && (
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
-                        <User className="w-4 h-4 text-white" />
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex gap-3"
-            >
-              <div className="flex-shrink-0 mt-1">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="bg-gray-800/50 border border-gray-700/30 rounded-2xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                  <span className="text-sm text-gray-400">Thinking...</span>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
+    <>
       <AnimatePresence>
-        {showScrollButton && (
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            onClick={scrollToBottom}
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 transition-all shadow-lg"
-          >
-            <ArrowUp className="w-5 h-5 rotate-180" />
-          </motion.button>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            onClick={onClose}
+          />
         )}
       </AnimatePresence>
 
-      <div className="border-t border-gray-800/50 bg-gray-900/80 backdrop-blur-sm">
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          {attachedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {attachedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center gap-2 bg-gray-800/80 rounded-lg px-3 py-2 border border-gray-700/50"
-                >
-                  {file.type === "image" && file.preview ? (
-                    <img src={file.preview} alt="" className="w-8 h-8 rounded object-cover" />
-                  ) : (
-                    <FileText className="w-4 h-4 text-blue-400" />
-                  )}
-
-                  <span className="text-xs text-gray-400 truncate max-w-[100px]">
-                    {file.file.name}
-                  </span>
-
-                  {file.uploading ? (
-                    <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
-                  ) : (
-                    <button
-                      onClick={() => removeFile(file.id)}
-                      className="text-gray-500 hover:text-gray-300"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="flex items-end gap-2">
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                placeholder="Ask me anything... (Ctrl+V to paste images)"
-                rows={1}
-                className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-16 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
-                disabled={isLoading}
-              />
-
-              <div className="absolute left-2 bottom-2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                  title="Attach image"
-                >
-                  <ImagePlus className="w-4 h-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                  title="Attach file"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "image")}
-            />
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "pdf")}
-            />
-
+      <motion.div
+        initial={false}
+        animate={{
+          width: isOpen ? 260 : 0,
+          opacity: isOpen ? 1 : 0,
+        }}
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+        className={cn(
+          "flex-shrink-0 border-r border-purple-500/20 flex flex-col overflow-hidden backdrop-blur-xl",
+          "md:relative fixed left-0 top-12 bottom-0 z-40"
+        )}
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(88, 28, 135, 0.15) 0%, rgba(15, 10, 35, 0.98) 100%)",
+        }}
+      >
+        <div className="w-[260px] h-full flex flex-col">
+          <div className="p-3">
             <Button
-              type="submit"
-              disabled={isLoading || (!input.trim() && attachedFiles.length === 0)}
-              className={cn(
-                "rounded-xl px-4 py-3 h-auto",
-                "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500",
-                "text-white font-medium",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "transition-all duration-200"
-              )}
+              onClick={startNewChat}
+              className="w-full h-9 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 text-xs font-medium"
             >
-              {isLoading ? (
-                <StopCircle className="w-5 h-5" onClick={stop} />
-              ) : (
-                <Zap className="w-5 h-5" />
-              )}
+              <Plus className="w-3.5 h-3.5 mr-2" />
+              New Chat
             </Button>
-          </form>
+          </div>
+
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search chats..."
+                className="w-full h-8 pl-8 pr-3 text-xs bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-cyan-500/30"
+              />
+            </div>
+          </div>
 
           {usage && (
-            <div className="flex items-center justify-between mt-2 px-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-purple-400" />
-                <span className="text-xs text-gray-500">
-                  {isOwnerAdmin || usage?.unlimited
-                    ? "Unlimited"
-                    : `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
-                        usage?.freeMessagesRemaining ??
-                        Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
-                      }`}
-                </span>
-              </div>
+            <div className="px-3 pb-3">
+              <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-2">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-white/40 uppercase tracking-wider">
+                      Messages
+                    </span>
+                    <span className="text-[10px] font-medium text-cyan-400">
+                      {usage.unlimited
+                        ? "Unlimited"
+                        : `Used: ${usage.used}/${usage.limit}`}
+                    </span>
+                  </div>
 
-              {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
-                <button
-                  onClick={() => setShowUpgrade(true)}
-                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  Upgrade
-                </button>
-              )}
+                  {!usage.unlimited && (
+                    <>
+                      <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            (usage.freeMessagesRemaining ?? 0) <= 0
+                              ? "bg-red-500"
+                              : usage.used >= usage.limit * 0.8
+                              ? "bg-yellow-500"
+                              : "bg-gradient-to-r from-cyan-500 to-blue-500"
+                          )}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (usage.used / usage.limit) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+
+                      <p className="mt-1 text-[10px] text-white/40">
+                        Remaining:{" "}
+                        {usage.freeMessagesRemaining ??
+                          Math.max(usage.limit - usage.used, 0)}
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {!usage.unlimited && usage.balance !== undefined && (
+                  <div className="flex items-center justify-between pt-1 border-t border-white/[0.06]">
+                    <span className="text-[10px] text-white/40">Balance</span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        usage.balance > 0.1
+                          ? "text-green-400"
+                          : usage.balance > 0
+                          ? "text-yellow-400"
+                          : "text-red-400"
+                      )}
+                    >
+                      ${usage.balance.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
+                {!usage.unlimited && (
+                  <Link
+                    href="/dashboard/top-up"
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 mt-2 rounded-md bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-[10px] font-medium hover:from-cyan-500/30 hover:to-blue-500/30 transition-all"
+                  >
+                    <Zap className="w-3 h-3" />
+                    Add Credits
+                  </Link>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      </div>
 
-      <UpgradePopup
-        open={showUpgrade}
-        onOpenChange={(open) => setShowUpgrade(open)}
-      />
-    </div>
+          <div className="flex-1 overflow-y-auto px-2 scrollbar-thin">
+            {todayChats.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">
+                  Today
+                </p>
+                {todayChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    onClick={() => loadChat(chat.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2.5 transition-all group mb-0.5",
+                      currentChatId === chat.id
+                        ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                        : "text-white/50 hover:bg-white/[0.04] hover:text-white/80"
+                    )}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate flex-1">{chat.title}</span>
+                    <Trash2
+                      className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
+                      onClick={(e) => deleteChat(chat.id, e)}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {olderChats.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] uppercase tracking-wider text-white/30 px-2 mb-1.5">
+                  Previous
+                </p>
+                {olderChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    onClick={() => loadChat(chat.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2.5 transition-all group mb-0.5",
+                      currentChatId === chat.id
+                        ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                        : "text-white/50 hover:bg-white/[0.04] hover:text-white/80"
+                    )}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate flex-1">{chat.title}</span>
+                    <Trash2
+                      className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
+                      onClick={(e) => deleteChat(chat.id, e)}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {filteredChats.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center mb-3">
+                  <MessageSquare className="w-5 h-5 text-white/20" />
+                </div>
+                <p className="text-xs text-white/30 mb-1">No conversations</p>
+                <p className="text-[10px] text-white/20">
+                  Start a new chat to begin
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 border-t border-white/[0.06]">
+            <p className="text-[10px] uppercase tracking-wider text-white/30 px-1 mb-2">
+              Quick Links
+            </p>
+            <div className="space-y-1">
+              <Link
+                href="/themes"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>Marketplace</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+
+              <Link
+                href="/import-website"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import Website</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+
+              <Link
+                href="/dashboard/imports"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Import Requests</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+
+              <Link
+                href="/dashboard/sites"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>My Websites</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+
+              <Link
+                href="/dashboard/deployments"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span>Deployments</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </>
   )
 }
