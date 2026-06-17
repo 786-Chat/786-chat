@@ -8,6 +8,7 @@ import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
+import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
 const OWNER_EMAILS = ["mujeeb@job4u.com"]
@@ -43,6 +44,7 @@ export default function DashboardLayout({
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(true)
   const [activeView, setActiveView] = useState<"chat">("chat")
   const [previewDevice, setPreviewDevice] = useState("full")
   const [previewUrl, setPreviewUrl] = useState("")
@@ -159,10 +161,13 @@ export default function DashboardLayout({
     const handleResize = () => {
       if (window.innerWidth < 768) {
         setSidebarOpen(false)
+        setPreviewOpen(false)
       } else if (window.innerWidth < 1200) {
         setSidebarOpen(true)
+        setPreviewOpen(true)
       } else {
         setSidebarOpen(true)
+        setPreviewOpen(true)
       }
     }
 
@@ -236,8 +241,8 @@ export default function DashboardLayout({
       <WorkspaceTopBar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
-        previewOpen={false}
-        setPreviewOpen={() => {}}
+        previewOpen={previewOpen}
+        setPreviewOpen={setPreviewOpen}
         dashboardOpen={dashboardOpen}
         setDashboardOpen={setDashboardOpen}
         previewDevice={previewDevice}
@@ -273,6 +278,23 @@ export default function DashboardLayout({
               onViewModeChange={setViewMode}
             />
           </div>
+
+          {previewOpen && (
+            <div className="w-[480px] xl:w-[560px] 2xl:w-[640px] flex-shrink-0 border-l border-white/[0.06] overflow-hidden">
+              <WorkspacePreviewPanel
+                device={previewDevice}
+                setDevice={setPreviewDevice}
+                previewUrl={previewUrl}
+                setPreviewUrl={setPreviewUrl}
+                onClose={() => setPreviewOpen(false)}
+                expanded={previewExpanded}
+                setExpanded={setPreviewExpanded}
+                previewHtml={previewHtml}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+              />
+            </div>
+          )}
         </div>
 
         <WorkspaceDashboardPanel
