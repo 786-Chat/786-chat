@@ -219,6 +219,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
 
+  const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [showUpgrade, setShowUpgrade] = useState(false)
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
@@ -240,6 +241,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 
   const {
     messages,
+    setMessages,
     sendMessage,
     status,
     stop,
@@ -248,6 +250,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   } = useChat({
     api: "/api/chat",
     body: {
+      chatId: activeChatId,
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
@@ -257,6 +260,61 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   })
 
   const isLoading = status === "streaming" || status === "submitted"
+
+  useEffect(() => {
+    const handleLoadChat = async (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      const chatId = detail?.chatId
+
+      if (!chatId) return
+
+      try {
+        const res = await fetch(`/api/chat?chatId=${chatId}`, {
+          credentials: "include",
+          cache: "no-store",
+        })
+
+        if (!res.ok) return
+
+        const data = await res.json()
+
+        const loadedMessages = (data.messages || []).map((msg: any) => ({
+          id: String(msg.id),
+          role: msg.role,
+          parts: [{ type: "text", text: msg.content || "" }],
+        }))
+
+        setActiveChatId(chatId)
+        setMessages(loadedMessages)
+        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
+      } catch (error) {
+        console.error("Failed to load chat:", error)
+      }
+    }
+
+    const handleNewChat = () => {
+      setActiveChatId(null)
+      setMessages([])
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+      onPreviewUpdate?.("")
+    }
+
+    window.addEventListener("load-chat", handleLoadChat)
+    window.addEventListener("new-chat", handleNewChat)
+
+    return () => {
+      window.removeEventListener("load-chat", handleLoadChat)
+      window.removeEventListener("new-chat", handleNewChat)
+    }
+  }, [
+    setMessages,
+    previewStorageKey,
+    previewBackupStorageKey,
+    previewHistoryStorageKey,
+    onPreviewUpdate,
+  ])
 
   useEffect(() => {
     fetch("/api/usage")
@@ -312,35 +370,35 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
       return
     }
 
-   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-const userInputText = input.trim()
-const wantsActualHomepage =
-  isOwnerAdmin &&
-  /actual homepage|real homepage|go back.*homepage|back to.*homepage|live homepage|mujeebproai homepage/i.test(
-    userInputText
-  )
+    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
+    const userInputText = input.trim()
+    const wantsActualHomepage =
+      isOwnerAdmin &&
+      /actual homepage|real homepage|go back.*homepage|back to.*homepage|live homepage|mujeebproai homepage/i.test(
+        userInputText
+      )
 
-if (wantsActualHomepage) {
-  localStorage.removeItem(previewStorageKey)
-  localStorage.removeItem(previewBackupStorageKey)
-  localStorage.removeItem(previewHistoryStorageKey)
-  onPreviewUpdate?.("")
-  window.dispatchEvent(
-    new CustomEvent("top-bar-preview-url", {
-      detail: { url: "/" },
-    })
-  )
-}
+    if (wantsActualHomepage) {
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+      onPreviewUpdate?.("")
+      window.dispatchEvent(
+        new CustomEvent("top-bar-preview-url", {
+          detail: { url: "/" },
+        })
+      )
+    }
 
-const storedPreview = wantsActualHomepage
-  ? ""
-  : localStorage.getItem(previewStorageKey) || ""
+    const storedPreview = wantsActualHomepage
+      ? ""
+      : localStorage.getItem(previewStorageKey) || ""
 
-const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
 
-const messageText =
-  userInputText +
-  (savedPreview && hasVisibleHtmlContent(savedPreview)
+    const messageText =
+      userInputText +
+      (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
 CURRENT_PREVIEW_HTML:
@@ -561,17 +619,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
       localStorage.removeItem(previewStorageKey)
       onPreviewUpdate("")
     }
-
-    const handleNewChat = () => {
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate("")
-    }
-
-    window.addEventListener("new-chat", handleNewChat)
-    return () => window.removeEventListener("new-chat", handleNewChat)
-  }, [onPreviewUpdate, previewBackupStorageKey, previewHistoryStorageKey, previewStorageKey, user?.email, isOwnerAdmin])
+  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
