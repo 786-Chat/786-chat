@@ -312,13 +312,35 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
       return
     }
 
-    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-    const storedPreview = localStorage.getItem(previewStorageKey) || ""
-    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+   const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
+const userInputText = input.trim()
+const wantsActualHomepage =
+  isOwnerAdmin &&
+  /actual homepage|real homepage|go back.*homepage|back to.*homepage|live homepage|mujeebproai homepage/i.test(
+    userInputText
+  )
 
-    const messageText =
-      input.trim() +
-      (savedPreview && hasVisibleHtmlContent(savedPreview)
+if (wantsActualHomepage) {
+  localStorage.removeItem(previewStorageKey)
+  localStorage.removeItem(previewBackupStorageKey)
+  localStorage.removeItem(previewHistoryStorageKey)
+  onPreviewUpdate?.("")
+  window.dispatchEvent(
+    new CustomEvent("top-bar-preview-url", {
+      detail: { url: "/" },
+    })
+  )
+}
+
+const storedPreview = wantsActualHomepage
+  ? ""
+  : localStorage.getItem(previewStorageKey) || ""
+
+const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+
+const messageText =
+  userInputText +
+  (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
 CURRENT_PREVIEW_HTML:
