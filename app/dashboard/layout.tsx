@@ -66,6 +66,42 @@ export default function DashboardLayout({
     ? `mujeebproai_last_preview_html_${userEmail}`
     : "mujeebproai_last_preview_html_guest"
   const previewBackupStorageKey = `${previewStorageKey}_backup`
+  const previewHistoryStorageKey = `${previewStorageKey}_history`
+
+  const readPreviewHistory = useCallback((): string[] => {
+    try {
+      const raw = localStorage.getItem(previewHistoryStorageKey) || "[]"
+      const parsed = JSON.parse(raw)
+
+      if (!Array.isArray(parsed)) return []
+
+      return parsed.filter(
+        (item): item is string =>
+          typeof item === "string" && hasVisibleHtmlContent(item)
+      )
+    } catch {
+      return []
+    }
+  }, [previewHistoryStorageKey])
+
+  const writePreviewHistory = useCallback(
+    (history: string[]) => {
+      const cleanHistory = history
+        .filter((item) => hasVisibleHtmlContent(item))
+        .slice(-20)
+
+      if (cleanHistory.length > 0) {
+        localStorage.setItem(previewHistoryStorageKey, JSON.stringify(cleanHistory))
+        localStorage.setItem(previewBackupStorageKey, cleanHistory[cleanHistory.length - 1])
+        setHasPreviewBackup(true)
+      } else {
+        localStorage.removeItem(previewHistoryStorageKey)
+        localStorage.removeItem(previewBackupStorageKey)
+        setHasPreviewBackup(false)
+      }
+    },
+    [previewBackupStorageKey, previewHistoryStorageKey]
+  )
 
   const isChatWorkspace =
     pathname === "/dashboard/chat" ||
@@ -83,20 +119,28 @@ export default function DashboardLayout({
   const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
       const currentHtml = previewHtml || localStorage.getItem(previewStorageKey) || ""
+      const nextHasContent = hasVisibleHtmlContent(nextHtml)
 
       if (
         currentHtml &&
-        nextHtml &&
+        nextHasContent &&
         hasVisibleHtmlContent(currentHtml) &&
-        hasVisibleHtmlContent(nextHtml) &&
         currentHtml.trim() !== nextHtml.trim()
       ) {
-        localStorage.setItem(previewBackupStorageKey, currentHtml)
-        setHasPreviewBackup(true)
+        const history = readPreviewHistory()
+        const lastHistoryItem = history[history.length - 1] || ""
+        const nextHistory =
+          lastHistoryItem.trim() === currentHtml.trim()
+            ? history
+            : [...history, currentHtml]
+
+        writePreviewHistory(nextHistory)
       }
 
-      if (nextHtml && hasVisibleHtmlContent(nextHtml)) {
+      if (nextHasContent) {
         localStorage.setItem(previewStorageKey, nextHtml)
+      } else {
+        localStorage.removeItem(previewStorageKey)
       }
 
       setPreviewHtml(nextHtml)
@@ -104,22 +148,22 @@ export default function DashboardLayout({
       setPreviewOpen(true)
       setActiveView("preview")
     },
-    [previewBackupStorageKey, previewHtml, previewStorageKey]
+    [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
 
   const restorePreviousPreview = useCallback(() => {
-    const backupHtml = localStorage.getItem(previewBackupStorageKey) || ""
+    const history = readPreviewHistory()
+    const backupHtml = history.pop() || localStorage.getItem(previewBackupStorageKey) || ""
 
     if (!backupHtml || !hasVisibleHtmlContent(backupHtml)) return
 
     localStorage.setItem(previewStorageKey, backupHtml)
-    localStorage.removeItem(previewBackupStorageKey)
+    writePreviewHistory(history)
     setPreviewHtml(backupHtml)
     setPreviewUrl("")
-    setHasPreviewBackup(false)
     setPreviewOpen(true)
     setActiveView("preview")
-  }, [previewBackupStorageKey, previewStorageKey])
+  }, [previewBackupStorageKey, previewStorageKey, readPreviewHistory, writePreviewHistory])
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -138,13 +182,16 @@ export default function DashboardLayout({
 
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const storedBackup = localStorage.getItem(previewBackupStorageKey) || ""
+    const history = readPreviewHistory()
 
     if (storedPreview && hasVisibleHtmlContent(storedPreview)) {
       setPreviewHtml(storedPreview)
     }
 
-    setHasPreviewBackup(Boolean(storedBackup && hasVisibleHtmlContent(storedBackup)))
-  }, [previewBackupStorageKey, previewStorageKey, userEmail])
+    setHasPreviewBackup(
+      history.length > 0 || Boolean(storedBackup && hasVisibleHtmlContent(storedBackup))
+    )
+  }, [previewBackupStorageKey, previewStorageKey, userEmail, readPreviewHistory])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
