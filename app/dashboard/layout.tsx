@@ -94,6 +94,8 @@ export default function DashboardLayout({
   const [previewExpanded, setPreviewExpanded] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
+  const [previewWidth, setPreviewWidth] = useState(560)
+  const [isDraggingPreview, setIsDraggingPreview] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -105,6 +107,9 @@ export default function DashboardLayout({
     : "mujeebproai_last_preview_html_guest"
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
+  const previewWidthStorageKey = userEmail
+    ? `mujeebproai_preview_width_${userEmail}`
+    : "mujeebproai_preview_width_guest"
 
   const readPreviewHistory = useCallback((): string[] => {
     try {
@@ -181,6 +186,60 @@ export default function DashboardLayout({
     },
     [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
+
+  const startPreviewResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingPreview(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isDraggingPreview) return
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const container = containerRef.current
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const nextWidth = rect.right - event.clientX
+      const minWidth = 360
+      const maxWidth = Math.min(980, Math.max(420, rect.width - 420))
+      const clampedWidth = Math.min(Math.max(nextWidth, minWidth), maxWidth)
+
+      setPreviewWidth(clampedWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsDraggingPreview(false)
+    }
+
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+
+    window.addEventListener("mousemove", handleMouseMove)
+    window.addEventListener("mouseup", handleMouseUp)
+
+    return () => {
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", handleMouseMove)
+      window.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [isDraggingPreview])
+
+  useEffect(() => {
+    if (!userEmail) return
+
+    const storedWidth = Number(localStorage.getItem(previewWidthStorageKey))
+    if (Number.isFinite(storedWidth) && storedWidth >= 360 && storedWidth <= 980) {
+      setPreviewWidth(storedWidth)
+    }
+  }, [previewWidthStorageKey, userEmail])
+
+  useEffect(() => {
+    if (!userEmail) return
+    localStorage.setItem(previewWidthStorageKey, String(Math.round(previewWidth)))
+  }, [previewWidth, previewWidthStorageKey, userEmail])
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -330,20 +389,41 @@ export default function DashboardLayout({
           </div>
 
           {previewOpen && (
-            <div className="w-[480px] xl:w-[560px] 2xl:w-[640px] flex-shrink-0 border-l border-white/[0.06] overflow-hidden">
-              <WorkspacePreviewPanel
-                device={previewDevice}
-                setDevice={setPreviewDevice}
-                previewUrl={previewUrl}
-                setPreviewUrl={setPreviewUrl}
-                onClose={() => setPreviewOpen(false)}
-                expanded={previewExpanded}
-                setExpanded={setPreviewExpanded}
-                previewHtml={previewHtml}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-              />
-            </div>
+            <>
+              <div
+                role="separator"
+                aria-label="Resize preview panel"
+                aria-orientation="vertical"
+                onMouseDown={startPreviewResize}
+                className={`
+                  relative z-30 w-[7px] flex-shrink-0 cursor-col-resize
+                  bg-cyan-500/20 hover:bg-cyan-400/50
+                  border-l border-cyan-500/20 border-r border-cyan-500/20
+                  transition-colors
+                  ${isDraggingPreview ? "bg-cyan-400/60" : ""}
+                `}
+              >
+                <div className="absolute left-1/2 top-1/2 h-20 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300/60" />
+              </div>
+
+              <div
+                className="flex-shrink-0 overflow-hidden"
+                style={{ width: `${previewWidth}px` }}
+              >
+                <WorkspacePreviewPanel
+                  device={previewDevice}
+                  setDevice={setPreviewDevice}
+                  previewUrl={previewUrl}
+                  setPreviewUrl={setPreviewUrl}
+                  onClose={() => setPreviewOpen(false)}
+                  expanded={previewExpanded}
+                  setExpanded={setPreviewExpanded}
+                  previewHtml={previewHtml}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                />
+              </div>
+            </>
           )}
         </div>
 
