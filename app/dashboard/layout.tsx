@@ -7,7 +7,6 @@ import { motion } from "framer-motion"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
-import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { WorkspaceDashboardPanel } from "@/components/workspace/dashboard-panel"
 import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
@@ -43,17 +42,14 @@ export default function DashboardLayout({
   const pathname = usePathname()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [previewOpen, setPreviewOpen] = useState(true)
   const [dashboardOpen, setDashboardOpen] = useState(false)
-  const [activeView, setActiveView] = useState<"chat" | "preview">("chat")
+  const [activeView, setActiveView] = useState<"chat">("chat")
   const [previewDevice, setPreviewDevice] = useState("full")
   const [previewUrl, setPreviewUrl] = useState("")
   const [previewExpanded, setPreviewExpanded] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
-  const [chatWidthPercent, setChatWidthPercent] = useState(50)
 
-  const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const userEmail = String(user?.email || "").trim().toLowerCase()
@@ -104,13 +100,6 @@ export default function DashboardLayout({
 
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDragging.current = true
-    document.body.style.cursor = "col-resize"
-    document.body.style.userSelect = "none"
-  }, [])
-
   const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
       const currentHtml = previewHtml || localStorage.getItem(previewStorageKey) || ""
@@ -140,8 +129,6 @@ export default function DashboardLayout({
 
       setPreviewHtml(nextHtml)
       setPreviewUrl("")
-      setPreviewOpen(true)
-      setActiveView("preview")
     },
     [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
@@ -169,42 +156,13 @@ export default function DashboardLayout({
   }, [previewStorageKey, userEmail])
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return
-
-      const rect = containerRef.current.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const percent = (x / rect.width) * 100
-
-      setChatWidthPercent(Math.min(75, Math.max(25, percent)))
-    }
-
-    const handleMouseUp = () => {
-      if (!isDragging.current) return
-
-      isDragging.current = false
-      document.body.style.cursor = ""
-      document.body.style.userSelect = ""
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-    window.addEventListener("mouseup", handleMouseUp)
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
-    }
-  }, [])
-
-  useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
         setSidebarOpen(false)
-        setPreviewOpen(false)
       } else if (window.innerWidth < 1200) {
-        setPreviewOpen(false)
+        setSidebarOpen(true)
       } else {
-        setPreviewOpen(true)
+        setSidebarOpen(true)
       }
     }
 
@@ -244,8 +202,6 @@ export default function DashboardLayout({
 
       setPreviewUrl(finalUrl)
       setPreviewHtml("")
-      setPreviewOpen(true)
-      setActiveView("preview")
     }
 
     window.addEventListener("top-bar-preview-url", handlePreviewUrl)
@@ -280,8 +236,8 @@ export default function DashboardLayout({
       <WorkspaceTopBar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
-        previewOpen={previewOpen}
-        setPreviewOpen={setPreviewOpen}
+        previewOpen={false}
+        setPreviewOpen={() => {}}
         dashboardOpen={dashboardOpen}
         setDashboardOpen={setDashboardOpen}
         previewDevice={previewDevice}
@@ -309,20 +265,7 @@ export default function DashboardLayout({
           className="flex-1 flex overflow-hidden relative w-full max-w-full"
         >
           <div
-            className={`flex flex-col min-w-0 overflow-hidden ${
-              activeView !== "chat" ? "hidden md:flex" : "flex w-full md:w-auto"
-            }`}
-            style={{
-              width:
-                activeView === "chat" &&
-                typeof window !== "undefined" &&
-                window.innerWidth < 768
-                  ? "100%"
-                  : previewOpen
-                    ? `${chatWidthPercent}%`
-                    : "100%",
-              flexShrink: 0,
-            }}
+            className="flex flex-col min-w-0 overflow-hidden w-full"
           >
             <WorkspaceChatPanel
               onPreviewUpdate={handlePreviewUpdate}
@@ -330,51 +273,6 @@ export default function DashboardLayout({
               onViewModeChange={setViewMode}
             />
           </div>
-
-          {previewOpen && (
-            <div
-              className="relative z-10 flex-shrink-0 group hidden md:block"
-              style={{ width: "6px" }}
-            >
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-white/[0.06] group-hover:bg-cyan-500/50 group-active:bg-cyan-400 transition-colors" />
-              <div
-                className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
-                onMouseDown={handleMouseDown}
-              />
-            </div>
-          )}
-
-          {previewOpen && (
-            <div
-              className={`${
-                activeView !== "preview"
-                  ? "hidden lg:flex"
-                  : "flex w-full md:w-auto"
-              } flex-col min-w-0 overflow-hidden`}
-              style={{
-                width:
-                  activeView === "preview" &&
-                  typeof window !== "undefined" &&
-                  window.innerWidth < 768
-                    ? "100%"
-                    : `${100 - chatWidthPercent}%`,
-                flexShrink: 0,
-              }}
-            >
-              <WorkspacePreviewPanel
-                device={previewDevice}
-                setDevice={setPreviewDevice}
-                previewUrl={previewUrl}
-                setPreviewUrl={setPreviewUrl}
-                onClose={() => setPreviewOpen(false)}
-                expanded={previewExpanded}
-                setExpanded={setPreviewExpanded}
-                previewHtml={previewHtml}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-              />
-            </div>
-          )}
         </div>
 
         <WorkspaceDashboardPanel
