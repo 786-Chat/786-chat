@@ -13,8 +13,51 @@ import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
 const OWNER_EMAILS = ["mujeeb@job4u.com"]
 
+function looksLikeReactOrTsxCode(value: string): boolean {
+  const text = value.trim()
+  if (!text) return false
+
+  const hasHtmlDocument =
+    /<!doctype html/i.test(text) ||
+    /<html[\s>]/i.test(text) ||
+    /<body[\s>]/i.test(text)
+
+  if (hasHtmlDocument) return false
+
+  const reactSignals = [
+    /^["']use client["']/,
+    /\bimport\s+.+\s+from\s+["'][^"']+["']/,
+    /\bexport\s+default\s+function\b/,
+    /\bexport\s+function\b/,
+    /\bfunction\s+[A-Z][A-Za-z0-9_]*\s*\(/,
+    /\bconst\s+[A-Z][A-Za-z0-9_]*\s*=\s*\(/,
+    /\binterface\s+[A-Z][A-Za-z0-9_]*/,
+    /\btype\s+[A-Z][A-Za-z0-9_]*\s*=/,
+    /\buseState\s*\(/,
+    /\buseEffect\s*\(/,
+    /className=/,
+    /onClick=/,
+  ]
+
+  return reactSignals.some((pattern) => pattern.test(text))
+}
+
+function isFakeComponentCodePreview(html: string): boolean {
+  const text = html.trim().toLowerCase()
+
+  return (
+    text.includes("<h3>component code</h3>") ||
+    (text.includes("component code") &&
+      text.includes("<pre") &&
+      text.includes("import ") &&
+      text.includes("export default"))
+  )
+}
+
 function hasVisibleHtmlContent(html: string): boolean {
   if (!html || !html.trim()) return false
+  if (looksLikeReactOrTsxCode(html)) return false
+  if (isFakeComponentCodePreview(html)) return false
 
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
   const content = bodyMatch ? bodyMatch[1] : html
@@ -125,12 +168,16 @@ export default function DashboardLayout({
 
       if (nextHasContent) {
         localStorage.setItem(previewStorageKey, nextHtml)
-      } else {
-        localStorage.removeItem(previewStorageKey)
+        setPreviewHtml(nextHtml)
+        setPreviewUrl("")
+        setPreviewOpen(true)
+        return
       }
 
-      setPreviewHtml(nextHtml)
+      localStorage.removeItem(previewStorageKey)
+      setPreviewHtml("")
       setPreviewUrl("")
+      setPreviewOpen(true)
     },
     [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
@@ -154,17 +201,21 @@ export default function DashboardLayout({
 
     if (storedPreview && hasVisibleHtmlContent(storedPreview)) {
       setPreviewHtml(storedPreview)
+      setPreviewOpen(true)
+    } else if (storedPreview) {
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+      setPreviewHtml("")
+      setPreviewOpen(true)
     }
-  }, [previewStorageKey, userEmail])
+  }, [previewStorageKey, previewBackupStorageKey, previewHistoryStorageKey, userEmail])
 
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
         setSidebarOpen(false)
         setPreviewOpen(false)
-      } else if (window.innerWidth < 1200) {
-        setSidebarOpen(true)
-        setPreviewOpen(true)
       } else {
         setSidebarOpen(true)
         setPreviewOpen(true)
@@ -207,6 +258,7 @@ export default function DashboardLayout({
 
       setPreviewUrl(finalUrl)
       setPreviewHtml("")
+      setPreviewOpen(true)
     }
 
     window.addEventListener("top-bar-preview-url", handlePreviewUrl)
@@ -269,9 +321,7 @@ export default function DashboardLayout({
           ref={containerRef}
           className="flex-1 flex overflow-hidden relative w-full max-w-full"
         >
-          <div
-            className="flex flex-col min-w-0 overflow-hidden w-full"
-          >
+          <div className="flex flex-col min-w-0 overflow-hidden flex-1">
             <WorkspaceChatPanel
               onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
