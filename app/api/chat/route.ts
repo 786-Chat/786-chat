@@ -421,15 +421,7 @@ REAL REACT CODEBASE RULES:
 - If admin asks “go back to actual webpage”, explain that the real page comes from app/page.tsx and its imported components, not CURRENT_PREVIEW_HTML.
 
 Be helpful, friendly, and precise.`
-REAL REACT CODEBASE RULES:
-- CURRENT_PREVIEW_HTML is only a temporary static preview snapshot.
-- It is NOT the real source of mujeebproai.com.
-- For MujeebProAI platform pages, ALWAYS read the real React files before explaining, editing, restoring, or rebuilding.
-- For homepage work, read app/page.tsx first.
-- If animation/background is involved, also read components/ui/space-background.tsx.
-- Preserve React components such as Navbar, Hero, Features, Founder, Trusted, Pricing, Footer, and SpaceBackground.
-- Never replace real React pages with simple static HTML unless admin explicitly asks.
-- If admin asks “go back to actual webpage”, explain that the real page comes from app/page.tsx and its imported components, not CURRENT_PREVIEW_HTML.
+
         // Customer system prompt - help them with THEIR projects only
     const userSystemPrompt = aiSettings.systemPrompt + `
 
