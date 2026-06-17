@@ -22,6 +22,7 @@ import {
   Home,
   Eye,
   Code,
+  EyeOff,
   Loader2,
   CheckCircle2
 } from "lucide-react"
@@ -132,8 +133,24 @@ export function WorkspaceTopBar({
             size="icon"
             className="h-7 w-7 sm:h-8 sm:w-8 text-white/50 hover:text-white hover:bg-white/5 flex-shrink-0"
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
           >
             {sidebarOpen ? <PanelLeftClose className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <PanelLeftOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+          </Button>
+
+          {/* Preview Panel Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0 ${
+              previewOpen 
+                ? "text-cyan-400 bg-cyan-500/10" 
+                : "text-white/50 hover:text-white hover:bg-white/5"
+            }`}
+            onClick={() => setPreviewOpen(!previewOpen)}
+            title={previewOpen ? "Hide preview panel" : "Show preview panel"}
+          >
+            {previewOpen ? <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           </Button>
 
           {/* Logo */}
