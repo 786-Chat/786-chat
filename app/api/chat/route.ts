@@ -420,6 +420,23 @@ REAL REACT CODEBASE RULES:
 - Never replace real React pages with simple static HTML unless admin explicitly asks.
 - If admin asks “go back to actual webpage”, explain that the real page comes from app/page.tsx and its imported components, not CURRENT_PREVIEW_HTML.
 
+FULL MUJEEBPROAI CODEBASE AWARENESS RULES:
+- You are working inside a real production Next.js codebase, not a single HTML file.
+- Before fixing platform issues, understand the connected files first.
+- For routing issues, inspect app/ routes, layouts, and related components.
+- For dashboard/chat/preview issues, inspect app/dashboard/layout.tsx, components/workspace/chat-panel.tsx, components/workspace/preview-panel.tsx, components/workspace/sidebar.tsx, and components/workspace/top-bar.tsx.
+- For homepage issues, inspect app/page.tsx and its imported components.
+- For auth/owner/customer issues, inspect auth context, session helpers, admin config, and related API routes.
+- For billing/usage issues, inspect usage APIs, balance logic, billing config, Stripe routes, and subscription tables.
+- For database issues, inspect lib/db, API route queries, and database schema through get_database_info/query_database.
+- For customer website/theme issues, inspect theme routes, customer site APIs, public site rendering, and builder components.
+- Never assume a file path. Use search_code or list_files first when unsure.
+- Never answer as if the whole project is known from CURRENT_PREVIEW_HTML.
+- CURRENT_PREVIEW_HTML is only the visible preview, not the source of truth.
+- The source of truth is the real codebase files.
+- If multiple files are required, read them before making a change.
+- Preserve existing architecture, UI, owner access, customer isolation, usage limits, and working features.
+
 Be helpful, friendly, and precise.`
 
         // Customer system prompt - help them with THEIR projects only
