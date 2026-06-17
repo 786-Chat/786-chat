@@ -14,7 +14,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { DEVICE_PRESETS } from "./top-bar"
 import { useAuth } from "@/contexts/auth-context"
 
 interface PreviewPanelProps {
@@ -30,39 +29,58 @@ interface PreviewPanelProps {
   onViewModeChange?: (mode: "preview" | "code") => void
 }
 
+function getDeviceLabel(device: string): string {
+  if (device === "full") return "Full Size"
+  if (device === "ipad" || device === "ipad-pro") return "Tablet"
+  if (device === "iphone-17-pro") return "iPhone 17 Pro"
+  return "Mobile"
+}
+
 function looksLikeReactOrTsxCode(value: string): boolean {
   const text = value.trim()
-
   if (!text) return false
 
-  const codeSignals = [
+  const hasHtmlDocument =
+    /<!doctype html/i.test(text) ||
+    /<html[\s>]/i.test(text) ||
+    /<body[\s>]/i.test(text)
+
+  if (hasHtmlDocument) return false
+
+  const reactSignals = [
     /^["']use client["']/,
     /\bimport\s+.+\s+from\s+["'][^"']+["']/,
     /\bexport\s+default\s+function\b/,
     /\bexport\s+function\b/,
     /\bfunction\s+[A-Z][A-Za-z0-9_]*\s*\(/,
     /\bconst\s+[A-Z][A-Za-z0-9_]*\s*=\s*\(/,
-    /interface\s+[A-Z][A-Za-z0-9_]*/,
-    /type\s+[A-Z][A-Za-z0-9_]*\s*=/,
+    /\binterface\s+[A-Z][A-Za-z0-9_]*/,
+    /\btype\s+[A-Z][A-Za-z0-9_]*\s*=/,
+    /\buseState\s*\(/,
+    /\buseEffect\s*\(/,
     /className=/,
     /onClick=/,
-    /useState\s*\(/,
-    /useEffect\s*\(/,
   ]
 
-  const hasRealHtmlDocument =
-    /<!doctype html/i.test(text) ||
-    /<html[\s>]/i.test(text) ||
-    /<body[\s>]/i.test(text)
+  return reactSignals.some((pattern) => pattern.test(text))
+}
 
-  if (hasRealHtmlDocument) return false
+function isFakeComponentCodePreview(html: string): boolean {
+  const text = html.trim().toLowerCase()
 
-  return codeSignals.some((pattern) => pattern.test(text))
+  return (
+    text.includes("<h3>component code</h3>") ||
+    (text.includes("component code") &&
+      text.includes("<pre") &&
+      text.includes("import ") &&
+      text.includes("export default"))
+  )
 }
 
 function hasVisibleHtmlContent(html: string): boolean {
   if (!html || !html.trim()) return false
   if (looksLikeReactOrTsxCode(html)) return false
+  if (isFakeComponentCodePreview(html)) return false
 
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
   const content = bodyMatch ? bodyMatch[1] : html
@@ -131,9 +149,13 @@ export function WorkspacePreviewPanel({
   const [copied, setCopied] = useState(false)
 
   const isReactCode = previewHtml ? looksLikeReactOrTsxCode(previewHtml) : false
+  const isBadComponentPreview = previewHtml ? isFakeComponentCodePreview(previewHtml) : false
 
   const cleanedPreviewHtml =
-    previewHtml && !isReactCode && hasVisibleHtmlContent(previewHtml)
+    previewHtml &&
+    !isReactCode &&
+    !isBadComponentPreview &&
+    hasVisibleHtmlContent(previewHtml)
       ? stripDangerousPreviewHtml(previewHtml)
       : ""
 
@@ -211,8 +233,7 @@ export function WorkspacePreviewPanel({
     setLiveUrl(normalizedUrl)
   }, [previewUrl, isOwnerAdmin])
 
-  const currentDevice =
-    DEVICE_PRESETS.find((d) => d.id === device) || DEVICE_PRESETS[0]
+  const currentDeviceLabel = getDeviceLabel(device)
 
   const isDesktopDevice = device === "full"
   const isTabletDevice = device === "ipad" || device === "ipad-pro"
@@ -351,7 +372,7 @@ export function WorkspacePreviewPanel({
         style={{ background: "rgba(20, 184, 166, 0.05)" }}
       >
         <span className="text-[11px] text-white/50 font-medium">
-          {hasPreviewHtml ? "Live Preview" : safeLiveUrl ? currentDevice.label : "Preview"}
+          {hasPreviewHtml ? "Live Preview" : safeLiveUrl ? currentDeviceLabel : "Preview"}
         </span>
 
         <div className="flex items-center gap-1">
@@ -394,7 +415,7 @@ export function WorkspacePreviewPanel({
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
                 ? "Website Preview"
-                : isReactCode
+                : isReactCode || isBadComponentPreview
                   ? "Code detected - switch to Code mode"
                   : "Preview Ready - No Website Loaded"}
           </span>
@@ -456,16 +477,16 @@ export function WorkspacePreviewPanel({
             </div>
 
             <h3 className="text-sm font-medium text-white/50 mb-1">
-              {isReactCode ? "Code is not preview HTML" : "Preview is empty"}
+              {isReactCode || isBadComponentPreview ? "Code is not preview HTML" : "Preview is empty"}
             </h3>
 
             <p className="text-xs text-white/25 max-w-[280px] mb-4">
-              {isReactCode
+              {isReactCode || isBadComponentPreview
                 ? "React/TSX code will only show in Code mode. Preview mode only renders real HTML or your live website."
                 : "Ask AI to generate or edit a website. The preview will appear here instead of a blank white page."}
             </p>
 
-            {isReactCode ? (
+            {isReactCode || isBadComponentPreview ? (
               <Button
                 variant="outline"
                 size="sm"
