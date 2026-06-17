@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { motion } from "framer-motion"
-import { RotateCcw } from "lucide-react"
+import { RotateCcw, Home } from "lucide-react"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
 import { WorkspaceSidebar } from "@/components/workspace/sidebar"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
@@ -165,6 +165,15 @@ export default function DashboardLayout({
     setActiveView("preview")
   }, [previewBackupStorageKey, previewStorageKey, readPreviewHistory, writePreviewHistory])
 
+  const showActualHomepage = useCallback(() => {
+    localStorage.removeItem(previewStorageKey)
+    setPreviewHtml("")
+    setPreviewUrl("/")
+    setPreviewOpen(true)
+    setActiveView("preview")
+    setViewMode("preview")
+  }, [previewStorageKey])
+
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login")
@@ -323,21 +332,35 @@ export default function DashboardLayout({
             Preview safety is active. MujeebProAI saves the previous preview before applying a new AI preview.
           </p>
 
-          <button
-            type="button"
-            onClick={restorePreviousPreview}
-            disabled={!hasPreviewBackup}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
-              hasPreviewBackup
-                ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
-                : "border-white/10 bg-white/[0.03] text-white/25 cursor-not-allowed"
+          <div className="flex items-center gap-2">
+            {isOwner && (
+              <button
+                type="button"
+                onClick={showActualHomepage}
+                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-all hover:bg-emerald-500/20"
+                title="Clear AI preview and show actual homepage"
+              >
+                <Home className="h-3.5 w-3.5" />
+                Actual Homepage
+              </button>
             )}
-            title="Rollback / Restore Previous Version"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Rollback
-          </button>
+
+            <button
+              type="button"
+              onClick={restorePreviousPreview}
+              disabled={!hasPreviewBackup}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all",
+                hasPreviewBackup
+                  ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
+                  : "border-white/10 bg-white/[0.03] text-white/25 cursor-not-allowed"
+              )}
+              title="Rollback / Restore Previous Version"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Rollback
+            </button>
+          </div>
         </div>
       </div>
 
