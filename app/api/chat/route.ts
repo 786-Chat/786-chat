@@ -658,7 +658,7 @@ const result = await streamText({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
         
-        // Save assistant response to database
+               // Save assistant response to database
         const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
         if (lastAssistant) {
           const assistantText = getMessageText(lastAssistant)
@@ -670,110 +670,45 @@ const result = await streamText({
           }
         }
 
-        // Update chat timestamp
         await sql`
           UPDATE chats SET updated_at = NOW() WHERE id = ${currentChatId}
         `
 
-        // Record usage with cost tracking
         const outputTokens = usage?.completionTokens || estimateTokens(getMessageText(lastAssistant!))
-        await recordUsage(
-          session.id,
-          inputTokens,
-          outputTokens,
-          imageCount,
-          totalPdfPages,
-          useExtraCredit
-        )
-if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
-  await sql`
-    INSERT INTO usage_logs (user_id, action, metadata)
-    VALUES (${session.id}, 'vision_analysis', ${JSON.stringify({
-      imageCount,
-      pdfPages: totalPdfPages,
-      model: aiSettings.visionModel || "gemini-2.5-flash",
-    })})
-  `
-}
-        
-    const chats = await sql`
-      SELECT c.id, c.title, c.created_at, c.updated_at,
-             (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
-      FROM chats c
-      WHERE c.user_id = ${session.id}
-      ORDER BY c.updated_at DESC
-      LIMIT 50
-    `
+        await recordUsage(session.id, inputTokens, outputTokens, imageCount, totalPdfPages, useExtraCredit)
 
-      }
-
-    const balance = await getUserBalance(session.id, session.email)
-    const pricing = await getPricingSettings()
-
-    return new Response(
-      JSON.stringify({
-        chats,
-        usage: {
-          plan: "customer",
-          unlimited: false,
-          monthly: {
-            used: balance.freeMessagesUsed || 0,
-            limit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
-            remaining: balance.freeMessagesRemaining || 0,
-          },
-          daily: {
-            used: balance.freeMessagesUsed || 0,
-            limit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
-            remaining: balance.freeMessagesRemaining || 0,
-          },
-          balance: balance.balance || 0,
-          freeMessagesUsed: balance.freeMessagesUsed || 0,
-          freeMessagesLimit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
-          freeMessagesRemaining: balance.freeMessagesRemaining || 0,
-          canSend: balance.freeMessagesRemaining > 0 || balance.balance > 0.001,
-          extraCredits: 0,
-          status: "active",
-        },
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      }
-    )
-  } catch (error) {
-    console.error("[Chat API GET] Error:", error)
-    return new Response(
-      JSON.stringify({
-        error: "Failed to load chat history",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    )
-  }
-}
-    if (isAdminRequest) {
-      return new Response(
-        JSON.stringify({
-          chats,
-          usage: {
-            plan: "admin",
-            unlimited: true,
-            monthly: { used: 0, limit: 999999999, remaining: 999999999 },
-            daily: { used: 0, limit: 999999999, remaining: 999999999 },
-            balance: 999999999,
-            freeMessagesRemaining: 999999999,
-            canSend: true,
-            extraCredits: 999999999,
-            status: "active",
-          },
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
+        if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
+          await sql`
+            INSERT INTO usage_logs (user_id, action, metadata)
+            VALUES (${session.id}, 'vision_analysis', ${JSON.stringify({
+              imageCount,
+              pdfPages: totalPdfPages,
+              model: aiSettings.visionModel || "gemini-2.5-flash",
+            })})
+          `
         }
-      )
-    }
+
+        await trackUsage(session.id, inputTokens, outputTokens, aiSettings.model as DeepSeekModel)
+
+        if (!isAdminRequest) {
+          await sql`
+            INSERT INTO user_balances (
+              user_id, balance, free_messages_used, free_messages_limit, total_messages_sent, total_spent
+            )
+            VALUES (${session.id}, 0, 1, 10, 1, 0)
+            ON CONFLICT (user_id)
+            DO UPDATE SET
+              free_messages_used = COALESCE(user_balances.free_messages_used, 0) + 1,
+              free_messages_limit = COALESCE(user_balances.free_messages_limit, 10),
+              total_messages_sent = COALESCE(user_balances.total_messages_sent, 0) + 1
+          `
+        }
+      },
+      consumeSseStream: consumeStream,
+      headers: {
+        "X-Chat-Id": currentChatId || "",
+        "X-Remaining-Daily": String(protectionResult.remaining?.dailyMessages || 0),
+        "X-Remaining-Monthly": String(protectionResult.remaining?.monthlyMessages || 0),
+        "X-Extra-Credits": String(protectionResult.remaining?.extraCredits || 0),
+      },
+    })
