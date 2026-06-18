@@ -499,18 +499,19 @@ export default function DashboardLayout({
                   ↶
                 </button>
 
-                <WorkspacePreviewPanel
-                  device={previewDevice}
-                  setDevice={setPreviewDevice}
-                  previewUrl={previewUrl}
-                  setPreviewUrl={setPreviewUrl}
-                  onClose={() => setPreviewOpen(false)}
-                  expanded={previewExpanded}
-                  setExpanded={setPreviewExpanded}
-                  previewHtml={previewHtml}
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                />
+            <WorkspacePreviewPanel
+  project={currentProject}
+  device={previewDevice}
+  setDevice={setPreviewDevice}
+  previewUrl={previewUrl}
+  setPreviewUrl={setPreviewUrl}
+  onClose={() => setPreviewOpen(false)}
+  expanded={previewExpanded}
+  setExpanded={setPreviewExpanded}
+  previewHtml={previewHtml}
+  viewMode={viewMode}
+  onViewModeChange={setViewMode}
+/>
               </div>
             </>
           )}
