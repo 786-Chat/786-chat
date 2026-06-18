@@ -76,6 +76,41 @@ function hasVisibleHtmlContent(html: string): boolean {
   return withoutInvisible.length > 3 || hasRealElements
 }
 
+function normalizeOwnerPreviewPath(path: string): string {
+  const cleanPath = path.trim()
+
+  if (!cleanPath || cleanPath === "about:blank") return ""
+
+  const withoutDomain = cleanPath
+    .replace(/^https:\/\/www\.mujeebproai\.com/i, "")
+    .replace(/^https:\/\/mujeebproai\.com/i, "")
+
+  const normalized = withoutDomain.startsWith("/") ? withoutDomain : `/${withoutDomain}`
+
+  const lower = normalized.toLowerCase()
+
+  if (lower === "/home" || lower === "/homepage" || lower === "/main") return "/"
+  if (lower === "/theme" || lower === "/themse" || lower === "/themes-card") return "/themes"
+
+  return normalized
+}
+
+function isBlockedOwnerPreviewPath(path: string): boolean {
+  const lower = path.trim().toLowerCase()
+
+  return (
+    lower.includes("/admin") ||
+    lower.includes("/admin-login") ||
+    lower.includes("/dashboard") ||
+    lower.includes("/api/admin") ||
+    lower.includes("/settings") ||
+    lower.includes("/users") ||
+    lower.includes("/subscriptions") ||
+    lower.includes("/balances") ||
+    lower.includes("/logs")
+  )
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -328,9 +363,26 @@ export default function DashboardLayout({
       const detail = (e as CustomEvent).detail
       if (!detail?.url) return
 
-      let finalUrl = detail.url
+      const rawUrl = String(detail.url).trim()
+      let finalUrl = rawUrl
 
-      if (detail.url.startsWith("/")) {
+      if (isOwner) {
+        finalUrl = normalizeOwnerPreviewPath(rawUrl)
+
+        if (!finalUrl || isBlockedOwnerPreviewPath(finalUrl)) {
+          setPreviewUrl("")
+          setPreviewHtml("")
+          setPreviewOpen(true)
+          return
+        }
+
+        setPreviewUrl(finalUrl)
+        setPreviewHtml("")
+        setPreviewOpen(true)
+        return
+      }
+
+      if (rawUrl.startsWith("/")) {
         try {
           const res = await fetch("/api/sites/my-site", {
             credentials: "include",
@@ -341,9 +393,9 @@ export default function DashboardLayout({
             const data = await res.json()
 
             if (data.subdomain) {
-              finalUrl = `/site/${data.subdomain}${detail.url}`
+              finalUrl = `/site/${data.subdomain}${rawUrl}`
             } else if (data.siteUrl) {
-              finalUrl = `${data.siteUrl.replace(/\/$/, "")}${detail.url}`
+              finalUrl = `${data.siteUrl.replace(/\/$/, "")}${rawUrl}`
             }
           }
         } catch {
@@ -360,7 +412,7 @@ export default function DashboardLayout({
 
     return () =>
       window.removeEventListener("top-bar-preview-url", handlePreviewUrl)
-  }, [])
+  }, [isOwner])
 
   if (isLoading || shouldRedirectOwnerToChat) {
     return (
