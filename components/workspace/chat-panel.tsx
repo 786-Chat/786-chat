@@ -1121,18 +1121,18 @@ setAttachedFiles([])
                 </span>
               </div>
 
-              {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
-                <button
-                  onClick={() => setShowUpgrade(true)}
-                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                  Upgrade
-                </button>
-              )}
-            </div>
+                       {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              Upgrade
+            </button>
           )}
         </div>
       </div>
+
+      {/* END CHAT INPUT WRAPPER */}
 
       <UpgradePopup
         open={showUpgrade}
