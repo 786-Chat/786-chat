@@ -505,13 +505,17 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     const cleanInput = input.trim()
     const requestedPreviewPath = attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
+    const previewInstruction = requestedPreviewPath
+      ? `
+
+SYSTEM_PREVIEW_ACTION:
+The preview panel has been opened to ${requestedPreviewPath}. Do not give a long page overview. Reply only: "Preview opened."`
+      : ""
+
     if (requestedPreviewPath) {
       openPreviewPath(requestedPreviewPath)
       onPreviewUpdate?.("")
       onViewModeChange?.("preview")
-      setInput("")
-      setAttachedFiles([])
-      return
     }
 
     const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
@@ -520,6 +524,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 
     const messageText =
       cleanInput +
+      previewInstruction +
       (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
