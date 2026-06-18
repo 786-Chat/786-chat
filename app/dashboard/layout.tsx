@@ -13,6 +13,15 @@ import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
 const OWNER_EMAILS = ["mujeeb@job4u.com"]
 
+type ProjectFileMap = Record<string, string>
+
+type WorkspaceProject = {
+  id: string
+  name: string
+  template?: string
+  files: ProjectFileMap
+}
+
 function looksLikeReactOrTsxCode(value: string): boolean {
   const text = value.trim()
   if (!text) return false
@@ -132,6 +141,7 @@ export default function DashboardLayout({
   const [previewWidth, setPreviewWidth] = useState(560)
   const [isDraggingPreview, setIsDraggingPreview] = useState(false)
   const [canRollbackPreview, setCanRollbackPreview] = useState(false)
+  const [currentProject, setCurrentProject] = useState<WorkspaceProject | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -188,6 +198,38 @@ export default function DashboardLayout({
 
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
+  const loadLatestProject = useCallback(async () => {
+    if (!userEmail || !isChatWorkspace) return
+
+    try {
+      const res = await fetch("/api/projects/latest", {
+        credentials: "include",
+        cache: "no-store",
+      })
+
+      if (!res.ok) {
+        setCurrentProject(null)
+        return
+      }
+
+      const data = await res.json()
+      setCurrentProject(data.project || null)
+    } catch {
+      setCurrentProject(null)
+    }
+  }, [userEmail, isChatWorkspace])
+
+  useEffect(() => {
+    loadLatestProject()
+
+    const handleProjectChanged = () => loadLatestProject()
+    window.addEventListener("project-files-changed", handleProjectChanged)
+
+    return () => {
+      window.removeEventListener("project-files-changed", handleProjectChanged)
+    }
+  }, [loadLatestProject])
+
   const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
       const currentHtml = previewHtml || localStorage.getItem(previewStorageKey) || ""
@@ -208,64 +250,6 @@ export default function DashboardLayout({
 
         writePreviewHistory(nextHistory)
       }
-
-      if (nextHasContent) {
-        localStorage.setItem(previewStorageKey, nextHtml)
-        setPreviewHtml(nextHtml)
-        setPreviewUrl("")
-        setPreviewOpen(true)
-        return
-      }
-
-      localStorage.removeItem(previewStorageKey)
-      setPreviewHtml("")
-      setPreviewUrl("")
-      setPreviewOpen(true)
-    },
-    [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
-  )
-
-  const restorePreviousPreview = useCallback(() => {
-    const history = readPreviewHistory()
-    const previousPreview = history[history.length - 1]
-
-    if (!previousPreview || !hasVisibleHtmlContent(previousPreview)) {
-      writePreviewHistory([])
-      return
-    }
-
-    const remainingHistory = history.slice(0, -1)
-
-    localStorage.setItem(previewStorageKey, previousPreview)
-    writePreviewHistory(remainingHistory)
-
-    setPreviewHtml(previousPreview)
-    setPreviewUrl("")
-    setPreviewOpen(true)
-    setViewMode("preview")
-  }, [previewStorageKey, readPreviewHistory, writePreviewHistory])
-
-  const startPreviewResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDraggingPreview(true)
-  }, [])
-
-  useEffect(() => {
-    if (!isDraggingPreview) return
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const container = containerRef.current
-      if (!container) return
-
-      const rect = container.getBoundingClientRect()
-      const nextWidth = rect.right - event.clientX
-      const minWidth = 360
-      const maxWidth = Math.min(980, Math.max(420, rect.width - 420))
-      const clampedWidth = Math.min(Math.max(nextWidth, minWidth), maxWidth)
-
-      setPreviewWidth(clampedWidth)
-    }
 
     const handleMouseUp = () => {
       setIsDraggingPreview(false)
