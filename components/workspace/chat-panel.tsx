@@ -54,6 +54,13 @@ interface AttachedFile {
   url?: string
 }
 
+type DbMessage = {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  created_at?: string
+}
+
 function getMessageText(message: { parts?: Array<{ type: string; text?: string }> }): string {
   if (!message.parts || !Array.isArray(message.parts)) return ""
   return message.parts
@@ -281,6 +288,14 @@ function openPreviewPath(path: string) {
   )
 }
 
+function toUiMessages(dbMessages: DbMessage[]) {
+  return dbMessages.map((message) => ({
+    id: String(message.id),
+    role: message.role === "assistant" ? "assistant" : "user",
+    parts: [{ type: "text" as const, text: String(message.content || "") }],
+  }))
+}
+
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
@@ -301,6 +316,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const [showScrollButton, setShowScrollButton] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState("")
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
 
   const savePreviewWithBackup = useCallback(
     (nextHtml: string) => {
@@ -322,9 +338,11 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     stop,
     reload,
     error,
+    setMessages,
   } = useChat({
     api: "/api/chat",
     body: {
+      chatId: currentChatId,
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
@@ -335,7 +353,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 
   const isLoading = status === "streaming" || status === "submitted"
 
-  useEffect(() => {
+  const refreshUsage = useCallback(() => {
     fetch("/api/usage")
       .then((res) => res.json())
       .then((data) => {
@@ -346,16 +364,79 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   }, [])
 
   useEffect(() => {
+    refreshUsage()
+  }, [refreshUsage])
+
+  useEffect(() => {
     if (messages.length > 0) {
-      fetch("/api/usage")
-        .then((res) => res.json())
-        .then((data) => {
-          setUsage(data)
-          window.dispatchEvent(new Event("chat-updated"))
-        })
-        .catch(() => {})
+      refreshUsage()
     }
-  }, [messages.length, status])
+  }, [messages.length, status, refreshUsage])
+
+  useEffect(() => {
+    const loadChatMessages = async (chatId: string) => {
+      try {
+        const response = await fetch(`/api/chat?chatId=${encodeURIComponent(chatId)}`, {
+          credentials: "include",
+          cache: "no-store",
+        })
+
+        if (!response.ok) return
+
+        const data = await response.json()
+        const dbMessages = Array.isArray(data.messages) ? data.messages : []
+
+        setCurrentChatId(chatId)
+        setMessages(toUiMessages(dbMessages) as any)
+        setAttachedFiles([])
+        setInput("")
+        onPreviewUpdate?.("")
+        onViewModeChange?.("preview")
+
+        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
+
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+        }, 50)
+      } catch (error) {
+        console.error("Failed to load chat:", error)
+      }
+    }
+
+    const handleLoadChat = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (!detail?.chatId) return
+      loadChatMessages(String(detail.chatId))
+    }
+
+    const handleNewChat = () => {
+      setCurrentChatId(null)
+      setMessages([] as any)
+      setInput("")
+      setAttachedFiles([])
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+      onPreviewUpdate?.("")
+      onViewModeChange?.("preview")
+      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null } }))
+    }
+
+    window.addEventListener("load-chat", handleLoadChat)
+    window.addEventListener("new-chat", handleNewChat)
+
+    return () => {
+      window.removeEventListener("load-chat", handleLoadChat)
+      window.removeEventListener("new-chat", handleNewChat)
+    }
+  }, [
+    onPreviewUpdate,
+    onViewModeChange,
+    previewBackupStorageKey,
+    previewHistoryStorageKey,
+    previewStorageKey,
+    setMessages,
+  ])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -479,8 +560,8 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
           )
         } else {
           const reader = new FileReader()
-          reader.onload = (e) => {
-            const dataUrl = e.target?.result as string
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string
             setAttachedFiles((prev) =>
               prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
             )
@@ -489,8 +570,8 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
         }
       } catch {
         const reader = new FileReader()
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string
           setAttachedFiles((prev) =>
             prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
           )
@@ -552,8 +633,8 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
           )
         } else {
           const reader = new FileReader()
-          reader.onload = (e) => {
-            const dataUrl = e.target?.result as string
+          reader.onload = (event) => {
+            const dataUrl = event.target?.result as string
             setAttachedFiles((prev) =>
               prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
             )
@@ -562,8 +643,8 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
         }
       } catch {
         const reader = new FileReader()
-        reader.onload = (e) => {
-          const dataUrl = e.target?.result as string
+        reader.onload = (event) => {
+          const dataUrl = event.target?.result as string
           setAttachedFiles((prev) =>
             prev.map((f) => (f.id === id ? { ...f, url: dataUrl, uploading: false } : f))
           )
@@ -626,17 +707,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
       localStorage.removeItem(previewStorageKey)
       onPreviewUpdate("")
     }
-
-    const handleNewChat = () => {
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-      onPreviewUpdate("")
-    }
-
-    window.addEventListener("new-chat", handleNewChat)
-    return () => window.removeEventListener("new-chat", handleNewChat)
-  }, [onPreviewUpdate, previewBackupStorageKey, previewHistoryStorageKey, previewStorageKey, user?.email, isOwnerAdmin])
+  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
