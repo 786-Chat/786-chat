@@ -90,7 +90,7 @@ function looksLikeReactOrTsxCode(value: string): boolean {
     /\btype\s+[A-Z][A-Za-z0-9_]*\s*=/,
     /\buseState\s*\(/,
     /\buseEffect\s*\(/,
-    className=/,
+    /className=/,
     /onClick=/,
   ]
 
