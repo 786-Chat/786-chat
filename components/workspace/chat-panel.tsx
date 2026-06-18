@@ -1135,9 +1135,7 @@ setAttachedFiles([])
       </div>
     </div>
 
-    <UpgradePopup
-      open={showUpgrade}
-      onOpenChange={(open) => setShowUpgrade(open)}
-    />
-  </>
-)
+    <<UpgradePopup
+  open={showUpgrade}
+  onOpenChange={(open) => setShowUpgrade(open)}
+/>
