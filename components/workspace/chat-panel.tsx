@@ -1126,16 +1126,19 @@ setAttachedFiles([])
               onClick={() => setShowUpgrade(true)}
               className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
             >
-              Upgrade
-            </button>
+                               Upgrade
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
-
-      <UpgradePopup
-        open={showUpgrade}
-        onOpenChange={(open) => setShowUpgrade(open)}
-      />
     </div>
-  )
+
+    <UpgradePopup
+      open={showUpgrade}
+      onOpenChange={(open) => setShowUpgrade(open)}
+    />
+  </>
+)
 }
