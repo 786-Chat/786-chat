@@ -544,45 +544,51 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
       }, 50)
       return
     }
+const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
-    const previewInstruction = ""
+const messageText = `
+${cleanInput}
 
-    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
-    const storedPreview = localStorage.getItem(previewStorageKey) || ""
-    const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
+PROJECT_FILE_SYSTEM_RULE:
+This is a real MujeebProAI file-based project.
+Do NOT return HTML preview.
+Do NOT use CURRENT_PREVIEW_HTML.
+Return file operations only.
 
-    const messageText =
-      cleanInput +
-      previewInstruction +
-      (savedPreview && hasVisibleHtmlContent(savedPreview)
-        ? `
+Required output format:
+editFile("app/page.tsx", "FULL FILE CODE")
+createFile("components/Header.tsx", "FULL FILE CODE")
+createFile("backend/orders.php", "FULL FILE CODE")
+createFile("python/ai.py", "FULL FILE CODE")
 
-CURRENT_PREVIEW_HTML:
-${savedPreview}
+Rules:
+- Always provide full file content.
+- Do not provide hints only.
+- Do not return one single HTML document.
+- If editing design, menu, animation, layout, colors, text, or images, edit the correct real project files.
+`.trim()
 
-Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user asks to change the current preview, return the full updated HTML code in one html code block. Before changing, assume the current preview has been backed up by MujeebProAI. Do not ask for URL unless the user is asking about an external website.`
-        : "")
+const finalMessageText = messageText || "Please analyze the attached file."
 
-    const finalMessageText = messageText.trim() || "Please analyze the attached file."
 if (requestedPreviewPath && isOwnerAdmin) {
   openPreviewPath(requestedPreviewPath)
   onViewModeChange?.("preview")
 }
-    sendMessage({
-      parts: [
-        { type: "text", text: finalMessageText },
-        ...uploadedFiles.map((f) => ({
-          type: "file" as const,
-          url: f.url!,
-          mediaType: f.file.type,
-        })),
-      ],
-    } as any)
 
-    setInput("")
-    setAttachedFiles([])
-  }
+sendMessage({
+  parts: [
+    { type: "text", text: finalMessageText },
+    ...uploadedFiles.map((f) => ({
+      type: "file" as const,
+      url: f.url!,
+      mediaType: f.file.type,
+    })),
+  ],
+} as any)
 
+setInput("")
+setAttachedFiles([])
+    
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text)
     setCopiedId(id)
