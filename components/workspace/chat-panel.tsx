@@ -588,7 +588,8 @@ sendMessage({
 
 setInput("")
 setAttachedFiles([])
-    
+  }
+
   const handleCopy = async (text: string, id: string) => {
     await navigator.clipboard.writeText(text)
     setCopiedId(id)
