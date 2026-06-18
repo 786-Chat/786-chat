@@ -514,7 +514,6 @@ The preview panel has been opened to ${requestedPreviewPath}. Do not give a long
 
     if (requestedPreviewPath) {
       openPreviewPath(requestedPreviewPath)
-      onPreviewUpdate?.("")
       onViewModeChange?.("preview")
     }
 
@@ -800,7 +799,9 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
               const rawText = getMessageText(message)
               const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                 ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-                : rawText
+                : rawText.includes("SYSTEM_PREVIEW_ACTION:")
+                  ? rawText.split("SYSTEM_PREVIEW_ACTION:")[0].trim()
+                  : rawText
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
