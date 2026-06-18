@@ -90,8 +90,8 @@ function looksLikeReactOrTsxCode(value: string): boolean {
     /\btype\s+[A-Z][A-Za-z0-9_]*\s*=/,
     /\buseState\s*\(/,
     /\buseEffect\s*\(/,
-    /className=/,
-    /onClick=/,
+    className=/,
+    onClick=/,
   ]
 
   return reactSignals.some((pattern) => pattern.test(text))
@@ -527,45 +527,47 @@ export function WorkspacePreviewPanel({
 
   const renderLiveUrlCodeNotice = () => {
     return (
-      <div className="absolute inset-0 overflow-auto bg-[#0d1117]">
-        <div className="border-b border-white/[0.06] px-4 py-2 sticky top-0 z-10 bg-[#0d1117]">
-          <span className="text-xs text-white/50">Live React Page Source</span>
-        </div>
+      <div className="border-b border-white/[0.06] px-4 py-2 bg-[#0d1117]">
+        <span className="text-xs text-white/50">Live React Page Source</span>
+      </div>
+    )
+  }
 
-        <div className="p-5">
-          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Code className="h-4 w-4 text-cyan-300" />
-              <h3 className="text-sm font-semibold text-white">This preview is a live route</h3>
-            </div>
-
-            <p className="text-xs leading-relaxed text-white/55 mb-4">
-              The preview is showing <span className="text-cyan-300">{safeLiveUrl || "/"}</span>.
-              Code mode cannot display the real React source automatically from the iframe.
-              Ask MujeebProAI chat to read the source files below if you want to edit this page.
-            </p>
-
-            <div className="space-y-2">
-              {sourceFileHints.map((path) => (
-                <div
-                  key={path}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
-                >
-                  <code className="text-xs text-cyan-100/80">{path}</code>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(path)}
-                    className="text-[11px] text-white/35 hover:text-white"
-                  >
-                    Copy
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-4 text-[11px] text-white/35">
-              Example: “Read app/themes/page.tsx and show me the code for this preview.”
-            </p>
+  const renderLiveCodePanel = () => {
+    return (
+      <div className="p-5">
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Code className="h-4 w-4 text-cyan-300" />
+            <h3 className="text-sm font-semibold text-white">This preview is a live route</h3>
           </div>
+
+          <p className="text-xs leading-relaxed text-white/55 mb-4">
+            The preview is showing <span className="text-cyan-300">{safeLiveUrl || "/"}</span>.
+            Code mode cannot display the real React source automatically from the iframe.
+            Ask MujeebProAI chat to read the source files below if you want to edit this page.
+          </p>
+
+          <div className="space-y-2">
+            {sourceFileHints.map((path) => (
+              <div
+                key={path}
+                className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+              >
+                <code className="text-xs text-cyan-100/80">{path}</code>
+                <button
+                  onClick={() => navigator.clipboard.writeText(path)}
+                  className="text-[11px] text-white/35 hover:text-white"
+                >
+                  Copy
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 text-[11px] text-white/35">
+            Example: &ldquo;Read app/themes/page.tsx and show me the code for this preview.&rdquo;
+          </p>
         </div>
       </div>
     )
@@ -765,7 +767,18 @@ export function WorkspacePreviewPanel({
             </pre>
           </div>
         ) : viewMode === "code" && safeLiveUrl ? (
-          renderLiveUrlCodeNotice()
+          <div className="absolute inset-0 flex flex-col bg-[#08080d]">
+            {/* Source file hints at top */}
+            <div className="flex-shrink-0">
+              {renderLiveUrlCodeNotice()}
+              {renderLiveCodePanel()}
+            </div>
+
+            {/* Live preview below the hints */}
+            <div className="flex-1 relative min-h-0">
+              {renderPreviewFrame("url")}
+            </div>
+          </div>
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
         ) : safeLiveUrl ? (
