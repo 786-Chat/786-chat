@@ -77,10 +77,10 @@ function getFileParts(message: { parts?: Array<{ type: string; url?: string; med
 }
 
 const suggestedPrompts = [
-  "Explain quantum computing simply",
-  "Write a Python sort function",
-  "Help me write a professional email",
-  "React best practices for 2025",
+  "Show me MujeebProAI homepage preview",
+  "Open the themes page preview",
+  "Create a modern landing page in HTML",
+  "Edit the current preview design",
 ]
 
 function looksLikeReactOrTsxCode(value: string): boolean {
@@ -118,7 +118,7 @@ function isFakeComponentCodePreview(html: string): boolean {
   return (
     text.includes("<h3>component code</h3>") ||
     (text.includes("component code") &&
-      text.includes("<pre>") &&
+      text.includes("<pre") &&
       text.includes("import ") &&
       text.includes("export default"))
   )
@@ -222,6 +222,63 @@ function sanitizeCustomerPreview(html: string): string {
   }
 
   return hasVisibleHtmlContent(safeHtml) ? safeHtml : ""
+}
+
+function getRequestedPreviewPath(text: string): string | null {
+  const lower = text.toLowerCase().trim()
+
+  const asksPreview =
+    lower.includes("preview") ||
+    lower.includes("show me") ||
+    lower.includes("open") ||
+    lower.includes("see") ||
+    lower.includes("website") ||
+    lower.includes("mujeebproai") ||
+    lower.includes("mujeeb pro ai")
+
+  if (!asksPreview) return null
+
+  if (
+    lower.includes("/admin") ||
+    lower.includes(" admin") ||
+    lower.includes("dashboard") ||
+    lower.includes("/api/")
+  ) {
+    return null
+  }
+
+  if (
+    lower.includes("theme") ||
+    lower.includes("themes") ||
+    lower.includes("themse") ||
+    lower.includes("card")
+  ) {
+    return "/themes"
+  }
+
+  if (
+    lower.includes("/home") ||
+    lower.includes("home page") ||
+    lower.includes("homepage") ||
+    lower.includes("mujeebproai.com") ||
+    lower.includes("www.mujeebproai.com") ||
+    lower.includes("mujeeb pro ai")
+  ) {
+    return "/"
+  }
+
+  const pathMatch = text.match(/(?:^|\s)(\/[a-zA-Z0-9][a-zA-Z0-9/_-]*)(?:\s|$)/)
+  if (pathMatch?.[1]) return pathMatch[1]
+
+  return null
+}
+
+function openPreviewPath(path: string) {
+  window.dispatchEvent(
+    new CustomEvent("top-bar-preview-url", {
+      detail: { url: path },
+    })
+  )
 }
 
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
@@ -332,12 +389,28 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
       return
     }
 
+    const cleanInput = input.trim()
+    const requestedPreviewPath = getRequestedPreviewPath(cleanInput)
+
+    if (requestedPreviewPath) {
+      openPreviewPath(requestedPreviewPath)
+      onViewModeChange?.("preview")
+    }
+
     const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
 
+    const previewInstruction = requestedPreviewPath
+      ? `
+
+SYSTEM_PREVIEW_ACTION:
+The preview panel has been opened to ${requestedPreviewPath}. Briefly confirm what is shown. Do not generate fake HTML unless the user asks to edit or create a page.`
+      : ""
+
     const messageText =
-      input.trim() +
+      cleanInput +
+      previewInstruction +
       (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
@@ -508,16 +581,9 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
   }
 
   const handleSuggestedPrompt = (prompt: string) => {
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      "value"
-    )?.set
-
-    nativeInputValueSetter?.call(textareaRef.current, prompt)
-    textareaRef.current?.dispatchEvent(new Event("input", { bubbles: true }))
-
+    setInput(prompt)
     setTimeout(() => {
-      textareaRef.current?.form?.requestSubmit()
+      textareaRef.current?.focus()
     }, 50)
   }
 
@@ -630,7 +696,9 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
               const rawText = getMessageText(message)
               const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                 ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-                : rawText
+                : rawText.includes("SYSTEM_PREVIEW_ACTION:")
+                  ? rawText.split("SYSTEM_PREVIEW_ACTION:")[0].trim()
+                  : rawText
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
@@ -728,6 +796,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
 
                               if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
                                 savePreviewWithBackup(safeHtml)
+                                onViewModeChange?.("preview")
                               }
                             }}
                             className="text-gray-500 hover:text-gray-300 transition-colors"
