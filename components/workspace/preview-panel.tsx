@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   ExternalLink,
   RefreshCw,
+  RotateCcw,
   X,
   Monitor,
   Smartphone,
@@ -168,6 +169,7 @@ export function WorkspacePreviewPanel({
   onClose,
   previewHtml,
   viewMode = "preview",
+  onViewModeChange,
 }: PreviewPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
@@ -175,16 +177,30 @@ export function WorkspacePreviewPanel({
   const [refreshKey, setRefreshKey] = useState(0)
   const [liveUrl, setLiveUrl] = useState("")
   const [copied, setCopied] = useState(false)
+  const [localPreviewHtml, setLocalPreviewHtml] = useState(previewHtml || "")
+  const [canRollbackPreview, setCanRollbackPreview] = useState(false)
 
-  const isReactCode = previewHtml ? looksLikeReactOrTsxCode(previewHtml) : false
-  const isBadComponentPreview = previewHtml ? isFakeComponentCodePreview(previewHtml) : false
+  const userEmail = user?.email?.toLowerCase() || "guest"
+  const previewStorageKey =
+    userEmail !== "guest"
+      ? `mujeebproai_last_preview_html_${userEmail}`
+      : "mujeebproai_last_preview_html_guest"
+  const previewBackupStorageKey = `${previewStorageKey}_backup`
+  const previewHistoryStorageKey = `${previewStorageKey}_history`
+
+  const currentPreviewHtml = localPreviewHtml || previewHtml || ""
+
+  const isReactCode = currentPreviewHtml ? looksLikeReactOrTsxCode(currentPreviewHtml) : false
+  const isBadComponentPreview = currentPreviewHtml
+    ? isFakeComponentCodePreview(currentPreviewHtml)
+    : false
 
   const cleanedPreviewHtml =
-    previewHtml &&
+    currentPreviewHtml &&
     !isReactCode &&
     !isBadComponentPreview &&
-    hasVisibleHtmlContent(previewHtml)
-      ? stripDangerousPreviewHtml(previewHtml)
+    hasVisibleHtmlContent(currentPreviewHtml)
+      ? stripDangerousPreviewHtml(currentPreviewHtml)
       : ""
 
   const safePreviewHtml =
@@ -193,6 +209,85 @@ export function WorkspacePreviewPanel({
       : ""
 
   const hasPreviewHtml = Boolean(safePreviewHtml)
+
+  const readPreviewHistory = useCallback((): string[] => {
+    try {
+      const raw = localStorage.getItem(previewHistoryStorageKey) || "[]"
+      const parsed = JSON.parse(raw)
+
+      if (!Array.isArray(parsed)) return []
+
+      return parsed.filter(
+        (item): item is string =>
+          typeof item === "string" && hasVisibleHtmlContent(item)
+      )
+    } catch {
+      return []
+    }
+  }, [previewHistoryStorageKey])
+
+  const writePreviewHistory = useCallback(
+    (history: string[]) => {
+      const cleanHistory = history
+        .filter((item) => hasVisibleHtmlContent(item))
+        .slice(-20)
+
+      if (cleanHistory.length > 0) {
+        localStorage.setItem(previewHistoryStorageKey, JSON.stringify(cleanHistory))
+        localStorage.setItem(previewBackupStorageKey, cleanHistory[cleanHistory.length - 1])
+      } else {
+        localStorage.removeItem(previewHistoryStorageKey)
+        localStorage.removeItem(previewBackupStorageKey)
+      }
+
+      setCanRollbackPreview(cleanHistory.length > 0)
+    },
+    [previewBackupStorageKey, previewHistoryStorageKey]
+  )
+
+  const refreshRollbackState = useCallback(() => {
+    setCanRollbackPreview(readPreviewHistory().length > 0)
+  }, [readPreviewHistory])
+
+  const restorePreviousPreview = useCallback(() => {
+    const history = readPreviewHistory()
+    const previousPreview = history[history.length - 1]
+
+    if (!previousPreview || !hasVisibleHtmlContent(previousPreview)) {
+      writePreviewHistory([])
+      return
+    }
+
+    const remainingHistory = history.slice(0, -1)
+
+    localStorage.setItem(previewStorageKey, previousPreview)
+    writePreviewHistory(remainingHistory)
+
+    setLocalPreviewHtml(previousPreview)
+    setPreviewUrl("")
+    setLiveUrl("")
+    setRefreshKey((prev) => prev + 1)
+    onViewModeChange?.("preview")
+  }, [onViewModeChange, previewStorageKey, readPreviewHistory, setPreviewUrl, writePreviewHistory])
+
+  useEffect(() => {
+    setLocalPreviewHtml(previewHtml || "")
+  }, [previewHtml])
+
+  useEffect(() => {
+    refreshRollbackState()
+
+    const handleStorage = () => refreshRollbackState()
+    const handlePreviewHistoryChanged = () => refreshRollbackState()
+
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("preview-history-changed", handlePreviewHistoryChanged)
+
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("preview-history-changed", handlePreviewHistoryChanged)
+    }
+  }, [refreshRollbackState])
 
   const normalizeCustomerPreviewUrl = (url: string) => {
     const cleanUrl = url.trim()
@@ -270,7 +365,7 @@ export function WorkspacePreviewPanel({
   const isMobileDevice = !isDesktopDevice && !isTabletDevice
 
   const copyCode = async () => {
-    const codeToCopy = safePreviewHtml || previewHtml || ""
+    const codeToCopy = safePreviewHtml || currentPreviewHtml || ""
     if (!codeToCopy) return
 
     await navigator.clipboard.writeText(codeToCopy)
@@ -417,6 +512,26 @@ export function WorkspacePreviewPanel({
           <Button
             variant="ghost"
             size="icon"
+            className={cn(
+              "h-6 w-6 transition-colors",
+              canRollbackPreview
+                ? "text-cyan-300 hover:text-white hover:bg-cyan-500/15"
+                : "text-white/15 cursor-not-allowed"
+            )}
+            onClick={restorePreviousPreview}
+            disabled={!canRollbackPreview}
+            title={
+              canRollbackPreview
+                ? "Restore previous preview"
+                : "No previous preview saved yet"
+            }
+          >
+            <RotateCcw className="w-3 h-3" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/5"
             onClick={() => setRefreshKey((prev) => prev + 1)}
           >
@@ -546,7 +661,7 @@ export function WorkspacePreviewPanel({
               </Button>
             )}
           </div>
-        ) : viewMode === "code" && (safePreviewHtml || previewHtml) ? (
+        ) : viewMode === "code" && (safePreviewHtml || currentPreviewHtml) ? (
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
@@ -565,7 +680,7 @@ export function WorkspacePreviewPanel({
             </div>
 
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {safePreviewHtml || previewHtml}
+              {safePreviewHtml || currentPreviewHtml}
             </pre>
           </div>
         ) : hasPreviewHtml ? (
