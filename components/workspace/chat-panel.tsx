@@ -505,17 +505,35 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     const cleanInput = input.trim()
     const requestedPreviewPath = attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
-    const previewInstruction = requestedPreviewPath
-      ? `
-
-SYSTEM_PREVIEW_ACTION:
-The preview panel has been opened to ${requestedPreviewPath}. Do not give a long page overview. Reply only: "Preview opened."`
-      : ""
-
     if (requestedPreviewPath) {
       openPreviewPath(requestedPreviewPath)
       onViewModeChange?.("preview")
+
+      const now = Date.now()
+
+      setMessages((prevMessages: any) => [
+        ...(Array.isArray(prevMessages) ? prevMessages : []),
+        {
+          id: `local-user-${now}`,
+          role: "user",
+          parts: [{ type: "text", text: cleanInput }],
+        },
+        {
+          id: `local-assistant-${now}`,
+          role: "assistant",
+          parts: [{ type: "text", text: "Preview opened." }],
+        },
+      ] as any)
+
+      setInput("")
+      setAttachedFiles([])
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+      }, 50)
+      return
     }
+
+    const previewInstruction = ""
 
     const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
@@ -748,7 +766,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
       >
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        <div className="max-w-3xl mx-auto px-4 pt-12 pb-6 space-y-6">
           {messages.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
               <div className="mb-8">
