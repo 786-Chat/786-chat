@@ -753,3 +753,27 @@ if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
     )
   }
 }
+    if (isAdminRequest) {
+      return new Response(
+        JSON.stringify({
+          chats,
+          usage: {
+            plan: "admin",
+            unlimited: true,
+            monthly: { used: 0, limit: 999999999, remaining: 999999999 },
+            daily: { used: 0, limit: 999999999, remaining: 999999999 },
+            balance: 999999999,
+            freeMessagesRemaining: 999999999,
+            canSend: true,
+            extraCredits: 999999999,
+            status: "active",
+          },
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      )
+    }
