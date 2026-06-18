@@ -91,7 +91,7 @@ function looksLikeReactOrTsxCode(value: string): boolean {
     /\buseState\s*\(/,
     /\buseEffect\s*\(/,
     className=/,
-    onClick=/,
+    /onClick=/,
   ]
 
   return reactSignals.some((pattern) => pattern.test(text))
