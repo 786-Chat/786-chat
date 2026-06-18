@@ -4,18 +4,19 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { 
-  Plus, 
-  Globe, 
-  Settings, 
-  ExternalLink, 
+import {
+  Plus,
+  Globe,
+  Settings,
+  ExternalLink,
   Loader2,
   Layout,
   Eye,
   EyeOff,
   MoreVertical,
   Pencil,
-  MessageSquare
+  MessageSquare,
+  Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +26,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/contexts/auth-context"
 import { Navbar } from "@/components/navbar"
@@ -49,6 +51,7 @@ export default function MySitesPage() {
   const router = useRouter()
   const [sites, setSites] = useState<Site[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -82,16 +85,46 @@ export default function MySitesPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_published: !currentStatus }),
-        credentials: "include"
+        credentials: "include",
       })
-      
+
       if (res.ok) {
-        setSites(sites.map(s => 
-          s.id === siteId ? { ...s, is_published: !currentStatus } : s
-        ))
+        setSites((prev) =>
+          prev.map((site) =>
+            site.id === siteId ? { ...site, is_published: !currentStatus } : site
+          )
+        )
       }
     } catch (error) {
       console.error("Failed to toggle publish:", error)
+    }
+  }
+
+  const deleteSite = async (site: Site) => {
+    const confirmed = window.confirm(
+      `Delete "${site.site_name}"?\n\nThis will remove this website from My Sites. This action cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    setDeletingSiteId(site.id)
+
+    try {
+      const res = await fetch(`/api/customer/sites/${site.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to delete site")
+      }
+
+      setSites((prev) => prev.filter((item) => item.id !== site.id))
+    } catch (error) {
+      console.error("Failed to delete site:", error)
+      alert("Failed to delete this website. Please try again.")
+    } finally {
+      setDeletingSiteId(null)
     }
   }
 
@@ -106,10 +139,9 @@ export default function MySitesPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      
+
       <main className="flex-1 pt-24 pb-12">
         <div className="max-w-7xl mx-auto px-4">
-          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold">My Sites</h1>
@@ -125,7 +157,6 @@ export default function MySitesPage() {
             </Button>
           </div>
 
-          {/* Sites Grid */}
           {sites.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
@@ -149,7 +180,6 @@ export default function MySitesPage() {
                   transition={{ delay: index * 0.1 }}
                 >
                   <Card className="overflow-hidden group hover:shadow-lg transition-shadow">
-                    {/* Thumbnail */}
                     <div className="aspect-video relative bg-muted">
                       {site.theme_thumbnail ? (
                         <img
@@ -162,8 +192,7 @@ export default function MySitesPage() {
                           <Layout className="w-12 h-12 text-muted-foreground/50" />
                         </div>
                       )}
-                      
-                      {/* Overlay on hover */}
+
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <Button size="sm" asChild>
                           <Link href={`/dashboard/sites/${site.id}/chat`}>
@@ -177,11 +206,23 @@ export default function MySitesPage() {
                             Edit
                           </Link>
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteSite(site)}
+                          disabled={deletingSiteId === site.id}
+                        >
+                          {deletingSiteId === site.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
                         {site.is_published && (
                           <Button size="sm" variant="outline" className="bg-white/10" asChild>
-                            <a 
-                              href={`https://${site.subdomain}.mujeebproai.com`} 
-                              target="_blank" 
+                            <a
+                              href={`https://${site.subdomain}.mujeebproai.com`}
+                              target="_blank"
                               rel="noopener noreferrer"
                             >
                               <ExternalLink className="w-4 h-4" />
@@ -190,7 +231,6 @@ export default function MySitesPage() {
                         )}
                       </div>
 
-                      {/* Status Badge */}
                       <div className="absolute top-2 right-2">
                         <Badge variant={site.is_published ? "default" : "secondary"}>
                           {site.is_published ? "Published" : "Draft"}
@@ -246,7 +286,7 @@ export default function MySitesPage() {
                             </DropdownMenuItem>
                             {site.is_published && (
                               <DropdownMenuItem asChild>
-                                <a 
+                                <a
                                   href={`https://${site.subdomain}.mujeebproai.com`}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -256,6 +296,19 @@ export default function MySitesPage() {
                                 </a>
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => deleteSite(site)}
+                              disabled={deletingSiteId === site.id}
+                              className="text-red-500 focus:text-red-500"
+                            >
+                              {deletingSiteId === site.id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4 mr-2" />
+                              )}
+                              Delete Website
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
