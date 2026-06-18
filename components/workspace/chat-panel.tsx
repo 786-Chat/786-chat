@@ -503,7 +503,8 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     }
 
     const cleanInput = input.trim()
-    const requestedPreviewPath = attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
+    const requestedPreviewPath =
+  !isOwnerAdmin && attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
     if (requestedPreviewPath) {
       openPreviewPath(requestedPreviewPath)
