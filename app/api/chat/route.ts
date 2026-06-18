@@ -616,6 +616,12 @@ const hasVisionInput = messages.some(msg =>
   )
 )
 
+const isPreviewNavigationRequest =
+  userText.includes("SYSTEM_PREVIEW_ACTION:") ||
+  /show me .*preview/i.test(userText) ||
+  /open .*preview/i.test(userText) ||
+  /preview .*page/i.test(userText)
+
 if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
   return new Response(
     JSON.stringify({
@@ -633,15 +639,21 @@ const result = await streamText({
   model: hasVisionInput
     ? google(aiSettings.visionModel || "gemini-2.5-flash")
     : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-system: isAdmin ? adminSystemPrompt : userSystemPrompt,
-messages: modelMessages,
-temperature: isAdmin ? 0.7 : aiSettings.temperature,
-maxOutputTokens: isAdmin ? 8192 : aiSettings.maxTokens,
-tools: isAdmin && github.isGitHubConfigured() ? adminTools : undefined,
-stopWhen: isAdmin ? stepCountIs(10) : undefined,
-abortSignal: request.signal,
+  system: isPreviewNavigationRequest
+    ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
+    : isAdmin
+      ? adminSystemPrompt
+      : userSystemPrompt,
+  messages: modelMessages,
+  temperature: isAdmin ? 0.7 : aiSettings.temperature,
+  maxOutputTokens: isPreviewNavigationRequest ? 50 : isAdmin ? 8192 : aiSettings.maxTokens,
+  tools:
+    isAdmin && github.isGitHubConfigured() && !isPreviewNavigationRequest
+      ? adminTools
+      : undefined,
+  stopWhen: isAdmin && !isPreviewNavigationRequest ? stepCountIs(10) : undefined,
+  abortSignal: request.signal,
 })
-
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
@@ -811,58 +823,4 @@ export async function GET(request: Request) {
       )
     }
 
-    const balanceData = await sql`
-      SELECT balance, free_messages_used, free_messages_limit 
-      FROM user_balances 
-      WHERE user_id = ${session.id}
-    `
-
-    const userBalance = balanceData[0] || {
-      balance: 0,
-      free_messages_used: 0,
-      free_messages_limit: 10,
-    }
-
-    const freeLimit = 10
-    const freeUsed = Number(userBalance.free_messages_used) || 0
-    const freeMessagesRemaining = Math.max(0, freeLimit - freeUsed)
-    const paidBalance = Number(userBalance.balance) || 0
-
-    return new Response(
-      JSON.stringify({
-        chats,
-        usage: {
-          plan: "free",
-          unlimited: false,
-          monthly: { used: freeUsed, limit: freeLimit, remaining: freeMessagesRemaining },
-          daily: { used: 0, limit: freeLimit, remaining: freeMessagesRemaining },
-          balance: paidBalance,
-          freeMessagesUsed: freeUsed,
-          freeMessagesLimit: freeLimit,
-          freeMessagesRemaining,
-          used: freeUsed,
-          limit: freeLimit,
-          canSend: freeMessagesRemaining > 0 || paidBalance > 0.001,
-          extraCredits: 0,
-          status: "active",
-        },
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      }
-    )
-  } catch (error) {
-    console.error("[Chat API] Get chats error:", error)
-
-    return new Response(JSON.stringify({ error: "Failed to get chats" }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    })
-  }
-}
+   
