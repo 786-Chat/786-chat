@@ -1128,13 +1128,16 @@ setAttachedFiles([])
             >
                                Upgrade
                 </button>
-              )}
-                  </div>
-    </div>
+                           )}
+            </div>
+          )}
+        </div>
+      </div>
 
-    <UpgradePopup
-      open={showUpgrade}
-      onOpenChange={(open) => setShowUpgrade(open)}
-    />
-  </>
-)
+      <UpgradePopup
+        open={showUpgrade}
+        onOpenChange={(open) => setShowUpgrade(open)}
+      />
+    </div>
+  )
+}
