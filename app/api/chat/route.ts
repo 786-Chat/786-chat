@@ -695,100 +695,7 @@ if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
     })})
   `
 }
-        // Track cost for admin dashboard
-        await trackUsage(session.id, inputTokens, outputTokens, aiSettings.model as DeepSeekModel)
-
-        // Deduct one text message from free customer allowance
-if (!isAdminRequest) {
-  await sql`
-    INSERT INTO user_balances (
-      user_id,
-      balance,
-      free_messages_used,
-      free_messages_limit,
-      total_messages_sent,
-      total_spent
-    )
-    VALUES (${session.id}, 0, 1, 10, 1, 0)
-    ON CONFLICT (user_id)
-    DO UPDATE SET
-      free_messages_used = COALESCE(user_balances.free_messages_used, 0) + 1,
-      free_messages_limit = COALESCE(user_balances.free_messages_limit, 10),
-      total_messages_sent = COALESCE(user_balances.total_messages_sent, 0) + 1
-  `
-}
-      },
-      consumeSseStream: consumeStream,
-      headers: {
-        "X-Chat-Id": currentChatId || "",
-        "X-Remaining-Daily": String(protectionResult.remaining?.dailyMessages || 0),
-        "X-Remaining-Monthly": String(protectionResult.remaining?.monthlyMessages || 0),
-        "X-Extra-Credits": String(protectionResult.remaining?.extraCredits || 0),
-      },
-    })
-  } catch (error) {
-    // Handle timeout errors specifically
-    if (error instanceof Error && error.message === "Request timed out") {
-      return new Response(
-        JSON.stringify({
-          error: "TIMEOUT",
-          message: "The AI request timed out. Please try again with a shorter message.",
-        }),
-        { status: 504, headers: { "Content-Type": "application/json" } }
-      )
-    }
-
-    console.error("[Chat API] Error:", error)
-    return new Response(
-      JSON.stringify({
-        error: "Failed to process chat request",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    )
-  }
-}
-
-// Get chat history
-export async function GET(request: Request) {
-  try {
-    const session = await getSession()
-
-    if (!session) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
-    const isAdminRequest =
-      isAdminUser(session.email) ||
-      session.email?.toLowerCase() === "mujeeb@job4u.com"
-
-    const { searchParams } = new URL(request.url)
-    const chatId = searchParams.get("chatId")
-
-        if (chatId) {
-      const dbMessages = await sql`
-        SELECT m.id, m.role, m.content, m.created_at
-        FROM messages m
-        JOIN chats c ON c.id = m.chat_id
-        WHERE m.chat_id = ${chatId}
-          AND c.user_id = ${session.id}
-        ORDER BY m.created_at ASC
-      `
-
-      return new Response(JSON.stringify({ messages: dbMessages }), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
-      })
-    }
-
+        
     const chats = await sql`
       SELECT c.id, c.title, c.created_at, c.updated_at,
              (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
@@ -798,28 +705,51 @@ export async function GET(request: Request) {
       LIMIT 50
     `
 
-    if (isAdminRequest) {
-      return new Response(
-        JSON.stringify({
-          chats,
-          usage: {
-            plan: "admin",
-            unlimited: true,
-            monthly: { used: 0, limit: 999999999, remaining: 999999999 },
-            daily: { used: 0, limit: 999999999, remaining: 999999999 },
-            balance: 999999999,
-            freeMessagesRemaining: 999999999,
-            canSend: true,
-            extraCredits: 999999999,
-            status: "active",
-          },
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
-        }
-      )
-    }
+      }
 
+    const balance = await getUserBalance(session.id, session.email)
+    const pricing = await getPricingSettings()
+
+    return new Response(
+      JSON.stringify({
+        chats,
+        usage: {
+          plan: "customer",
+          unlimited: false,
+          monthly: {
+            used: balance.freeMessagesUsed || 0,
+            limit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
+            remaining: balance.freeMessagesRemaining || 0,
+          },
+          daily: {
+            used: balance.freeMessagesUsed || 0,
+            limit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
+            remaining: balance.freeMessagesRemaining || 0,
+          },
+          balance: balance.balance || 0,
+          freeMessagesUsed: balance.freeMessagesUsed || 0,
+          freeMessagesLimit: balance.freeMessagesLimit || pricing.freeMessagesLimit || 10,
+          freeMessagesRemaining: balance.freeMessagesRemaining || 0,
+          canSend: balance.freeMessagesRemaining > 0 || balance.balance > 0.001,
+          extraCredits: 0,
+          status: "active",
+        },
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    )
+  } catch (error) {
+    console.error("[Chat API GET] Error:", error)
+    return new Response(
+      JSON.stringify({
+        error: "Failed to load chat history",
+        details: error instanceof Error ? error.message : "Unknown error",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    )
+  }
+}
