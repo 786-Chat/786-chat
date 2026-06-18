@@ -343,51 +343,44 @@ export default function DashboardLayout({
 
   if (!user) return null
 
-  if (!isChatWorkspace) {
-    return <>{children}</>
-  }
+if (!isChatWorkspace) {
+  return <>{children}</>
+}
 
-  return (
-    <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
-      <WorkspaceTopBar
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        previewOpen={previewOpen}
-        setPreviewOpen={setPreviewOpen}
-        dashboardOpen={dashboardOpen}
-        setDashboardOpen={setDashboardOpen}
-        previewDevice={previewDevice}
-        setPreviewDevice={setPreviewDevice}
-        activeView={activeView}
-        setActiveView={setActiveView}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+return (
+  <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
+    <WorkspaceTopBar
+      sidebarOpen={sidebarOpen}
+      setSidebarOpen={setSidebarOpen}
+      previewOpen={previewOpen}
+      setPreviewOpen={setPreviewOpen}
+      dashboardOpen={dashboardOpen}
+      setDashboardOpen={setDashboardOpen}
+      previewDevice={previewDevice}
+      setPreviewDevice={setPreviewDevice}
+      activeView={activeView}
+      setActiveView={setActiveView}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+    />
+
+    <div className="flex-1 flex overflow-hidden relative">
+      <WorkspaceSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
-      <div className="border-b border-white/[0.06] bg-[#0f1118]/95 px-3 py-2">
-        <p className="truncate text-xs text-white/45">
-          Preview safety is active. MujeebProAI saves the previous preview before applying a new AI preview.
-        </p>
-      </div>
-
-      <div className="flex-1 flex overflow-hidden relative">
-        <WorkspaceSidebar
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-
-        <div
-          ref={containerRef}
-          className="flex-1 flex overflow-hidden relative w-full max-w-full"
-        >
-          <div className="flex flex-col min-w-0 overflow-hidden flex-1">
-            <WorkspaceChatPanel
-              onPreviewUpdate={handlePreviewUpdate}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-            />
-          </div>
-
+      <div
+        ref={containerRef}
+        className="flex-1 flex overflow-hidden relative w-full max-w-full"
+      >
+        <div className="flex flex-col min-w-0 overflow-hidden flex-1">
+          <WorkspaceChatPanel
+            onPreviewUpdate={handlePreviewUpdate}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+          />
+        </div>
           {previewOpen && (
             <>
               <div
