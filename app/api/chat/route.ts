@@ -622,6 +622,9 @@ const isPreviewNavigationRequest =
   /open .*preview/i.test(userText) ||
   /preview .*page/i.test(userText)
 
+const shouldUsePreviewOnlyMode =
+  !isAdmin && isPreviewNavigationRequest
+
 if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
   return new Response(
     JSON.stringify({
@@ -639,19 +642,19 @@ const result = await streamText({
   model: hasVisionInput
     ? google(aiSettings.visionModel || "gemini-2.5-flash")
     : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
-  system: isPreviewNavigationRequest
+  system: shouldUsePreviewOnlyMode
     ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
     : isAdmin
       ? adminSystemPrompt
       : userSystemPrompt,
   messages: modelMessages,
   temperature: isAdmin ? 0.7 : aiSettings.temperature,
-  maxOutputTokens: isPreviewNavigationRequest ? 50 : isAdmin ? 8192 : aiSettings.maxTokens,
+  maxOutputTokens: shouldUsePreviewOnlyMode ? 50 : isAdmin ? 8192 : aiSettings.maxTokens,
   tools:
-    isAdmin && github.isGitHubConfigured() && !isPreviewNavigationRequest
+    isAdmin && github.isGitHubConfigured()
       ? adminTools
       : undefined,
-  stopWhen: isAdmin && !isPreviewNavigationRequest ? stepCountIs(10) : undefined,
+  stopWhen: isAdmin ? stepCountIs(10) : undefined,
   abortSignal: request.signal,
 })
     return result.toUIMessageStreamResponse({
@@ -712,3 +715,157 @@ const result = await streamText({
         "X-Extra-Credits": String(protectionResult.remaining?.extraCredits || 0),
       },
     })
+
+  } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof Error && error.message === "Request timed out") {
+      return new Response(
+        JSON.stringify({
+          error: "TIMEOUT",
+          message: "The AI request timed out. Please try again with a shorter message.",
+        }),
+        { status: 504, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    console.error("[Chat API] Error:", error)
+    return new Response(
+      JSON.stringify({
+        error: "Failed to process chat request",
+        details: error instanceof Error ? error.message : "Unknown error",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    )
+  }
+}
+
+// Get chat history
+export async function GET(request: Request) {
+  try {
+    const session = await getSession()
+
+    if (!session) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      })
+    }
+
+    const isAdminRequest =
+      isAdminUser(session.email) ||
+      session.email?.toLowerCase() === "mujeeb@job4u.com"
+
+    const { searchParams } = new URL(request.url)
+    const chatId = searchParams.get("chatId")
+
+    if (chatId) {
+      const dbMessages = await sql`
+        SELECT m.id, m.role, m.content, m.created_at
+        FROM messages m
+        JOIN chats c ON c.id = m.chat_id
+        WHERE m.chat_id = ${chatId}
+          AND c.user_id = ${session.id}
+        ORDER BY m.created_at ASC
+      `
+
+      return new Response(JSON.stringify({ messages: dbMessages }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      })
+    }
+
+    const chats = await sql`
+      SELECT c.id, c.title, c.created_at, c.updated_at,
+             (SELECT COUNT(*) FROM messages WHERE chat_id = c.id) as message_count
+      FROM chats c
+      WHERE c.user_id = ${session.id}
+      ORDER BY c.updated_at DESC
+      LIMIT 50
+    `
+
+    if (isAdminRequest) {
+      return new Response(
+        JSON.stringify({
+          chats,
+          usage: {
+            plan: "admin",
+            unlimited: true,
+            monthly: { used: 0, limit: 999999999, remaining: 999999999 },
+            daily: { used: 0, limit: 999999999, remaining: 999999999 },
+            balance: 999999999,
+            freeMessagesRemaining: 999999999,
+            canSend: true,
+            extraCredits: 999999999,
+            status: "active",
+          },
+        }),
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      )
+    }
+
+    const balanceInfo = await getUserBalance(session.id, session.email)
+    const pricing = await getPricingSettings()
+    const balanceAny = balanceInfo as any
+    const pricingAny = pricing as any
+
+    const freeMessagesUsed = Number(balanceAny.freeMessagesUsed ?? balanceAny.free_messages_used ?? 0)
+    const freeMessagesLimit = Number(balanceAny.freeMessagesLimit ?? balanceAny.free_messages_limit ?? pricingAny.freeMessagesLimit ?? 10)
+    const freeMessagesRemaining = Math.max(
+      0,
+      Number(balanceAny.freeMessagesRemaining ?? freeMessagesLimit - freeMessagesUsed)
+    )
+    const balance = Number(balanceAny.balance ?? 0)
+
+    return new Response(
+      JSON.stringify({
+        chats,
+        usage: {
+          plan: "customer",
+          unlimited: false,
+          monthly: {
+            used: freeMessagesUsed,
+            limit: freeMessagesLimit,
+            remaining: freeMessagesRemaining,
+          },
+          daily: {
+            used: freeMessagesUsed,
+            limit: freeMessagesLimit,
+            remaining: freeMessagesRemaining,
+          },
+          balance,
+          freeMessagesUsed,
+          freeMessagesLimit,
+          freeMessagesRemaining,
+          canSend: freeMessagesRemaining > 0 || balance > 0.001,
+          extraCredits: 0,
+          status: "active",
+        },
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    )
+  } catch (error) {
+    console.error("[Chat API GET] Error:", error)
+    return new Response(
+      JSON.stringify({
+        error: "Failed to load chat history",
+        details: error instanceof Error ? error.message : "Unknown error",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    )
+  }
+}
