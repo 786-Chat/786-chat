@@ -19,14 +19,26 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 
 interface PreviewPanelProps {
+  project?: {
+    id: string
+    name: string
+    template?: string
+    files: Record<string, string>
+  } | null
+
   device: string
   setDevice: (device: string) => void
+
   previewUrl: string
   setPreviewUrl: (url: string) => void
+
   onClose: () => void
+
   expanded: boolean
   setExpanded: (v: boolean) => void
+
   previewHtml?: string
+
   viewMode?: "preview" | "code"
   onViewModeChange?: (mode: "preview" | "code") => void
 }
@@ -193,6 +205,7 @@ function hideIframeScrollbar(iframe: HTMLIFrameElement | null) {
 }
 
 export function WorkspacePreviewPanel({
+  project,
   device,
   setDevice,
   previewUrl,
@@ -240,7 +253,7 @@ export function WorkspacePreviewPanel({
       : ""
 
   const hasPreviewHtml = Boolean(safePreviewHtml)
-
+const projectFiles = project?.files || {}
   const readPreviewHistory = useCallback((): string[] => {
     try {
       const raw = localStorage.getItem(previewHistoryStorageKey) || "[]"
