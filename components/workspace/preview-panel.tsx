@@ -12,6 +12,7 @@ import {
   Globe,
   Copy,
   Check,
+  Code,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -35,6 +36,36 @@ function getDeviceLabel(device: string): string {
   if (device === "ipad" || device === "ipad-pro") return "Tablet"
   if (device === "iphone-17-pro") return "iPhone 17 Pro Max"
   return "Mobile"
+}
+
+function getSourceFileHints(url: string): string[] {
+  const cleanUrl = url.trim().toLowerCase()
+
+  if (!cleanUrl || cleanUrl === "/") {
+    return ["app/page.tsx", "components/ui/space-background.tsx"]
+  }
+
+  if (cleanUrl.includes("/themes")) {
+    return ["app/themes/page.tsx", "app/themes/[slug]/page.tsx", "components/website-launch-wizard.tsx"]
+  }
+
+  if (cleanUrl.includes("/pricing")) {
+    return ["app/pricing/page.tsx", "lib/billing.ts"]
+  }
+
+  if (cleanUrl.includes("/about")) {
+    return ["app/about/page.tsx"]
+  }
+
+  if (cleanUrl.includes("/contact")) {
+    return ["app/contact/page.tsx"]
+  }
+
+  if (cleanUrl.includes("/features")) {
+    return ["app/features/page.tsx"]
+  }
+
+  return [`app${cleanUrl}/page.tsx`]
 }
 
 function looksLikeReactOrTsxCode(value: string): boolean {
@@ -414,6 +445,8 @@ export function WorkspacePreviewPanel({
 
   const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
 
+  const sourceFileHints = getSourceFileHints(safeLiveUrl)
+
   const renderPreviewFrame = (content: "html" | "url") => {
     const iframeProps =
       content === "html"
@@ -486,6 +519,52 @@ export function WorkspacePreviewPanel({
 
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/10" />
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderLiveUrlCodeNotice = () => {
+    return (
+      <div className="absolute inset-0 overflow-auto bg-[#0d1117]">
+        <div className="border-b border-white/[0.06] px-4 py-2 sticky top-0 z-10 bg-[#0d1117]">
+          <span className="text-xs text-white/50">Live React Page Source</span>
+        </div>
+
+        <div className="p-5">
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Code className="h-4 w-4 text-cyan-300" />
+              <h3 className="text-sm font-semibold text-white">This preview is a live route</h3>
+            </div>
+
+            <p className="text-xs leading-relaxed text-white/55 mb-4">
+              The preview is showing <span className="text-cyan-300">{safeLiveUrl || "/"}</span>.
+              Code mode cannot display the real React source automatically from the iframe.
+              Ask MujeebProAI chat to read the source files below if you want to edit this page.
+            </p>
+
+            <div className="space-y-2">
+              {sourceFileHints.map((path) => (
+                <div
+                  key={path}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+                >
+                  <code className="text-xs text-cyan-100/80">{path}</code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(path)}
+                    className="text-[11px] text-white/35 hover:text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-4 text-[11px] text-white/35">
+              Example: “Read app/themes/page.tsx and show me the code for this preview.”
+            </p>
           </div>
         </div>
       </div>
@@ -567,7 +646,9 @@ export function WorkspacePreviewPanel({
             {hasPreviewHtml
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
-                ? "Website Preview"
+                ? viewMode === "code"
+                  ? "Code Mode - Live React Route"
+                  : "Website Preview"
                 : isReactCode || isBadComponentPreview
                   ? "Code detected - switch to Code mode"
                   : "Preview Ready - No Website Loaded"}
@@ -683,6 +764,8 @@ export function WorkspacePreviewPanel({
               {safePreviewHtml || currentPreviewHtml}
             </pre>
           </div>
+        ) : viewMode === "code" && safeLiveUrl ? (
+          renderLiveUrlCodeNotice()
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
         ) : safeLiveUrl ? (
