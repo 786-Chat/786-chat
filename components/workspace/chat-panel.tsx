@@ -1132,8 +1132,6 @@ setAttachedFiles([])
         </div>
       </div>
 
-      {/* END CHAT INPUT WRAPPER */}
-
       <UpgradePopup
         open={showUpgrade}
         onOpenChange={(open) => setShowUpgrade(open)}
