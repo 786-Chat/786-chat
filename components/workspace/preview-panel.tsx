@@ -32,7 +32,7 @@ interface PreviewPanelProps {
 function getDeviceLabel(device: string): string {
   if (device === "full") return "Full Size"
   if (device === "ipad" || device === "ipad-pro") return "Tablet"
-  if (device === "iphone-17-pro") return "iPhone 17 Pro"
+  if (device === "iphone-17-pro") return "iPhone 17 Pro Max"
   return "Mobile"
 }
 
@@ -132,6 +132,34 @@ function stripDangerousPreviewHtml(html: string): string {
     .replace(/\ssrc=["']javascript:[\s\S]*?["']/gi, "")
 }
 
+function hideIframeScrollbar(iframe: HTMLIFrameElement | null) {
+  if (!iframe) return
+
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) return
+
+    const style = doc.createElement("style")
+    style.setAttribute("data-mujeebproai-scrollbar-fix", "true")
+    style.innerHTML = `
+      html, body {
+        -ms-overflow-style: none !important;
+        scrollbar-width: none !important;
+      }
+      html::-webkit-scrollbar,
+      body::-webkit-scrollbar,
+      *::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+        display: none !important;
+      }
+    `
+    doc.head?.appendChild(style)
+  } catch {
+    // Cross-origin iframe cannot be styled. Keep preview safe and functional.
+  }
+}
+
 export function WorkspacePreviewPanel({
   device,
   setDevice,
@@ -184,9 +212,7 @@ export function WorkspacePreviewPanel({
     return cleanUrl
   }
 
-  const isBlockedCustomerUrl = (url: string) => {
-    if (isOwnerAdmin) return false
-
+  const isBlockedPreviewUrl = (url: string) => {
     const cleanUrl = url.trim().toLowerCase()
     if (!cleanUrl) return false
     if (cleanUrl === "about:blank") return true
@@ -194,7 +220,9 @@ export function WorkspacePreviewPanel({
 
     const blockedWords = [
       "/login",
+      "/register",
       "/admin",
+      "/admin-login",
       "/dashboard",
       "/settings",
       "/users",
@@ -203,7 +231,9 @@ export function WorkspacePreviewPanel({
       "/logs",
       "/api/admin",
       "mujeebproai.com/login",
+      "mujeebproai.com/register",
       "mujeebproai.com/admin",
+      "mujeebproai.com/admin-login",
       "mujeebproai.com/dashboard",
       "mujeebproai.com/api/admin",
     ]
@@ -225,7 +255,7 @@ export function WorkspacePreviewPanel({
 
     const normalizedUrl = normalizeCustomerPreviewUrl(previewUrl)
 
-    if (!normalizedUrl || isBlockedCustomerUrl(normalizedUrl)) {
+    if (!normalizedUrl || isBlockedPreviewUrl(normalizedUrl)) {
       clearPreview()
       return
     }
@@ -269,7 +299,7 @@ export function WorkspacePreviewPanel({
         nextUrl = `/site/${data.subdomain}`
       }
 
-      if (!nextUrl || isBlockedCustomerUrl(nextUrl)) {
+      if (!nextUrl || isBlockedPreviewUrl(nextUrl)) {
         clearPreview()
         return
       }
@@ -283,7 +313,7 @@ export function WorkspacePreviewPanel({
   }
 
   const safeLiveUrl =
-    liveUrl && liveUrl !== "about:blank" && !isBlockedCustomerUrl(liveUrl)
+    liveUrl && liveUrl !== "about:blank" && !isBlockedPreviewUrl(liveUrl)
       ? liveUrl
       : ""
 
@@ -309,33 +339,37 @@ export function WorkspacePreviewPanel({
       return (
         <iframe
           {...iframeProps}
+          onLoad={(event) => hideIframeScrollbar(event.currentTarget)}
           className="absolute inset-0 h-full w-full bg-white"
         />
       )
     }
 
     const frameClass = isMobileDevice
-      ? "h-[852px] w-[393px] max-h-[calc(100vh-170px)] max-w-[94vw] rounded-[58px]"
+      ? "h-[844px] w-[390px] max-h-[calc(100vh-165px)] max-w-[94vw] rounded-[54px]"
       : "h-[720px] w-[900px] max-h-[calc(100vh-190px)] max-w-[94vw] rounded-[34px]"
 
-    const screenClass = isMobileDevice ? "rounded-[50px]" : "rounded-[26px]"
+    const screenClass = isMobileDevice ? "rounded-[44px]" : "rounded-[26px]"
 
     return (
-      <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.24),transparent_38%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.16),transparent_42%)] p-5">
+      <div className="absolute inset-0 overflow-auto bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.12),transparent_42%)] p-5">
         <div className="flex min-h-full items-center justify-center py-5">
           <div
             className={cn(
-              "relative shrink-0 shadow-2xl bg-[#111318]",
+              "relative shrink-0 shadow-2xl",
               frameClass,
-              isMobileDevice ? "p-[10px] shadow-cyan-500/25" : "p-[4px] shadow-purple-500/25"
+              isMobileDevice
+                ? "bg-[#080a10] p-[9px] shadow-cyan-500/25 ring-1 ring-white/15"
+                : "bg-[#111318] p-[4px] shadow-purple-500/25"
             )}
           >
             {isMobileDevice && (
               <>
-                <div className="absolute left-1/2 top-[18px] z-30 h-[31px] w-[118px] -translate-x-1/2 rounded-full bg-black border border-white/10" />
-                <div className="absolute right-[-3px] top-[190px] z-30 h-[92px] w-[4px] rounded-r-full bg-[#2a2d35]" />
-                <div className="absolute left-[-3px] top-[150px] z-30 h-[54px] w-[4px] rounded-l-full bg-[#2a2d35]" />
-                <div className="absolute left-[-3px] top-[220px] z-30 h-[78px] w-[4px] rounded-l-full bg-[#2a2d35]" />
+                <div className="absolute left-1/2 top-[17px] z-30 h-[28px] w-[110px] -translate-x-1/2 rounded-full bg-black shadow-inner border border-white/10" />
+                <div className="absolute left-1/2 top-[25px] z-40 h-[7px] w-[44px] -translate-x-1/2 rounded-full bg-white/10" />
+                <div className="absolute right-[-3px] top-[190px] z-30 h-[88px] w-[4px] rounded-r-full bg-[#2a2d35]" />
+                <div className="absolute left-[-3px] top-[145px] z-30 h-[52px] w-[4px] rounded-l-full bg-[#2a2d35]" />
+                <div className="absolute left-[-3px] top-[215px] z-30 h-[76px] w-[4px] rounded-l-full bg-[#2a2d35]" />
               </>
             )}
 
@@ -349,9 +383,13 @@ export function WorkspacePreviewPanel({
                 <div className="absolute left-1/2 top-3 z-20 h-3 w-3 -translate-x-1/2 rounded-full bg-black/80 border border-white/10" />
               )}
 
-              <iframe {...iframeProps} className="h-full w-full bg-white" />
+              <iframe
+                {...iframeProps}
+                onLoad={(event) => hideIframeScrollbar(event.currentTarget)}
+                className="h-full w-full bg-white border-0"
+              />
 
-              <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-white/15" />
+              <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/10" />
             </div>
           </div>
         </div>
