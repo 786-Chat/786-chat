@@ -253,7 +253,7 @@ export function WorkspacePreviewPanel({
       : ""
 
   const hasPreviewHtml = Boolean(safePreviewHtml)
-const projectFiles = project?.files || {}
+const projectFiles = project?.files ?? null
   const readPreviewHistory = useCallback((): string[] => {
     try {
       const raw = localStorage.getItem(previewHistoryStorageKey) || "[]"
