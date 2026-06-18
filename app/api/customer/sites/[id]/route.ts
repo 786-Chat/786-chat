@@ -65,9 +65,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Verify ownership
     const [existing] = await sql`
-      SELECT id FROM customer_sites 
+      SELECT id
+      FROM customer_sites
       WHERE id = ${id} AND user_id = ${payload.id}
     `
 
@@ -87,7 +87,7 @@ export async function PATCH(
         favicon_url = COALESCE(${favicon_url}, favicon_url),
         is_published = COALESCE(${is_published}, is_published),
         updated_at = NOW()
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${payload.id}
       RETURNING *
     `
 
@@ -95,5 +95,51 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating site:", error)
     return NextResponse.json({ error: "Failed to update site" }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const cookieStore = await cookies()
+    const token = cookieStore.get("auth-token")?.value
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const payload = await verifyToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const [existing] = await sql`
+      SELECT id
+      FROM customer_sites
+      WHERE id = ${id} AND user_id = ${payload.id}
+      LIMIT 1
+    `
+
+    if (!existing) {
+      return NextResponse.json({ error: "Site not found" }, { status: 404 })
+    }
+
+    await sql`
+      DELETE FROM customer_site_settings
+      WHERE site_id = ${id}
+    `
+
+    await sql`
+      DELETE FROM customer_sites
+      WHERE id = ${id} AND user_id = ${payload.id}
+    `
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error deleting site:", error)
+    return NextResponse.json({ error: "Failed to delete site" }, { status: 500 })
   }
 }
