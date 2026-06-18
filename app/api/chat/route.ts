@@ -748,7 +748,7 @@ if (!isAdminRequest) {
     )
   }
 }
-
+}
 // Get chat history
 export async function GET(request: Request) {
   try {
