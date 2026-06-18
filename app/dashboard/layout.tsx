@@ -96,6 +96,7 @@ export default function DashboardLayout({
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
   const [previewWidth, setPreviewWidth] = useState(560)
   const [isDraggingPreview, setIsDraggingPreview] = useState(false)
+  const [canRollbackPreview, setCanRollbackPreview] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -140,6 +141,8 @@ export default function DashboardLayout({
         localStorage.removeItem(previewHistoryStorageKey)
         localStorage.removeItem(previewBackupStorageKey)
       }
+
+      setCanRollbackPreview(cleanHistory.length > 0)
     },
     [previewBackupStorageKey, previewHistoryStorageKey]
   )
@@ -186,6 +189,26 @@ export default function DashboardLayout({
     },
     [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
   )
+
+  const restorePreviousPreview = useCallback(() => {
+    const history = readPreviewHistory()
+    const previousPreview = history[history.length - 1]
+
+    if (!previousPreview || !hasVisibleHtmlContent(previousPreview)) {
+      writePreviewHistory([])
+      return
+    }
+
+    const remainingHistory = history.slice(0, -1)
+
+    localStorage.setItem(previewStorageKey, previousPreview)
+    writePreviewHistory(remainingHistory)
+
+    setPreviewHtml(previousPreview)
+    setPreviewUrl("")
+    setPreviewOpen(true)
+    setViewMode("preview")
+  }, [previewStorageKey, readPreviewHistory, writePreviewHistory])
 
   const startPreviewResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -242,6 +265,11 @@ export default function DashboardLayout({
   }, [previewWidth, previewWidthStorageKey, userEmail])
 
   useEffect(() => {
+    if (!userEmail) return
+    setCanRollbackPreview(readPreviewHistory().length > 0)
+  }, [readPreviewHistory, userEmail])
+
+  useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login")
     }
@@ -268,7 +296,15 @@ export default function DashboardLayout({
       setPreviewHtml("")
       setPreviewOpen(true)
     }
-  }, [previewStorageKey, previewBackupStorageKey, previewHistoryStorageKey, userEmail])
+
+    setCanRollbackPreview(readPreviewHistory().length > 0)
+  }, [
+    previewStorageKey,
+    previewBackupStorageKey,
+    previewHistoryStorageKey,
+    userEmail,
+    readPreviewHistory,
+  ])
 
   useEffect(() => {
     const handleResize = () => {
@@ -343,44 +379,45 @@ export default function DashboardLayout({
 
   if (!user) return null
 
-if (!isChatWorkspace) {
-  return <>{children}</>
-}
+  if (!isChatWorkspace) {
+    return <>{children}</>
+  }
 
-return (
-  <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
-    <WorkspaceTopBar
-      sidebarOpen={sidebarOpen}
-      setSidebarOpen={setSidebarOpen}
-      previewOpen={previewOpen}
-      setPreviewOpen={setPreviewOpen}
-      dashboardOpen={dashboardOpen}
-      setDashboardOpen={setDashboardOpen}
-      previewDevice={previewDevice}
-      setPreviewDevice={setPreviewDevice}
-      activeView={activeView}
-      setActiveView={setActiveView}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
-    />
-
-    <div className="flex-1 flex overflow-hidden relative">
-      <WorkspaceSidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+  return (
+    <div className="h-screen flex flex-col bg-[#0a0a0f] overflow-hidden">
+      <WorkspaceTopBar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        previewOpen={previewOpen}
+        setPreviewOpen={setPreviewOpen}
+        dashboardOpen={dashboardOpen}
+        setDashboardOpen={setDashboardOpen}
+        previewDevice={previewDevice}
+        setPreviewDevice={setPreviewDevice}
+        activeView={activeView}
+        setActiveView={setActiveView}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       />
 
-      <div
-        ref={containerRef}
-        className="flex-1 flex overflow-hidden relative w-full max-w-full"
-      >
-        <div className="flex flex-col min-w-0 overflow-hidden flex-1">
-          <WorkspaceChatPanel
-            onPreviewUpdate={handlePreviewUpdate}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
-        </div>
+      <div className="flex-1 flex overflow-hidden relative">
+        <WorkspaceSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+
+        <div
+          ref={containerRef}
+          className="flex-1 flex overflow-hidden relative w-full max-w-full"
+        >
+          <div className="flex flex-col min-w-0 overflow-hidden flex-1">
+            <WorkspaceChatPanel
+              onPreviewUpdate={handlePreviewUpdate}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+            />
+          </div>
+
           {previewOpen && (
             <>
               <div
@@ -400,9 +437,32 @@ return (
               </div>
 
               <div
-                className="flex-shrink-0 overflow-hidden"
+                className="relative flex-shrink-0 overflow-hidden"
                 style={{ width: `${previewWidth}px` }}
               >
+                <button
+                  type="button"
+                  onClick={restorePreviousPreview}
+                  disabled={!canRollbackPreview}
+                  title={
+                    canRollbackPreview
+                      ? "Restore previous preview"
+                      : "No previous preview saved yet"
+                  }
+                  className={`
+                    absolute right-12 top-3 z-40 flex h-6 w-6 items-center justify-center
+                    rounded-md border border-cyan-500/30 bg-[#071018]/90 text-xs
+                    text-cyan-300 shadow-lg backdrop-blur transition-colors
+                    ${
+                      canRollbackPreview
+                        ? "hover:bg-cyan-500/20 hover:text-white"
+                        : "cursor-not-allowed opacity-35"
+                    }
+                  `}
+                >
+                  ↶
+                </button>
+
                 <WorkspacePreviewPanel
                   device={previewDevice}
                   setDevice={setPreviewDevice}
