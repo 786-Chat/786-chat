@@ -417,12 +417,23 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
         const data = await response.json()
         const dbMessages = Array.isArray(data.messages) ? data.messages : []
 
-        setCurrentChatId(chatId)
+               setCurrentChatId(chatId)
         setMessages(toUiMessages(dbMessages) as any)
         setAttachedFiles([])
         setInput("")
-        onPreviewUpdate?.("")
-        onViewModeChange?.("preview")
+
+        const lastUserText =
+          [...dbMessages].reverse().find((m) => m.role === "user")?.content || ""
+
+        const restorePreviewPath = getRequestedPreviewPath(String(lastUserText))
+
+        if (restorePreviewPath) {
+          openPreviewPath(restorePreviewPath)
+          onViewModeChange?.("preview")
+        } else {
+          onPreviewUpdate?.("")
+          onViewModeChange?.("preview")
+        }
 
         window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
 
