@@ -617,10 +617,7 @@ const hasVisionInput = messages.some(msg =>
 )
 
 const isPreviewNavigationRequest =
-  userText.includes("SYSTEM_PREVIEW_ACTION:") ||
-  /show me .*preview/i.test(userText) ||
-  /open .*preview/i.test(userText) ||
-  /preview .*page/i.test(userText)
+  userText.includes("SYSTEM_PREVIEW_ACTION:")
 
 const shouldUsePreviewOnlyMode =
   !isAdmin && isPreviewNavigationRequest
