@@ -76,10 +76,13 @@ function getToolParts(message: { parts?: Array<{ type: string }> }): ToolPart[] 
   )
 }
 
-function getFileParts(message: { parts?: Array<{ type: string; url?: string; mediaType?: string }> }): Array<{ type: "file"; url: string; mediaType: string }> {
+function getFileParts(
+  message: { parts?: Array<{ type: string; url?: string; mediaType?: string }> }
+): Array<{ type: "file"; url: string; mediaType: string }> {
   if (!message.parts || !Array.isArray(message.parts)) return []
-  return message.parts.filter((p): p is { type: "file"; url: string; mediaType: string } =>
-    p.type === "file" && typeof p.url === "string"
+  return message.parts.filter(
+    (p): p is { type: "file"; url: string; mediaType: string } =>
+      p.type === "file" && typeof p.url === "string"
   )
 }
 
@@ -148,7 +151,9 @@ function hasVisibleHtmlContent(html: string): boolean {
     .trim()
 
   const hasRealElements =
-    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(content)
+    /<(main|section|header|footer|nav|div|article|aside|h1|h2|h3|p|button|form|img|a|ul|ol|li|table|canvas|svg)\b/i.test(
+      content
+    )
 
   return withoutInvisible.length > 3 || hasRealElements
 }
@@ -325,10 +330,36 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
         return
       }
 
+      const currentHtml = localStorage.getItem(previewStorageKey) || ""
+
+      if (
+        currentHtml &&
+        currentHtml !== nextHtml &&
+        hasVisibleHtmlContent(currentHtml)
+      ) {
+        try {
+          const rawHistory = localStorage.getItem(previewHistoryStorageKey) || "[]"
+          const parsedHistory = JSON.parse(rawHistory)
+          const history = Array.isArray(parsedHistory) ? parsedHistory : []
+
+          const nextHistory = [...history, currentHtml]
+            .filter((item): item is string => typeof item === "string" && hasVisibleHtmlContent(item))
+            .slice(-20)
+
+          localStorage.setItem(previewHistoryStorageKey, JSON.stringify(nextHistory))
+          localStorage.setItem(previewBackupStorageKey, currentHtml)
+          window.dispatchEvent(new Event("preview-history-changed"))
+        } catch {
+          localStorage.setItem(previewHistoryStorageKey, JSON.stringify([currentHtml]))
+          localStorage.setItem(previewBackupStorageKey, currentHtml)
+          window.dispatchEvent(new Event("preview-history-changed"))
+        }
+      }
+
       localStorage.setItem(previewStorageKey, nextHtml)
       onPreviewUpdate?.(nextHtml)
     },
-    [onPreviewUpdate, previewStorageKey]
+    [onPreviewUpdate, previewBackupStorageKey, previewHistoryStorageKey, previewStorageKey]
   )
 
   const {
@@ -419,6 +450,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
       localStorage.removeItem(previewHistoryStorageKey)
       onPreviewUpdate?.("")
       onViewModeChange?.("preview")
+      window.dispatchEvent(new Event("preview-history-changed"))
       window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null } }))
     }
 
@@ -471,27 +503,23 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     }
 
     const cleanInput = input.trim()
-    const requestedPreviewPath = getRequestedPreviewPath(cleanInput)
+    const requestedPreviewPath = attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
     if (requestedPreviewPath) {
       openPreviewPath(requestedPreviewPath)
+      onPreviewUpdate?.("")
       onViewModeChange?.("preview")
+      setInput("")
+      setAttachedFiles([])
+      return
     }
 
     const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
     const savedPreview = isOwnerAdmin ? storedPreview : sanitizeCustomerPreview(storedPreview)
 
-    const previewInstruction = requestedPreviewPath
-      ? `
-
-SYSTEM_PREVIEW_ACTION:
-The preview panel has been opened to ${requestedPreviewPath}. Briefly confirm what is shown. Do not generate fake HTML unless the user asks to edit or create a page.`
-      : ""
-
     const messageText =
       cleanInput +
-      previewInstruction +
       (savedPreview && hasVisibleHtmlContent(savedPreview)
         ? `
 
@@ -767,9 +795,7 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
               const rawText = getMessageText(message)
               const text = rawText.includes("CURRENT_PREVIEW_HTML:")
                 ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-                : rawText.includes("SYSTEM_PREVIEW_ACTION:")
-                  ? rawText.split("SYSTEM_PREVIEW_ACTION:")[0].trim()
-                  : rawText
+                : rawText
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
