@@ -504,9 +504,9 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
 
     const cleanInput = input.trim()
     const requestedPreviewPath =
-  !isOwnerAdmin && attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
+  attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
-    if (requestedPreviewPath) {
+   if (requestedPreviewPath && !isOwnerAdmin) {
       openPreviewPath(requestedPreviewPath)
       onViewModeChange?.("preview")
 
@@ -553,7 +553,10 @@ Instruction: Use CURRENT_PREVIEW_HTML as the current page/project. If the user a
         : "")
 
     const finalMessageText = messageText.trim() || "Please analyze the attached file."
-
+if (requestedPreviewPath && isOwnerAdmin) {
+  openPreviewPath(requestedPreviewPath)
+  onViewModeChange?.("preview")
+}
     sendMessage({
       parts: [
         { type: "text", text: finalMessageText },
