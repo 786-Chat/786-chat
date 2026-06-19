@@ -883,50 +883,35 @@ Do not say "copy this code".
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
-// Save assistant response to database and apply file operations
-const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
+        // Save assistant response to database and apply file operations
+        const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
+        const assistantText = lastAssistant ? getMessageText(lastAssistant) : ""
 
-if (lastAssistant) {
-  const assistantText = getMessageText(lastAssistant)
+        if (assistantText) {
+          const operations = extractFileOperations(assistantText)
 
-  if (assistantText) {
-    const operations = extractFileOperations(assistantText)
+          if (operations.length > 0 && !isAdmin) {
+            await applyFileOperationsToLatestProject(session.id, assistantText)
+          }
 
-    if (operations.length > 0 && !isAdmin) {
-      await applyFileOperationsToLatestProject(session.id, assistantText)
-    }
+          const cleanMessage =
+            operations.length > 0
+              ? "Project files updated successfully."
+              : assistantText.trim()
 
-    const cleanMessage =
-      operations.length > 0
-        ? "Project files updated successfully."
-        : assistantText.trim()
+          if (cleanMessage) {
+            await sql`
+              INSERT INTO messages (chat_id, role, content)
+              VALUES (${currentChatId}, 'assistant', ${cleanMessage})
+            `
+          }
+        }
 
-    await sql`
-      INSERT INTO messages (chat_id, role, content)
-      VALUES (${currentChatId}, 'assistant', ${cleanMessage})
-    `
-  }
-}
-  // 1. Apply file operations FIRST
-  if (operations.length > 0) {
-    await applyFileOperationsToLatestProject(session.id, assistantText)
-  }
+        await sql`
+          UPDATE chats SET updated_at = NOW() WHERE id = ${currentChatId}
+        `
 
-  // 2. Clean assistant message (REMOVE file ops from chat UI)
-  const cleanMessage = assistantText
-    .replace(/```txt[\s\S]*?```/g, "")
-    .replace(/editFile\([\s\S]*?\)/g, "")
-    .replace(/createFile\([\s\S]*?\)/g, "")
-    .replace(/deleteFile\([\s\S]*?\)/g, "")
-    .trim()
-
-  // 3. Store ONLY clean message
-  await sql`
-    INSERT INTO messages (chat_id, role, content)
-    VALUES (${currentChatId}, 'assistant', ${cleanMessage})
-  `
-}
-        const outputTokens = usage?.completionTokens || estimateTokens(getMessageText(lastAssistant!))
+        const outputTokens = usage?.completionTokens || estimateTokens(assistantText)
         await recordUsage(session.id, inputTokens, outputTokens, imageCount, totalPdfPages, useExtraCredit)
 
         if (!isAdminRequest && (imageCount > 0 || totalPdfPages > 0)) {
