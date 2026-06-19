@@ -230,7 +230,7 @@ export default function DashboardLayout({
     }
   }, [loadLatestProject])
 
-  const handlePreviewUpdate = useCallback(
+   const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
       const currentHtml = previewHtml || localStorage.getItem(previewStorageKey) || ""
       const nextHasContent = hasVisibleHtmlContent(nextHtml)
@@ -251,6 +251,64 @@ export default function DashboardLayout({
         writePreviewHistory(nextHistory)
       }
 
+      if (nextHasContent) {
+        localStorage.setItem(previewStorageKey, nextHtml)
+        setPreviewHtml(nextHtml)
+        setPreviewUrl("")
+        setPreviewOpen(true)
+        return
+      }
+
+      localStorage.removeItem(previewStorageKey)
+      setPreviewHtml("")
+      setPreviewUrl("")
+      setPreviewOpen(true)
+    },
+    [previewHtml, previewStorageKey, readPreviewHistory, writePreviewHistory]
+  )
+
+  const restorePreviousPreview = useCallback(() => {
+    const history = readPreviewHistory()
+    const previousPreview = history[history.length - 1]
+
+    if (!previousPreview || !hasVisibleHtmlContent(previousPreview)) {
+      writePreviewHistory([])
+      return
+    }
+
+    const remainingHistory = history.slice(0, -1)
+
+    localStorage.setItem(previewStorageKey, previousPreview)
+    writePreviewHistory(remainingHistory)
+
+    setPreviewHtml(previousPreview)
+    setPreviewUrl("")
+    setPreviewOpen(true)
+    setViewMode("preview")
+  }, [previewStorageKey, readPreviewHistory, writePreviewHistory])
+
+  const startPreviewResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDraggingPreview(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isDraggingPreview) return
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const container = containerRef.current
+      if (!container) return
+
+      const rect = container.getBoundingClientRect()
+      const nextWidth = rect.right - event.clientX
+      const minWidth = 360
+      const maxWidth = Math.min(980, Math.max(420, rect.width - 420))
+      const clampedWidth = Math.min(Math.max(nextWidth, minWidth), maxWidth)
+
+      setPreviewWidth(clampedWidth)
+    }
+
     const handleMouseUp = () => {
       setIsDraggingPreview(false)
     }
@@ -268,7 +326,6 @@ export default function DashboardLayout({
       window.removeEventListener("mouseup", handleMouseUp)
     }
   }, [isDraggingPreview])
-
   useEffect(() => {
     if (!userEmail) return
 
