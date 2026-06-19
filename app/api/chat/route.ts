@@ -143,6 +143,66 @@ function extractFileOperations(text: string): FileOperation[] {
   return operations
 }
 
+
+function toComponentNameFromPath(path: string): string {
+  const fileName = path.split("/").pop() || "Component"
+  const baseName = fileName.replace(/\.(tsx|jsx|ts|js)$/i, "")
+  const clean = baseName.replace(/[^a-zA-Z0-9]/g, " ")
+  const name = clean
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("")
+
+  return name || "Component"
+}
+
+function buildAutoWiredPageFromComponents(files: Record<string, string>): string | null {
+  const componentPaths = Object.keys(files)
+    .filter((path) => /^components\/[A-Za-z0-9/_-]+\.(tsx|jsx)$/i.test(path))
+    .filter((path) => {
+      const name = toComponentNameFromPath(path)
+      return /^[A-Z][A-Za-z0-9_]*$/.test(name)
+    })
+    .slice(0, 12)
+
+  if (componentPaths.length === 0) return null
+
+  const imports = componentPaths
+    .map((path) => {
+      const name = toComponentNameFromPath(path)
+      const importPath = `@/${path.replace(/\.(tsx|jsx)$/i, "")}`
+      return `import ${name} from "${importPath}"`
+    })
+    .join("\n")
+
+  const components = componentPaths
+    .map((path) => {
+      const name = toComponentNameFromPath(path)
+      return `        <${name} />`
+    })
+    .join("\n")
+
+  return `${imports}
+
+export default function Page() {
+  return (
+    <main className="min-h-screen bg-slate-950 text-white overflow-hidden">
+${components}
+    </main>
+  )
+}
+`
+}
+
+function looksLikeStarterPage(content: string): boolean {
+  const text = content.toLowerCase()
+  return (
+    text.includes("new website") &&
+    text.includes("start building your project with mujeebproai")
+  )
+}
+
 async function applyFileOperationsToLatestProject(userId: string, assistantText: string) {
   const operations = extractFileOperations(assistantText)
 
@@ -216,6 +276,22 @@ if __name__ == "__main__":
       delete nextFiles[cleanPath]
     } else {
       nextFiles[cleanPath] = operation.content
+    }
+  }
+
+  const hasPageOperation = operations.some(
+    (operation) => operation.path.replace(/^\/+/, "").trim() === "app/page.tsx"
+  )
+
+  const currentPage = nextFiles["app/page.tsx"] || ""
+  const needsAutoWiredPage =
+    !hasPageOperation &&
+    (!currentPage.trim() || looksLikeStarterPage(currentPage))
+
+  if (needsAutoWiredPage) {
+    const autoPage = buildAutoWiredPageFromComponents(nextFiles)
+    if (autoPage) {
+      nextFiles["app/page.tsx"] = autoPage
     }
   }
 
@@ -744,6 +820,12 @@ REAL PROJECT RULES:
 - Every website is a real file-based project.
 - Source of truth is project.files from database.
 - Always think in this structure:
+- app/page.tsx is REQUIRED for every project build or visual change.
+- app/page.tsx must never stay as the starter "New Website" page after a build request.
+- app/page.tsx must contain the visible working page and must import/use any component files you create.
+- If you create components/Header.tsx, components/Hero.tsx, components/Menu.tsx, components/Contact.tsx, you must also editFile("app/page.tsx", ...) to render them.
+- For premium websites, include modern responsive layout, gradients, shadows, motion-friendly classes, strong spacing, and polished sections.
+- For software/SaaS apps, create realistic dashboard pages/components plus backend and python starter files where useful.
 
 app/page.tsx
 app/layout.tsx
@@ -1010,6 +1092,8 @@ Do NOT edit the MujeebProAI platform.
 Do NOT read or change the live mujeebproai.com repo.
 Return ONLY createFile/editFile/deleteFile operations for project.files.
 Use real full files such as app/page.tsx, app/layout.tsx, backend/orders.php, python/ai.py, components/*, and lib/*.
+Every build/create/design request MUST include editFile("app/page.tsx", ...) with the complete visible UI wired to any components.
+app/page.tsx must never remain as the starter "New Website" page.
 `
       : isAdmin
         ? adminSystemPrompt
@@ -1022,11 +1106,20 @@ Return ONLY file operations.
 
 Examples:
 
-editFile("app/page.tsx", \`FULL FILE CONTENT\`)
+editFile("app/page.tsx", \`FULL FILE CONTENT WITH THE COMPLETE VISIBLE PAGE AND IMPORTS\`)
+editFile("app/layout.tsx", \`FULL FILE CONTENT\`)
 createFile("components/Header.tsx", \`FULL FILE CONTENT\`)
+createFile("components/Hero.tsx", \`FULL FILE CONTENT\`)
+createFile("components/Menu.tsx", \`FULL FILE CONTENT\`)
+createFile("components/Contact.tsx", \`FULL FILE CONTENT\`)
 createFile("backend/orders.php", \`FULL FILE CONTENT\`)
 createFile("python/ai.py", \`FULL FILE CONTENT\`)
 deleteFile("components/OldHeader.tsx")
+
+Mandatory:
+- A build/create/redesign request must include editFile("app/page.tsx", ...).
+- app/page.tsx must not be a placeholder.
+- app/page.tsx must render the real UI immediately.
 
 Do not explain.
 Do not return HTML previews.
@@ -1064,7 +1157,7 @@ Do not say "copy this code".
         if (assistantText) {
           const operations = extractFileOperations(assistantText)
 
-          if (operations.length > 0 && !isAdmin) {
+          if (operations.length > 0 && !ownerPlatformAdminMode) {
             await applyFileOperationsToLatestProject(session.id, assistantText)
           }
 
