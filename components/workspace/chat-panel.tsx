@@ -557,7 +557,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     lastProjectRefreshRef.current = refreshKey
 
     window.dispatchEvent(new Event("project-files-changed"))
-    onViewModeChange?.("code")
+    onViewModeChange?.("preview")
 
     setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 800)
     setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 2000)
