@@ -76,27 +76,68 @@ function decodeFileContent(content: string) {
     .replace(/\\\\/g, "\\")
 }
 
-function extractFileOperations(text: string): FileOperation[] {
-  const operations: FileOperation[] = []
+function readQuotedArgument(text: string, startIndex: number): { value: string; endIndex: number } | null {
+  const quote = text[startIndex]
 
-  const writeRegex =
-    /(editFile|createFile)\(\s*["']([^"']+)["']\s*,\s*([`"'])([\s\S]*?)\3\s*\)/g
+  if (quote !== "`" && quote !== '"' && quote !== "'") return null
 
-  let match
-  while ((match = writeRegex.exec(text)) !== null) {
-    operations.push({
-      type: match[1] === "editFile" ? "edit" : "create",
-      path: match[2],
-      content: decodeFileContent(match[4]),
-    })
+  let value = ""
+  let index = startIndex + 1
+
+  while (index < text.length) {
+    const char = text[index]
+    const previous = text[index - 1]
+
+    if (char === quote && previous !== "\\") {
+      return { value, endIndex: index + 1 }
+    }
+
+    value += char
+    index++
   }
 
-  const deleteRegex = /deleteFile\(\s*["']([^"']+)["']\s*\)/g
-  while ((match = deleteRegex.exec(text)) !== null) {
+  return null
+}
+
+function extractFileOperations(text: string): FileOperation[] {
+  const operations: FileOperation[] = []
+  const operationRegex = /\b(editFile|createFile|deleteFile)\s*\(/g
+
+  let match: RegExpExecArray | null
+
+  while ((match = operationRegex.exec(text)) !== null) {
+    const operationName = match[1]
+    let cursor = operationRegex.lastIndex
+
+    while (cursor < text.length && /\s/.test(text[cursor])) cursor++
+
+    const pathArg = readQuotedArgument(text, cursor)
+    if (!pathArg) continue
+
+    const path = pathArg.value.trim()
+    cursor = pathArg.endIndex
+
+    if (operationName === "deleteFile") {
+      operations.push({ type: "delete", path })
+      continue
+    }
+
+    while (cursor < text.length && /\s/.test(text[cursor])) cursor++
+    if (text[cursor] !== ",") continue
+    cursor++
+
+    while (cursor < text.length && /\s/.test(text[cursor])) cursor++
+
+    const contentArg = readQuotedArgument(text, cursor)
+    if (!contentArg) continue
+
     operations.push({
-      type: "delete",
-      path: match[1],
+      type: operationName === "editFile" ? "edit" : "create",
+      path,
+      content: decodeFileContent(contentArg.value),
     })
+
+    operationRegex.lastIndex = contentArg.endIndex
   }
 
   return operations
@@ -105,9 +146,12 @@ function extractFileOperations(text: string): FileOperation[] {
 async function applyFileOperationsToLatestProject(userId: string, assistantText: string) {
   const operations = extractFileOperations(assistantText)
 
-  if (operations.length === 0) return
+  if (operations.length === 0) {
+    console.warn("[Chat API] No file operations found in assistant response")
+    return
+  }
 
-  const rows = await sql`
+  const existingProjects = await sql`
     SELECT id, files
     FROM projects
     WHERE user_id = ${userId}::uuid
@@ -115,10 +159,8 @@ async function applyFileOperationsToLatestProject(userId: string, assistantText:
     LIMIT 1
   `
 
-  const nextFiles: Record<string, string> = rows.length
-    ? { ...((rows[0].files || {}) as Record<string, string>) }
-    : {
-        "app/page.tsx": `export default function Home() {
+  const baseFiles: Record<string, string> = {
+    "app/page.tsx": `export default function Home() {
   return (
     <main className="min-h-screen bg-white text-gray-900">
       <section className="px-6 py-24 text-center">
@@ -129,7 +171,7 @@ async function applyFileOperationsToLatestProject(userId: string, assistantText:
   )
 }
 `,
-        "app/layout.tsx": `import type { Metadata } from "next"
+    "app/layout.tsx": `import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -145,33 +187,44 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   )
 }
 `,
-        "backend/orders.php": `<?php
+    "backend/orders.php": `<?php
 header('Content-Type: application/json');
 echo json_encode(['status' => 'ok', 'message' => 'Orders API ready']);
 ?>
 `,
-        "python/ai.py": `def main():
+    "python/ai.py": `def main():
     return "AI helper ready"
 
 if __name__ == "__main__":
     print(main())
 `,
+  }
+
+  const nextFiles: Record<string, string> = existingProjects.length
+    ? {
+        ...baseFiles,
+        ...((existingProjects[0].files || {}) as Record<string, string>),
       }
+    : { ...baseFiles }
 
   for (const operation of operations) {
+    const cleanPath = operation.path.replace(/^\/+/, "").trim()
+
+    if (!cleanPath) continue
+
     if (operation.type === "delete") {
-      delete nextFiles[operation.path]
+      delete nextFiles[cleanPath]
     } else {
-      nextFiles[operation.path] = operation.content
+      nextFiles[cleanPath] = operation.content
     }
   }
 
-  if (rows.length) {
+  if (existingProjects.length) {
     await sql`
       UPDATE projects
       SET files = ${JSON.stringify(nextFiles)}::jsonb,
           updated_at = NOW()
-      WHERE id = ${rows[0].id}::uuid
+      WHERE id = ${existingProjects[0].id}::uuid
         AND user_id = ${userId}::uuid
     `
     return
@@ -182,26 +235,44 @@ if __name__ == "__main__":
   try {
     await sql`
       INSERT INTO projects (user_id, name, template, files, created_at, updated_at)
-      VALUES (${userId}::uuid, ${projectName}, 'custom', ${JSON.stringify(nextFiles)}::jsonb, NOW(), NOW())
+      VALUES (
+        ${userId}::uuid,
+        ${projectName},
+        'custom',
+        ${JSON.stringify(nextFiles)}::jsonb,
+        NOW(),
+        NOW()
+      )
     `
     return
-  } catch (errorWithTemplate) {
-    console.warn("[Chat API] Project insert with template failed, retrying without template", errorWithTemplate)
+  } catch (error) {
+    console.warn("[Chat API] Insert with template/name failed, retrying with name only", error)
   }
 
   try {
     await sql`
       INSERT INTO projects (user_id, name, files, created_at, updated_at)
-      VALUES (${userId}::uuid, ${projectName}, ${JSON.stringify(nextFiles)}::jsonb, NOW(), NOW())
+      VALUES (
+        ${userId}::uuid,
+        ${projectName},
+        ${JSON.stringify(nextFiles)}::jsonb,
+        NOW(),
+        NOW()
+      )
     `
     return
-  } catch (errorWithName) {
-    console.warn("[Chat API] Project insert with name failed, retrying minimal insert", errorWithName)
+  } catch (error) {
+    console.warn("[Chat API] Insert with name failed, retrying minimal insert", error)
   }
 
   await sql`
     INSERT INTO projects (user_id, files, created_at, updated_at)
-    VALUES (${userId}::uuid, ${JSON.stringify(nextFiles)}::jsonb, NOW(), NOW())
+    VALUES (
+      ${userId}::uuid,
+      ${JSON.stringify(nextFiles)}::jsonb,
+      NOW(),
+      NOW()
+    )
   `
 }
 
@@ -655,10 +726,10 @@ When user asks to build, create, edit, change, add, remove, redesign, animate, a
 SUPPORTED OPERATIONS:
 
 \`\`\`txt
-editFile("app/page.tsx", "FULL FILE CODE HERE")
-createFile("components/Header.tsx", "FULL FILE CODE HERE")
-createFile("backend/orders.php", "FULL FILE CODE HERE")
-createFile("python/ai.py", "FULL FILE CODE HERE")
+editFile("app/page.tsx", `FULL FILE CODE HERE`)
+createFile("components/Header.tsx", `FULL FILE CODE HERE`)
+createFile("backend/orders.php", `FULL FILE CODE HERE`)
+createFile("python/ai.py", `FULL FILE CODE HERE`)
 deleteFile("old/file.tsx")
 \`\`\`
 
@@ -916,10 +987,10 @@ Return ONLY file operations.
 
 Examples:
 
-editFile("app/page.tsx", "FULL FILE CONTENT")
-createFile("components/Header.tsx", "FULL FILE CONTENT")
-createFile("backend/orders.php", "FULL FILE CONTENT")
-createFile("python/ai.py", "FULL FILE CONTENT")
+editFile("app/page.tsx", `FULL FILE CONTENT`)
+createFile("components/Header.tsx", `FULL FILE CONTENT`)
+createFile("backend/orders.php", `FULL FILE CONTENT`)
+createFile("python/ai.py", `FULL FILE CONTENT`)
 deleteFile("components/OldHeader.tsx")
 
 Do not explain.
