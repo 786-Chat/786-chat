@@ -607,10 +607,13 @@ if (!isAdminRequest) {
       }
     }
 
-// Check if user is admin (for AI model selection)
+// Decide whether owner is editing the MujeebProAI platform or testing a customer project.
+// IMPORTANT: Owner login must NOT automatically edit GitHub for normal website/project prompts.
+// Default owner behavior is Replit-style project.files mode. GitHub/admin tools are only enabled
+// when the owner clearly asks to fix the MujeebProAI platform/codebase/admin system.
 const userTextLower = userText.toLowerCase()
 
-const isCustomerProjectModeRequest =
+const ownerExplicitCustomerProjectMode =
   isAdminRequest &&
   (
     userTextLower.includes("customer project") ||
@@ -620,10 +623,40 @@ const isCustomerProjectModeRequest =
     userTextLower.includes("for my customer") ||
     userTextLower.includes("test customer") ||
     userTextLower.includes("do not edit mujeebproai") ||
-    userTextLower.includes("do not edit platform")
+    userTextLower.includes("do not edit platform") ||
+    userTextLower.includes("like replit") ||
+    userTextLower.includes("create a website") ||
+    userTextLower.includes("create website") ||
+    userTextLower.includes("create a homepage") ||
+    userTextLower.includes("restaurant homepage") ||
+    userTextLower.includes("landing page")
   )
 
-const isAdmin = isAdminRequest && !isCustomerProjectModeRequest
+const ownerPlatformAdminMode =
+  isAdminRequest &&
+  !ownerExplicitCustomerProjectMode &&
+  (
+    userTextLower.includes("fix mujeebproai") ||
+    userTextLower.includes("edit mujeebproai") ||
+    userTextLower.includes("change mujeebproai") ||
+    userTextLower.includes("mujeebproai platform") ||
+    userTextLower.includes("platform file") ||
+    userTextLower.includes("github") ||
+    userTextLower.includes("vercel") ||
+    userTextLower.includes("neon") ||
+    userTextLower.includes("database schema") ||
+    userTextLower.includes("admin dashboard") ||
+    userTextLower.includes("owner dashboard") ||
+    userTextLower.includes("app/api/") ||
+    userTextLower.includes("components/") ||
+    userTextLower.includes("lib/") ||
+    userTextLower.includes("route.ts") ||
+    userTextLower.includes("page.tsx") ||
+    userTextLower.includes("layout.tsx")
+  )
+
+const isCustomerProjectModeRequest = isAdminRequest && !ownerPlatformAdminMode
+const isAdmin = isAdminRequest && ownerPlatformAdminMode
 
 // Admin system prompt - HAS file-editing tools that deploy to the live site
 const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
@@ -971,10 +1004,12 @@ const result = await streamText({
       ? userSystemPrompt + `
 
 IMPORTANT:
-The owner is testing a CUSTOMER PROJECT.
+The owner is building/testing a CUSTOMER PROJECT in Replit-style project mode.
 Do NOT use GitHub tools.
 Do NOT edit the MujeebProAI platform.
-Return ONLY file operations for project.files.
+Do NOT read or change the live mujeebproai.com repo.
+Return ONLY createFile/editFile/deleteFile operations for project.files.
+Use real full files such as app/page.tsx, app/layout.tsx, backend/orders.php, python/ai.py, components/*, and lib/*.
 `
       : isAdmin
         ? adminSystemPrompt
