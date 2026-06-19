@@ -155,6 +155,78 @@ function hasVisibleHtmlContent(html: string): boolean {
   return textOnly.length > 3 || hasRealPreviewElement
 }
 
+
+function extractReturnJsx(code: string): string {
+  const returnIndex = code.indexOf("return")
+  if (returnIndex === -1) return ""
+
+  const firstParen = code.indexOf("(", returnIndex)
+  if (firstParen === -1) return ""
+
+  let depth = 0
+  let end = -1
+
+  for (let i = firstParen; i < code.length; i++) {
+    const char = code[i]
+    if (char === "(") depth++
+    if (char === ")") depth--
+    if (depth === 0) {
+      end = i
+      break
+    }
+  }
+
+  if (end === -1) return ""
+  return code.slice(firstParen + 1, end).trim()
+}
+
+function jsxToPreviewHtml(jsx: string): string {
+  return jsx
+    .replace(/^[\s\S]*?<React\.Fragment>/, "")
+    .replace(/<\/React\.Fragment>[\s\S]*$/, "")
+    .replace(/<>/g, "")
+    .replace(/<\/>/g, "")
+    .replace(/className=/g, "class=")
+    .replace(/htmlFor=/g, "for=")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\s+key=\{[^}]*\}/g, "")
+    .replace(/\s+on[A-Z][A-Za-z0-9_]*=\{[\s\S]*?\}/g, "")
+    .replace(/\{`([\s\S]*?)`\}/g, "$1")
+    .replace(/\{\"([^\"]*)\"\}/g, "$1")
+    .replace(/\{'([^']*)'\}/g, "$1")
+    .replace(/\{([^{}]*)\}/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?\s*\/>/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
+}
+
+function buildProjectPreviewHtml(files: Record<string, string>): string {
+  const pageCode = files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || ""
+  if (!pageCode.trim()) return ""
+
+  const jsx = extractReturnJsx(pageCode)
+  const body = jsxToPreviewHtml(jsx)
+
+  if (!body.trim()) return ""
+
+  const css = files["app/globals.css"] || files["styles/globals.css"] || ""
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+html, body { margin: 0; min-height: 100%; background: white; }
+${css}
+</style>
+</head>
+<body>
+${body}
+</body>
+</html>`
+}
+
 function stripDangerousPreviewHtml(html: string): string {
   if (!html) return ""
 
@@ -258,9 +330,14 @@ export function WorkspacePreviewPanel({
     ? cleanedPreviewHtml
     : ""
 
-const hasPreviewHtml = Boolean(safePreviewHtml)
-
 const projectFiles = project?.files ?? {}
+const projectPreviewHtml = buildProjectPreviewHtml(projectFiles)
+const safeProjectPreviewHtml =
+  projectPreviewHtml && hasVisibleHtmlContent(projectPreviewHtml)
+    ? stripDangerousPreviewHtml(projectPreviewHtml)
+    : ""
+const activePreviewHtml = safePreviewHtml || safeProjectPreviewHtml
+const hasPreviewHtml = Boolean(activePreviewHtml)
 const projectFilePaths = Object.keys(projectFiles)
 
 const defaultFile =
@@ -441,7 +518,7 @@ useEffect(() => {
   const isMobileDevice = !isDesktopDevice && !isTabletDevice
 
   const copyCode = async () => {
-    const codeToCopy = safePreviewHtml || currentPreviewHtml || ""
+    const codeToCopy = viewMode === "code" ? selectedFileContent : activePreviewHtml || currentPreviewHtml || ""
     if (!codeToCopy) return
 
     await navigator.clipboard.writeText(codeToCopy)
@@ -500,8 +577,8 @@ useEffect(() => {
     const iframeProps =
       content === "html"
         ? {
-            key: `html-${refreshKey}-${device}-${safePreviewHtml.length}`,
-            srcDoc: safePreviewHtml,
+            key: `html-${refreshKey}-${device}-${activePreviewHtml.length}`,
+            srcDoc: activePreviewHtml,
             title: "Generated Preview",
             sandbox: "allow-scripts allow-forms allow-popups",
           }
@@ -833,7 +910,7 @@ useEffect(() => {
               </Button>
             )}
           </div>
-        ) : viewMode === "code" && (safePreviewHtml || currentPreviewHtml) ? (
+        ) : viewMode === "code" && (activePreviewHtml || currentPreviewHtml) ? (
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
@@ -852,7 +929,7 @@ useEffect(() => {
             </div>
 
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {safePreviewHtml || currentPreviewHtml}
+              {activePreviewHtml || currentPreviewHtml}
             </pre>
           </div>
         ) : viewMode === "code" && safeLiveUrl ? (
