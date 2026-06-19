@@ -62,7 +62,80 @@ function getImageCount(msg: UIMessage): number {
   }).length
 }
 
-// Helper to create error response with remaining info
+// Helper types and functions for project file operations
+type FileOperation =
+  | { type: "edit"; path: string; content: string }
+  | { type: "create"; path: string; content: string }
+  | { type: "delete"; path: string }
+
+function decodeFileContent(content: string) {
+  return content
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\`/g, "`")
+    .replace(/\\\\/g, "\\")
+}
+
+function extractFileOperations(text: string): FileOperation[] {
+  const operations: FileOperation[] = []
+
+  const writeRegex =
+    /(editFile|createFile)\(\s*["']([^"']+)["']\s*,\s*([`"'])([\s\S]*?)\3\s*\)/g
+
+  let match
+  while ((match = writeRegex.exec(text)) !== null) {
+    operations.push({
+      type: match[1] === "editFile" ? "edit" : "create",
+      path: match[2],
+      content: decodeFileContent(match[4]),
+    })
+  }
+
+  const deleteRegex = /deleteFile\(\s*["']([^"']+)["']\s*\)/g
+  while ((match = deleteRegex.exec(text)) !== null) {
+    operations.push({
+      type: "delete",
+      path: match[1],
+    })
+  }
+
+  return operations
+}
+
+async function applyFileOperationsToLatestProject(userId: string, assistantText: string) {
+  const operations = extractFileOperations(assistantText)
+
+  if (operations.length === 0) return
+
+  const rows = await sql`
+    SELECT id, files
+    FROM projects
+    WHERE user_id = ${userId}::uuid
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `
+
+  if (!rows.length) return
+
+  const currentFiles = (rows[0].files || {}) as Record<string, string>
+  const nextFiles = { ...currentFiles }
+
+  for (const operation of operations) {
+    if (operation.type === "delete") {
+      delete nextFiles[operation.path]
+    } else {
+      nextFiles[operation.path] = operation.content
+    }
+  }
+
+  await sql`
+    UPDATE projects
+    SET files = ${JSON.stringify(nextFiles)}::jsonb,
+        updated_at = NOW()
+    WHERE id = ${rows[0].id}::uuid
+      AND user_id = ${userId}::uuid
+  `
+}
 function createProtectionError(result: ProtectionResult, status: number = 429) {
   return new Response(
     JSON.stringify({
@@ -733,19 +806,20 @@ Do not say "copy this code".
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
-        
-               // Save assistant response to database
-        const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
-        if (lastAssistant) {
-          const assistantText = getMessageText(lastAssistant)
-          if (assistantText) {
-            await sql`
-              INSERT INTO messages (chat_id, role, content)
-              VALUES (${currentChatId}, 'assistant', ${assistantText})
-            `
-          }
-        }
+        // Save assistant response to database and apply file operations
+const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
+if (lastAssistant) {
+  const assistantText = getMessageText(lastAssistant)
 
+  if (assistantText) {
+    await sql`
+      INSERT INTO messages (chat_id, role, content)
+      VALUES (${currentChatId}, 'assistant', ${assistantText})
+    `
+
+    await applyFileOperationsToLatestProject(session.id, assistantText)
+  }
+}
         await sql`
           UPDATE chats SET updated_at = NOW() WHERE id = ${currentChatId}
         `
