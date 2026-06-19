@@ -886,23 +886,30 @@ Do not say "copy this code".
         // Save assistant response to database and apply file operations
 const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
 if (lastAssistant) {
-  const assistantText = getMessageText(lastAssistant)
+const assistantText = getMessageText(lastAssistant)
 
-  if (assistantText) {
-    await sql`
-      INSERT INTO messages (chat_id, role, content)
-      VALUES (${currentChatId}, 'assistant', ${assistantText})
-    `
+if (assistantText) {
+  const operations = extractFileOperations(assistantText)
 
-    if (!isAdmin) {
-      await applyFileOperationsToLatestProject(session.id, assistantText)
-    }
+  // 1. Apply file operations FIRST
+  if (operations.length > 0) {
+    await applyFileOperationsToLatestProject(session.id, assistantText)
   }
-}
-        await sql`
-          UPDATE chats SET updated_at = NOW() WHERE id = ${currentChatId}
-        `
 
+  // 2. Clean assistant message (REMOVE file ops from chat UI)
+  const cleanMessage = assistantText
+    .replace(/```txt[\s\S]*?```/g, "")
+    .replace(/editFile\([\s\S]*?\)/g, "")
+    .replace(/createFile\([\s\S]*?\)/g, "")
+    .replace(/deleteFile\([\s\S]*?\)/g, "")
+    .trim()
+
+  // 3. Store ONLY clean message
+  await sql`
+    INSERT INTO messages (chat_id, role, content)
+    VALUES (${currentChatId}, 'assistant', ${cleanMessage})
+  `
+}
         const outputTokens = usage?.completionTokens || estimateTokens(getMessageText(lastAssistant!))
         await recordUsage(session.id, inputTokens, outputTokens, imageCount, totalPdfPages, useExtraCredit)
 
