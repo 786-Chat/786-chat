@@ -497,13 +497,25 @@ useEffect(() => {
         return
       }
 
+        const loadMyCustomerSite = async () => {
+    try {
+      const response = await fetch("/api/sites/my-site", {
+        credentials: "include",
+        cache: "no-store",
+      })
+
+      if (!response.ok) {
+        clearPreview()
+        return
+      }
+
       const data = await response.json()
       let nextUrl = ""
 
-      if (data.previewUrl) {
-        nextUrl = normalizeCustomerPreviewUrl(data.previewUrl)
-      } else if (data.subdomain) {
+      if (data.subdomain) {
         nextUrl = `/site/${data.subdomain}`
+      } else if (data.previewUrl) {
+        nextUrl = normalizeCustomerPreviewUrl(data.previewUrl)
       }
 
       if (!nextUrl || isBlockedPreviewUrl(nextUrl)) {
