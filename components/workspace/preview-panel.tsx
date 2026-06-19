@@ -780,7 +780,9 @@ export function WorkspacePreviewPanel({
       </div>
 
       <div className="flex-1 relative overflow-hidden bg-[#08080d] w-full max-w-full">
-        {showEmptyPreview ? (
+       {viewMode === "code" ? (
+  renderCodeMode()
+) : showEmptyPreview ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 bg-[#08080d]">
             <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
               <Monitor className="w-8 h-8 text-white/15" />
