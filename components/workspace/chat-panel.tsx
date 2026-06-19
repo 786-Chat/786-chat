@@ -301,6 +301,57 @@ function toUiMessages(dbMessages: DbMessage[]) {
   }))
 }
 
+
+function removeHiddenPromptRules(text: string): string {
+  if (!text) return ""
+
+  const hiddenMarkers = [
+    "CURRENT_PREVIEW_HTML:",
+    "SYSTEM_PREVIEW_ACTION:",
+    "PROJECT_FILE_SYSTEM_RULE:",
+  ]
+
+  let cleanText = text
+
+  for (const marker of hiddenMarkers) {
+    if (cleanText.includes(marker)) {
+      cleanText = cleanText.split(marker)[0].trim()
+    }
+  }
+
+  return cleanText.trim()
+}
+
+function containsFileOperations(text: string): boolean {
+  return /\b(editFile|createFile|deleteFile)\s*\(/.test(text)
+}
+
+function cleanFileOperationText(text: string): string {
+  if (!text) return ""
+
+  const withoutCodeBlocks = text.replace(/```(?:txt|ts|tsx|js|jsx|typescript|javascript)?[\s\S]*?```/gi, "")
+
+  const withoutOperations = withoutCodeBlocks
+    .replace(/\b(editFile|createFile)\(\s*["'][^"']+["']\s*,\s*`[\s\S]*?`\s*\)/g, "")
+    .replace(/\b(editFile|createFile)\(\s*["'][^"']+["']\s*,\s*"[\s\S]*?"\s*\)/g, "")
+    .replace(/\b(editFile|createFile)\(\s*["'][^"']+["']\s*,\s*'[\s\S]*?'\s*\)/g, "")
+    .replace(/\bdeleteFile\(\s*["'][^"']+["']\s*\)/g, "")
+    .trim()
+
+  return withoutOperations
+}
+
+function getDisplayTextForMessage(rawText: string, role: string): string {
+  const visibleText = removeHiddenPromptRules(rawText)
+
+  if (role === "assistant" && containsFileOperations(visibleText)) {
+    const cleanText = cleanFileOperationText(visibleText)
+    return cleanText || "Project files updated successfully."
+  }
+
+  return visibleText
+}
+
 export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
@@ -837,11 +888,7 @@ setAttachedFiles([])
           <AnimatePresence initial={false}>
             {messages.map((message) => {
               const rawText = getMessageText(message)
-              const text = rawText.includes("CURRENT_PREVIEW_HTML:")
-                ? rawText.split("CURRENT_PREVIEW_HTML:")[0].trim()
-                : rawText.includes("SYSTEM_PREVIEW_ACTION:")
-                  ? rawText.split("SYSTEM_PREVIEW_ACTION:")[0].trim()
-                  : rawText
+              const text = getDisplayTextForMessage(rawText, message.role)
               const toolParts = getToolParts(message)
               const fileParts = getFileParts(message)
               const isUser = message.role === "user"
