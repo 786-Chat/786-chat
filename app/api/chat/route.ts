@@ -136,6 +136,23 @@ async function applyFileOperationsToLatestProject(userId: string, assistantText:
       AND user_id = ${userId}::uuid
   `
 }
+
+function normalizeGithubPath(path?: string) {
+  const cleanPath = String(path || "").trim()
+
+  if (
+    !cleanPath ||
+    cleanPath === "." ||
+    cleanPath === "/" ||
+    cleanPath.startsWith("/home") ||
+    cleanPath.startsWith("home/")
+  ) {
+    return ""
+  }
+
+  return cleanPath.replace(/^\/+/, "")
+}
+
 function createProtectionError(result: ProtectionResult, status: number = 429) {
   return new Response(
     JSON.stringify({
@@ -452,7 +469,22 @@ if (!isAdminRequest) {
     }
 
 // Check if user is admin (for AI model selection)
-const isAdmin = isAdminRequest
+const userTextLower = userText.toLowerCase()
+
+const isCustomerProjectModeRequest =
+  isAdminRequest &&
+  (
+    userTextLower.includes("customer project") ||
+    userTextLower.includes("customer website") ||
+    userTextLower.includes("customer site") ||
+    userTextLower.includes("project.files") ||
+    userTextLower.includes("for my customer") ||
+    userTextLower.includes("test customer") ||
+    userTextLower.includes("do not edit mujeebproai") ||
+    userTextLower.includes("do not edit platform")
+  )
+
+const isAdmin = isAdminRequest && !isCustomerProjectModeRequest
 
 // Admin system prompt - HAS file-editing tools that deploy to the live site
 const adminSystemPrompt = `You are MujeebProAI Assistant with FULL ADMIN ACCESS, helping the owner (mujeeb@job4u.com).
@@ -509,6 +541,14 @@ FULL MUJEEBPROAI CODEBASE AWARENESS RULES:
 - The source of truth is the real codebase files.
 - If multiple files are required, read them before making a change.
 - Preserve existing architecture, UI, owner access, customer isolation, usage limits, and working features.
+
+GITHUB TOOL PATH RULES:
+- GitHub tools only accept repo-relative paths such as app, components, lib, public, app/page.tsx.
+- NEVER use /home/user, /home, absolute Linux paths, or local filesystem paths with GitHub tools.
+- If you need the repo root, use list_files with an empty path.
+- Never assume a dynamic route file exists. Before reading paths like app/restaurant/[id]/page.tsx, first list the parent directory.
+- If a file is not found, list the nearest existing parent directory and choose the real path.
+- For customer project testing, do NOT use GitHub tools. Return editFile/createFile/deleteFile operations only.
 
 Be helpful, friendly, and precise.`
 
@@ -591,8 +631,17 @@ Focus on:
         }),
         execute: async ({ path }) => {
           try {
-            const { content } = await github.readFile(path)
-            return { success: true, content, path }
+            const safePath = normalizeGithubPath(path)
+
+            if (!safePath) {
+              return {
+                success: false,
+                error: "Use a repo-relative file path only, for example app/page.tsx or components/header.tsx. Do not use /home/user.",
+              }
+            }
+
+            const { content } = await github.readFile(safePath)
+            return { success: true, content, path: safePath }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to read file" }
           }
@@ -608,10 +657,19 @@ Focus on:
         }),
         execute: async ({ path, content, message }) => {
           try {
-            const result = await github.writeFile(path, content, message)
+            const safePath = normalizeGithubPath(path)
+
+            if (!safePath) {
+              return {
+                success: false,
+                error: "Use a repo-relative file path only, for example app/page.tsx or components/header.tsx. Do not use /home/user.",
+              }
+            }
+
+            const result = await github.writeFile(safePath, content, message)
             return { 
               success: true, 
-              message: `File ${path} updated successfully. Changes will deploy in 1-2 minutes.`,
+              message: `File ${safePath} updated successfully. Changes will deploy in 1-2 minutes.`,
               sha: result.sha 
             }
           } catch (error) {
@@ -628,8 +686,17 @@ Focus on:
         }),
         execute: async ({ path, message }) => {
           try {
-            await github.deleteFile(path, message)
-            return { success: true, message: `File ${path} deleted successfully.` }
+            const safePath = normalizeGithubPath(path)
+
+            if (!safePath) {
+              return {
+                success: false,
+                error: "Use a repo-relative file path only, for example app/page.tsx or components/header.tsx. Do not use /home/user.",
+              }
+            }
+
+            await github.deleteFile(safePath, message)
+            return { success: true, message: `File ${safePath} deleted successfully.` }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to delete file" }
           }
@@ -643,8 +710,9 @@ Focus on:
         }),
         execute: async ({ path }) => {
           try {
-            const files = await github.listFiles(path || "")
-            return { success: true, files }
+            const safePath = normalizeGithubPath(path)
+            const files = await github.listFiles(safePath)
+            return { success: true, files, path: safePath || "repo root" }
           } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : "Failed to list files" }
           }
@@ -760,9 +828,18 @@ const result = await streamText({
 
   system: shouldUsePreviewOnlyMode
     ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
-    : isAdmin
-      ? adminSystemPrompt
-      : enableFileMode
+    : isCustomerProjectModeRequest
+      ? userSystemPrompt + `
+
+IMPORTANT:
+The owner is testing a CUSTOMER PROJECT.
+Do NOT use GitHub tools.
+Do NOT edit the MujeebProAI platform.
+Return ONLY file operations for project.files.
+`
+      : isAdmin
+        ? adminSystemPrompt
+        : enableFileMode
         ? userSystemPrompt +
           `
 
@@ -817,7 +894,9 @@ if (lastAssistant) {
       VALUES (${currentChatId}, 'assistant', ${assistantText})
     `
 
-    await applyFileOperationsToLatestProject(session.id, assistantText)
+    if (!isAdmin) {
+      await applyFileOperationsToLatestProject(session.id, assistantText)
+    }
   }
 }
         await sql`
