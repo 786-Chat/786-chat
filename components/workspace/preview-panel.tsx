@@ -23,7 +23,7 @@ interface PreviewPanelProps {
     id: string
     name: string
     template?: string
-    files: Record<string, string>
+    files?: Record<string, string>
   } | null
 
   device: string
@@ -44,10 +44,17 @@ interface PreviewPanelProps {
 }
 
 function getDeviceLabel(device: string): string {
-  if (device === "full") return "Full Size"
-  if (device === "ipad" || device === "ipad-pro") return "Tablet"
-  if (device === "iphone-17-pro") return "iPhone 17 Pro Max"
-  return "Mobile"
+  switch (device) {
+    case "full":
+      return "Full Size"
+    case "ipad":
+    case "ipad-pro":
+      return "Tablet"
+    case "iphone-17-pro":
+      return "iPhone 17 Pro Max"
+    default:
+      return "Mobile"
+  }
 }
 
 function getSourceFileHints(url: string): string[] {
@@ -553,11 +560,50 @@ export function WorkspacePreviewPanel({
       </div>
     )
   }
-
   const renderLiveUrlCodeNotice = () => {
     return (
       <div className="border-b border-white/[0.06] px-4 py-2 bg-[#0d1117]">
         <span className="text-xs text-white/50">Live React Page Source</span>
+      </div>
+    )
+  }
+
+  const renderCodeMode = () => {
+    if (!project || projectFilePaths.length === 0) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#08080d] text-white/40 text-sm">
+          No project files found
+        </div>
+      )
+    }
+
+    return (
+      <div className="absolute inset-0 flex bg-[#0b0f17] text-white">
+        <div className="w-56 border-r border-white/10 overflow-y-auto">
+          <div className="p-2 text-xs text-white/50 border-b border-white/10">
+            Project Files
+          </div>
+
+          {projectFilePaths.map((file) => (
+            <button
+              key={file}
+              onClick={() => setSelectedFile(file)}
+              className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${
+                selectedFile === file ? "bg-white/10 text-cyan-300" : "text-white/70"
+              }`}
+            >
+              {file}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <div className="text-xs text-white/40 mb-2">{selectedFile}</div>
+
+          <pre className="text-xs whitespace-pre-wrap text-white/80">
+            {selectedFileContent}
+          </pre>
+        </div>
       </div>
     )
   }
@@ -601,7 +647,6 @@ export function WorkspacePreviewPanel({
       </div>
     )
   }
-
   return (
     <div
       className="relative flex flex-col h-full overflow-hidden w-full max-w-full backdrop-blur-xl border-l border-teal-500/20"
