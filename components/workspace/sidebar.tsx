@@ -11,7 +11,7 @@ import {
   Zap,
   Palette,
   Upload,
-  Globe,
+  FolderKanban,
   ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
@@ -106,7 +106,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         })
       }
     } catch {
-      // ignore
+      // Keep sidebar usable if one counter request fails.
     }
   }, [user, deletedChatKey])
 
@@ -372,6 +372,15 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
             </p>
             <div className="space-y-1">
               <Link
+                href="/dashboard/projects"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
+              >
+                <FolderKanban className="w-3.5 h-3.5" />
+                <span>My Projects</span>
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </Link>
+
+              <Link
                 href="/themes"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
               >
@@ -386,15 +395,6 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>Import Website</span>
-                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
-              </Link>
-
-              <Link
-                href="/dashboard/sites"
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>My Websites</span>
                 <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
               </Link>
             </div>
