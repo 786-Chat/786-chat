@@ -13,8 +13,6 @@ import {
   Upload,
   Globe,
   ExternalLink,
-  FileText,
-  Rocket,
 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -392,29 +390,11 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
               </Link>
 
               <Link
-                href="/dashboard/imports"
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Import Requests</span>
-                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
-              </Link>
-
-              <Link
                 href="/dashboard/sites"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
               >
                 <Globe className="w-3.5 h-3.5" />
                 <span>My Websites</span>
-                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
-              </Link>
-
-              <Link
-                href="/dashboard/deployments"
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-white/50 hover:bg-white/[0.04] hover:text-white/80 transition-all"
-              >
-                <Rocket className="w-3.5 h-3.5" />
-                <span>Deployments</span>
                 <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
               </Link>
             </div>
