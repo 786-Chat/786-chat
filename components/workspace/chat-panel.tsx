@@ -345,8 +345,7 @@ function getDisplayTextForMessage(rawText: string, role: string): string {
   const visibleText = removeHiddenPromptRules(rawText)
 
   if (role === "assistant" && containsFileOperations(visibleText)) {
-    const cleanText = cleanFileOperationText(visibleText)
-    return cleanText || "Project files updated successfully."
+    return "Project files updated successfully."
   }
 
   return visibleText
@@ -597,29 +596,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     }
 const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
-const messageText = `
-${cleanInput}
-
-PROJECT_FILE_SYSTEM_RULE:
-This is a real MujeebProAI file-based project.
-Do NOT return HTML preview.
-Do NOT use CURRENT_PREVIEW_HTML.
-Return file operations only.
-
-Required output format:
-editFile("app/page.tsx", "FULL FILE CODE")
-createFile("components/Header.tsx", "FULL FILE CODE")
-createFile("backend/orders.php", "FULL FILE CODE")
-createFile("python/ai.py", "FULL FILE CODE")
-
-Rules:
-- Always provide full file content.
-- Do not provide hints only.
-- Do not return one single HTML document.
-- If editing design, menu, animation, layout, colors, text, or images, edit the correct real project files.
-`.trim()
-
-const finalMessageText = messageText || "Please analyze the attached file."
+const finalMessageText = cleanInput || "Please analyze the attached file."
 
 if (requestedPreviewPath && isOwnerAdmin) {
   openPreviewPath(requestedPreviewPath)
