@@ -16,7 +16,7 @@ function normalizeFiles(files: unknown): Record<string, string> {
   return output
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession()
 
@@ -24,12 +24,25 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const rows = await sql`
-      SELECT id, name, description, domain, custom_domain, status, template, files, created_at, updated_at
-      FROM projects
-      WHERE user_id = ${session.id}::uuid
-      ORDER BY updated_at DESC NULLS LAST, created_at DESC
-    `
+    const { searchParams } = new URL(request.url)
+    const includeDeleted = searchParams.get("includeDeleted") === "true"
+
+    const rows = includeDeleted
+      ? await sql`
+          SELECT id, name, description, domain, custom_domain, status, template, files, created_at, updated_at, deleted_at, delete_after
+          FROM projects
+          WHERE user_id = ${session.id}::uuid
+            AND deleted_at IS NOT NULL
+            AND (delete_after IS NULL OR delete_after > NOW())
+          ORDER BY deleted_at DESC, updated_at DESC NULLS LAST, created_at DESC
+        `
+      : await sql`
+          SELECT id, name, description, domain, custom_domain, status, template, files, created_at, updated_at, deleted_at, delete_after
+          FROM projects
+          WHERE user_id = ${session.id}::uuid
+            AND deleted_at IS NULL
+          ORDER BY updated_at DESC NULLS LAST, created_at DESC
+        `
 
     return NextResponse.json(
       {
@@ -48,6 +61,8 @@ export async function GET() {
             fileCount: Object.keys(files).length,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            delete_after: row.delete_after,
           }
         }),
       },
