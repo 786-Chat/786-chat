@@ -254,12 +254,28 @@ export function WorkspacePreviewPanel({
       ? stripDangerousPreviewHtml(currentPreviewHtml)
       : ""
   const safePreviewHtml =
-    cleanedPreviewHtml && hasVisibleHtmlContent(cleanedPreviewHtml)
-      ? cleanedPreviewHtml
-      : ""
+  cleanedPreviewHtml && hasVisibleHtmlContent(cleanedPreviewHtml)
+    ? cleanedPreviewHtml
+    : ""
 
+const hasPreviewHtml = Boolean(safePreviewHtml)
 
-  useEffect(() => {
+const projectFiles = project?.files ?? {}
+const projectFilePaths = Object.keys(projectFiles)
+
+const defaultFile =
+  projectFilePaths.length > 0
+    ? projectFilePaths[0]
+    : "app/page.tsx"
+
+const [selectedFile, setSelectedFile] = useState(defaultFile)
+
+const selectedFileContent =
+  projectFiles[selectedFile] ||
+  projectFiles[defaultFile] ||
+  ""
+
+useEffect(() => {
   if (projectFilePaths.length > 0) {
     setSelectedFile(projectFilePaths[0])
   }
