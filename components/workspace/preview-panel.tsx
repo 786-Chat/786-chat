@@ -363,7 +363,7 @@ function buildProjectPreviewHtml(files: Record<string, string>): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-html, body { margin: 0; min-height: 100%; background: white; }
+html, body { margin: 0; min-height: 100%; background: #08080d; }
 ${css}
 </style>
 </head>
@@ -483,7 +483,21 @@ const safeProjectPreviewHtml =
     ? stripDangerousPreviewHtml(projectPreviewHtml)
     : ""
 const activePreviewHtml = safePreviewHtml || safeProjectPreviewHtml
-const hasPreviewHtml = Boolean(activePreviewHtml)
+
+const [stablePreviewHtml, setStablePreviewHtml] = useState("")
+const [previewFrameReady, setPreviewFrameReady] = useState(false)
+
+useEffect(() => {
+  if (activePreviewHtml && hasVisibleHtmlContent(activePreviewHtml)) {
+    setPreviewFrameReady(false)
+    setStablePreviewHtml((current) =>
+      current === activePreviewHtml ? current : activePreviewHtml
+    )
+  }
+}, [activePreviewHtml])
+
+const displayPreviewHtml = activePreviewHtml || stablePreviewHtml
+const hasPreviewHtml = Boolean(displayPreviewHtml)
 const projectFilePaths = Object.keys(projectFiles)
 
 const defaultFile =
@@ -664,7 +678,7 @@ useEffect(() => {
   const isMobileDevice = !isDesktopDevice && !isTabletDevice
 
   const copyCode = async () => {
-    const codeToCopy = viewMode === "code" ? selectedFileContent : activePreviewHtml || currentPreviewHtml || ""
+    const codeToCopy = viewMode === "code" ? selectedFileContent : displayPreviewHtml || currentPreviewHtml || ""
     if (!codeToCopy) return
 
     await navigator.clipboard.writeText(codeToCopy)
@@ -723,8 +737,8 @@ useEffect(() => {
     const iframeProps =
       content === "html"
         ? {
-            key: `html-${refreshKey}-${device}-${activePreviewHtml.length}`,
-            srcDoc: activePreviewHtml,
+            key: `html-${refreshKey}-${device}-${displayPreviewHtml.length}`,
+            srcDoc: displayPreviewHtml,
             title: "Generated Preview",
             sandbox: "allow-scripts allow-forms allow-popups",
           }
@@ -737,11 +751,23 @@ useEffect(() => {
 
     if (isDesktopDevice) {
       return (
-        <iframe
-          {...iframeProps}
-          onLoad={(event) => hideIframeScrollbar(event.currentTarget)}
-          className="absolute inset-0 h-full w-full bg-white"
-        />
+        <>
+          <iframe
+            {...iframeProps}
+            onLoad={(event) => {
+              hideIframeScrollbar(event.currentTarget)
+              setPreviewFrameReady(true)
+            }}
+            className="absolute inset-0 h-full w-full bg-[#08080d]"
+          />
+          {content === "html" && !previewFrameReady && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[#08080d]">
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3 text-xs text-cyan-200 shadow-2xl shadow-cyan-500/10">
+                Preparing live preview...
+              </div>
+            </div>
+          )}
+        </>
       )
     }
 
@@ -785,9 +811,20 @@ useEffect(() => {
 
               <iframe
                 {...iframeProps}
-                onLoad={(event) => hideIframeScrollbar(event.currentTarget)}
-                className="h-full w-full bg-white border-0"
+                onLoad={(event) => {
+                  hideIframeScrollbar(event.currentTarget)
+                  setPreviewFrameReady(true)
+                }}
+                className="h-full w-full bg-[#08080d] border-0"
               />
+
+              {content === "html" && !previewFrameReady && (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-[inherit] bg-[#08080d]">
+                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3 text-xs text-cyan-200 shadow-2xl shadow-cyan-500/10">
+                    Preparing live preview...
+                  </div>
+                </div>
+              )}
 
               <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/10" />
             </div>
@@ -1056,7 +1093,7 @@ useEffect(() => {
               </Button>
             )}
           </div>
-        ) : viewMode === "code" && (activePreviewHtml || currentPreviewHtml) ? (
+        ) : viewMode === "code" && (displayPreviewHtml || currentPreviewHtml) ? (
           <div className="absolute inset-0 overflow-auto">
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
               <span className="text-xs text-white/50">Generated Code</span>
@@ -1075,7 +1112,7 @@ useEffect(() => {
             </div>
 
             <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {activePreviewHtml || currentPreviewHtml}
+              {displayPreviewHtml || currentPreviewHtml}
             </pre>
           </div>
         ) : viewMode === "code" && safeLiveUrl ? (
