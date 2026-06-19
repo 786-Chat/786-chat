@@ -372,6 +372,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const lastProjectRefreshRef = useRef<string | null>(null)
 
   const savePreviewWithBackup = useCallback(
     (nextHtml: string) => {
@@ -486,8 +487,10 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
         }
 
         window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
+        window.dispatchEvent(new Event("project-files-changed"))
 
         setTimeout(() => {
+          window.dispatchEvent(new Event("project-files-changed"))
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
         }, 50)
       } catch (error) {
@@ -534,6 +537,31 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  useEffect(() => {
+    if (status === "streaming" || status === "submitted") return
+
+    const lastMsg = messages[messages.length - 1]
+    if (!lastMsg || lastMsg.role !== "assistant") return
+
+    const rawText = getMessageText(lastMsg)
+    const displayText = getDisplayTextForMessage(rawText, lastMsg.role)
+    const shouldRefreshProject =
+      containsFileOperations(rawText) ||
+      displayText.toLowerCase().includes("project files updated")
+
+    if (!shouldRefreshProject) return
+
+    const refreshKey = `${lastMsg.id}-${rawText.length}`
+    if (lastProjectRefreshRef.current === refreshKey) return
+    lastProjectRefreshRef.current = refreshKey
+
+    window.dispatchEvent(new Event("project-files-changed"))
+    onViewModeChange?.("code")
+
+    setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 800)
+    setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 2000)
+  }, [messages, status, onViewModeChange])
 
   useEffect(() => {
     if (textareaRef.current) {
