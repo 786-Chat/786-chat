@@ -439,7 +439,7 @@ FULL MUJEEBPROAI CODEBASE AWARENESS RULES:
 
 Be helpful, friendly, and precise.`
 
-      // Customer system prompt - help them with THEIR real code projects only
+     // Customer system prompt - help them with THEIR real code projects only
 const userSystemPrompt = aiSettings.systemPrompt + `
 
 IMPORTANT: You are helping a CUSTOMER with their OWN real code project only.
@@ -468,30 +468,39 @@ components/
 lib/
 public/
 
-AI OUTPUT RULES:
-When creating or editing a website, return file operations only.
+AI FILE SYSTEM MODE:
+When user asks to build, create, edit, change, add, remove, redesign, animate, add menu, add section, fix layout, or update content, respond with structured file operations ONLY.
 
-Use this exact format:
+SUPPORTED OPERATIONS:
 
 \`\`\`txt
 editFile("app/page.tsx", "FULL FILE CODE HERE")
 createFile("components/Header.tsx", "FULL FILE CODE HERE")
 createFile("backend/orders.php", "FULL FILE CODE HERE")
 createFile("python/ai.py", "FULL FILE CODE HERE")
+deleteFile("old/file.tsx")
 \`\`\`
 
-STRICT RULES:
-- Always provide full file content.
+STRICT OUTPUT RULES:
+- Return ONLY file operations when making code changes.
+- Always provide FULL file content.
 - Do not provide hints only.
 - Do not say “copy this into app/page.tsx”.
 - Do not return one single HTML document.
-- If user asks for design, animation, menu, section, color, image, or layout changes, edit the correct real files.
+- Do not return markdown explanation before file operations.
+- Do not ask the user for a URL when editing their current project.
+- If the user asks for UI/design/animation/menu/section/color/image/layout changes, edit React files.
+- If the user asks for backend/order/payment/API logic, edit backend files.
+- If the user asks for AI/script/automation logic, edit python files.
 - Preview Mode is rendered from files.
 - Code Mode shows real file contents.
 - My Websites must use stored project files.
 - Theme purchases must create full project files.
 
-Focus on helping customers build full real projects:
+PROJECT GOAL:
+You are helping build a Replit-style AI development platform where every customer website is a full codebase.
+
+Focus on:
 1. React / Next.js pages
 2. Components
 3. PHP backend files
@@ -660,24 +669,65 @@ if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     }
   )
 }
+const enableFileMode =
+  userText.includes("edit") ||
+  userText.includes("create") ||
+  userText.includes("build") ||
+  userText.includes("change") ||
+  userText.includes("add") ||
+  userText.includes("remove") ||
+  userText.includes("delete") ||
+  userText.includes("update") ||
+  userText.includes("fix")
 
 const result = await streamText({
   model: hasVisionInput
     ? google(aiSettings.visionModel || "gemini-2.5-flash")
     : deepseek(aiSettings.model as "deepseek-chat" | "deepseek-reasoner"),
+
   system: shouldUsePreviewOnlyMode
     ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
     : isAdmin
       ? adminSystemPrompt
-      : userSystemPrompt,
+      : enableFileMode
+        ? userSystemPrompt +
+          `
+
+IMPORTANT:
+Return ONLY file operations.
+
+Examples:
+
+editFile("app/page.tsx", "FULL FILE CONTENT")
+createFile("components/Header.tsx", "FULL FILE CONTENT")
+createFile("backend/orders.php", "FULL FILE CONTENT")
+createFile("python/ai.py", "FULL FILE CONTENT")
+deleteFile("components/OldHeader.tsx")
+
+Do not explain.
+Do not return HTML previews.
+Do not return markdown instructions.
+Do not say "copy this code".
+`
+        : userSystemPrompt,
+
   messages: modelMessages,
+
   temperature: isAdmin ? 0.7 : aiSettings.temperature,
-  maxOutputTokens: shouldUsePreviewOnlyMode ? 50 : isAdmin ? 8192 : aiSettings.maxTokens,
+
+  maxOutputTokens: shouldUsePreviewOnlyMode
+    ? 50
+    : isAdmin
+      ? 8192
+      : aiSettings.maxTokens,
+
   tools:
     isAdmin && github.isGitHubConfigured()
       ? adminTools
       : undefined,
+
   stopWhen: isAdmin ? stepCountIs(10) : undefined,
+
   abortSignal: request.signal,
 })
     return result.toUIMessageStreamResponse({
