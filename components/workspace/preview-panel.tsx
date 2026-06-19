@@ -492,50 +492,6 @@ useEffect(() => {
         ? liveUrl
         : ""
 
-      if (!response.ok) {
-        clearPreview()
-        return
-      }
-
-        const loadMyCustomerSite = async () => {
-    try {
-      const response = await fetch("/api/sites/my-site", {
-        credentials: "include",
-        cache: "no-store",
-      })
-
-      if (!response.ok) {
-        clearPreview()
-        return
-      }
-
-      const data = await response.json()
-      let nextUrl = ""
-
-      if (data.subdomain) {
-        nextUrl = `/site/${data.subdomain}`
-      } else if (data.previewUrl) {
-        nextUrl = normalizeCustomerPreviewUrl(data.previewUrl)
-      }
-
-      if (!nextUrl || isBlockedPreviewUrl(nextUrl)) {
-        clearPreview()
-        return
-      }
-
-      setLiveUrl(nextUrl)
-      setPreviewUrl(nextUrl)
-      setRefreshKey((prev) => prev + 1)
-    } catch {
-      clearPreview()
-    }
-  }
-
-  const safeLiveUrl =
-    liveUrl && liveUrl !== "about:blank" && !isBlockedPreviewUrl(liveUrl)
-      ? liveUrl
-      : ""
-
   const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
 
   const sourceFileHints = getSourceFileHints(safeLiveUrl)
