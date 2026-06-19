@@ -199,12 +199,83 @@ function jsxToPreviewHtml(jsx: string): string {
     .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
 }
 
+
+function getLocalComponentPathFromImport(importPath: string): string | null {
+  if (importPath.startsWith("@/components/")) {
+    return `${importPath.replace("@/", "")}.tsx`
+  }
+
+  if (importPath.startsWith("./components/")) {
+    return `${importPath.replace("./", "")}.tsx`
+  }
+
+  if (importPath.startsWith("../components/")) {
+    return `${importPath.replace("../", "")}.tsx`
+  }
+
+  return null
+}
+
+function getComponentRenderMap(files: Record<string, string>, pageCode: string): Record<string, string> {
+  const output: Record<string, string> = {}
+  const importRegex = /import\s+([A-Z][A-Za-z0-9_]*)\s+from\s+["']([^"']+)["']/g
+  let match: RegExpExecArray | null
+
+  while ((match = importRegex.exec(pageCode)) !== null) {
+    const componentName = match[1]
+    const importedPath = getLocalComponentPathFromImport(match[2])
+
+    if (!importedPath) continue
+
+    const code =
+      files[importedPath] ||
+      files[importedPath.replace(/\.tsx$/i, ".jsx")] ||
+      files[importedPath.replace(/\.tsx$/i, ".ts")] ||
+      files[importedPath.replace(/\.tsx$/i, ".js")]
+
+    if (!code) continue
+
+    const jsx = extractReturnJsx(code)
+    if (!jsx.trim()) continue
+
+    output[componentName] = jsx
+  }
+
+  return output
+}
+
+function inlineLocalComponents(jsx: string, componentMap: Record<string, string>): string {
+  let output = jsx
+
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false
+
+    for (const [name, componentJsx] of Object.entries(componentMap)) {
+      const before = output
+
+      output = output
+        .replace(new RegExp(`<${name}(\\s[^>]*)?\\s*\\/>`, "g"), componentJsx)
+        .replace(new RegExp(`<${name}(\\s[^>]*)?>[\\s\\S]*?<\\/${name}>`, "g"), componentJsx)
+
+      if (output !== before) changed = true
+    }
+
+    if (!changed) break
+  }
+
+  return output
+}
+
 function buildProjectPreviewHtml(files: Record<string, string>): string {
   const pageCode = files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || ""
   if (!pageCode.trim()) return ""
 
-  const jsx = extractReturnJsx(pageCode)
-  const body = jsxToPreviewHtml(jsx)
+  const pageJsx = extractReturnJsx(pageCode)
+  if (!pageJsx.trim()) return ""
+
+  const componentMap = getComponentRenderMap(files, pageCode)
+  const inlinedJsx = inlineLocalComponents(pageJsx, componentMap)
+  const body = jsxToPreviewHtml(inlinedJsx)
 
   if (!body.trim()) return ""
 
