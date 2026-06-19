@@ -87,10 +87,10 @@ function getFileParts(
 }
 
 const suggestedPrompts = [
-  "Show me MujeebProAI homepage preview",
-  "Open the themes page preview",
-  "Create a modern landing page in HTML",
-  "Edit the current preview design",
+  "Create a premium restaurant website with animation sections",
+  "Create a SaaS dashboard with sidebar, cards and reports",
+  "Create a school management system homepage",
+  "Improve the current project with premium design",
 ]
 
 function looksLikeReactOrTsxCode(value: string): boolean {
