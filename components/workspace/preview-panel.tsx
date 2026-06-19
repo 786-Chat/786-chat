@@ -258,24 +258,12 @@ export function WorkspacePreviewPanel({
       ? cleanedPreviewHtml
       : ""
 
-  const hasPreviewHtml = Boolean(safePreviewHtml)
-
-  const projectFiles = project?.files ?? {}
-  const projectFilePaths = Object.keys(projectFiles)
-  const defaultFile = projectFilePaths[0] || "app/page.tsx"
-
-  const [selectedFile, setSelectedFile] = useState(defaultFile)
-
-  const selectedFileContent =
-    projectFiles[selectedFile] ||
-    projectFiles[defaultFile] ||
-    ""
 
   useEffect(() => {
-    if (projectFilePaths.length > 0 && !projectFiles[selectedFile]) {
-      setSelectedFile(projectFilePaths[0])
-    }
-  }, [project?.id, projectFilePaths.length, projectFiles, selectedFile])
+  if (projectFilePaths.length > 0) {
+    setSelectedFile(projectFilePaths[0])
+  }
+}, [project?.id, projectFilePaths.length])
 
   const readPreviewHistory = useCallback((): string[] => {
     try {
