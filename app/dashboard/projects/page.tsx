@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Trash2,
   RotateCcw,
-  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -31,18 +30,22 @@ type Project = {
   delete_after?: string | null
 }
 
+type ViewMode = "active" | "recover"
+
 export default function DashboardProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
-  const [showDeleted, setShowDeleted] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>("active")
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null)
+
+  const isRecoverMode = viewMode === "recover"
 
   const loadProjects = async () => {
     setLoading(true)
 
     try {
-      const response = await fetch(`/api/projects?includeDeleted=${showDeleted ? "true" : "false"}`, {
+      const response = await fetch(`/api/projects?includeDeleted=${isRecoverMode ? "true" : "false"}`, {
         credentials: "include",
         cache: "no-store",
       })
@@ -64,7 +67,7 @@ export default function DashboardProjectsPage() {
   useEffect(() => {
     loadProjects()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showDeleted])
+  }, [viewMode])
 
   const filteredProjects = useMemo(() => {
     const cleanQuery = query.trim().toLowerCase()
@@ -79,9 +82,6 @@ export default function DashboardProjectsPage() {
     )
   }, [projects, query])
 
-  const activeCount = projects.filter((project) => !project.deleted_at).length
-  const deletedCount = projects.filter((project) => project.deleted_at).length
-
   const getRecoverDaysLeft = (project: Project) => {
     if (!project.delete_after) return 7
 
@@ -92,13 +92,16 @@ export default function DashboardProjectsPage() {
     return Math.max(diff, 0)
   }
 
+  const startNewProject = () => {
+    try {
+      window.localStorage.removeItem("mujeebproai_last_preview_html")
+      window.dispatchEvent(new CustomEvent("new-chat"))
+    } catch {
+      // Keep navigation working even if storage is unavailable.
+    }
+  }
+
   const softDeleteProject = async (projectId: string) => {
-    const confirmed = window.confirm(
-      "Move this project to Recover Projects? You can recover it within 7 days."
-    )
-
-    if (!confirmed) return
-
     setBusyProjectId(projectId)
 
     try {
@@ -127,7 +130,7 @@ export default function DashboardProjectsPage() {
       })
 
       if (response.ok) {
-        await loadProjects()
+        setViewMode("active")
       }
     } finally {
       setBusyProjectId(null)
@@ -143,9 +146,15 @@ export default function DashboardProjectsPage() {
               <ShieldCheck className="h-3.5 w-3.5" />
               Your private projects only
             </div>
-            <h1 className="text-3xl font-black tracking-tight md:text-4xl">My Projects</h1>
+
+            <h1 className="text-3xl font-black tracking-tight md:text-4xl">
+              {isRecoverMode ? "Recover Projects" : "My Projects"}
+            </h1>
+
             <p className="mt-2 max-w-2xl text-sm text-white/45">
-              All projects created by your MujeebProAI chat are saved here. Each login can only see its own projects.
+              {isRecoverMode
+                ? "Search deleted projects and recover them within 7 days."
+                : "All projects created by your MujeebProAI chat are saved here. Each login can only see its own projects."}
             </p>
           </div>
 
@@ -153,26 +162,24 @@ export default function DashboardProjectsPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowDeleted((value) => !value)}
-              className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+              onClick={() => {
+                setQuery("")
+                setViewMode(isRecoverMode ? "active" : "recover")
+              }}
+              className={
+                isRecoverMode
+                  ? "border-cyan-500/25 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                  : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+              }
             >
-              {showDeleted ? (
-                <>
-                  <X className="mr-2 h-4 w-4" />
-                  Hide Recover
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Recover Projects
-                </>
-              )}
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Recover Projects
             </Button>
 
-            <Link href="/dashboard/chat">
+            <Link href="/dashboard/chat" onClick={startNewProject}>
               <Button className="bg-cyan-500 text-black hover:bg-cyan-400">
                 <Plus className="mr-2 h-4 w-4" />
-                New Chat
+                New Project
               </Button>
             </Link>
           </div>
@@ -184,21 +191,20 @@ export default function DashboardProjectsPage() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search projects..."
+              placeholder={isRecoverMode ? "Search deleted projects..." : "Search projects..."}
               className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-cyan-500/40"
             />
           </div>
 
           <div className="text-xs text-white/35">
-            {showDeleted
-              ? `${deletedCount} recoverable / ${activeCount} active`
-              : `${filteredProjects.length} project${filteredProjects.length === 1 ? "" : "s"}`}
+            {filteredProjects.length} {isRecoverMode ? "recoverable" : "project"}
+            {filteredProjects.length === 1 ? "" : "s"}
           </div>
         </div>
 
-        {showDeleted && (
-          <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100/75">
-            Deleted projects are hidden from your normal list and can be recovered for 7 days.
+        {isRecoverMode && (
+          <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100/75">
+            Deleted projects stay here for 7 days. Select a project and click Recover to move it back to My Projects.
           </div>
         )}
 
@@ -211,18 +217,21 @@ export default function DashboardProjectsPage() {
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10">
               <FolderKanban className="h-8 w-8 text-cyan-300" />
             </div>
+
             <h2 className="text-xl font-bold">
-              {showDeleted ? "No deleted projects" : "No projects yet"}
+              {isRecoverMode ? "No deleted projects" : "No projects yet"}
             </h2>
+
             <p className="mx-auto mt-2 max-w-md text-sm text-white/45">
-              {showDeleted
+              {isRecoverMode
                 ? "Deleted projects will appear here for 7 days after deletion."
-                : "Start a new chat and ask MujeebProAI to create a website, SaaS app, school system, restaurant system, or custom software."}
+                : "Start a new project and ask MujeebProAI to create a website, SaaS app, school system, restaurant system, or custom software."}
             </p>
-            {!showDeleted && (
-              <Link href="/dashboard/chat">
+
+            {!isRecoverMode && (
+              <Link href="/dashboard/chat" onClick={startNewProject}>
                 <Button className="mt-6 bg-cyan-500 text-black hover:bg-cyan-400">
-                  Create Project
+                  New Project
                 </Button>
               </Link>
             )}
@@ -230,7 +239,6 @@ export default function DashboardProjectsPage() {
         ) : (
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project, index) => {
-              const isDeleted = Boolean(project.deleted_at)
               const daysLeft = getRecoverDaysLeft(project)
 
               return (
@@ -240,8 +248,8 @@ export default function DashboardProjectsPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}
                   className={`group rounded-3xl border p-5 shadow-2xl shadow-black/20 transition ${
-                    isDeleted
-                      ? "border-amber-400/20 bg-amber-400/[0.045] hover:border-amber-400/35"
+                    isRecoverMode
+                      ? "border-cyan-500/20 bg-cyan-500/[0.045] hover:border-cyan-500/35"
                       : "border-white/10 bg-white/[0.035] hover:border-cyan-500/35 hover:bg-white/[0.055]"
                   }`}
                 >
@@ -252,20 +260,20 @@ export default function DashboardProjectsPage() {
 
                     <div className="flex items-center gap-2">
                       <span className={`rounded-full border px-3 py-1 text-[11px] capitalize ${
-                        isDeleted
-                          ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                        isRecoverMode
+                          ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200"
                           : "border-white/10 bg-black/20 text-white/50"
                       }`}>
-                        {isDeleted ? "deleted" : project.status || "active"}
+                        {isRecoverMode ? "recoverable" : project.status || "active"}
                       </span>
 
-                      {!isDeleted && (
+                      {!isRecoverMode && (
                         <button
                           type="button"
                           disabled={busyProjectId === project.id}
                           onClick={() => softDeleteProject(project.id)}
                           className="rounded-full border border-red-500/20 bg-red-500/10 p-2 text-red-300 opacity-80 transition hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40"
-                          title="Delete project"
+                          title="Move to Recover Projects"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -278,7 +286,7 @@ export default function DashboardProjectsPage() {
                   </h3>
 
                   <p className="mt-2 line-clamp-2 min-h-[40px] text-sm text-white/42">
-                    {isDeleted
+                    {isRecoverMode
                       ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup.`
                       : project.description ||
                         `Real file-based project with ${project.fileCount || 0} saved file${project.fileCount === 1 ? "" : "s"}.`}
@@ -296,10 +304,10 @@ export default function DashboardProjectsPage() {
                     <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                       <div className="mb-1 flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5" />
-                        {isDeleted ? "Recover" : "Updated"}
+                        {isRecoverMode ? "Recover" : "Updated"}
                       </div>
                       <div className="font-semibold text-white/70">
-                        {isDeleted
+                        {isRecoverMode
                           ? `${daysLeft} day${daysLeft === 1 ? "" : "s"}`
                           : project.updated_at
                             ? new Date(project.updated_at).toLocaleDateString()
@@ -316,12 +324,12 @@ export default function DashboardProjectsPage() {
                         : "Created"}
                     </span>
 
-                    {isDeleted ? (
+                    {isRecoverMode ? (
                       <button
                         type="button"
                         disabled={busyProjectId === project.id}
                         onClick={() => recoverProject(project.id)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
                       >
                         Recover
                         <RotateCcw className="h-3.5 w-3.5" />
