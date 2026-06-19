@@ -223,12 +223,33 @@ export default function DashboardLayout({
     loadLatestProject()
 
     const handleProjectChanged = () => loadLatestProject()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadLatestProject()
+      }
+    }
+
     window.addEventListener("project-files-changed", handleProjectChanged)
+    window.addEventListener("chat-updated", handleProjectChanged)
+    window.addEventListener("chat-selected", handleProjectChanged)
+    window.addEventListener("focus", handleProjectChanged)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    const refreshTimer = window.setInterval(() => {
+      if (isChatWorkspace && userEmail) {
+        loadLatestProject()
+      }
+    }, 4000)
 
     return () => {
       window.removeEventListener("project-files-changed", handleProjectChanged)
+      window.removeEventListener("chat-updated", handleProjectChanged)
+      window.removeEventListener("chat-selected", handleProjectChanged)
+      window.removeEventListener("focus", handleProjectChanged)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.clearInterval(refreshTimer)
     }
-  }, [loadLatestProject])
+  }, [loadLatestProject, isChatWorkspace, userEmail])
 
    const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
@@ -423,7 +444,26 @@ export default function DashboardLayout({
         return
       }
 
-      if (rawUrl.startsWith("/")) {
+      const lowerRawUrl = rawUrl.toLowerCase()
+
+      if (
+        !rawUrl ||
+        rawUrl === "/" ||
+        lowerRawUrl.includes("mujeebproai.com") ||
+        lowerRawUrl.startsWith("/dashboard") ||
+        lowerRawUrl.startsWith("/admin") ||
+        lowerRawUrl.startsWith("/login") ||
+        lowerRawUrl.startsWith("/register")
+      ) {
+        setPreviewUrl("")
+        setPreviewHtml("")
+        setPreviewOpen(true)
+        return
+      }
+
+      if (rawUrl.startsWith("/site/")) {
+        finalUrl = rawUrl
+      } else if (rawUrl.startsWith("/")) {
         try {
           const res = await fetch("/api/sites/my-site", {
             credentials: "include",
@@ -435,13 +475,17 @@ export default function DashboardLayout({
 
             if (data.subdomain) {
               finalUrl = `/site/${data.subdomain}${rawUrl}`
-            } else if (data.siteUrl) {
-              finalUrl = `${data.siteUrl.replace(/\/$/, "")}${rawUrl}`
+            } else {
+              finalUrl = ""
             }
+          } else {
+            finalUrl = ""
           }
         } catch {
           finalUrl = ""
         }
+      } else {
+        finalUrl = ""
       }
 
       setPreviewUrl(finalUrl)
