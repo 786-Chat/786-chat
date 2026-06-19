@@ -359,30 +359,40 @@ useEffect(() => {
       window.removeEventListener("preview-history-changed", handlePreviewHistoryChanged)
     }
   }, [refreshRollbackState])
-
   const normalizeCustomerPreviewUrl = (url: string) => {
     const cleanUrl = url.trim()
-    if (!cleanUrl) return ""
-    if (cleanUrl === "about:blank") return ""
-    if (cleanUrl === "/") return "/"
+
+    if (!cleanUrl || cleanUrl === "about:blank") return ""
+
+    if (isOwnerAdmin) {
+      if (cleanUrl === "/") return "/"
+      if (cleanUrl.startsWith("https://www.mujeebproai.com")) {
+        return cleanUrl.replace("https://www.mujeebproai.com", "") || "/"
+      }
+      if (cleanUrl.startsWith("https://mujeebproai.com")) {
+        return cleanUrl.replace("https://mujeebproai.com", "") || "/"
+      }
+      return cleanUrl
+    }
+
+    if (cleanUrl === "/") return ""
+    if (cleanUrl.includes("mujeebproai.com")) return ""
+    if (cleanUrl.startsWith("/dashboard")) return ""
+    if (cleanUrl.startsWith("/admin")) return ""
+    if (cleanUrl.startsWith("/login")) return ""
+    if (cleanUrl.startsWith("/register")) return ""
+
     if (cleanUrl.startsWith("/site/")) return cleanUrl
 
-    if (cleanUrl.startsWith("https://www.mujeebproai.com")) {
-      return cleanUrl.replace("https://www.mujeebproai.com", "") || "/"
-    }
-
-    if (cleanUrl.startsWith("https://mujeebproai.com")) {
-      return cleanUrl.replace("https://mujeebproai.com", "") || "/"
-    }
-
-    return cleanUrl
+    return ""
   }
 
   const isBlockedPreviewUrl = (url: string) => {
     const cleanUrl = url.trim().toLowerCase()
     if (!cleanUrl) return false
     if (cleanUrl === "about:blank") return true
-    if (cleanUrl.startsWith("/site/")) return false
+
+    if (!isOwnerAdmin && cleanUrl.startsWith("/site/")) return false
 
     const blockedWords = [
       "/login",
@@ -396,12 +406,7 @@ useEffect(() => {
       "/balances",
       "/logs",
       "/api/admin",
-      "mujeebproai.com/login",
-      "mujeebproai.com/register",
-      "mujeebproai.com/admin",
-      "mujeebproai.com/admin-login",
-      "mujeebproai.com/dashboard",
-      "mujeebproai.com/api/admin",
+      "mujeebproai.com",
     ]
 
     return blockedWords.some((word) => cleanUrl.includes(word))
@@ -450,6 +455,42 @@ useEffect(() => {
         credentials: "include",
         cache: "no-store",
       })
+
+      if (!response.ok) {
+        clearPreview()
+        return
+      }
+
+      const data = await response.json()
+      let nextUrl = ""
+
+      if (data.subdomain) {
+        nextUrl = `/site/${data.subdomain}`
+      } else if (data.previewUrl) {
+        nextUrl = normalizeCustomerPreviewUrl(data.previewUrl)
+      }
+
+      if (!nextUrl || isBlockedPreviewUrl(nextUrl)) {
+        clearPreview()
+        return
+      }
+
+      setLiveUrl(nextUrl)
+      setPreviewUrl(nextUrl)
+      setRefreshKey((prev) => prev + 1)
+    } catch {
+      clearPreview()
+    }
+  }
+
+  const safeLiveUrl =
+    isOwnerAdmin
+      ? liveUrl && liveUrl !== "about:blank" && !isBlockedPreviewUrl(liveUrl)
+        ? liveUrl
+        : ""
+      : liveUrl && liveUrl.startsWith("/site/") && !isBlockedPreviewUrl(liveUrl)
+        ? liveUrl
+        : ""
 
       if (!response.ok) {
         clearPreview()
