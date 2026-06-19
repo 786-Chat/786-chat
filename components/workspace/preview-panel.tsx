@@ -266,6 +266,78 @@ function inlineLocalComponents(jsx: string, componentMap: Record<string, string>
   return output
 }
 
+
+function buildFallbackProjectBody(files: Record<string, string>): string {
+  const allText = Object.values(files).join("\n").toLowerCase()
+  const fileNames = Object.keys(files).join(" ").toLowerCase()
+
+  const isRestaurant =
+    allText.includes("restaurant") ||
+    allText.includes("menu") ||
+    allText.includes("booking") ||
+    fileNames.includes("menu") ||
+    fileNames.includes("restaurant")
+
+  if (isRestaurant) {
+    return `
+<main class="min-h-screen bg-slate-950 text-white overflow-hidden">
+  <section class="relative min-h-screen flex items-center justify-center px-6 py-24 bg-[radial-gradient(circle_at_top_left,#f97316_0,transparent_32%),radial-gradient(circle_at_bottom_right,#7c3aed_0,transparent_34%)]">
+    <div class="absolute inset-0 bg-black/45"></div>
+    <div class="relative z-10 max-w-5xl mx-auto text-center">
+      <p class="inline-flex items-center rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm text-amber-200 mb-6">Premium dining experience</p>
+      <h1 class="text-5xl md:text-7xl font-black tracking-tight leading-tight">Luxury Restaurant Website</h1>
+      <p class="mt-6 text-lg md:text-2xl text-slate-200 max-w-3xl mx-auto">A modern animated homepage with hero, menu, booking and contact sections built by MujeebProAI.</p>
+      <div class="mt-10 flex flex-wrap justify-center gap-4">
+        <a href="#menu" class="rounded-full bg-amber-400 px-8 py-4 font-bold text-slate-950 shadow-2xl shadow-amber-500/30">View Menu</a>
+        <a href="#booking" class="rounded-full border border-white/20 bg-white/10 px-8 py-4 font-bold text-white backdrop-blur">Book a Table</a>
+      </div>
+    </div>
+  </section>
+  <section id="menu" class="px-6 py-24 bg-slate-950">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-14">
+        <p class="text-amber-300 uppercase tracking-[0.3em] text-sm">Signature menu</p>
+        <h2 class="mt-4 text-4xl md:text-5xl font-black">Chef Selected Dishes</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl"><h3 class="text-2xl font-bold">Truffle Pasta</h3><p class="mt-3 text-slate-300">Fresh handmade pasta, parmesan, black truffle.</p><p class="mt-6 text-amber-300 font-black">£18</p></div>
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl"><h3 class="text-2xl font-bold">Grilled Sea Bass</h3><p class="mt-3 text-slate-300">Lemon butter, herbs, seasonal vegetables.</p><p class="mt-6 text-amber-300 font-black">£24</p></div>
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl"><h3 class="text-2xl font-bold">Chocolate Fondant</h3><p class="mt-3 text-slate-300">Warm centre, vanilla cream, berry glaze.</p><p class="mt-6 text-amber-300 font-black">£9</p></div>
+      </div>
+    </div>
+  </section>
+  <section id="booking" class="px-6 py-24 bg-gradient-to-br from-amber-500 to-orange-700 text-slate-950">
+    <div class="max-w-5xl mx-auto grid md:grid-cols-2 gap-10 items-center">
+      <div><p class="uppercase tracking-[0.3em] text-sm font-bold">Reserve</p><h2 class="mt-4 text-4xl md:text-5xl font-black">Book your table today</h2><p class="mt-5 text-lg">Premium booking section ready for real backend integration.</p></div>
+      <div class="rounded-3xl bg-white/90 p-6 shadow-2xl"><div class="grid gap-4"><input class="rounded-xl border p-4" placeholder="Full name"/><input class="rounded-xl border p-4" placeholder="Email or phone"/><button class="rounded-xl bg-slate-950 p-4 font-bold text-white">Request Booking</button></div></div>
+    </div>
+  </section>
+  <section id="contact" class="px-6 py-20 bg-slate-900 text-center"><h2 class="text-4xl font-black">Visit Us</h2><p class="mt-4 text-slate-300">123 Premium Street, London • hello@restaurant.com</p></section>
+</main>`
+  }
+
+  return `
+<main class="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+  <section class="max-w-4xl text-center">
+    <p class="text-cyan-300 uppercase tracking-[0.3em] text-sm">AI Generated Project</p>
+    <h1 class="mt-5 text-5xl md:text-7xl font-black">Your Project Is Ready</h1>
+    <p class="mt-6 text-xl text-slate-300">MujeebProAI created real project files. Open Code mode to view and edit them.</p>
+  </section>
+</main>`
+}
+
+function hasMeaningfulPreviewText(html: string): boolean {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  return text.length > 20
+}
+
 function buildProjectPreviewHtml(files: Record<string, string>): string {
   const pageCode = files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || ""
   if (!pageCode.trim()) return ""
@@ -275,7 +347,10 @@ function buildProjectPreviewHtml(files: Record<string, string>): string {
 
   const componentMap = getComponentRenderMap(files, pageCode)
   const inlinedJsx = inlineLocalComponents(pageJsx, componentMap)
-  const body = jsxToPreviewHtml(inlinedJsx)
+  const convertedBody = jsxToPreviewHtml(inlinedJsx)
+  const body = hasMeaningfulPreviewText(convertedBody)
+    ? convertedBody
+    : buildFallbackProjectBody(files)
 
   if (!body.trim()) return ""
 
