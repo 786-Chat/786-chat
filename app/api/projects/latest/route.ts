@@ -2,6 +2,22 @@ import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
+function normalizeFiles(files: unknown): Record<string, string> {
+  if (!files || typeof files !== "object" || Array.isArray(files)) {
+    return {}
+  }
+
+  const output: Record<string, string> = {}
+
+  for (const [path, value] of Object.entries(files as Record<string, unknown>)) {
+    if (typeof path === "string" && typeof value === "string") {
+      output[path] = value
+    }
+  }
+
+  return output
+}
+
 export async function GET() {
   try {
     const session = await getSession()
@@ -19,13 +35,32 @@ export async function GET() {
     `
 
     if (!rows.length) {
-      return NextResponse.json({ project: null })
+      return NextResponse.json(
+        { success: true, project: null },
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      )
     }
 
-    return NextResponse.json({
-      success: true,
-      project: rows[0],
-    })
+    const project = rows[0]
+
+    return NextResponse.json(
+      {
+        success: true,
+        project: {
+          ...project,
+          files: normalizeFiles(project.files),
+        },
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    )
   } catch (error) {
     console.error("Latest project error:", error)
     return NextResponse.json(
