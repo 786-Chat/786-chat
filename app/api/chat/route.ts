@@ -883,14 +883,30 @@ Do not say "copy this code".
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       onFinish: async ({ messages: allMessages, usage }: { messages: UIMessage[]; usage?: { completionTokens?: number } }) => {
-        // Save assistant response to database and apply file operations
+// Save assistant response to database and apply file operations
 const lastAssistant = allMessages.filter((m) => m.role === "assistant").pop()
+
 if (lastAssistant) {
-const assistantText = getMessageText(lastAssistant)
+  const assistantText = getMessageText(lastAssistant)
 
-if (assistantText) {
-  const operations = extractFileOperations(assistantText)
+  if (assistantText) {
+    const operations = extractFileOperations(assistantText)
 
+    if (operations.length > 0 && !isAdmin) {
+      await applyFileOperationsToLatestProject(session.id, assistantText)
+    }
+
+    const cleanMessage =
+      operations.length > 0
+        ? "Project files updated successfully."
+        : assistantText.trim()
+
+    await sql`
+      INSERT INTO messages (chat_id, role, content)
+      VALUES (${currentChatId}, 'assistant', ${cleanMessage})
+    `
+  }
+}
   // 1. Apply file operations FIRST
   if (operations.length > 0) {
     await applyFileOperationsToLatestProject(session.id, assistantText)
