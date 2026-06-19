@@ -726,10 +726,10 @@ When user asks to build, create, edit, change, add, remove, redesign, animate, a
 SUPPORTED OPERATIONS:
 
 \`\`\`txt
-editFile("app/page.tsx", `FULL FILE CODE HERE`)
-createFile("components/Header.tsx", `FULL FILE CODE HERE`)
-createFile("backend/orders.php", `FULL FILE CODE HERE`)
-createFile("python/ai.py", `FULL FILE CODE HERE`)
+editFile("app/page.tsx", \`FULL FILE CODE HERE\`)
+createFile("components/Header.tsx", \`FULL FILE CODE HERE\`)
+createFile("backend/orders.php", \`FULL FILE CODE HERE\`)
+createFile("python/ai.py", \`FULL FILE CODE HERE\`)
 deleteFile("old/file.tsx")
 \`\`\`
 
@@ -987,10 +987,10 @@ Return ONLY file operations.
 
 Examples:
 
-editFile("app/page.tsx", `FULL FILE CONTENT`)
-createFile("components/Header.tsx", `FULL FILE CONTENT`)
-createFile("backend/orders.php", `FULL FILE CONTENT`)
-createFile("python/ai.py", `FULL FILE CONTENT`)
+editFile("app/page.tsx", \`FULL FILE CONTENT\`)
+createFile("components/Header.tsx", \`FULL FILE CONTENT\`)
+createFile("backend/orders.php", \`FULL FILE CONTENT\`)
+createFile("python/ai.py", \`FULL FILE CONTENT\`)
 deleteFile("components/OldHeader.tsx")
 
 Do not explain.
