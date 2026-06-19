@@ -1108,37 +1108,27 @@ setAttachedFiles([])
             </Button>
           </form>
 
-          {usage && (
-            <div className="flex items-center justify-between mt-2 px-1">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-purple-400" />
-                <span className="text-xs text-gray-500">
-                  {isOwnerAdmin || usage?.unlimited
-                    ? "Unlimited"
-                    : `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
-                        usage?.freeMessagesRemaining ??
-                        Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
-                      }`}
-                </span>
-              </div>
-
-                       {!isOwnerAdmin && !usage.unlimited && usage.used >= usage.limit && (
-            <button
-              onClick={() => setShowUpgrade(true)}
-              className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-            >
-                               Upgrade
-                </button>
-                           )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <UpgradePopup
-        open={showUpgrade}
-        onOpenChange={(open) => setShowUpgrade(open)}
-      />
+         {usage && (
+  <div className="flex items-center justify-between mt-2 px-1">
+    <div className="flex items-center gap-2">
+      <Sparkles className="w-3 h-3 text-purple-400" />
+      <span className="text-xs text-gray-500">
+        {isOwnerAdmin || usage?.unlimited
+          ? "Unlimited"
+          : `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
+              usage?.freeMessagesRemaining ??
+              Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
+            }`}
+      </span>
     </div>
-  )
-}
+
+    {!isOwnerAdmin && !usage?.unlimited && usage?.used >= usage?.limit && (
+      <button
+        onClick={() => setShowUpgrade(true)}
+        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+      >
+        Upgrade
+      </button>
+    )}
+  </div>
+)}
