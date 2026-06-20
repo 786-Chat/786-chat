@@ -38,11 +38,13 @@ export default function DashboardProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>("active")
   const [busyProjectId, setBusyProjectId] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState("")
 
   const isRecoverMode = viewMode === "recover"
 
   const loadProjects = async () => {
     setLoading(true)
+    setErrorMessage("")
 
     try {
       const response = await fetch(`/api/projects?includeDeleted=${isRecoverMode ? "true" : "false"}`, {
@@ -50,15 +52,18 @@ export default function DashboardProjectsPage() {
         cache: "no-store",
       })
 
+      const data = await response.json().catch(() => ({}))
+
       if (!response.ok) {
         setProjects([])
+        setErrorMessage(data?.debug || data?.error || "Could not load projects.")
         return
       }
 
-      const data = await response.json()
       setProjects(Array.isArray(data.projects) ? data.projects : [])
     } catch {
       setProjects([])
+      setErrorMessage("Could not load projects.")
     } finally {
       setLoading(false)
     }
@@ -97,22 +102,44 @@ export default function DashboardProjectsPage() {
       window.localStorage.removeItem("mujeebproai_last_preview_html")
       window.dispatchEvent(new CustomEvent("new-chat"))
     } catch {
-      // Keep navigation working even if storage is unavailable.
+      // keep navigation working
     }
   }
 
   const softDeleteProject = async (projectId: string) => {
     setBusyProjectId(projectId)
+    setErrorMessage("")
+
+    const previousProjects = projects
+    setProjects((current) => current.filter((project) => project.id !== projectId))
 
     try {
-      const response = await fetch(`/api/projects/${projectId}`, {
+      let response = await fetch(`/api/projects/${projectId}`, {
         method: "DELETE",
         credentials: "include",
       })
 
-      if (response.ok) {
-        await loadProjects()
+      if (!response.ok) {
+        response = await fetch(`/api/projects/${projectId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "delete" }),
+        })
       }
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setProjects(previousProjects)
+        setErrorMessage(data?.debug || data?.error || "Delete failed. Please try again.")
+        return
+      }
+
+      await loadProjects()
+    } catch {
+      setProjects(previousProjects)
+      setErrorMessage("Delete failed. Please try again.")
     } finally {
       setBusyProjectId(null)
     }
@@ -120,6 +147,7 @@ export default function DashboardProjectsPage() {
 
   const recoverProject = async (projectId: string) => {
     setBusyProjectId(projectId)
+    setErrorMessage("")
 
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
@@ -129,9 +157,16 @@ export default function DashboardProjectsPage() {
         body: JSON.stringify({ action: "restore" }),
       })
 
-      if (response.ok) {
-        setViewMode("active")
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setErrorMessage(data?.debug || data?.error || "Recover failed. Please try again.")
+        return
       }
+
+      setViewMode("active")
+    } catch {
+      setErrorMessage("Recover failed. Please try again.")
     } finally {
       setBusyProjectId(null)
     }
@@ -164,6 +199,7 @@ export default function DashboardProjectsPage() {
               variant="outline"
               onClick={() => {
                 setQuery("")
+                setErrorMessage("")
                 setViewMode(isRecoverMode ? "active" : "recover")
               }}
               className={
@@ -176,7 +212,7 @@ export default function DashboardProjectsPage() {
               Recover Projects
             </Button>
 
-            <Link href="/dashboard/chat" onClick={startNewProject}>
+            <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
               <Button className="bg-cyan-500 text-black hover:bg-cyan-400">
                 <Plus className="mr-2 h-4 w-4" />
                 New Project
@@ -201,6 +237,12 @@ export default function DashboardProjectsPage() {
             {filteredProjects.length === 1 ? "" : "s"}
           </div>
         </div>
+
+        {errorMessage && (
+          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100/80">
+            {errorMessage}
+          </div>
+        )}
 
         {isRecoverMode && (
           <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100/75">
@@ -229,7 +271,7 @@ export default function DashboardProjectsPage() {
             </p>
 
             {!isRecoverMode && (
-              <Link href="/dashboard/chat" onClick={startNewProject}>
+              <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
                 <Button className="mt-6 bg-cyan-500 text-black hover:bg-cyan-400">
                   New Project
                 </Button>
