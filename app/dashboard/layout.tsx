@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { motion } from "framer-motion"
 import { WorkspaceTopBar } from "@/components/workspace/top-bar"
@@ -128,6 +128,7 @@ export default function DashboardLayout({
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dashboardOpen, setDashboardOpen] = useState(false)
@@ -196,10 +197,18 @@ export default function DashboardLayout({
     pathname === "/dashboard/chat" ||
     /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
 
+  const isFreshNewProject =
+    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1"
+
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
   const loadLatestProject = useCallback(async () => {
     if (!userEmail || !isChatWorkspace) return
+
+    if (isFreshNewProject) {
+      setCurrentProject(null)
+      return
+    }
 
     try {
       const res = await fetch("/api/projects/latest", {
@@ -217,7 +226,37 @@ export default function DashboardLayout({
     } catch {
       setCurrentProject(null)
     }
-  }, [userEmail, isChatWorkspace])
+  }, [userEmail, isChatWorkspace, isFreshNewProject])
+
+  useEffect(() => {
+    if (!userEmail || !isFreshNewProject) return
+
+    localStorage.removeItem(previewStorageKey)
+    localStorage.removeItem(previewBackupStorageKey)
+    localStorage.removeItem(previewHistoryStorageKey)
+
+    setCurrentProject(null)
+    setPreviewHtml("")
+    setPreviewUrl("")
+    setPreviewOpen(true)
+    setViewMode("preview")
+    setCanRollbackPreview(false)
+
+    window.dispatchEvent(new Event("preview-history-changed"))
+
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("new-chat"))
+      window.dispatchEvent(new Event("project-files-changed"))
+    }, 50)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    isFreshNewProject,
+    previewBackupStorageKey,
+    previewHistoryStorageKey,
+    previewStorageKey,
+    userEmail,
+  ])
 
   useEffect(() => {
     loadLatestProject()
@@ -380,6 +419,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!userEmail) return
+    if (isFreshNewProject) return
 
     const storedPreview = localStorage.getItem(previewStorageKey) || ""
 
@@ -401,6 +441,7 @@ export default function DashboardLayout({
     previewHistoryStorageKey,
     userEmail,
     readPreviewHistory,
+    isFreshNewProject,
   ])
 
   useEffect(() => {
@@ -549,6 +590,7 @@ export default function DashboardLayout({
         >
           <div className="flex flex-col min-w-0 overflow-hidden flex-1">
             <WorkspaceChatPanel
+              key={isFreshNewProject ? "fresh-new-project" : "chat-workspace"}
               onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
