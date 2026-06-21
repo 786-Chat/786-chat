@@ -43,6 +43,23 @@ interface SidebarProps {
   onClose: () => void
 }
 
+type DbMessage = {
+  id?: string
+  role?: string
+  content?: string
+  created_at?: string
+}
+
+function makeProjectChatTitle(messages: DbMessage[], fallback: string) {
+  const firstUserMessage = messages.find((message) => message.role === "user")
+  const title = String(firstUserMessage?.content || fallback || "Project Chat")
+    .replace(/CURRENT_PREVIEW_HTML:[\s\S]*$/i, "")
+    .replace(/PROJECT_FILE_SYSTEM_RULE:[\s\S]*$/i, "")
+    .trim()
+
+  return title.length > 42 ? `${title.slice(0, 42)}...` : title || "Project Chat"
+}
+
 export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
   const searchParams = useSearchParams()
@@ -60,10 +77,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
 
-    if (isFreshNewProject && !selectedProjectId) {
-      setChatHistory([])
-      setCurrentChatId(null)
-
+    const loadUsage = async () => {
       try {
         const [usageResponse, balanceResponse] = await Promise.all([
           fetch("/api/usage", { credentials: "include", cache: "no-store" }),
@@ -99,64 +113,80 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
       } catch {
         // Keep sidebar usable.
       }
+    }
 
+    await loadUsage()
+
+    if (isFreshNewProject && !selectedProjectId) {
+      setChatHistory([])
+      setCurrentChatId(null)
       return
     }
 
     try {
-      const [chatResponse, usageResponse, balanceResponse] = await Promise.all([
-        fetch("/api/chat", { credentials: "include" }),
-        fetch("/api/usage", { credentials: "include", cache: "no-store" }),
-        fetch("/api/balance", { credentials: "include", cache: "no-store" }),
-      ])
+      const deletedIds =
+        typeof window !== "undefined"
+          ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
+          : []
 
-      if (chatResponse.ok) {
-        const data = await chatResponse.json()
-
-        const deletedIds =
-          typeof window !== "undefined"
-            ? JSON.parse(localStorage.getItem(deletedChatKey) || "[]")
-            : []
-
-        setChatHistory(
-          (data.chats || []).filter(
-            (chat: ChatHistory) => !deletedIds.includes(chat.id)
-          )
+      if (selectedProjectId) {
+        const projectChatResponse = await fetch(
+          `/api/chat?projectId=${encodeURIComponent(selectedProjectId)}`,
+          { credentials: "include", cache: "no-store" }
         )
+
+        if (!projectChatResponse.ok) {
+          setChatHistory([])
+          return
+        }
+
+        const data = await projectChatResponse.json()
+        const chatId = data.chatId ? String(data.chatId) : ""
+        const messages = Array.isArray(data.messages) ? data.messages : []
+
+        if (!chatId || deletedIds.includes(chatId)) {
+          setChatHistory([])
+          setCurrentChatId(null)
+          return
+        }
+
+        setChatHistory([
+          {
+            id: chatId,
+            title: makeProjectChatTitle(messages, "Project Chat"),
+            createdAt:
+              messages[0]?.created_at ||
+              data.createdAt ||
+              new Date().toISOString(),
+            messageCount: messages.length,
+          },
+        ])
+
+        setCurrentChatId((current) => current || chatId)
+        return
       }
 
-      const isOwner = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+      const chatResponse = await fetch("/api/chat", {
+        credentials: "include",
+        cache: "no-store",
+      })
 
-      let usageData: any = null
-      let balanceData: any = null
-
-      if (usageResponse.ok) usageData = await usageResponse.json()
-      if (balanceResponse.ok) balanceData = await balanceResponse.json()
-
-      if (usageData) {
-        const used = Number(usageData.used ?? 0)
-        const limit = Number(usageData.limit ?? 10)
-        const remaining =
-          usageData.freeMessagesRemaining ??
-          Math.max(limit - used, 0)
-
-        setUsage({
-          used,
-          limit: isOwner ? 999999999 : limit,
-          plan: usageData.plan || "free",
-          balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
-          freeMessagesUsed: used,
-          freeMessagesLimit: isOwner ? 999999999 : limit,
-          freeMessagesRemaining: isOwner ? 999999999 : remaining,
-          costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
-          unlimited: Boolean(isOwner || usageData.unlimited),
-        })
+      if (!chatResponse.ok) {
+        setChatHistory([])
+        return
       }
+
+      const data = await chatResponse.json()
+
+      setChatHistory(
+        (data.chats || []).filter(
+          (chat: ChatHistory) => !deletedIds.includes(chat.id)
+        )
+      )
     } catch {
-      // Keep sidebar usable if one counter request fails.
+      setChatHistory([])
     }
   }, [user, deletedChatKey, isFreshNewProject, selectedProjectId])
-
   useEffect(() => {
     if (user) fetchChatHistory()
   }, [user, fetchChatHistory])
@@ -280,7 +310,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search chats..."
+                placeholder={selectedProjectId ? "Search project chat..." : "Search chats..."}
                 className="w-full h-8 pl-8 pr-3 text-xs bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-cyan-500/30"
               />
             </div>
