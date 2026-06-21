@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   ExternalLink,
   RefreshCw,
@@ -441,7 +442,9 @@ export function WorkspacePreviewPanel({
   onViewModeChange,
 }: PreviewPanelProps) {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+  const isFreshNewProject = searchParams.get("newProject") === "1"
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [liveUrl, setLiveUrl] = useState("")
@@ -457,7 +460,7 @@ export function WorkspacePreviewPanel({
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
 
-  const currentPreviewHtml = localPreviewHtml || previewHtml || ""
+  const currentPreviewHtml = isFreshNewProject ? "" : localPreviewHtml || previewHtml || ""
 
   const isReactCode = currentPreviewHtml ? looksLikeReactOrTsxCode(currentPreviewHtml) : false
   const isBadComponentPreview = currentPreviewHtml
@@ -476,7 +479,7 @@ export function WorkspacePreviewPanel({
     ? cleanedPreviewHtml
     : ""
 
-const projectFiles = project?.files ?? {}
+const projectFiles = isFreshNewProject ? {} : project?.files ?? {}
 const projectPreviewHtml = buildProjectPreviewHtml(projectFiles)
 const safeProjectPreviewHtml =
   projectPreviewHtml && hasVisibleHtmlContent(projectPreviewHtml)
@@ -488,15 +491,21 @@ const [stablePreviewHtml, setStablePreviewHtml] = useState("")
 const [previewFrameReady, setPreviewFrameReady] = useState(false)
 
 useEffect(() => {
+  if (isFreshNewProject) {
+    setPreviewFrameReady(false)
+    setStablePreviewHtml("")
+    return
+  }
+
   if (activePreviewHtml && hasVisibleHtmlContent(activePreviewHtml)) {
     setPreviewFrameReady(false)
     setStablePreviewHtml((current) =>
       current === activePreviewHtml ? current : activePreviewHtml
     )
   }
-}, [activePreviewHtml])
+}, [activePreviewHtml, isFreshNewProject])
 
-const displayPreviewHtml = activePreviewHtml || stablePreviewHtml
+const displayPreviewHtml = isFreshNewProject ? "" : activePreviewHtml || stablePreviewHtml
 const hasPreviewHtml = Boolean(displayPreviewHtml)
 const projectFilePaths = Object.keys(projectFiles)
 
@@ -579,8 +588,36 @@ useEffect(() => {
   }, [onViewModeChange, previewStorageKey, readPreviewHistory, setPreviewUrl, writePreviewHistory])
 
   useEffect(() => {
+    if (isFreshNewProject) {
+      setLocalPreviewHtml("")
+      return
+    }
+
     setLocalPreviewHtml(previewHtml || "")
-  }, [previewHtml])
+  }, [previewHtml, isFreshNewProject])
+
+  useEffect(() => {
+    if (!isFreshNewProject) return
+
+    setLocalPreviewHtml("")
+    setStablePreviewHtml("")
+    setPreviewFrameReady(false)
+    setLiveUrl("")
+    setPreviewUrl("")
+    setRefreshKey((prev) => prev + 1)
+    setSelectedFile("app/page.tsx")
+
+    localStorage.removeItem(previewStorageKey)
+    localStorage.removeItem(previewBackupStorageKey)
+    localStorage.removeItem(previewHistoryStorageKey)
+  }, [
+    isFreshNewProject,
+    previewBackupStorageKey,
+    previewHistoryStorageKey,
+    previewStorageKey,
+    setPreviewUrl,
+  ])
+
 
   useEffect(() => {
     refreshRollbackState()
@@ -720,8 +757,9 @@ useEffect(() => {
     }
   }
 
-  const safeLiveUrl =
-    isOwnerAdmin
+  const safeLiveUrl = isFreshNewProject
+    ? ""
+    : isOwnerAdmin
       ? liveUrl && liveUrl !== "about:blank" && !isBlockedPreviewUrl(liveUrl)
         ? liveUrl
         : ""
