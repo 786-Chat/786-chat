@@ -203,7 +203,37 @@ function looksLikeStarterPage(content: string): boolean {
   )
 }
 
-async function applyFileOperationsToLatestProject(userId: string, assistantText: string) {
+function createProjectNameFromPrompt(prompt: string): string {
+  const clean = prompt
+    .replace(/CURRENT_PREVIEW_HTML:[\s\S]*/gi, "")
+    .replace(/SYSTEM_PREVIEW_ACTION:[\s\S]*/gi, "")
+    .replace(/PROJECT_FILE_SYSTEM_RULE:[\s\S]*/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!clean) return "AI Generated Project"
+
+  const lower = clean.toLowerCase()
+
+  if (lower.includes("restaurant")) return "Restaurant Website"
+  if (lower.includes("school")) return "School Management Project"
+  if (lower.includes("madrasa") || lower.includes("madrasah")) return "Madrasa Learning Project"
+  if (lower.includes("account")) return "Accounting Software"
+  if (lower.includes("inventory")) return "Inventory Management System"
+  if (lower.includes("crm")) return "CRM System"
+  if (lower.includes("booking")) return "Booking System"
+  if (lower.includes("marketplace") || lower.includes("gumtree")) return "Marketplace Project"
+  if (lower.includes("saas")) return "SaaS Project"
+  if (lower.includes("dashboard")) return "Dashboard Project"
+
+  return clean.length > 64 ? `${clean.slice(0, 61)}...` : clean
+}
+
+async function applyFileOperationsToLatestProject(
+  userId: string,
+  assistantText: string,
+  options: { createNewProject?: boolean; projectName?: string } = {}
+) {
   const operations = extractFileOperations(assistantText)
 
   if (operations.length === 0) {
@@ -211,13 +241,16 @@ async function applyFileOperationsToLatestProject(userId: string, assistantText:
     return
   }
 
-  const existingProjects = await sql`
-    SELECT id, files
-    FROM projects
-    WHERE user_id = ${userId}::uuid
-    ORDER BY updated_at DESC
-    LIMIT 1
-  `
+  const existingProjects = options.createNewProject
+    ? []
+    : await sql`
+        SELECT id, files
+        FROM projects
+        WHERE user_id = ${userId}::uuid
+          AND deleted_at IS NULL
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `
 
   const baseFiles: Record<string, string> = {
     "app/page.tsx": `export default function Home() {
@@ -306,7 +339,7 @@ if __name__ == "__main__":
     return
   }
 
-  const projectName = "AI Generated Website"
+  const projectName = options.projectName || "AI Generated Project"
 
   try {
     await sql`
@@ -1065,15 +1098,20 @@ if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
   )
 }
 const enableFileMode =
-  userText.includes("edit") ||
-  userText.includes("create") ||
-  userText.includes("build") ||
-  userText.includes("change") ||
-  userText.includes("add") ||
-  userText.includes("remove") ||
-  userText.includes("delete") ||
-  userText.includes("update") ||
-  userText.includes("fix")
+  userTextLower.includes("edit") ||
+  userTextLower.includes("create") ||
+  userTextLower.includes("build") ||
+  userTextLower.includes("change") ||
+  userTextLower.includes("add") ||
+  userTextLower.includes("remove") ||
+  userTextLower.includes("delete") ||
+  userTextLower.includes("update") ||
+  userTextLower.includes("fix") ||
+  userTextLower.includes("website") ||
+  userTextLower.includes("homepage") ||
+  userTextLower.includes("software") ||
+  userTextLower.includes("saas") ||
+  userTextLower.includes("dashboard")
 
 const result = await streamText({
   model: hasVisionInput
@@ -1158,7 +1196,16 @@ Do not say "copy this code".
           const operations = extractFileOperations(assistantText)
 
           if (operations.length > 0 && !ownerPlatformAdminMode) {
-            await applyFileOperationsToLatestProject(session.id, assistantText)
+            const userMessageCount = messages.filter((message) => message.role === "user").length
+            const shouldCreateNewProject =
+              !chatId && userMessageCount <= 1
+
+            await applyFileOperationsToLatestProject(session.id, assistantText, {
+              createNewProject: shouldCreateNewProject,
+              projectName: shouldCreateNewProject
+                ? createProjectNameFromPrompt(userText)
+                : undefined,
+            })
           }
 
           const cleanMessage =
