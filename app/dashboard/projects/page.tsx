@@ -180,6 +180,51 @@ export default function DashboardProjectsPage() {
     }
   }
 
+  const deleteForeverProject = async (projectId: string, projectName: string) => {
+    const confirmed = window.confirm(
+      `Delete "${projectName || "AI Project"}" forever?\n\nThis will permanently remove it from Recover Projects and cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    setBusyProjectId(projectId)
+    setErrorMessage("")
+
+    const previousProjects = projects
+    setProjects((current) => current.filter((project) => project.id !== projectId))
+
+    try {
+      let response = await fetch(`/api/projects/${projectId}?permanent=true`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+
+      if (!response.ok) {
+        response = await fetch(`/api/projects/${projectId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action: "deleteForever" }),
+        })
+      }
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setProjects(previousProjects)
+        setErrorMessage(data?.debug || data?.error || "Delete forever failed. Please try again.")
+        return
+      }
+
+      await loadProjects()
+    } catch {
+      setProjects(previousProjects)
+      setErrorMessage("Delete forever failed. Please try again.")
+    } finally {
+      setBusyProjectId(null)
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#070711] text-white">
       <div className="mx-auto max-w-7xl px-5 py-8">
@@ -196,7 +241,7 @@ export default function DashboardProjectsPage() {
 
             <p className="mt-2 max-w-2xl text-sm text-white/45">
               {isRecoverMode
-                ? "Search deleted projects and recover them within 7 days."
+                ? "Search deleted projects, recover important work, or permanently delete test projects."
                 : "All projects created by your MujeebProAI chat are saved here. Each login can only see its own projects."}
             </p>
           </div>
@@ -217,7 +262,7 @@ export default function DashboardProjectsPage() {
               }
             >
               <RotateCcw className="mr-2 h-4 w-4" />
-              Recover Projects
+              {isRecoverMode ? "My Projects" : "Recover Projects"}
             </Button>
 
             <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
@@ -254,7 +299,7 @@ export default function DashboardProjectsPage() {
 
         {isRecoverMode && (
           <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100/75">
-            Deleted projects stay here for 7 days. Select a project and click Recover to move it back to My Projects.
+            Deleted projects stay here for 7 days. Use Recover for real projects or Delete Forever to clear test projects permanently.
           </div>
         )}
 
@@ -290,6 +335,7 @@ export default function DashboardProjectsPage() {
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project, index) => {
               const daysLeft = getRecoverDaysLeft(project)
+              const projectName = project.name || "AI Project"
 
               return (
                 <motion.div
@@ -328,16 +374,28 @@ export default function DashboardProjectsPage() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
+
+                      {isRecoverMode && (
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => deleteForeverProject(project.id, projectName)}
+                          className="rounded-full border border-red-500/25 bg-red-500/10 p-2 text-red-300 opacity-90 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
+                          title="Delete Forever"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   <h3 className="mt-5 line-clamp-2 text-lg font-bold">
-                    {project.name || "AI Project"}
+                    {projectName}
                   </h3>
 
                   <p className="mt-2 line-clamp-2 min-h-[40px] text-sm text-white/42">
                     {isRecoverMode
-                      ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup.`
+                      ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup, or delete forever now.`
                       : project.description ||
                         `Real file-based project with ${project.fileCount || 0} saved file${project.fileCount === 1 ? "" : "s"}.`}
                   </p>
@@ -375,15 +433,27 @@ export default function DashboardProjectsPage() {
                     </span>
 
                     {isRecoverMode ? (
-                      <button
-                        type="button"
-                        disabled={busyProjectId === project.id}
-                        onClick={() => recoverProject(project.id)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
-                      >
-                        Recover
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => deleteForeverProject(project.id, projectName)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
+                        >
+                          Delete Forever
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => recoverProject(project.id)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
+                        >
+                          Recover
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ) : (
                       <Link
                         href={`/dashboard/chat?projectId=${encodeURIComponent(project.id)}`}
