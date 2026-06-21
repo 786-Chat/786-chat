@@ -507,7 +507,13 @@ useEffect(() => {
 
 const displayPreviewHtml = isFreshNewProject ? "" : activePreviewHtml || stablePreviewHtml
 const hasPreviewHtml = Boolean(displayPreviewHtml)
-const projectFilePaths = Object.keys(projectFiles)
+const projectFilePaths = Object.keys(projectFiles).sort((a, b) => {
+  const priority = ["app/page.tsx", "app/layout.tsx", "components/Hero.tsx", "backend/orders.php", "python/ai.py"]
+  const ai = priority.indexOf(a)
+  const bi = priority.indexOf(b)
+  if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+  return a.localeCompare(b)
+})
 
 const defaultFile =
   projectFilePaths.length > 0
