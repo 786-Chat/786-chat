@@ -229,6 +229,119 @@ function createProjectNameFromPrompt(prompt: string): string {
   return clean.length > 64 ? `${clean.slice(0, 61)}...` : clean
 }
 
+function isEditOnlyProjectRequest(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+
+  return (
+    lower.includes("change") ||
+    lower.includes("edit") ||
+    lower.includes("update") ||
+    lower.includes("fix") ||
+    lower.includes("rename") ||
+    lower.includes("replace") ||
+    lower.includes("modify") ||
+    lower.includes("improve current") ||
+    lower.includes("current project") ||
+    lower.includes("same project")
+  )
+}
+
+function isNewProjectBuildRequest(prompt: string): boolean {
+  const lower = prompt.toLowerCase()
+
+  const hasCreateIntent =
+    lower.includes("create") ||
+    lower.includes("build") ||
+    lower.includes("make") ||
+    lower.includes("generate") ||
+    lower.includes("start new") ||
+    lower.includes("new project") ||
+    lower.includes("new website") ||
+    lower.includes("new app") ||
+    lower.includes("new software")
+
+  const hasProjectType =
+    lower.includes("website") ||
+    lower.includes("homepage") ||
+    lower.includes("landing page") ||
+    lower.includes("software") ||
+    lower.includes("saas") ||
+    lower.includes("dashboard") ||
+    lower.includes("system") ||
+    lower.includes("app") ||
+    lower.includes("portal")
+
+  return hasCreateIntent && hasProjectType && !isEditOnlyProjectRequest(prompt)
+}
+
+function extractRequestedTitle(prompt: string): string | null {
+  const clean = prompt
+    .replace(/CURRENT_PREVIEW_HTML:[\s\S]*/gi, "")
+    .replace(/SYSTEM_PREVIEW_ACTION:[\s\S]*/gi, "")
+    .replace(/PROJECT_FILE_SYSTEM_RULE:[\s\S]*/gi, "")
+    .trim()
+
+  const patterns = [
+    /(?:change|edit|update|replace|rename)\s+(?:the\s+)?(?:hero\s+)?(?:title|heading|h1)\s+(?:to|as)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /(?:hero\s+)?(?:title|heading|h1)\s+(?:to|as)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = clean.match(pattern)
+    if (match?.[1]) {
+      return match[1].trim().replace(/[.!?]\s*$/, "")
+    }
+  }
+
+  return null
+}
+
+function applySimpleHeroTitleFallback(
+  files: Record<string, string>,
+  prompt: string
+): Record<string, string> | null {
+  const requestedTitle = extractRequestedTitle(prompt)
+  if (!requestedTitle) return null
+
+  const heroPath =
+    Object.keys(files).find((path) => /^components\/Hero\.(tsx|jsx)$/i.test(path)) ||
+    Object.keys(files).find((path) => /hero/i.test(path) && /\.(tsx|jsx)$/.test(path)) ||
+    "components/Hero.tsx"
+
+  const currentHero = files[heroPath]
+  if (!currentHero) return null
+
+  let nextHero = currentHero
+  let changed = false
+
+  // Prefer changing a multi-line h1 block while preserving styling/background.
+  nextHero = nextHero.replace(
+    /<h1([^>]*)>[\s\S]*?<\/h1>/i,
+    (full, attrs) => {
+      changed = true
+      return `<h1${attrs}>\n            ${requestedTitle}\n          </h1>`
+    }
+  )
+
+  // If there is no h1, change the first prominent paragraph/title text.
+  if (!changed) {
+    nextHero = nextHero.replace(
+      /(<p[^>]*>\s*)([^<]{3,})(\s*<\/p>)/i,
+      (_full, start, _oldText, end) => {
+        changed = true
+        return `${start}${requestedTitle}${end}`
+      }
+    )
+  }
+
+  if (!changed || nextHero === currentHero) return null
+
+  return {
+    ...files,
+    [heroPath]: nextHero,
+  }
+}
+
 async function applyFileOperationsToProject(
   userId: string,
   assistantText: string,
@@ -345,6 +458,11 @@ if __name__ == "__main__":
       WHERE id = ${existingProjects[0].id}::uuid
         AND user_id = ${userId}::uuid
     `
+    return
+  }
+
+  if (!options.createNewProject) {
+    console.warn("[Chat API] No selected project and createNewProject is false. Skipping project insert.")
     return
   }
 
@@ -744,8 +862,13 @@ Project Name: ${selectedProjectName || "Selected Project"}
 
 You are editing THIS selected project only.
 Here are the current real files. Use these exact paths and update the correct file.
-If the user asks to change hero title/text, inspect and edit components/Hero.tsx or the component containing that text, not only app/page.tsx.
-If the visible page imports components, edit the imported component that contains the visible text.
+CRITICAL PRESERVE RULE:
+- For change/edit/update/fix requests, preserve the current design, background, layout, colors, imports, and files.
+- Do NOT create a new simple website.
+- Do NOT replace a restaurant project with a generic ProAI landing page.
+- Do NOT create a new project.
+- If the user asks to change hero title/text, edit the existing component that contains that visible text, usually components/Hero.tsx.
+- If the visible page imports components, edit the imported component that contains the visible text.
 Return ONLY editFile/createFile/deleteFile operations with FULL file content.
 
 CURRENT PROJECT FILES:
@@ -1214,6 +1337,11 @@ app/page.tsx must never remain as the starter "New Website" page.
 IMPORTANT:
 Return ONLY file operations.
 
+If a SELECTED PROJECT CONTEXT is present:
+- Edit that selected project only.
+- For change/edit/update/fix requests, preserve the existing design and only change the requested part.
+- Never create a new generic page when the user asks to change text/colors/sections in the current project.
+
 Examples:
 
 editFile("app/page.tsx", \`FULL FILE CONTENT WITH THE COMPLETE VISIBLE PAGE AND IMPORTS\`)
@@ -1267,18 +1395,56 @@ Do not say "copy this code".
         if (assistantText) {
           const operations = extractFileOperations(assistantText)
 
-          if (operations.length > 0 && !ownerPlatformAdminMode) {
+          if (!ownerPlatformAdminMode) {
             const userMessageCount = messages.filter((message) => message.role === "user").length
             const shouldCreateNewProject =
-              !requestedProjectId && !chatId && userMessageCount <= 1
+              !requestedProjectId &&
+              !chatId &&
+              userMessageCount <= 1 &&
+              isNewProjectBuildRequest(userText)
 
-            await applyFileOperationsToProject(session.id, assistantText, {
-              createNewProject: shouldCreateNewProject && !requestedProjectId,
-              projectId: requestedProjectId,
-              projectName: shouldCreateNewProject && !requestedProjectId
-                ? createProjectNameFromPrompt(userText)
-                : undefined,
-            })
+            if (operations.length > 0) {
+              await applyFileOperationsToProject(session.id, assistantText, {
+                createNewProject: shouldCreateNewProject,
+                projectId: requestedProjectId,
+                projectName: shouldCreateNewProject
+                  ? createProjectNameFromPrompt(userText)
+                  : undefined,
+              })
+            }
+
+            // Safety net: for selected projects, simple hero title edits must update the
+            // existing project design instead of creating a fake/generic new page.
+            if (requestedProjectId && isEditOnlyProjectRequest(userText)) {
+              const refreshedProject = await sql`
+                SELECT files
+                FROM projects
+                WHERE id = ${requestedProjectId}::uuid
+                  AND user_id = ${session.id}::uuid
+                  AND deleted_at IS NULL
+                LIMIT 1
+              `
+
+              const currentFiles =
+                refreshedProject[0]?.files &&
+                typeof refreshedProject[0].files === "object" &&
+                !Array.isArray(refreshedProject[0].files)
+                  ? (refreshedProject[0].files as Record<string, string>)
+                  : selectedProjectFiles
+
+              const fallbackFiles = applySimpleHeroTitleFallback(currentFiles, userText)
+
+              if (fallbackFiles) {
+                await sql`
+                  UPDATE projects
+                  SET files = ${JSON.stringify(fallbackFiles)}::jsonb,
+                      updated_at = NOW()
+                  WHERE id = ${requestedProjectId}::uuid
+                    AND user_id = ${session.id}::uuid
+                    AND deleted_at IS NULL
+                `
+              }
+            }
           }
 
           const cleanMessage =
