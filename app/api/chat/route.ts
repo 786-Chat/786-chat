@@ -1408,7 +1408,7 @@ const hasVisionInput = messages.some(msg =>
 )
 
 const isPreviewNavigationRequest =
-  userText.includes("SYSTEM_PREVIEW_ACTION:")
+  userText.trim().startsWith("SYSTEM_PREVIEW_ACTION:")
 
 const shouldUsePreviewOnlyMode =
   !isAdmin && isPreviewNavigationRequest
