@@ -1341,6 +1341,7 @@ If a SELECTED PROJECT CONTEXT is present:
 - Edit that selected project only.
 - For change/edit/update/fix requests, preserve the existing design and only change the requested part.
 - Never create a new generic page when the user asks to change text/colors/sections in the current project.
+- For simple title/heading text changes, change only the text inside the existing component and preserve every className, wrapper, background, and other section.
 
 Examples:
 
@@ -1403,19 +1404,12 @@ Do not say "copy this code".
               userMessageCount <= 1 &&
               isNewProjectBuildRequest(userText)
 
-            if (operations.length > 0) {
-              await applyFileOperationsToProject(session.id, assistantText, {
-                createNewProject: shouldCreateNewProject,
-                projectId: requestedProjectId,
-                projectName: shouldCreateNewProject
-                  ? createProjectNameFromPrompt(userText)
-                  : undefined,
-              })
-            }
+            let handledBySafeFallback = false
 
-            // Safety net: for selected projects, simple hero title edits must update the
-            // existing project design instead of creating a fake/generic new page.
-            if (requestedProjectId && isEditOnlyProjectRequest(userText)) {
+            // FIRST priority for selected project title edits:
+            // Preserve the existing project files and update only the title text.
+            // This prevents the AI from replacing a restaurant design with a generic purple page.
+            if (requestedProjectId && isEditOnlyProjectRequest(userText) && extractRequestedTitle(userText)) {
               const refreshedProject = await sql`
                 SELECT files
                 FROM projects
@@ -1443,7 +1437,19 @@ Do not say "copy this code".
                     AND user_id = ${session.id}::uuid
                     AND deleted_at IS NULL
                 `
+
+                handledBySafeFallback = true
               }
+            }
+
+            if (!handledBySafeFallback && operations.length > 0) {
+              await applyFileOperationsToProject(session.id, assistantText, {
+                createNewProject: shouldCreateNewProject,
+                projectId: requestedProjectId,
+                projectName: shouldCreateNewProject
+                  ? createProjectNameFromPrompt(userText)
+                  : undefined,
+              })
             }
           }
 
