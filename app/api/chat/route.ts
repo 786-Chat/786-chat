@@ -1138,6 +1138,19 @@ CRITICAL PRESERVE RULE:
 - If the visible page imports components, edit the imported component that contains the visible text.
 Return ONLY editFile/createFile/deleteFile operations with FULL file content.
 
+MANDATORY EDIT BEHAVIOR:
+- You MUST edit the real selected project files, not platform files.
+- Do NOT use read_file/list_files/search_code/write_file when a selected project exists.
+- Do NOT edit MujeebProAI app files such as components/workspace/*, app/api/chat/route.ts, app/dashboard/*, or lib/* platform files.
+- For visual requests, always update app/page.tsx or the component imported by app/page.tsx that renders the visible UI.
+- For mobile/tablet requests, use responsive Tailwind classes so the preview visibly changes.
+- For center requests, apply text-center, items-center, justify-center, mx-auto, and responsive layout changes.
+- For overflow/visible requests, remove line-clamp, truncate, overflow-hidden around text, fixed widths, and large non-responsive text classes.
+- For color requests, the requested colors must visibly appear in background, gradients, buttons, cards, or borders.
+- For font requests, update font classes/styles visibly.
+- For border/card/div/table/logo/animation/position requests, create or update real visible JSX in project files.
+- Never return the same file content unchanged.
+
 CURRENT PROJECT FILES:
 ${Object.entries(selectedProjectFiles)
   .slice(0, 30)
@@ -1208,6 +1221,7 @@ const ownerExplicitCustomerProjectMode =
 
 const ownerPlatformAdminMode =
   isAdminRequest &&
+  !effectiveProjectId &&
   !ownerExplicitCustomerProjectMode &&
   (
     userTextLower.includes("fix mujeebproai") ||
@@ -1222,11 +1236,7 @@ const ownerPlatformAdminMode =
     userTextLower.includes("admin dashboard") ||
     userTextLower.includes("owner dashboard") ||
     userTextLower.includes("app/api/") ||
-    userTextLower.includes("components/") ||
-    userTextLower.includes("lib/") ||
-    userTextLower.includes("route.ts") ||
-    userTextLower.includes("page.tsx") ||
-    userTextLower.includes("layout.tsx")
+    userTextLower.includes("route.ts")
   )
 
 const isCustomerProjectModeRequest = isAdminRequest && !ownerPlatformAdminMode
@@ -1361,6 +1371,14 @@ STRICT OUTPUT RULES:
 - Code Mode shows real file contents.
 - My Websites must use stored project files.
 - Theme purchases must create full project files.
+
+CRITICAL VISIBLE EDIT RULE:
+When the user asks to change colors, fonts, mobile, tablet, center content, add animations, add tables, move elements, or edit existing files:
+- Edit the actual visible project file.
+- Do not only reply with success.
+- Do not create unrelated files that are not rendered.
+- app/page.tsx or the rendered component imported by app/page.tsx must change.
+- The preview must visibly change after saving.
 
 PROJECT GOAL:
 You are helping build a Replit-style AI development platform where every customer website is a full codebase.
@@ -1669,9 +1687,9 @@ Do not say "copy this code".
 
   maxOutputTokens: shouldUsePreviewOnlyMode
     ? 50
-    : isAdmin
+    : isAdmin || effectiveProjectId
       ? 8192
-      : aiSettings.maxTokens,
+      : Math.max(aiSettings.maxTokens || 4096, 4096),
 
   tools:
     isAdmin && github.isGitHubConfigured()
