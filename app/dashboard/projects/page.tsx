@@ -99,8 +99,16 @@ export default function DashboardProjectsPage() {
 
   const startNewProject = () => {
     try {
-      window.localStorage.removeItem("mujeebproai_last_preview_html")
+      const keysToRemove = Object.keys(window.localStorage).filter((key) =>
+        key.startsWith("mujeebproai_last_preview_html")
+      )
+
+      for (const key of keysToRemove) {
+        window.localStorage.removeItem(key)
+      }
+
       window.dispatchEvent(new CustomEvent("new-chat"))
+      window.dispatchEvent(new Event("project-files-changed"))
     } catch {
       // keep navigation working
     }
