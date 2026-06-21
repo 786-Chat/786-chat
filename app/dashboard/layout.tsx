@@ -143,6 +143,7 @@ export default function DashboardLayout({
   const [isDraggingPreview, setIsDraggingPreview] = useState(false)
   const [canRollbackPreview, setCanRollbackPreview] = useState(false)
   const [currentProject, setCurrentProject] = useState<WorkspaceProject | null>(null)
+  const [runtimeProjectId, setRuntimeProjectId] = useState("")
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -198,11 +199,45 @@ export default function DashboardLayout({
     /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
 
   const selectedProjectId = searchParams.get("projectId") || ""
+  const effectiveProjectId = selectedProjectId || runtimeProjectId
 
   const isFreshNewProject =
-    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1" && !selectedProjectId
+    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1" && !effectiveProjectId
 
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
+
+  useEffect(() => {
+    setRuntimeProjectId(selectedProjectId)
+  }, [selectedProjectId])
+
+  useEffect(() => {
+    const syncProjectIdFromBrowser = () => {
+      const params = new URLSearchParams(window.location.search)
+      const nextProjectId = params.get("projectId") || ""
+      setRuntimeProjectId(nextProjectId)
+    }
+
+    const handleChatSelected = (event: Event) => {
+      const detail = (event as CustomEvent).detail
+      if (typeof detail?.projectId === "string") {
+        setRuntimeProjectId(detail.projectId)
+      }
+    }
+
+    window.addEventListener("popstate", syncProjectIdFromBrowser)
+    window.addEventListener("project-files-changed", syncProjectIdFromBrowser)
+    window.addEventListener("chat-updated", syncProjectIdFromBrowser)
+    window.addEventListener("chat-selected", handleChatSelected)
+
+    syncProjectIdFromBrowser()
+
+    return () => {
+      window.removeEventListener("popstate", syncProjectIdFromBrowser)
+      window.removeEventListener("project-files-changed", syncProjectIdFromBrowser)
+      window.removeEventListener("chat-updated", syncProjectIdFromBrowser)
+      window.removeEventListener("chat-selected", handleChatSelected)
+    }
+  }, [])
 
   const loadLatestProject = useCallback(async () => {
     if (!userEmail || !isChatWorkspace) return
@@ -213,8 +248,8 @@ export default function DashboardLayout({
     }
 
     try {
-      const projectEndpoint = selectedProjectId
-        ? `/api/projects/${encodeURIComponent(selectedProjectId)}`
+      const projectEndpoint = effectiveProjectId
+        ? `/api/projects/${encodeURIComponent(effectiveProjectId)}`
         : "/api/projects/latest"
 
       const res = await fetch(projectEndpoint, {
@@ -232,7 +267,7 @@ export default function DashboardLayout({
     } catch {
       setCurrentProject(null)
     }
-  }, [userEmail, isChatWorkspace, isFreshNewProject, selectedProjectId])
+  }, [userEmail, isChatWorkspace, isFreshNewProject, effectiveProjectId])
 
   useEffect(() => {
     if (!userEmail || !isFreshNewProject) return
@@ -452,13 +487,13 @@ export default function DashboardLayout({
 
 
   useEffect(() => {
-    if (!selectedProjectId || !currentProject?.files) return
+    if (!effectiveProjectId || !currentProject?.files) return
 
     setPreviewHtml("")
     setPreviewUrl("")
     setPreviewOpen(true)
     setViewMode("preview")
-  }, [selectedProjectId, currentProject?.id])
+  }, [effectiveProjectId, currentProject?.id])
 
   useEffect(() => {
     const handleResize = () => {
@@ -606,8 +641,8 @@ export default function DashboardLayout({
         >
           <div className="flex flex-col min-w-0 overflow-hidden flex-1">
             <WorkspaceChatPanel
-              key={isFreshNewProject ? "fresh-new-project" : selectedProjectId ? `project-${selectedProjectId}` : "chat-workspace"}
-              projectId={selectedProjectId || undefined}
+              key={isFreshNewProject ? "fresh-new-project" : effectiveProjectId ? `project-${effectiveProjectId}` : "chat-workspace"}
+              projectId={effectiveProjectId || undefined}
               onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
