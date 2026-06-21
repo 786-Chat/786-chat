@@ -459,20 +459,42 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     onError: (err) => {
       console.error("Chat error:", err)
     },
-    onFinish: () => {
+    onFinish: async () => {
       window.dispatchEvent(new Event("project-files-changed"))
       window.dispatchEvent(new Event("chat-updated"))
 
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search)
-        const urlProjectId = params.get("projectId") || projectId || ""
-        if (urlProjectId) {
-          window.dispatchEvent(
-            new CustomEvent("chat-selected", {
-              detail: { chatId: currentChatId, projectId: urlProjectId },
+        const existingProjectId = params.get("projectId") || projectId || ""
+        const isNewProjectPage = params.get("newProject") === "1"
+
+        if (!existingProjectId && isNewProjectPage) {
+          try {
+            const response = await fetch("/api/projects/latest", {
+              credentials: "include",
+              cache: "no-store",
             })
-          )
+
+            const data = await response.json().catch(() => ({}))
+            const nextProjectId = data?.project?.id ? String(data.project.id) : ""
+
+            if (response.ok && nextProjectId) {
+              const nextUrl = `/dashboard/chat?projectId=${encodeURIComponent(nextProjectId)}`
+              window.history.replaceState({}, "", nextUrl)
+              window.dispatchEvent(new PopStateEvent("popstate"))
+              window.dispatchEvent(
+                new CustomEvent("chat-selected", {
+                  detail: { chatId: currentChatId, projectId: nextProjectId },
+                })
+              )
+            }
+          } catch {
+            // Keep chat usable. User can still open project from My Projects.
+          }
         }
+
+        window.dispatchEvent(new Event("project-files-changed"))
+        window.dispatchEvent(new Event("chat-updated"))
       }
     },
   })
