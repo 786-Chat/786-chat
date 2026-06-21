@@ -438,14 +438,60 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
   const isLoading = status === "streaming" || status === "submitted"
 
   useEffect(() => {
-    setCurrentChatId(null)
-    setMessages([] as any)
-    setInput("")
-    setAttachedFiles([])
-    onPreviewUpdate?.("")
-    onViewModeChange?.("preview")
-    window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
-    window.dispatchEvent(new Event("project-files-changed"))
+    let cancelled = false
+
+    const resetPanel = () => {
+      setCurrentChatId(null)
+      setMessages([] as any)
+      setInput("")
+      setAttachedFiles([])
+      onPreviewUpdate?.("")
+      onViewModeChange?.(projectId ? "preview" : "preview")
+      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
+      window.dispatchEvent(new Event("project-files-changed"))
+    }
+
+    const loadProjectChat = async () => {
+      if (!projectId) {
+        resetPanel()
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/chat?projectId=${encodeURIComponent(projectId)}`, {
+          credentials: "include",
+          cache: "no-store",
+        })
+
+        if (!response.ok) {
+          resetPanel()
+          return
+        }
+
+        const data = await response.json()
+        if (cancelled) return
+
+        const dbMessages = Array.isArray(data.messages) ? data.messages : []
+        const nextChatId = data.chatId ? String(data.chatId) : null
+
+        setCurrentChatId(nextChatId)
+        setMessages(toUiMessages(dbMessages) as any)
+        setInput("")
+        setAttachedFiles([])
+        onPreviewUpdate?.("")
+        onViewModeChange?.("preview")
+        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: nextChatId, projectId } }))
+        window.dispatchEvent(new Event("project-files-changed"))
+      } catch {
+        if (!cancelled) resetPanel()
+      }
+    }
+
+    loadProjectChat()
+
+    return () => {
+      cancelled = true
+    }
   }, [projectId, onPreviewUpdate, onViewModeChange, setMessages])
 
   const refreshUsage = useCallback(() => {
@@ -640,7 +686,18 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     }
 const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
-const finalMessageText = cleanInput || "Please analyze the attached file."
+let finalMessageText = cleanInput || "Please analyze the attached file."
+
+if (projectId && uploadedFiles.length === 0) {
+  finalMessageText += `
+
+PROJECT_FILE_SYSTEM_RULE:
+- This is an existing selected project.
+- Read and preserve the existing files from server context.
+- Modify only the requested file and section.
+- Preserve id, ul, ol, li, div, a href/url, image src/url, classes, animations, layout, colors, backgrounds, and components unless the user explicitly asks to change them.
+- Return only editFile/createFile/deleteFile operations with full file content.`
+}
 
 if (requestedPreviewPath && isOwnerAdmin) {
   openPreviewPath(requestedPreviewPath)
