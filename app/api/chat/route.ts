@@ -225,12 +225,15 @@ function createProjectNameFromPrompt(prompt: string): string {
   if (lower.includes("marketplace") || lower.includes("gumtree")) return "Marketplace Project"
   if (lower.includes("saas")) return "SaaS Project"
   if (lower.includes("dashboard")) return "Dashboard Project"
+  if (lower.includes("quiz")) return "Quiz Generator App"
+  if (lower.includes("calculator")) return "Calculator App"
+  if (lower.includes("todo") || lower.includes("task")) return "Task Manager App"
 
   return clean.length > 64 ? `${clean.slice(0, 61)}...` : clean
 }
 
 
-type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "generic"
+type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "quiz" | "app" | "generic"
 
 function detectProjectKind(prompt: string): ProjectKind {
   const lower = prompt.toLowerCase()
@@ -239,6 +242,8 @@ function detectProjectKind(prompt: string): ProjectKind {
   if (lower.includes("school") || lower.includes("student") || lower.includes("teacher") || lower.includes("classroom")) return "school"
   if (lower.includes("marketplace") || lower.includes("ecommerce") || lower.includes("shop") || lower.includes("gumtree")) return "marketplace"
   if (lower.includes("saas") || lower.includes("dashboard") || lower.includes("reports") || lower.includes("analytics")) return "saas"
+  if (lower.includes("quiz") || lower.includes("question") || lower.includes("answers")) return "quiz"
+  if (lower.includes("web app") || lower.includes("app") || lower.includes("interactive") || lower.includes("generator") || lower.includes("tool")) return "app"
 
   return "generic"
 }
@@ -255,6 +260,10 @@ Design must be education-focused only: student dashboard, attendance, classes, t
 Design must be SaaS/software-focused only: sidebar, analytics cards, revenue/users/churn metrics, reports, charts, activity feed, settings. Use clean product dashboard styling. NEVER use restaurant text like Restaurant Preview, Reserve a Table, View Menu, chef, menu, booking table, or food imagery.`,
     marketplace: `PROJECT TYPE: MARKETPLACE.
 Design must be marketplace-focused only: product/category cards, search/filter bar, seller stats, listings, trust badges, checkout/order flow. NEVER use restaurant text like Restaurant Preview, Reserve a Table, View Menu, chef, menu, booking table, or food imagery.`,
+    quiz: `PROJECT TYPE: QUIZ GENERATOR WEB APP.
+Design must be an actual interactive quiz app, not a text-only landing page. It must include a topic input, generate quiz button, 5-8 question cards, answer options, score/progress area, reset button, and interactive state with useState. It must be fully responsive on mobile/tablet/desktop.`,
+    app: `PROJECT TYPE: INTERACTIVE WEB APP / TOOL.
+Design must be a working interactive app, not only hero text. It must include input controls, buttons, generated results/cards, state handling with useState, responsive layout, and polished app UI.`,
     generic: `PROJECT TYPE: CUSTOM WEBSITE / SOFTWARE.
 Create a unique design based on the user's wording. Do not reuse restaurant, school, SaaS, or marketplace templates unless the user explicitly asks for that type.`,
   }
@@ -371,6 +380,248 @@ function buildUniqueStarterFiles(prompt: string, projectName: string): Record<st
       "app/page.tsx": `import MarketplaceHome from "@/components/MarketplaceHome"\n\nexport default function Page() {\n  return <MarketplaceHome />\n}\n`,
     }
   }
+
+
+  if (kind === "quiz") {
+    return {
+      ...base,
+      "app/page.tsx": `"use client"
+
+import { useMemo, useState } from "react"
+
+type QuizQuestion = {
+  question: string
+  options: string[]
+  answer: string
+}
+
+const fallbackTopic = "general knowledge"
+
+function buildQuestions(topic: string): QuizQuestion[] {
+  const cleanTopic = topic.trim() || fallbackTopic
+  return [
+    {
+      question: \`What is the main idea of \${cleanTopic}?\`,
+      options: ["A core concept", "A random guess", "An unrelated topic", "None of these"],
+      answer: "A core concept",
+    },
+    {
+      question: \`Which skill helps you understand \${cleanTopic} better?\`,
+      options: ["Practice", "Ignoring details", "Guessing only", "Skipping examples"],
+      answer: "Practice",
+    },
+    {
+      question: \`Why is \${cleanTopic} useful?\`,
+      options: ["It solves real problems", "It removes learning", "It blocks progress", "It has no use"],
+      answer: "It solves real problems",
+    },
+    {
+      question: \`What should you do first when learning \${cleanTopic}?\`,
+      options: ["Start with basics", "Memorize everything", "Avoid examples", "Stop asking questions"],
+      answer: "Start with basics",
+    },
+    {
+      question: \`How can you test your knowledge of \${cleanTopic}?\`,
+      options: ["Answer questions", "Close the app", "Hide notes", "Skip revision"],
+      answer: "Answer questions",
+    },
+    {
+      question: \`Which method improves confidence in \${cleanTopic}?\`,
+      options: ["Interactive quizzes", "No feedback", "Random clicking", "Less practice"],
+      answer: "Interactive quizzes",
+    },
+  ]
+}
+
+export default function Page() {
+  const [topic, setTopic] = useState("")
+  const [activeTopic, setActiveTopic] = useState("general knowledge")
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({})
+
+  const questions = useMemo(() => buildQuestions(activeTopic), [activeTopic])
+  const answeredCount = Object.keys(selectedAnswers).length
+  const score = questions.reduce((total, question, index) => {
+    return total + (selectedAnswers[index] === question.answer ? 1 : 0)
+  }, 0)
+
+  function generateQuiz() {
+    setActiveTopic(topic.trim() || fallbackTopic)
+    setSelectedAnswers({})
+  }
+
+  function resetQuiz() {
+    setTopic("")
+    setActiveTopic(fallbackTopic)
+    setSelectedAnswers({})
+  }
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-slate-950 text-white">
+      <section className="relative px-5 py-8 sm:px-8 lg:px-12">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.28),transparent_34%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.24),transparent_32%),radial-gradient(circle_at_bottom,rgba(34,197,94,0.18),transparent_36%)]" />
+        <div className="relative mx-auto max-w-7xl">
+          <div className="mb-8 text-center">
+            <p className="mx-auto mb-4 inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.28em] text-cyan-200">
+              Interactive Quiz Builder
+            </p>
+            <h1 className="mx-auto max-w-4xl text-balance text-4xl font-black leading-tight tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+              Quiz Generator Web App
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
+              Enter any topic and instantly generate a 5-8 question interactive quiz with clickable answers, live score, and progress tracking.
+            </p>
+          </div>
+
+          <div className="mx-auto mb-8 max-w-4xl rounded-[2rem] border border-white/10 bg-white/[0.07] p-4 shadow-2xl shadow-cyan-950/30 backdrop-blur sm:p-6">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+              <input
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") generateQuiz()
+                }}
+                placeholder="Enter topic, e.g. Space, Maths, JavaScript..."
+                className="min-h-14 rounded-2xl border border-white/10 bg-slate-950/80 px-5 text-white outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-4"
+              />
+              <button
+                onClick={generateQuiz}
+                className="min-h-14 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:scale-[1.02] hover:bg-cyan-200"
+              >
+                Generate Quiz
+              </button>
+              <button
+                onClick={resetQuiz}
+                className="min-h-14 rounded-2xl border border-white/10 bg-white/10 px-6 font-bold text-white transition hover:bg-white/15"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center">
+              <p className="text-sm text-slate-400">Current Topic</p>
+              <p className="mt-2 text-2xl font-black capitalize text-cyan-200">{activeTopic}</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center">
+              <p className="text-sm text-slate-400">Progress</p>
+              <p className="mt-2 text-2xl font-black text-purple-200">{answeredCount}/{questions.length}</p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center">
+              <p className="text-sm text-slate-400">Score</p>
+              <p className="mt-2 text-2xl font-black text-emerald-200">{score}/{questions.length}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            {questions.map((question, index) => (
+              <article
+                key={question.question}
+                className="rounded-[2rem] border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/20 backdrop-blur sm:p-6"
+              >
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-cyan-300 font-black text-slate-950">
+                    {index + 1}
+                  </span>
+                  <h2 className="text-lg font-black leading-7 sm:text-xl">{question.question}</h2>
+                </div>
+                <div className="grid gap-3">
+                  {question.options.map((option) => {
+                    const isSelected = selectedAnswers[index] === option
+                    const isCorrect = option === question.answer
+                    const reveal = Boolean(selectedAnswers[index])
+                    return (
+                      <button
+                        key={option}
+                        onClick={() =>
+                          setSelectedAnswers((current) => ({
+                            ...current,
+                            [index]: option,
+                          }))
+                        }
+                        className={[
+                          "rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition sm:text-base",
+                          reveal && isCorrect
+                            ? "border-emerald-300 bg-emerald-300/20 text-emerald-100"
+                            : isSelected
+                              ? "border-red-300 bg-red-300/15 text-red-100"
+                              : "border-white/10 bg-white/[0.04] text-slate-200 hover:border-cyan-300/60 hover:bg-cyan-300/10",
+                        ].join(" ")}
+                      >
+                        {option}
+                      </button>
+                    )
+                  })}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
+  )
+}
+`,
+    }
+  }
+
+  if (kind === "app") {
+    return {
+      ...base,
+      "app/page.tsx": `"use client"
+
+import { useState } from "react"
+
+export default function Page() {
+  const [value, setValue] = useState("")
+  const [items, setItems] = useState<string[]>(["Interactive result card", "Responsive app layout", "Editable generated content"])
+
+  function addItem() {
+    if (!value.trim()) return
+    setItems((current) => [value.trim(), ...current].slice(0, 8))
+    setValue("")
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 px-5 py-10 text-white sm:px-8">
+      <section className="mx-auto max-w-6xl text-center">
+        <p className="mb-4 inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.28em] text-cyan-200">
+          Interactive Web App
+        </p>
+        <h1 className="mx-auto max-w-4xl text-4xl font-black leading-tight sm:text-5xl md:text-7xl">${title}</h1>
+        <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+          A real responsive app interface with input, state, actions, and generated cards.
+        </p>
+
+        <div className="mx-auto mt-10 grid max-w-3xl gap-3 rounded-[2rem] border border-white/10 bg-white/[0.07] p-4 sm:grid-cols-[1fr_auto]">
+          <input
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            placeholder="Type something to generate..."
+            className="min-h-14 rounded-2xl border border-white/10 bg-slate-950/80 px-5 outline-none focus:ring-4 focus:ring-cyan-300/30"
+          />
+          <button onClick={addItem} className="min-h-14 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950">
+            Generate
+          </button>
+        </div>
+
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {items.map((item) => (
+            <article key={item} className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 text-left shadow-xl">
+              <div className="mb-4 h-12 w-12 rounded-2xl bg-cyan-300/20" />
+              <h2 className="text-xl font-black">{item}</h2>
+              <p className="mt-3 text-slate-400">Generated in a real editable project file.</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </main>
+  )
+}
+`,
+    }
+  }
+
 
   return {
     ...base,
@@ -1379,6 +1630,15 @@ When the user asks to change colors, fonts, mobile, tablet, center content, add 
 - Do not create unrelated files that are not rendered.
 - app/page.tsx or the rendered component imported by app/page.tsx must change.
 - The preview must visibly change after saving.
+
+INTERACTIVE APP BUILD RULE:
+When user asks for an app, web app, generator, quiz, calculator, dashboard, form tool, booking tool, or any interactive layout:
+- Do NOT create only hero text.
+- Create a working React UI with useState where needed.
+- Include real input fields, buttons, cards/results, empty state, and interactive feedback.
+- For quiz generator specifically, create topic input, generate quiz button, 5-8 quiz cards, answer options, score/progress state, and reset.
+- It must be responsive and usable on mobile/tablet/desktop.
+- app/page.tsx must contain the working app or import the working app component.
 
 PROJECT GOAL:
 You are helping build a Replit-style AI development platform where every customer website is a full codebase.
