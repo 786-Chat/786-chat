@@ -528,10 +528,15 @@ const selectedFileContent =
   ""
 
 useEffect(() => {
-  if (projectFilePaths.length > 0) {
-    setSelectedFile(projectFilePaths[0])
+  if (projectFilePaths.length === 0) {
+    setSelectedFile("app/page.tsx")
+    return
   }
-}, [project?.id, projectFilePaths.length])
+
+  setSelectedFile((current) =>
+    current && projectFilePaths.includes(current) ? current : projectFilePaths[0]
+  )
+}, [project?.id, projectFilePaths.join("|")])
 
   const readPreviewHistory = useCallback((): string[] => {
     try {
@@ -592,6 +597,15 @@ useEffect(() => {
     setRefreshKey((prev) => prev + 1)
     onViewModeChange?.("preview")
   }, [onViewModeChange, previewStorageKey, readPreviewHistory, setPreviewUrl, writePreviewHistory])
+
+  useEffect(() => {
+    if (!project?.id) return
+
+    setLiveUrl("")
+    setPreviewUrl("")
+    setRefreshKey((prev) => prev + 1)
+    setPreviewFrameReady(false)
+  }, [project?.id, setPreviewUrl])
 
   useEffect(() => {
     if (isFreshNewProject) {
@@ -888,8 +902,12 @@ useEffect(() => {
   const renderCodeMode = () => {
     if (!project || projectFilePaths.length === 0) {
       return (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#08080d] text-white/40 text-sm">
-          No project files found
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#08080d] px-6 text-center">
+          <Code className="mb-3 h-8 w-8 text-white/15" />
+          <div className="text-sm font-medium text-white/45">No project files found</div>
+          <p className="mt-2 max-w-xs text-xs text-white/25">
+            Create or open a saved project. Code Mode will show the real files stored for that project.
+          </p>
         </div>
       )
     }
