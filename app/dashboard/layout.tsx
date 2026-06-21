@@ -450,6 +450,16 @@ export default function DashboardLayout({
     isFreshNewProject,
   ])
 
+
+  useEffect(() => {
+    if (!selectedProjectId || !currentProject?.files) return
+
+    setPreviewHtml("")
+    setPreviewUrl("")
+    setPreviewOpen(true)
+    setViewMode("preview")
+  }, [selectedProjectId, currentProject?.id])
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
