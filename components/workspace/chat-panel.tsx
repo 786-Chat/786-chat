@@ -437,6 +437,17 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
 
   const isLoading = status === "streaming" || status === "submitted"
 
+  useEffect(() => {
+    setCurrentChatId(null)
+    setMessages([] as any)
+    setInput("")
+    setAttachedFiles([])
+    onPreviewUpdate?.("")
+    onViewModeChange?.("preview")
+    window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
+    window.dispatchEvent(new Event("project-files-changed"))
+  }, [projectId, onPreviewUpdate, onViewModeChange, setMessages])
+
   const refreshUsage = useCallback(() => {
     fetch("/api/usage")
       .then((res) => res.json())
@@ -484,11 +495,13 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
           openPreviewPath(restorePreviewPath)
           onViewModeChange?.("preview")
         } else {
-          onPreviewUpdate?.("")
+          if (!projectId) {
+            onPreviewUpdate?.("")
+          }
           onViewModeChange?.("preview")
         }
 
-        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId } }))
+        window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId, projectId: projectId || null } }))
         window.dispatchEvent(new Event("project-files-changed"))
 
         setTimeout(() => {
@@ -517,7 +530,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       onPreviewUpdate?.("")
       onViewModeChange?.("preview")
       window.dispatchEvent(new Event("preview-history-changed"))
-      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null } }))
+      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
     }
 
     window.addEventListener("load-chat", handleLoadChat)
@@ -533,6 +546,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     previewBackupStorageKey,
     previewHistoryStorageKey,
     previewStorageKey,
+    projectId,
     setMessages,
   ])
 
@@ -823,6 +837,11 @@ setAttachedFiles([])
   useEffect(() => {
     if (!onPreviewUpdate) return
 
+    if (projectId) {
+      onPreviewUpdate("")
+      return
+    }
+
     if (!user?.email) {
       onPreviewUpdate("")
       return
@@ -837,7 +856,7 @@ setAttachedFiles([])
       localStorage.removeItem(previewStorageKey)
       onPreviewUpdate("")
     }
-  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin])
+  }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin, projectId])
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
