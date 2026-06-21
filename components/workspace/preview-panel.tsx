@@ -480,6 +480,10 @@ export function WorkspacePreviewPanel({
     : ""
 
 const projectFiles = isFreshNewProject ? {} : project?.files ?? {}
+const projectPreviewApiUrl =
+  !isFreshNewProject && project?.id
+    ? `/api/projects/${encodeURIComponent(project.id)}/preview?raw=1&v=${refreshKey}`
+    : ""
 const projectPreviewHtml = buildProjectPreviewHtml(projectFiles)
 const safeProjectPreviewHtml =
   projectPreviewHtml && hasVisibleHtmlContent(projectPreviewHtml)
@@ -787,7 +791,7 @@ useEffect(() => {
         ? liveUrl
         : ""
 
-  const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl
+  const showEmptyPreview = !hasPreviewHtml && !safeLiveUrl && !projectPreviewApiUrl
 
   const sourceFileHints = getSourceFileHints(safeLiveUrl)
 
@@ -1190,6 +1194,18 @@ useEffect(() => {
               {renderPreviewFrame("url")}
             </div>
           </div>
+        ) : projectPreviewApiUrl ? (
+          <iframe
+            key={projectPreviewApiUrl}
+            src={projectPreviewApiUrl}
+            title="Project Preview"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            onLoad={(event) => {
+              hideIframeScrollbar(event.currentTarget)
+              setPreviewFrameReady(true)
+            }}
+            className="absolute inset-0 h-full w-full border-0 bg-[#050509]"
+          />
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
         ) : safeLiveUrl ? (
