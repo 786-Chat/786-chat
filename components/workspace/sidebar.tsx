@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -44,6 +45,9 @@ interface SidebarProps {
 
 export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const isFreshNewProject = searchParams.get("newProject") === "1"
+  const selectedProjectId = searchParams.get("projectId")
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
@@ -55,6 +59,49 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
 
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
+
+    if (isFreshNewProject && !selectedProjectId) {
+      setChatHistory([])
+      setCurrentChatId(null)
+
+      try {
+        const [usageResponse, balanceResponse] = await Promise.all([
+          fetch("/api/usage", { credentials: "include", cache: "no-store" }),
+          fetch("/api/balance", { credentials: "include", cache: "no-store" }),
+        ])
+
+        const isOwner = user?.email?.toLowerCase() === "mujeeb@job4u.com"
+        let usageData: any = null
+        let balanceData: any = null
+
+        if (usageResponse.ok) usageData = await usageResponse.json()
+        if (balanceResponse.ok) balanceData = await balanceResponse.json()
+
+        if (usageData) {
+          const used = Number(usageData.used ?? 0)
+          const limit = Number(usageData.limit ?? 10)
+          const remaining =
+            usageData.freeMessagesRemaining ??
+            Math.max(limit - used, 0)
+
+          setUsage({
+            used,
+            limit: isOwner ? 999999999 : limit,
+            plan: usageData.plan || "free",
+            balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
+            freeMessagesUsed: used,
+            freeMessagesLimit: isOwner ? 999999999 : limit,
+            freeMessagesRemaining: isOwner ? 999999999 : remaining,
+            costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
+            unlimited: Boolean(isOwner || usageData.unlimited),
+          })
+        }
+      } catch {
+        // Keep sidebar usable.
+      }
+
+      return
+    }
 
     try {
       const [chatResponse, usageResponse, balanceResponse] = await Promise.all([
@@ -108,7 +155,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     } catch {
       // Keep sidebar usable if one counter request fails.
     }
-  }, [user, deletedChatKey])
+  }, [user, deletedChatKey, isFreshNewProject, selectedProjectId])
 
   useEffect(() => {
     if (user) fetchChatHistory()
@@ -131,12 +178,25 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
 
   const startNewChat = () => {
     setCurrentChatId(null)
+    setChatHistory([])
     window.dispatchEvent(new CustomEvent("new-chat"))
-    window.location.href = "/dashboard/chat?newProject=1"
+
+    if (typeof window !== "undefined") {
+      window.history.pushState({}, "", "/dashboard/chat?newProject=1")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    }
+
+    if (window.innerWidth < 768) onClose()
   }
 
   const loadChat = (chatId: string) => {
     setCurrentChatId(chatId)
+
+    if (typeof window !== "undefined" && isFreshNewProject) {
+      window.history.pushState({}, "", "/dashboard/chat")
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    }
+
     window.dispatchEvent(new CustomEvent("load-chat", { detail: { chatId } }))
     if (window.innerWidth < 768) onClose()
   }
@@ -153,7 +213,10 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     if (currentChatId === chatId) setCurrentChatId(null)
   }
 
-  const filteredChats = chatHistory.filter((chat) =>
+  const visibleChatHistory =
+    isFreshNewProject && !selectedProjectId ? [] : chatHistory
+
+  const filteredChats = visibleChatHistory.filter((chat) =>
     chat.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
