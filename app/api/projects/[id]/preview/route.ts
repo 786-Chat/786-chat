@@ -289,6 +289,122 @@ function navHtml(items: string[], accent: string, defaults: string[]) {
     .join("")
 }
 
+
+function extractReturnJsx(code: string): string {
+  const returnIndex = code.indexOf("return")
+  if (returnIndex === -1) return ""
+  const firstParen = code.indexOf("(", returnIndex)
+  if (firstParen === -1) return ""
+  let depth = 0
+  let end = -1
+  for (let i = firstParen; i < code.length; i++) {
+    const char = code[i]
+    if (char === "(") depth++
+    if (char === ")") depth--
+    if (depth === 0) { end = i; break }
+  }
+  if (end === -1) return ""
+  return code.slice(firstParen + 1, end).trim()
+}
+
+function getLocalComponentPathFromImport(importPath: string): string | null {
+  if (importPath.startsWith("@/components/")) return `${importPath.replace("@/", "")}.tsx`
+  if (importPath.startsWith("./components/")) return `${importPath.replace("./", "")}.tsx`
+  if (importPath.startsWith("../components/")) return `${importPath.replace("../", "")}.tsx`
+  return null
+}
+
+function getComponentRenderMap(files: Record<string, string>, pageCode: string): Record<string, string> {
+  const output: Record<string, string> = {}
+  const importRegex = /import\s+([A-Z][A-Za-z0-9_]*)\s+from\s+["']([^"']+)["']/g
+  let match: RegExpExecArray | null
+  while ((match = importRegex.exec(pageCode)) !== null) {
+    const componentName = match[1]
+    const importedPath = getLocalComponentPathFromImport(match[2])
+    if (!importedPath) continue
+    const code = files[importedPath] || files[importedPath.replace(/\.tsx$/i, ".jsx")] || files[importedPath.replace(/\.tsx$/i, ".ts")] || files[importedPath.replace(/\.tsx$/i, ".js")]
+    if (!code) continue
+    const jsx = extractReturnJsx(code)
+    if (jsx.trim()) output[componentName] = jsx
+  }
+  return output
+}
+
+function inlineLocalComponents(jsx: string, componentMap: Record<string, string>): string {
+  let output = jsx
+  for (let pass = 0; pass < 5; pass++) {
+    let changed = false
+    for (const [name, componentJsx] of Object.entries(componentMap)) {
+      const before = output
+      output = output
+        .replace(new RegExp(`<${name}(\\s[^>]*)?\\s*\\/>`, "g"), componentJsx)
+        .replace(new RegExp(`<${name}(\\s[^>]*)?>[\\s\\S]*?<\\/${name}>`, "g"), componentJsx)
+      if (output !== before) changed = true
+    }
+    if (!changed) break
+  }
+  return output
+}
+
+function jsxToPreviewHtml(jsx: string): string {
+  return jsx
+    .replace(/<>/g, "")
+    .replace(/<\/>/g, "")
+    .replace(/className=/g, "class=")
+    .replace(/htmlFor=/g, "for=")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\s+key=\{[^}]*\}/g, "")
+    .replace(/\s+on[A-Z][A-Za-z0-9_]*=\{[\s\S]*?\}/g, "")
+    .replace(/\s+style=\{\{([\s\S]*?)\}\}/g, "")
+    .replace(/\{`([\s\S]*?)`\}/g, "$1")
+    .replace(/\{\"([^\"]*)\"\}/g, "$1")
+    .replace(/\{'([^']*)'\}/g, "$1")
+    .replace(/\{([^{}]*)\}/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?\s*\/>/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
+}
+
+function hasMeaningfulPreviewText(html: string): boolean {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text.length > 20
+}
+
+function buildRealReactPreviewHtml(files: Record<string, string>): string {
+  const pageCode = getFile(files, ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"])
+  if (!pageCode.trim()) return ""
+  const pageJsx = extractReturnJsx(pageCode)
+  if (!pageJsx.trim()) return ""
+  const componentMap = getComponentRenderMap(files, pageCode)
+  const inlinedJsx = inlineLocalComponents(pageJsx, componentMap)
+  const body = jsxToPreviewHtml(inlinedJsx)
+  if (!body.trim() || !hasMeaningfulPreviewText(body)) return ""
+  const globalsCss = getFile(files, ["app/globals.css", "styles/globals.css", "globals.css"])
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+html, body { margin: 0; min-height: 100%; background: #050509; color: white; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+*, *::before, *::after { box-sizing: border-box; }
+img, video, canvas, svg { max-width: 100%; height: auto; }
+h1, h2, h3, p, span, a, button { overflow-wrap: anywhere; }
+${globalsCss}
+</style>
+</head>
+<body>
+${body}
+</body>
+</html>`
+}
+
 function renderRestaurantPreview(content: ReturnType<typeof getPreviewContent>) {
   const cards = content.cards.length
     ? content.cards
@@ -488,12 +604,20 @@ function renderGenericPreview(content: ReturnType<typeof getPreviewContent>) {
 }
 
 function buildPreviewHtml(files: Record<string, string>, projectName = "") {
+  // First render the REAL saved project files.
+  // This is critical: if chat edits text position, center alignment, colors, fonts,
+  // mobile/tablet classes, tables, borders, or animations, preview must show those
+  // exact file changes instead of rebuilding a generic template.
+  const realReactPreview = buildRealReactPreviewHtml(files)
+  if (realReactPreview) return realReactPreview
+
   const globalsCss = getFile(files, ["app/globals.css", "styles/globals.css", "globals.css"])
   const kind = detectProjectKind(files, projectName)
   const content = getPreviewContent(files, projectName)
 
   const withCss = (html: string) =>
-    html.replace("</style>", `${globalsCss}\n</style>`)
+    html.replace("</style>", `${globalsCss}
+</style>`)
 
   if (kind === "restaurant") return withCss(renderRestaurantPreview(content))
   if (kind === "school") return withCss(renderSchoolPreview(content))
