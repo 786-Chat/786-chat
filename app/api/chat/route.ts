@@ -834,12 +834,27 @@ if (!isAdminRequest) {
     if (!currentChatId) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
 
-      const newChat = await sql`
-        INSERT INTO chats (user_id, title)
-        VALUES (${session.id}, ${title || "New chat"})
-        RETURNING id
-      `
-      currentChatId = newChat[0].id
+      if (requestedProjectId) {
+        try {
+          const projectChat = await sql`
+            INSERT INTO chats (user_id, project_id, title)
+            VALUES (${session.id}, ${requestedProjectId}::uuid, ${title || "New chat"})
+            RETURNING id
+          `
+          currentChatId = projectChat[0].id
+        } catch (error) {
+          console.warn("[Chat API] chats.project_id is not available yet; falling back to normal chat insert", error)
+        }
+      }
+
+      if (!currentChatId) {
+        const newChat = await sql`
+          INSERT INTO chats (user_id, title)
+          VALUES (${session.id}, ${title || "New chat"})
+          RETURNING id
+        `
+        currentChatId = newChat[0].id
+      }
     }
 
     // Save user message to database
@@ -1554,6 +1569,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const chatId = searchParams.get("chatId")
+    const projectId = searchParams.get("projectId")
 
     if (chatId) {
       const dbMessages = await sql`
@@ -1566,6 +1582,48 @@ export async function GET(request: Request) {
       `
 
       return new Response(JSON.stringify({ messages: dbMessages }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      })
+    }
+
+    if (projectId) {
+      try {
+        const projectChatRows = await sql`
+          SELECT id
+          FROM chats
+          WHERE user_id = ${session.id}
+            AND project_id = ${projectId}::uuid
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `
+
+        const projectChatId = projectChatRows[0]?.id
+
+        if (projectChatId) {
+          const dbMessages = await sql`
+            SELECT m.id, m.role, m.content, m.created_at
+            FROM messages m
+            JOIN chats c ON c.id = m.chat_id
+            WHERE m.chat_id = ${projectChatId}
+              AND c.user_id = ${session.id}
+            ORDER BY m.created_at ASC
+          `
+
+          return new Response(JSON.stringify({ chatId: projectChatId, messages: dbMessages }), {
+            headers: {
+              "Content-Type": "application/json",
+              "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+          })
+        }
+      } catch (error) {
+        console.warn("[Chat API] Could not load project chat by project_id. Returning empty project chat.", error)
+      }
+
+      return new Response(JSON.stringify({ chatId: null, messages: [] }), {
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-store, no-cache, must-revalidate",
