@@ -132,6 +132,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const startNewChat = () => {
     setCurrentChatId(null)
     window.dispatchEvent(new CustomEvent("new-chat"))
+    window.location.href = "/dashboard/chat?newProject=1"
   }
 
   const loadChat = (chatId: string) => {
