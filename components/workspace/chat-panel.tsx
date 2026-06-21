@@ -446,6 +446,12 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       if (nextProjectId && nextProjectId !== projectId && typeof window !== "undefined") {
         const nextUrl = `/dashboard/chat?projectId=${encodeURIComponent(nextProjectId)}`
         window.history.replaceState({}, "", nextUrl)
+        window.dispatchEvent(new PopStateEvent("popstate"))
+        window.dispatchEvent(
+          new CustomEvent("chat-selected", {
+            detail: { chatId: nextChatId || currentChatId, projectId: nextProjectId },
+          })
+        )
         window.dispatchEvent(new Event("project-files-changed"))
         window.dispatchEvent(new Event("chat-updated"))
       }
@@ -456,6 +462,18 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     onFinish: () => {
       window.dispatchEvent(new Event("project-files-changed"))
       window.dispatchEvent(new Event("chat-updated"))
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search)
+        const urlProjectId = params.get("projectId") || projectId || ""
+        if (urlProjectId) {
+          window.dispatchEvent(
+            new CustomEvent("chat-selected", {
+              detail: { chatId: currentChatId, projectId: urlProjectId },
+            })
+          )
+        }
+      }
     },
   })
 
