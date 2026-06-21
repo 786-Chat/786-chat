@@ -267,6 +267,65 @@ CRITICAL UNIQUENESS RULE:
 - If prompt is SaaS, school, or marketplace, do not output any restaurant words anywhere in any file.`
 }
 
+
+function getUserEditInstructionBrief(prompt: string): string {
+  const lower = prompt.toLowerCase()
+  const rules: string[] = []
+
+  if (lower.includes("center") || lower.includes("centre")) {
+    rules.push("- CENTERING REQUEST: center the requested content using flex/grid/text-center/items-center/justify-center/mx-auto as appropriate. For mobile and tablet, keep content centered with responsive classes such as text-center, items-center, justify-center, mx-auto, px-5, sm:px-6, md:px-8.")
+  }
+
+  if (lower.includes("visible") || lower.includes("overflow") || lower.includes("mobile") || lower.includes("tablet") || lower.includes("responsive")) {
+    rules.push("- RESPONSIVE/VISIBILITY REQUEST: make all text visible on desktop, tablet, and mobile. Remove truncation such as line-clamp, overflow-hidden on text wrappers, fixed huge widths, negative margins, and any class that cuts text. Use break-words, whitespace-normal, max-w-full, leading-tight, responsive text sizes like text-4xl sm:text-5xl md:text-7xl, and responsive padding.")
+  }
+
+  if (lower.includes("color") || lower.includes("colour") || lower.includes("background") || lower.includes("red") || lower.includes("blue") || lower.includes("green")) {
+    rules.push("- COLOR REQUEST: apply the user's requested colors directly to backgrounds, gradients, buttons, borders, highlights, shadows, and section accents. If user asks red/blue/green, those colors must appear visibly in the UI.")
+  }
+
+  if (lower.includes("font") || lower.includes("text") || lower.includes("txt") || lower.includes("heading") || lower.includes("title")) {
+    rules.push("- TEXT/FONT REQUEST: edit the actual visible React text and font classes in the real project files. Preserve existing design unless user asks for redesign. Do not only change saved chat text.")
+  }
+
+  if (lower.includes("border") || lower.includes("div") || lower.includes("card") || lower.includes("box")) {
+    rules.push("- BORDER/DIV REQUEST: create or update visible div/card containers with borders, rounded corners, padding, shadows, and responsive spacing as requested.")
+  }
+
+  if (lower.includes("table") || lower.includes("tablie") || lower.includes("color table") || lower.includes("colour table")) {
+    rules.push("- TABLE REQUEST: create a real responsive table component or table section with headers, rows, borders, readable mobile layout, and colors requested by the user.")
+  }
+
+  if (lower.includes("animation") || lower.includes("animate") || lower.includes("effect") || lower.includes("motion")) {
+    rules.push("- ANIMATION/EFFECT REQUEST: add visible CSS/Tailwind animations and effects such as animate-pulse, animate-bounce, hover:scale, transition, gradient movement, floating blobs, blur glows, or custom keyframes in app/globals.css when needed.")
+  }
+
+  if (lower.includes("position") || lower.includes("move") || lower.includes("left") || lower.includes("right") || lower.includes("top") || lower.includes("bottom")) {
+    rules.push("- POSITION REQUEST: change layout/position exactly as requested using flex/grid/order/absolute/relative, responsive breakpoints, and spacing utilities. Make sure it works on desktop, tablet, and mobile.")
+  }
+
+  if (lower.includes("logo") || lower.includes("image") || lower.includes("icon")) {
+    rules.push("- LOGO/IMAGE REQUEST: create or update visible logo/image/icon area. If no image URL is provided, build a polished text/SVG/CSS logo placeholder in the project files.")
+  }
+
+  if (rules.length === 0) {
+    rules.push("- GENERAL EDIT REQUEST: understand the user's instruction literally and update the real project files so the preview visibly changes. Do not return success unless at least one real file operation changes the requested UI.")
+  }
+
+  return `
+
+USER REQUEST IMPLEMENTATION RULES:
+${rules.join("\n")}
+
+STRICT RESPONSIVE QUALITY CHECK BEFORE RESPONDING:
+- The edited UI must look correct at desktop, tablet, and mobile widths.
+- Hero text must not be cut off in the mobile preview.
+- Buttons/cards/tables must stay inside the screen on mobile.
+- Use full file operations only.
+- If the request says change, center, color, font, text, border, table, animation, effect, position, logo, overflow, mobile, or tablet, you MUST edit the real React file(s) that control that visible part.
+`
+}
+
 function buildUniqueStarterFiles(prompt: string, projectName: string): Record<string, string> {
   const kind = detectProjectKind(prompt)
   const title = projectName.replace(/`/g, "'")
@@ -332,7 +391,27 @@ function isEditOnlyProjectRequest(prompt: string): boolean {
     lower.includes("modify") ||
     lower.includes("improve current") ||
     lower.includes("current project") ||
-    lower.includes("same project")
+    lower.includes("same project") ||
+    lower.includes("center") ||
+    lower.includes("centre") ||
+    lower.includes("visible") ||
+    lower.includes("mobile") ||
+    lower.includes("tablet") ||
+    lower.includes("responsive") ||
+    lower.includes("overflow") ||
+    lower.includes("color") ||
+    lower.includes("colour") ||
+    lower.includes("font") ||
+    lower.includes("text") ||
+    lower.includes("txt") ||
+    lower.includes("border") ||
+    lower.includes("table") ||
+    lower.includes("tablie") ||
+    lower.includes("animation") ||
+    lower.includes("animate") ||
+    lower.includes("effect") ||
+    lower.includes("position") ||
+    lower.includes("logo")
   )
 }
 
@@ -1069,6 +1148,7 @@ ${String(content).slice(0, 12000)}`)
       : ""
 
     const projectDesignBrief = getProjectDesignBrief(userText, selectedProjectName || createProjectNameFromPrompt(userText))
+    const userEditInstructionBrief = getUserEditInstructionBrief(userText)
 
     // Estimate input tokens
     const inputTokens = estimateTokens(userText)
@@ -1496,7 +1576,27 @@ const enableFileMode =
   userTextLower.includes("homepage") ||
   userTextLower.includes("software") ||
   userTextLower.includes("saas") ||
-  userTextLower.includes("dashboard")
+  userTextLower.includes("dashboard") ||
+  userTextLower.includes("center") ||
+  userTextLower.includes("centre") ||
+  userTextLower.includes("visible") ||
+  userTextLower.includes("mobile") ||
+  userTextLower.includes("tablet") ||
+  userTextLower.includes("responsive") ||
+  userTextLower.includes("overflow") ||
+  userTextLower.includes("color") ||
+  userTextLower.includes("colour") ||
+  userTextLower.includes("font") ||
+  userTextLower.includes("text") ||
+  userTextLower.includes("txt") ||
+  userTextLower.includes("border") ||
+  userTextLower.includes("table") ||
+  userTextLower.includes("tablie") ||
+  userTextLower.includes("animation") ||
+  userTextLower.includes("animate") ||
+  userTextLower.includes("effect") ||
+  userTextLower.includes("position") ||
+  userTextLower.includes("logo")
 
 const result = await streamText({
   model: hasVisionInput
@@ -1509,6 +1609,7 @@ const result = await streamText({
       ? userSystemPrompt + selectedProjectFileContext + `
 
 ${projectDesignBrief}
+${userEditInstructionBrief}
 
 IMPORTANT:
 The owner is building/testing a CUSTOMER PROJECT in Replit-style project mode.
@@ -1527,6 +1628,7 @@ app/page.tsx must never remain as the starter "New Website" page.
           `
 
 ${projectDesignBrief}
+${userEditInstructionBrief}
 
 IMPORTANT:
 Return ONLY file operations.
