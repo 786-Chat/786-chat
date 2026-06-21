@@ -197,8 +197,10 @@ export default function DashboardLayout({
     pathname === "/dashboard/chat" ||
     /^\/dashboard\/sites\/[^/]+\/chat$/.test(pathname)
 
+  const selectedProjectId = searchParams.get("projectId") || ""
+
   const isFreshNewProject =
-    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1"
+    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1" && !selectedProjectId
 
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
@@ -211,7 +213,11 @@ export default function DashboardLayout({
     }
 
     try {
-      const res = await fetch("/api/projects/latest", {
+      const projectEndpoint = selectedProjectId
+        ? `/api/projects/${encodeURIComponent(selectedProjectId)}`
+        : "/api/projects/latest"
+
+      const res = await fetch(projectEndpoint, {
         credentials: "include",
         cache: "no-store",
       })
@@ -226,7 +232,7 @@ export default function DashboardLayout({
     } catch {
       setCurrentProject(null)
     }
-  }, [userEmail, isChatWorkspace, isFreshNewProject])
+  }, [userEmail, isChatWorkspace, isFreshNewProject, selectedProjectId])
 
   useEffect(() => {
     if (!userEmail || !isFreshNewProject) return
@@ -590,7 +596,8 @@ export default function DashboardLayout({
         >
           <div className="flex flex-col min-w-0 overflow-hidden flex-1">
             <WorkspaceChatPanel
-              key={isFreshNewProject ? "fresh-new-project" : "chat-workspace"}
+              key={isFreshNewProject ? "fresh-new-project" : selectedProjectId ? `project-${selectedProjectId}` : "chat-workspace"}
+              projectId={selectedProjectId || undefined}
               onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
