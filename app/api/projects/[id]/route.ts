@@ -1,232 +1,23 @@
-import { NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { getSession } from "@/lib/auth"
-
-function normalizeFiles(files: unknown): Record<string, string> {
-  if (!files || typeof files !== "object" || Array.isArray(files)) return {}
-
-  const output: Record<string, string> = {}
-
-  for (const [path, value] of Object.entries(files as Record<string, unknown>)) {
-    if (typeof path === "string" && typeof value === "string") {
-      output[path] = value
-    }
-  }
-
-  return output
-}
-
-async function getProjectId(params: { id: string } | Promise<{ id: string }>) {
-  const resolvedParams = await Promise.resolve(params)
-  return String(resolvedParams.id || "")
-}
-
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const projectId = await getProjectId(params)
-
-    const rows = await sql`
-      SELECT id, user_id, name, description, domain, custom_domain, status, template, files, created_at, updated_at, deleted_at, delete_after
-      FROM projects
-      WHERE id = ${projectId}::uuid
-        AND user_id = ${session.id}::uuid
-      LIMIT 1
-    `
-
-    if (!rows.length) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 })
-    }
-
-    const project = rows[0]
-    const files = normalizeFiles(project.files)
-
-    return NextResponse.json(
-      {
-        success: true,
-        project: {
-          id: project.id,
-          user_id: project.user_id,
-          name: project.name || "AI Project",
-          description: project.description || "",
-          domain: project.domain || null,
-          custom_domain: project.custom_domain || null,
-          status: project.status || "active",
-          template: project.template || "custom",
-          files,
-          fileCount: Object.keys(files).length,
-          created_at: project.created_at,
-          updated_at: project.updated_at,
-          deleted_at: project.deleted_at,
-          delete_after: project.delete_after,
-        },
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    )
-  } catch (error) {
-    console.error("Get project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to get project",
-        debug: error instanceof Error ? error.message : "Unknown project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-}
-
-async function softDeleteProject(projectId: string, userId: string) {
-  return sql`
-    UPDATE projects
-    SET deleted_at = NOW(),
-        delete_after = NOW() + INTERVAL '7 days',
-        updated_at = NOW()
-    WHERE id = ${projectId}::uuid
-      AND user_id = ${userId}::uuid
-      AND deleted_at IS NULL
-    RETURNING id
-  `
-}
-
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const projectId = await getProjectId(params)
-    const rows = await softDeleteProject(projectId, session.id)
-
-    if (!rows.length) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 })
-    }
-
-    return NextResponse.json(
-      { success: true, deleted: true },
-      { headers: { "Cache-Control": "no-store" } }
-    )
-  } catch (error) {
-    console.error("Delete project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to delete project",
-        debug: error instanceof Error ? error.message : "Unknown delete project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json().catch(() => ({}))
-    const projectId = await getProjectId(params)
-
-    if (body?.action === "delete") {
-      const rows = await softDeleteProject(projectId, session.id)
-
-      if (!rows.length) {
-        return NextResponse.json({ error: "Project not found" }, { status: 404 })
-      }
-
-      return NextResponse.json(
-        { success: true, deleted: true },
-        { headers: { "Cache-Control": "no-store" } }
-      )
-    }
-
-    if (body?.action === "restore") {
-      return restoreProject(projectId, session.id)
-    }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
-  } catch (error) {
-    console.error("Project action error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to update project",
-        debug: error instanceof Error ? error.message : "Unknown project action error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-}
-
-async function restoreProject(projectId: string, userId: string) {
-  const rows = await sql`
-    UPDATE projects
-    SET deleted_at = NULL,
-        delete_after = NULL,
-        updated_at = NOW()
-    WHERE id = ${projectId}::uuid
-      AND user_id = ${userId}::uuid
-      AND deleted_at IS NOT NULL
-      AND (delete_after IS NULL OR delete_after > NOW())
-    RETURNING id
-  `
-
-  if (!rows.length) {
-    return NextResponse.json(
-      { error: "Project not found or recovery period expired" },
-      { status: 404 }
-    )
-  }
-
-  return NextResponse.json(
-    { success: true, restored: true },
-    { headers: { "Cache-Control": "no-store" } }
-  )
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json().catch(() => ({}))
-
-    if (body?.action !== "restore") {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 })
-    }
-
-    const projectId = await getProjectId(params)
-    return restoreProject(projectId, session.id)
-  } catch (error) {
-    console.error("Restore project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to restore project",
-        debug: error instanceof Error ? error.message : "Unknown restore project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-}
+PK
+     ˜„Õ\              mujeebproai_project_delete_fix/UT	 8j8jux         PK
+     ˜„Õ\            #  mujeebproai_project_delete_fix/app/UT	 8j8jux         PK
+     ˜„Õ\            '  mujeebproai_project_delete_fix/app/api/UT	 8j8jux         PK
+     ˜„Õ\            0  mujeebproai_project_delete_fix/app/api/projects/UT	 8j8jux         PK
+     ˜„Õ\            5  mujeebproai_project_delete_fix/app/api/projects/[id]/UT	 8j8jux         PK    ˜„Õ\ÆP†1  à  =  mujeebproai_project_delete_fix/app/api/projects/[id]/route.tsUT	 8j8jux         íYÝOÛHÏ_1X§ÖÖ¥)•z:)*pB‰Âõ¡ªèboˆ[ÇN×khšæ¿Ù/{í8!¡—Þ±wwfw>3kÂñ$afÐ£ßyŸ¦“$N)ÌaÈ’181N¾L)»¥Ìi„†4ýåÿ¼ŒÂë—Áµµ|CùMÓ0‰+T$ã#§Ñf±ÏÅjœ°1‰Âô$ŒhêÅo²økœÜÅ^úÔOXð&å,Œoš žû0k „Cpw$üü	|:¡ÉÔxgoœäúõ¹##ÓV˜Ê§:Äó€Qž±fóîæ£Ò’ŒO2¾ôØ=M<L¸Šãã„ðQnI”ÑO€œÉc[4F£´º¥VqåÊ(u´bKØ:(jž=3
+ÊƒJ‹fÐÒK‰>¡¬’T.Íâ´ÊŠ°S$Æ>äî@¿³D(Ð
+Ü	adŒÞ˜A´µ
+Ð?IÆaJß”ö• Ê,Œ¦ItKƒs¹
+CîHÈ
+gK/ë#¼B²¹™[fo…ð¢ãxBdú]YEò·‹Û\1úM¸ï[FSÞÄ‰¨3`ÞÎß×W	­¦´âlªÍ¬ôKutÅŠ€w½FîÏMv€nÒªÚÙÖú’"ç(c	kƒs‹DI&FàÀ¼)2Žž¡è¯w_ÁÜÓnµ$š¿Ù2UéÙ,¹+<ƒ	ýYËwÑ9í
+Ð¥˜øWâ%&cÚ„€¦>'Âà8HÆ$Ä§Ÿ¥<_™¡’³	œŽ'áÈ%S éÅapE8î;	ò÷€F´ü~E†œ2-ÍIÿì½Q.ÕsÞuú¥ÿc–+>o·³,4
+ÀaïØ( 	µ3ÐeÊÓîûî ^ÉÑgËyÂ>­ˆÆ7|´‘ó´ÑÛ8"E/zðõ*¢¬âä»Ÿ¬5#{U¼Ô,-ij³¥j
+f¹ÒÌ÷Ñ&mŒîŒ6ói½iÛ¢™æ4kE›¸X6AcÑˆð)ÄH&ôa´±›Ú
+³‚ÉšT`PâÁgË± ‹³(²)KÑZ0”¦ëøŒóƒKI"Ð--Éc‚¿ 73’CVâPIR™8ÂèA?è’ò•Nu=ñtX–ËÓËÒªH9ÛayòY>+²ä“š¶òt] T‰[¥U³õÜ¼æ/3QP&‘Ù9"þˆ¾8J°‚&‘ƒ	'/Ð^ŒbÉR ²g>áþ\™wžÏID[rÒuÞÒ"¯T~:Mõâm˜,&»Oz  ž|5{[®èuvÓVäbî’Ø…»#'ÔBkŒyGn(H¬—@YL§ÆF&ÿÚÝm>È`5?M†üXzI'¢›Ã©)ƒª
+ceim¸¼l\ž:e ¾è¬Bôê}p=ÛTEx˜Uøº½A§ÿïá)<ÿ2MŸE˜z¹´N=¨V¥Ô"%p÷z—§§r±ß\ö{ÝÞ[ÔŸkl9¡ˆÍ16~Ñt+&=Æ:Œ&],€¨îÙ`µÊõÍ—’Ô•:ÈÎë÷lÁ2‰Mïà²êjS´pÖ³«¼‰$Å¥VJ	óGºÑE\'§ÀÖ^6ú¢<;Ûhõòµ4ûý‘Û„¢{ò4wÛ´ŽË1¤ÌöÐÖ*O»!Ñ~ªªd[ìÂ áW°¾‹»ÞgMó‘:%æÚ®¦|Aµ§Óó¥È¸·ÀTº0“fX„ËTKåÅG+˜AiûmÔÌ FàG+õØw~v1øí‘ï:	¦¹8øä¶^KÆ‹•}oÜÙÜ+áH&tç´ˆ²¼ÄFÖGº»íF µ
+¢¶}ÿËÍ¸ú­„Š2.mãÐZeêdßÅEf‘&‡«ã5ü²iÙù÷X¿ÂS«j„màeÐoì¸E¿Z%à©Í¨âZ@
+½°Fwp_õ+|ÐoI„Mª`!UvUª¬U¾Œ;µ.Û._êòñW>[à§ºù-óåê;Êª/‡ë]ñv±üXZ|úËž}ûQnIB}!„³~Yò}%žWmj,‡¬û»Ã•PÅFMD„I Ø¡„Lí…Ø)`JEDã¾Ó`IGL¥ÞlA+>áŸŽÞýßJmÔJÕ£øÎJÿu4~Ø¿PHÖ‚ý¾ÚìÑ®-¬¼ÿ6€ŸÕ‰üXÈÿPK
+     ˜„Õ\                     íA    mujeebproai_project_delete_fix/UT 8jux         PK
+     ˜„Õ\            #         íAY   mujeebproai_project_delete_fix/app/UT 8jux         PK
+     ˜„Õ\            '         íA¶   mujeebproai_project_delete_fix/app/api/UT 8jux         PK
+     ˜„Õ\            0         íA  mujeebproai_project_delete_fix/app/api/projects/UT 8jux         PK
+     ˜„Õ\            5         íA  mujeebproai_project_delete_fix/app/api/projects/[id]/UT 8jux         PK    ˜„Õ\ÆP†1  à  =         ¤ð  mujeebproai_project_delete_fix/app/api/projects/[id]/route.tsUT 8jux         PK      ¯  ˜    
