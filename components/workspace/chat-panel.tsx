@@ -756,10 +756,15 @@ if (projectId && uploadedFiles.length === 0) {
   finalMessageText += `
 
 PROJECT_FILE_SYSTEM_RULE:
+- This is a CUSTOMER PROJECT in project.files mode.
+- Do NOT edit the MujeebProAI platform.
+- Do NOT edit GitHub.
+- Do NOT read or change app/api/chat/route.ts, components/workspace/*, lib/* platform files, admin files, dashboard shell files, or owner platform files.
 - This is an existing selected project.
-- Read and preserve the existing files from server context.
-- Modify only the requested file and section.
+- Read and preserve the existing project files from server context.
+- Modify only the requested project file and section.
 - Preserve id, ul, ol, li, div, a href/url, image src/url, classes, animations, layout, colors, backgrounds, and components unless the user explicitly asks to change them.
+- If the user asks for center/mobile/tablet/text/color/font/border/table/logo/animation/position/spacing changes, update the real project React files so the visible preview changes.
 - Return only editFile/createFile/deleteFile operations with full file content.`
 }
 
