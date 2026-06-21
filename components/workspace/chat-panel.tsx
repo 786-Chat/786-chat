@@ -40,6 +40,7 @@ interface UsageData {
 }
 
 interface ChatPanelProps {
+  projectId?: string
   onPreviewUpdate?: (html: string) => void
   viewMode?: "preview" | "code"
   onViewModeChange?: (mode: "preview" | "code") => void
@@ -351,7 +352,7 @@ function getDisplayTextForMessage(rawText: string, role: string): string {
   return visibleText
 }
 
-export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
+export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onViewModeChange }: ChatPanelProps) {
   const { user } = useAuth()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
   const previewStorageKey = user?.email
@@ -425,6 +426,7 @@ export function WorkspaceChatPanel({ onPreviewUpdate, viewMode, onViewModeChange
     api: "/api/chat",
     body: {
       chatId: currentChatId,
+      projectId: projectId || undefined,
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
