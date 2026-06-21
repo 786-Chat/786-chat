@@ -795,7 +795,7 @@ useEffect(() => {
 
   const sourceFileHints = getSourceFileHints(safeLiveUrl)
 
-  const renderPreviewFrame = (content: "html" | "url") => {
+  const renderPreviewFrame = (content: "html" | "url" | "project") => {
     const iframeProps =
       content === "html"
         ? {
@@ -804,12 +804,19 @@ useEffect(() => {
             title: "Generated Preview",
             sandbox: "allow-scripts allow-forms allow-popups",
           }
-        : {
-            key: `${refreshKey}-${device}-${safeLiveUrl}`,
-            src: safeLiveUrl,
-            title: "Website Preview",
-            sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
-          }
+        : content === "project"
+          ? {
+              key: `project-${refreshKey}-${device}-${projectPreviewApiUrl}`,
+              src: projectPreviewApiUrl,
+              title: "Project Preview",
+              sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
+            }
+          : {
+              key: `${refreshKey}-${device}-${safeLiveUrl}`,
+              src: safeLiveUrl,
+              title: "Website Preview",
+              sandbox: "allow-scripts allow-same-origin allow-forms allow-popups",
+            }
 
     if (isDesktopDevice) {
       return (
@@ -1058,7 +1065,7 @@ useEffect(() => {
         <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
           <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
           <span className="text-[11px] text-cyan-400/80">
-            {hasPreviewHtml
+            {hasPreviewHtml || projectPreviewApiUrl
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
                 ? viewMode === "code"
@@ -1195,17 +1202,7 @@ useEffect(() => {
             </div>
           </div>
         ) : projectPreviewApiUrl ? (
-          <iframe
-            key={projectPreviewApiUrl}
-            src={projectPreviewApiUrl}
-            title="Project Preview"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={(event) => {
-              hideIframeScrollbar(event.currentTarget)
-              setPreviewFrameReady(true)
-            }}
-            className="absolute inset-0 h-full w-full border-0 bg-[#050509]"
-          />
+          renderPreviewFrame("project")
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
         ) : safeLiveUrl ? (
