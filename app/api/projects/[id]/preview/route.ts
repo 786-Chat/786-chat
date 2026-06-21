@@ -84,61 +84,105 @@ function findComponentFile(files: Record<string, string>, name: string) {
 }
 
 function detectProjectKind(files: Record<string, string>, projectName = ""): ProjectKind {
-  const allText = `${projectName}\n${Object.keys(files).join("\n")}\n${Object.values(files).join("\n")}`.toLowerCase()
+  const nameText = projectName.toLowerCase()
+  const pathText = Object.keys(files).join("\n").toLowerCase()
+  const fileText = Object.values(files).join("\n").toLowerCase()
+  const allText = `${nameText}\n${pathText}\n${fileText}`
 
-  if (
-    allText.includes("restaurant") ||
-    allText.includes("dining") ||
-    allText.includes("menu") ||
-    allText.includes("chef") ||
-    allText.includes("table")
-  ) {
-    return "restaurant"
-  }
-
-  if (
-    allText.includes("school") ||
-    allText.includes("student") ||
-    allText.includes("teacher") ||
-    allText.includes("attendance") ||
-    allText.includes("grades") ||
-    allText.includes("classroom")
-  ) {
+  // IMPORTANT:
+  // Project name is the strongest source of truth.
+  // Old/generated files may still contain words like "Restaurant Preview", "menu", or "table".
+  // If we check those weak words first, school/SaaS projects get rendered with the restaurant preview.
+  if (nameText.includes("school") || nameText.includes("student") || nameText.includes("teacher")) {
     return "school"
   }
 
-  if (
-    allText.includes("saas") ||
-    allText.includes("dashboard") ||
-    allText.includes("revenue") ||
-    allText.includes("analytics") ||
-    allText.includes("reports") ||
-    allText.includes("sidebar")
-  ) {
+  if (nameText.includes("saas") || nameText.includes("dashboard") || nameText.includes("analytics") || nameText.includes("reports")) {
     return "saas"
   }
 
-  if (
-    allText.includes("marketplace") ||
-    allText.includes("listing") ||
-    allText.includes("seller") ||
-    allText.includes("buyer") ||
-    allText.includes("product")
-  ) {
+  if (nameText.includes("marketplace") || nameText.includes("listing") || nameText.includes("seller") || nameText.includes("buyer")) {
     return "marketplace"
   }
 
-  if (
-    allText.includes("booking") ||
-    allText.includes("appointment") ||
-    allText.includes("reservation")
-  ) {
+  if (nameText.includes("booking") || nameText.includes("appointment") || nameText.includes("reservation")) {
+    return "booking"
+  }
+
+  if (nameText.includes("restaurant") || nameText.includes("dining") || nameText.includes("food") || nameText.includes("cafe")) {
+    return "restaurant"
+  }
+
+  const schoolScore = [
+    "school",
+    "student",
+    "students",
+    "teacher",
+    "teachers",
+    "attendance",
+    "grades",
+    "classroom",
+    "classes",
+    "parent portal",
+    "timetable",
+  ].filter((word) => allText.includes(word)).length
+
+  const saasScore = [
+    "saas",
+    "dashboard",
+    "analytics",
+    "reports",
+    "revenue",
+    "metrics",
+    "subscription",
+    "users",
+    "sidebar",
+    "workspace",
+  ].filter((word) => allText.includes(word)).length
+
+  const marketplaceScore = [
+    "marketplace",
+    "listing",
+    "listings",
+    "seller",
+    "buyer",
+    "product",
+    "products",
+    "checkout",
+    "vendor",
+  ].filter((word) => allText.includes(word)).length
+
+  const restaurantScore = [
+    "restaurant",
+    "dining",
+    "chef",
+    "cuisine",
+    "reservation",
+    "book a table",
+    "reserve a table",
+    "private dining",
+    "signature menu",
+  ].filter((word) => allText.includes(word)).length
+
+  const scores: Array<{ kind: ProjectKind; score: number }> = [
+    { kind: "school", score: schoolScore },
+    { kind: "saas", score: saasScore },
+    { kind: "marketplace", score: marketplaceScore },
+    { kind: "restaurant", score: restaurantScore },
+  ]
+
+  const winner = scores.sort((a, b) => b.score - a.score)[0]
+
+  if (winner.score > 0) {
+    return winner.kind
+  }
+
+  if (allText.includes("booking") || allText.includes("appointment")) {
     return "booking"
   }
 
   return "generic"
 }
-
 function extractCards(files: Record<string, string>) {
   const source = Object.values(files).join("\n")
   const matches = [...source.matchAll(/\{\s*name:\s*["'`]([^"'`]+)["'`][\s\S]*?(?:price|value|amount|count):\s*["'`]([^"'`]+)["'`][\s\S]*?(?:desc|description|label):\s*["'`]([^"'`]+)["'`][\s\S]*?\}/g)]
