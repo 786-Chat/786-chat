@@ -229,10 +229,10 @@ function createProjectNameFromPrompt(prompt: string): string {
   return clean.length > 64 ? `${clean.slice(0, 61)}...` : clean
 }
 
-async function applyFileOperationsToLatestProject(
+async function applyFileOperationsToProject(
   userId: string,
   assistantText: string,
-  options: { createNewProject?: boolean; projectName?: string } = {}
+  options: { createNewProject?: boolean; projectName?: string; projectId?: string | null } = {}
 ) {
   const operations = extractFileOperations(assistantText)
 
@@ -243,14 +243,23 @@ async function applyFileOperationsToLatestProject(
 
   const existingProjects = options.createNewProject
     ? []
-    : await sql`
-        SELECT id, files
-        FROM projects
-        WHERE user_id = ${userId}::uuid
-          AND deleted_at IS NULL
-        ORDER BY updated_at DESC
-        LIMIT 1
-      `
+    : options.projectId
+      ? await sql`
+          SELECT id, files
+          FROM projects
+          WHERE id = ${options.projectId}::uuid
+            AND user_id = ${userId}::uuid
+            AND deleted_at IS NULL
+          LIMIT 1
+        `
+      : await sql`
+          SELECT id, files
+          FROM projects
+          WHERE user_id = ${userId}::uuid
+            AND deleted_at IS NULL
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `
 
   const baseFiles: Record<string, string> = {
     "app/page.tsx": `export default function Home() {
@@ -471,6 +480,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     const messages: UIMessage[] = body.messages
     const chatId: string | null = body.chatId
+    const requestedProjectId: string | null =
+      typeof body.projectId === "string" && body.projectId.trim()
+        ? body.projectId.trim()
+        : null
 
     // Get user's subscription and plan
     const subscriptions = await sql`
@@ -642,6 +655,26 @@ if (!isAdminRequest) {
     }
   }
 }
+
+    // Selected project must belong to this logged-in user.
+    // Customers and owner can only edit their own project rows here.
+    if (requestedProjectId) {
+      const ownedProject = await sql`
+        SELECT id
+        FROM projects
+        WHERE id = ${requestedProjectId}::uuid
+          AND user_id = ${session.id}::uuid
+          AND deleted_at IS NULL
+        LIMIT 1
+      `
+
+      if (!ownedProject[0]) {
+        return new Response(
+          JSON.stringify({ error: "PROJECT_NOT_FOUND" }),
+          { status: 404, headers: { "Content-Type": "application/json" } }
+        )
+      }
+    }
 
     // Get or create chat - secure per user
     let currentChatId = chatId
@@ -1097,6 +1130,10 @@ if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     }
   )
 }
+const selectedProjectContext = requestedProjectId
+  ? `\nSELECTED_PROJECT_ID: ${requestedProjectId}\nYou are editing this selected project only. Do not create or update any other project.`
+  : ""
+
 const enableFileMode =
   userTextLower.includes("edit") ||
   userTextLower.includes("create") ||
@@ -1121,7 +1158,7 @@ const result = await streamText({
   system: shouldUsePreviewOnlyMode
     ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
     : isCustomerProjectModeRequest
-      ? userSystemPrompt + `
+      ? userSystemPrompt + selectedProjectContext + `
 
 IMPORTANT:
 The owner is building/testing a CUSTOMER PROJECT in Replit-style project mode.
@@ -1136,7 +1173,7 @@ app/page.tsx must never remain as the starter "New Website" page.
       : isAdmin
         ? adminSystemPrompt
         : enableFileMode
-        ? userSystemPrompt +
+        ? userSystemPrompt + selectedProjectContext +
           `
 
 IMPORTANT:
@@ -1164,7 +1201,7 @@ Do not return HTML previews.
 Do not return markdown instructions.
 Do not say "copy this code".
 `
-        : userSystemPrompt,
+        : userSystemPrompt + selectedProjectContext,
 
   messages: modelMessages,
 
@@ -1198,11 +1235,12 @@ Do not say "copy this code".
           if (operations.length > 0 && !ownerPlatformAdminMode) {
             const userMessageCount = messages.filter((message) => message.role === "user").length
             const shouldCreateNewProject =
-              !chatId && userMessageCount <= 1
+              !requestedProjectId && !chatId && userMessageCount <= 1
 
-            await applyFileOperationsToLatestProject(session.id, assistantText, {
-              createNewProject: shouldCreateNewProject,
-              projectName: shouldCreateNewProject
+            await applyFileOperationsToProject(session.id, assistantText, {
+              createNewProject: shouldCreateNewProject && !requestedProjectId,
+              projectId: requestedProjectId,
+              projectName: shouldCreateNewProject && !requestedProjectId
                 ? createProjectNameFromPrompt(userText)
                 : undefined,
             })
@@ -1258,6 +1296,7 @@ Do not say "copy this code".
       consumeSseStream: consumeStream,
       headers: {
         "X-Chat-Id": currentChatId || "",
+        "X-Project-Id": requestedProjectId || "",
         "X-Remaining-Daily": String(protectionResult.remaining?.dailyMessages || 0),
         "X-Remaining-Monthly": String(protectionResult.remaining?.monthlyMessages || 0),
         "X-Extra-Credits": String(protectionResult.remaining?.extraCredits || 0),
