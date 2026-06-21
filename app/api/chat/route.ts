@@ -657,10 +657,13 @@ if (!isAdminRequest) {
 }
 
     // Selected project must belong to this logged-in user.
-    // Customers and owner can only edit their own project rows here.
+    // Also load project files so the AI can edit the real selected file, not guess.
+    let selectedProjectFiles: Record<string, string> = {}
+    let selectedProjectName = ""
+
     if (requestedProjectId) {
       const ownedProject = await sql`
-        SELECT id
+        SELECT id, name, files
         FROM projects
         WHERE id = ${requestedProjectId}::uuid
           AND user_id = ${session.id}::uuid
@@ -673,6 +676,20 @@ if (!isAdminRequest) {
           JSON.stringify({ error: "PROJECT_NOT_FOUND" }),
           { status: 404, headers: { "Content-Type": "application/json" } }
         )
+      }
+
+      selectedProjectName = String(ownedProject[0].name || "Selected Project")
+
+      if (
+        ownedProject[0].files &&
+        typeof ownedProject[0].files === "object" &&
+        !Array.isArray(ownedProject[0].files)
+      ) {
+        selectedProjectFiles = Object.fromEntries(
+          Object.entries(ownedProject[0].files as Record<string, unknown>).filter(
+            ([path, value]) => typeof path === "string" && typeof value === "string"
+          )
+        ) as Record<string, string>
       }
     }
 
@@ -717,6 +734,28 @@ if (!isAdminRequest) {
 
     // Convert UIMessages to model messages
     const modelMessages = await convertToModelMessages(messages)
+
+    const selectedProjectFileContext = requestedProjectId
+      ? `
+
+SELECTED PROJECT CONTEXT:
+Project ID: ${requestedProjectId}
+Project Name: ${selectedProjectName || "Selected Project"}
+
+You are editing THIS selected project only.
+Here are the current real files. Use these exact paths and update the correct file.
+If the user asks to change hero title/text, inspect and edit components/Hero.tsx or the component containing that text, not only app/page.tsx.
+If the visible page imports components, edit the imported component that contains the visible text.
+Return ONLY editFile/createFile/deleteFile operations with FULL file content.
+
+CURRENT PROJECT FILES:
+${Object.entries(selectedProjectFiles)
+  .slice(0, 30)
+  .map(([path, content]) => `--- FILE: ${path} ---
+${String(content).slice(0, 12000)}`)
+  .join("\n\n")}
+`
+      : ""
 
     // Estimate input tokens
     const inputTokens = estimateTokens(userText)
@@ -1130,10 +1169,6 @@ if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     }
   )
 }
-const selectedProjectContext = requestedProjectId
-  ? `\nSELECTED_PROJECT_ID: ${requestedProjectId}\nYou are editing this selected project only. Do not create or update any other project.`
-  : ""
-
 const enableFileMode =
   userTextLower.includes("edit") ||
   userTextLower.includes("create") ||
@@ -1158,7 +1193,7 @@ const result = await streamText({
   system: shouldUsePreviewOnlyMode
     ? `You are MujeebProAI. The preview panel has already been opened by the frontend. Reply exactly: Preview opened. Do not use tools. Do not search files. Do not read files.`
     : isCustomerProjectModeRequest
-      ? userSystemPrompt + selectedProjectContext + `
+      ? userSystemPrompt + selectedProjectFileContext + `
 
 IMPORTANT:
 The owner is building/testing a CUSTOMER PROJECT in Replit-style project mode.
@@ -1173,7 +1208,7 @@ app/page.tsx must never remain as the starter "New Website" page.
       : isAdmin
         ? adminSystemPrompt
         : enableFileMode
-        ? userSystemPrompt + selectedProjectContext +
+        ? userSystemPrompt + selectedProjectFileContext +
           `
 
 IMPORTANT:
@@ -1201,7 +1236,7 @@ Do not return HTML previews.
 Do not return markdown instructions.
 Do not say "copy this code".
 `
-        : userSystemPrompt + selectedProjectContext,
+        : userSystemPrompt + selectedProjectFileContext,
 
   messages: modelMessages,
 
