@@ -346,12 +346,12 @@ async function applyFileOperationsToProject(
   userId: string,
   assistantText: string,
   options: { createNewProject?: boolean; projectName?: string; projectId?: string | null } = {}
-) {
+): Promise<string | null> {
   const operations = extractFileOperations(assistantText)
 
   if (operations.length === 0) {
     console.warn("[Chat API] No file operations found in assistant response")
-    return
+    return null
   }
 
   const existingProjects = options.createNewProject
@@ -458,18 +458,18 @@ if __name__ == "__main__":
       WHERE id = ${existingProjects[0].id}::uuid
         AND user_id = ${userId}::uuid
     `
-    return
+    return String(existingProjects[0].id)
   }
 
   if (!options.createNewProject) {
     console.warn("[Chat API] No selected project and createNewProject is false. Skipping project insert.")
-    return
+    return null
   }
 
   const projectName = options.projectName || "AI Generated Project"
 
   try {
-    await sql`
+    const insertedProject = await sql`
       INSERT INTO projects (user_id, name, template, files, created_at, updated_at)
       VALUES (
         ${userId}::uuid,
@@ -479,14 +479,15 @@ if __name__ == "__main__":
         NOW(),
         NOW()
       )
+      RETURNING id
     `
-    return
+    return insertedProject[0]?.id ? String(insertedProject[0].id) : null
   } catch (error) {
     console.warn("[Chat API] Insert with template/name failed, retrying with name only", error)
   }
 
   try {
-    await sql`
+    const insertedProject = await sql`
       INSERT INTO projects (user_id, name, files, created_at, updated_at)
       VALUES (
         ${userId}::uuid,
@@ -495,13 +496,14 @@ if __name__ == "__main__":
         NOW(),
         NOW()
       )
+      RETURNING id
     `
-    return
+    return insertedProject[0]?.id ? String(insertedProject[0].id) : null
   } catch (error) {
     console.warn("[Chat API] Insert with name failed, retrying minimal insert", error)
   }
 
-  await sql`
+  const insertedProject = await sql`
     INSERT INTO projects (user_id, files, created_at, updated_at)
     VALUES (
       ${userId}::uuid,
@@ -509,7 +511,10 @@ if __name__ == "__main__":
       NOW(),
       NOW()
     )
+    RETURNING id
   `
+
+  return insertedProject[0]?.id ? String(insertedProject[0].id) : null
 }
 
 function normalizeGithubPath(path?: string) {
@@ -602,6 +607,28 @@ export async function POST(request: Request) {
       typeof body.projectId === "string" && body.projectId.trim()
         ? body.projectId.trim()
         : null
+
+    let effectiveProjectId: string | null = requestedProjectId
+
+    // If the frontend sends an existing chatId without projectId, recover the project_id from the chat.
+    // This keeps old project chats connected to their real files like Replit/Cursor.
+    if (chatId && !effectiveProjectId) {
+      try {
+        const chatProjectRows = await sql`
+          SELECT project_id
+          FROM chats
+          WHERE id = ${chatId}
+            AND user_id = ${session.id}
+          LIMIT 1
+        `
+
+        if (chatProjectRows[0]?.project_id) {
+          effectiveProjectId = String(chatProjectRows[0].project_id)
+        }
+      } catch (error) {
+        console.warn("[Chat API] chats.project_id not available while resolving chat project", error)
+      }
+    }
 
     // Get user's subscription and plan
     const subscriptions = await sql`
@@ -779,11 +806,11 @@ if (!isAdminRequest) {
     let selectedProjectFiles: Record<string, string> = {}
     let selectedProjectName = ""
 
-    if (requestedProjectId) {
+    if (effectiveProjectId) {
       const ownedProject = await sql`
         SELECT id, name, files
         FROM projects
-        WHERE id = ${requestedProjectId}::uuid
+        WHERE id = ${effectiveProjectId}::uuid
           AND user_id = ${session.id}::uuid
           AND deleted_at IS NULL
         LIMIT 1
@@ -834,11 +861,11 @@ if (!isAdminRequest) {
     if (!currentChatId) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
 
-      if (requestedProjectId) {
+      if (effectiveProjectId) {
         try {
           const projectChat = await sql`
             INSERT INTO chats (user_id, project_id, title)
-            VALUES (${session.id}, ${requestedProjectId}::uuid, ${title || "New chat"})
+            VALUES (${session.id}, ${effectiveProjectId}::uuid, ${title || "New chat"})
             RETURNING id
           `
           currentChatId = projectChat[0].id
@@ -868,11 +895,11 @@ if (!isAdminRequest) {
     // Convert UIMessages to model messages
     const modelMessages = await convertToModelMessages(messages)
 
-    const selectedProjectFileContext = requestedProjectId
+    const selectedProjectFileContext = effectiveProjectId
       ? `
 
 SELECTED PROJECT CONTEXT:
-Project ID: ${requestedProjectId}
+Project ID: ${effectiveProjectId}
 Project Name: ${selectedProjectName || "Selected Project"}
 
 You are editing THIS selected project only.
@@ -1414,7 +1441,7 @@ Do not say "copy this code".
           if (!ownerPlatformAdminMode) {
             const userMessageCount = messages.filter((message) => message.role === "user").length
             const shouldCreateNewProject =
-              !requestedProjectId &&
+              !effectiveProjectId &&
               !chatId &&
               userMessageCount <= 1 &&
               isNewProjectBuildRequest(userText)
@@ -1424,11 +1451,11 @@ Do not say "copy this code".
             // FIRST priority for selected project title edits:
             // Preserve the existing project files and update only the title text.
             // This prevents the AI from replacing a restaurant design with a generic purple page.
-            if (requestedProjectId && isEditOnlyProjectRequest(userText) && extractRequestedTitle(userText)) {
+            if (effectiveProjectId && isEditOnlyProjectRequest(userText) && extractRequestedTitle(userText)) {
               const refreshedProject = await sql`
                 SELECT files
                 FROM projects
-                WHERE id = ${requestedProjectId}::uuid
+                WHERE id = ${effectiveProjectId}::uuid
                   AND user_id = ${session.id}::uuid
                   AND deleted_at IS NULL
                 LIMIT 1
@@ -1448,7 +1475,7 @@ Do not say "copy this code".
                   UPDATE projects
                   SET files = ${JSON.stringify(fallbackFiles)}::jsonb,
                       updated_at = NOW()
-                  WHERE id = ${requestedProjectId}::uuid
+                  WHERE id = ${effectiveProjectId}::uuid
                     AND user_id = ${session.id}::uuid
                     AND deleted_at IS NULL
                 `
@@ -1458,13 +1485,28 @@ Do not say "copy this code".
             }
 
             if (!handledBySafeFallback && operations.length > 0) {
-              await applyFileOperationsToProject(session.id, assistantText, {
+              const savedProjectId = await applyFileOperationsToProject(session.id, assistantText, {
                 createNewProject: shouldCreateNewProject,
-                projectId: requestedProjectId,
+                projectId: effectiveProjectId,
                 projectName: shouldCreateNewProject
                   ? createProjectNameFromPrompt(userText)
                   : undefined,
               })
+
+              if (savedProjectId && currentChatId) {
+                try {
+                  await sql`
+                    UPDATE chats
+                    SET project_id = ${savedProjectId}::uuid,
+                        updated_at = NOW()
+                    WHERE id = ${currentChatId}
+                      AND user_id = ${session.id}
+                  `
+                  effectiveProjectId = savedProjectId
+                } catch (error) {
+                  console.warn("[Chat API] chats.project_id is not available yet; project saved without chat link", error)
+                }
+              }
             }
           }
 
@@ -1518,7 +1560,7 @@ Do not say "copy this code".
       consumeSseStream: consumeStream,
       headers: {
         "X-Chat-Id": currentChatId || "",
-        "X-Project-Id": requestedProjectId || "",
+        "X-Project-Id": effectiveProjectId || "",
         "X-Remaining-Daily": String(protectionResult.remaining?.dailyMessages || 0),
         "X-Remaining-Monthly": String(protectionResult.remaining?.monthlyMessages || 0),
         "X-Extra-Credits": String(protectionResult.remaining?.extraCredits || 0),
