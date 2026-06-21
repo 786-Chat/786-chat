@@ -254,7 +254,7 @@ ${globalsCss}
 }
 
 export async function GET(
-  _req: Request,
+  request: Request,
   { params }: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
@@ -265,6 +265,8 @@ export async function GET(
     }
 
     const projectId = await getProjectId(params)
+    const url = new URL(request.url)
+    const rawHtml = url.searchParams.get("raw") === "1"
 
     const rows = await sql`
       SELECT id, files
@@ -276,11 +278,28 @@ export async function GET(
     `
 
     if (!rows.length) {
+      if (rawHtml) {
+        return new Response("<!doctype html><html><body style='background:#050509;color:white;font-family:sans-serif;padding:24px'>Project not found</body></html>", {
+          status: 404,
+          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+        })
+      }
+
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
     const files = normalizeFiles(rows[0].files)
     const html = buildPreviewHtml(files)
+
+    if (rawHtml) {
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      })
+    }
 
     return NextResponse.json(
       { success: true, html },
