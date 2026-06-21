@@ -430,8 +430,32 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
     },
+    onResponse: (response) => {
+      const nextChatId = response.headers.get("X-Chat-Id") || ""
+      const nextProjectId = response.headers.get("X-Project-Id") || ""
+
+      if (nextChatId) {
+        setCurrentChatId(nextChatId)
+        window.dispatchEvent(
+          new CustomEvent("chat-selected", {
+            detail: { chatId: nextChatId, projectId: nextProjectId || projectId || null },
+          })
+        )
+      }
+
+      if (nextProjectId && nextProjectId !== projectId && typeof window !== "undefined") {
+        const nextUrl = `/dashboard/chat?projectId=${encodeURIComponent(nextProjectId)}`
+        window.history.replaceState({}, "", nextUrl)
+        window.dispatchEvent(new Event("project-files-changed"))
+        window.dispatchEvent(new Event("chat-updated"))
+      }
+    },
     onError: (err) => {
       console.error("Chat error:", err)
+    },
+    onFinish: () => {
+      window.dispatchEvent(new Event("project-files-changed"))
+      window.dispatchEvent(new Event("chat-updated"))
     },
   })
 
