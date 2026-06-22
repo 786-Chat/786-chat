@@ -64,13 +64,13 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const isFreshNewProject = searchParams.get("newProject") === "1" || localFreshNewChat
   const selectedProjectId = searchParams.get("projectId")
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [localFreshNewChat, setLocalFreshNewChat] = useState(false)
+  const isFreshNewProject = searchParams.get("newProject") === "1" || localFreshNewChat
 
   const deletedChatKey = user?.email
     ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
@@ -217,10 +217,10 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   }, [])
 
   const startNewChat = () => {
+    setLocalFreshNewChat(true)
     setCurrentChatId(null)
     setChatHistory([])
     setSearchQuery("")
-    setLocalFreshNewChat(true)
 
     if (typeof window !== "undefined") {
       for (const key of Object.keys(window.localStorage)) {
@@ -232,12 +232,14 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
           window.localStorage.removeItem(key)
         }
       }
-
-      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
-      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
     }
 
     router.replace("/dashboard/chat?newProject=1", { scroll: false })
+
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
+      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
+    }, 0)
 
     if (window.innerWidth < 768) onClose()
   }
