@@ -1053,8 +1053,23 @@ if __name__ == "__main__":
   }
 
   if (options.createNewProject && options.userPrompt) {
-    const uniqueStarterFiles = buildUniqueStarterFiles(options.userPrompt, options.projectName || createProjectNameFromPrompt(options.userPrompt))
-    Object.assign(nextFiles, uniqueStarterFiles)
+    const uniqueStarterFiles = buildUniqueStarterFiles(
+      options.userPrompt,
+      options.projectName || createProjectNameFromPrompt(options.userPrompt)
+    )
+
+    // Important:
+    // Do NOT overwrite real AI-generated file operations with starter files.
+    // Starter files are only a safety baseline for missing files.
+    // Before this fix, a good AI-generated app/page.tsx could be replaced by
+    // buildUniqueStarterFiles(), causing simple starter/placeholder apps.
+    for (const [path, content] of Object.entries(uniqueStarterFiles)) {
+      const existingContent = nextFiles[path] || ""
+
+      if (!existingContent.trim() || looksLikeStarterPage(existingContent)) {
+        nextFiles[path] = content
+      }
+    }
   }
 
   if (existingProjects.length) {
@@ -1816,11 +1831,20 @@ When the user asks to change colors, fonts, mobile, tablet, center content, add 
 INTERACTIVE APP BUILD RULE:
 When user asks for an app, web app, generator, quiz, calculator, dashboard, form tool, booking tool, or any interactive layout:
 - Do NOT create only hero text.
-- Create a working React UI with useState where needed.
-- Include real input fields, buttons, cards/results, empty state, and interactive feedback.
-- For quiz generator specifically, create topic input, generate quiz button, 5-8 quiz cards, answer options, score/progress state, and reset.
+- Do NOT create placeholders, mock-only cards, "Sample question", "Option A", "Option B", or static demo text as the final app.
+- Create a working React UI with useState/useMemo/useEffect where needed.
+- Include real input fields, buttons, generated results/cards, empty state, validation, progress/status, reset/clear actions, and interactive feedback.
+- For quiz generator specifically, create a topic input, generate quiz button, 5-8 generated question cards based on the entered topic, answer options, correct/incorrect feedback, score/progress state, reset, and results summary.
+- Generated questions may be rule-based in frontend code when no external AI API is connected, but they must update from the user's typed topic and must not be static "Sample question" text.
 - It must be responsive and usable on mobile/tablet/desktop.
 - app/page.tsx must contain the working app or import the working app component.
+
+PRODUCTION QUALITY RULE:
+- For every new app build, create a small real file-based project, not one weak page.
+- Include app/page.tsx, app/layout.tsx, at least one component under components/ when useful, lib/data or lib/helpers when useful, backend/orders.php, and python/ai.py.
+- app/page.tsx must render the actual working product immediately.
+- Never rely on preview fallback templates.
+- Never save starter files over better generated files.
 
 PROJECT GOAL:
 You are helping build a Replit-style AI development platform where every customer website is a full codebase.
@@ -2115,6 +2139,8 @@ Mandatory:
 - A build/create/redesign request must include editFile("app/page.tsx", ...).
 - app/page.tsx must not be a placeholder.
 - app/page.tsx must render the real UI immediately.
+- Do not output "Sample question", "Option A", "Option B", "Coming soon", "Lorem ipsum", or static placeholder content as the final product.
+- For apps/tools, implement real client-side state and interactions.
 
 Do not explain.
 Do not return HTML previews.
