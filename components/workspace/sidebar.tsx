@@ -15,7 +15,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -62,17 +62,27 @@ function makeProjectChatTitle(messages: DbMessage[], fallback: string) {
 
 export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const isFreshNewProject = searchParams.get("newProject") === "1"
+  const isFreshNewProject = searchParams.get("newProject") === "1" || localFreshNewChat
   const selectedProjectId = searchParams.get("projectId")
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [localFreshNewChat, setLocalFreshNewChat] = useState(false)
 
   const deletedChatKey = user?.email
     ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
     : "mujeebproai_deleted_chats_guest"
+
+  useEffect(() => {
+    if (searchParams.get("newProject") === "1") {
+      setLocalFreshNewChat(true)
+    } else if (searchParams.get("projectId")) {
+      setLocalFreshNewChat(false)
+    }
+  }, [searchParams])
 
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
@@ -210,33 +220,30 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     setCurrentChatId(null)
     setChatHistory([])
     setSearchQuery("")
+    setLocalFreshNewChat(true)
 
     if (typeof window !== "undefined") {
-      // Clear old HTML previews so the right panel does not keep showing the
-      // previous project when the user starts a new chat.
       for (const key of Object.keys(window.localStorage)) {
         if (
           key.startsWith("mujeebproai_last_preview_html") ||
-          key.includes("_preview_html_") ||
-          key.includes("preview_history")
+          key.includes("preview_history") ||
+          key.includes("_history")
         ) {
           window.localStorage.removeItem(key)
         }
       }
 
-      // Move to a clean new-project URL first, then notify the workspace.
-      // Do not dispatch project-files-changed here because that reloads the
-      // latest saved project and brings the old preview back.
-      window.history.pushState({}, "", "/dashboard/chat?newProject=1")
-      window.dispatchEvent(new PopStateEvent("popstate"))
       window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
-      window.dispatchEvent(new CustomEvent("preview-cleared"))
+      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
     }
+
+    router.replace("/dashboard/chat?newProject=1", { scroll: false })
 
     if (window.innerWidth < 768) onClose()
   }
 
   const loadChat = (chatId: string) => {
+    setLocalFreshNewChat(false)
     setCurrentChatId(chatId)
 
     if (typeof window !== "undefined" && isFreshNewProject) {
