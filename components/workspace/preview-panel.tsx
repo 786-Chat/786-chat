@@ -272,12 +272,76 @@ function buildFallbackProjectBody(files: Record<string, string>): string {
   const allText = Object.values(files).join("\n").toLowerCase()
   const fileNames = Object.keys(files).join(" ").toLowerCase()
 
+  const isQuiz =
+    allText.includes("quiz") ||
+    allText.includes("question") ||
+    allText.includes("score") ||
+    allText.includes("generate quiz") ||
+    fileNames.includes("quiz")
+
+  const isLogin =
+    allText.includes("login") ||
+    allText.includes("sign in") ||
+    allText.includes("password") ||
+    allText.includes("email") ||
+    fileNames.includes("login")
+
   const isRestaurant =
     allText.includes("restaurant") ||
     allText.includes("menu") ||
     allText.includes("booking") ||
     fileNames.includes("menu") ||
     fileNames.includes("restaurant")
+
+  if (isQuiz) {
+    return `
+<main class="min-h-screen bg-slate-950 text-white px-6 py-10">
+  <section class="mx-auto max-w-6xl">
+    <div class="text-center">
+      <p class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.28em] text-cyan-200">Interactive Quiz Builder</p>
+      <h1 class="mx-auto mt-5 max-w-4xl text-5xl font-black leading-tight md:text-7xl">Quiz Generator Web App</h1>
+      <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">Enter a topic, generate 5-8 quiz questions, choose answers, and track your score.</p>
+    </div>
+    <div class="mx-auto mt-10 grid max-w-4xl gap-3 rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 md:grid-cols-[1fr_auto_auto]">
+      <input class="min-h-14 rounded-2xl border border-white/10 bg-slate-950/80 px-5 text-white" placeholder="Enter topic, e.g. Maths, Space, JavaScript" />
+      <button class="min-h-14 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950">Generate Quiz</button>
+      <button class="min-h-14 rounded-2xl border border-white/10 bg-white/10 px-6 font-bold text-white">Reset</button>
+    </div>
+    <div class="mt-8 grid gap-4 md:grid-cols-3">
+      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Topic</p><p class="mt-2 text-2xl font-black text-cyan-200">General Knowledge</p></div>
+      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Progress</p><p class="mt-2 text-2xl font-black text-purple-200">0/6</p></div>
+      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Score</p><p class="mt-2 text-2xl font-black text-emerald-200">0/6</p></div>
+    </div>
+    <div class="mt-8 grid gap-5 lg:grid-cols-2">
+      ${[1,2,3,4,5,6].map((num) => `<article class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6"><h2 class="text-xl font-black">${num}. Sample quiz question ${num}</h2><div class="mt-4 grid gap-3"><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option A</button><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option B</button><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option C</button></div></article>`).join("")}
+    </div>
+  </section>
+</main>`
+  }
+
+  if (isLogin) {
+    return `
+<main class="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
+  <section class="grid w-full max-w-6xl overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/[0.06] shadow-2xl md:grid-cols-2">
+    <div class="bg-gradient-to-br from-cyan-400 to-purple-500 p-10 text-slate-950 md:p-14">
+      <p class="font-black uppercase tracking-[0.25em]">Secure Access</p>
+      <h1 class="mt-6 text-5xl font-black leading-tight md:text-7xl">Login Page</h1>
+      <p class="mt-6 text-lg font-medium text-slate-900/80">A polished authentication screen with email, password, remember me, forgot password, and sign in button.</p>
+    </div>
+    <form class="p-8 md:p-12">
+      <h2 class="text-3xl font-black">Welcome back</h2>
+      <p class="mt-2 text-slate-400">Sign in to continue to your dashboard.</p>
+      <label class="mt-8 block text-sm font-bold text-slate-300">Email address</label>
+      <input class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white" placeholder="you@example.com" />
+      <label class="mt-5 block text-sm font-bold text-slate-300">Password</label>
+      <input type="password" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white" placeholder="••••••••" />
+      <div class="mt-5 flex items-center justify-between text-sm"><label class="flex items-center gap-2 text-slate-300"><input type="checkbox" /> Remember me</label><a class="text-cyan-300" href="#">Forgot password?</a></div>
+      <button class="mt-8 w-full rounded-2xl bg-cyan-300 px-6 py-4 font-black text-slate-950">Sign In</button>
+      <p class="mt-6 text-center text-sm text-slate-400">No account? <a class="text-cyan-300" href="#">Create one</a></p>
+    </form>
+  </section>
+</main>`
+  }
 
   if (isRestaurant) {
     return `
@@ -480,16 +544,22 @@ export function WorkspacePreviewPanel({
     : ""
 
 const projectFiles = isFreshNewProject ? {} : project?.files ?? {}
-const projectPreviewApiUrl =
-  !isFreshNewProject && project?.id
-    ? `/api/projects/${encodeURIComponent(project.id)}/preview?raw=1&v=${refreshKey}`
-    : ""
 const projectPreviewHtml = buildProjectPreviewHtml(projectFiles)
 const safeProjectPreviewHtml =
   projectPreviewHtml && hasVisibleHtmlContent(projectPreviewHtml)
     ? stripDangerousPreviewHtml(projectPreviewHtml)
     : ""
+
+// IMPORTANT:
+// Prefer the preview generated directly from saved project.files.
+// The /api/projects/[id]/preview route is only a fallback now.
+// Before this change, the panel used the API iframe first, so if that API returned
+// black/empty HTML, the user saw a black screen even when real files existed.
 const activePreviewHtml = safePreviewHtml || safeProjectPreviewHtml
+const projectPreviewApiUrl =
+  !activePreviewHtml && !isFreshNewProject && project?.id
+    ? `/api/projects/${encodeURIComponent(project.id)}/preview?raw=1&v=${refreshKey}`
+    : ""
 
 const [stablePreviewHtml, setStablePreviewHtml] = useState("")
 const [previewFrameReady, setPreviewFrameReady] = useState(false)
@@ -1201,10 +1271,10 @@ useEffect(() => {
               {renderPreviewFrame("url")}
             </div>
           </div>
-        ) : projectPreviewApiUrl ? (
-          renderPreviewFrame("project")
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
+        ) : projectPreviewApiUrl ? (
+          renderPreviewFrame("project")
         ) : safeLiveUrl ? (
           renderPreviewFrame("url")
         ) : null}
