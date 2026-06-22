@@ -41,6 +41,35 @@ export default function DashboardProjectsPage() {
   const [errorMessage, setErrorMessage] = useState("")
 
   const isRecoverMode = viewMode === "recover"
+  const projectCacheKey = `mujeebproai_projects_cache_${isRecoverMode ? "recover" : "active"}`
+
+  const getFriendlyProjectError = (data: any, response?: Response) => {
+    const rawMessage = String(data?.message || data?.debug || data?.error || "")
+
+    if (response?.status === 402 || rawMessage.toLowerCase().includes("data transfer quota")) {
+      return "Database quota is temporarily exceeded in Neon. Your projects were not deleted. The app will show cached projects if available. Upgrade/reset Neon quota, then refresh."
+    }
+
+    return rawMessage || "Could not load projects."
+  }
+
+  const readCachedProjects = (): Project[] => {
+    try {
+      const raw = window.localStorage.getItem(projectCacheKey) || "[]"
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+
+  const writeCachedProjects = (nextProjects: Project[]) => {
+    try {
+      window.localStorage.setItem(projectCacheKey, JSON.stringify(nextProjects))
+    } catch {
+      // Browser storage may be unavailable. Keep UI working.
+    }
+  }
 
   const loadProjects = async () => {
     setLoading(true)
@@ -55,15 +84,28 @@ export default function DashboardProjectsPage() {
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        setProjects([])
-        setErrorMessage(data?.debug || data?.error || "Could not load projects.")
+        const cachedProjects = readCachedProjects()
+
+        if (cachedProjects.length > 0) {
+          setProjects(cachedProjects)
+        }
+
+        setErrorMessage(getFriendlyProjectError(data, response))
         return
       }
 
-      setProjects(Array.isArray(data.projects) ? data.projects : [])
+      const nextProjects = Array.isArray(data.projects) ? data.projects : []
+      setProjects(nextProjects)
+      writeCachedProjects(nextProjects)
     } catch {
-      setProjects([])
-      setErrorMessage("Could not load projects.")
+      const cachedProjects = readCachedProjects()
+
+      if (cachedProjects.length > 0) {
+        setProjects(cachedProjects)
+        setErrorMessage("Could not reach the database. Showing cached projects from this browser.")
+      } else {
+        setErrorMessage("Could not load projects. Your projects were not deleted; the database request failed.")
+      }
     } finally {
       setLoading(false)
     }
