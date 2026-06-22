@@ -1,4 +1,4 @@
-"use client"
+components/workspace/chat-panel.tsx"use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
@@ -346,7 +346,13 @@ function getDisplayTextForMessage(rawText: string, role: string): string {
   const visibleText = removeHiddenPromptRules(rawText)
 
   if (role === "assistant" && containsFileOperations(visibleText)) {
-    return "Project files updated successfully."
+    const cleanedText = cleanFileOperationText(visibleText)
+
+    if (cleanedText) {
+      return cleanedText
+    }
+
+    return "Project file changes were received. Refreshing the project preview now."
   }
 
   return visibleText
@@ -466,9 +472,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search)
         const existingProjectId = params.get("projectId") || projectId || ""
-        const isNewProjectPage = params.get("newProject") === "1"
-
-        if (!existingProjectId && isNewProjectPage) {
+        if (!existingProjectId) {
           try {
             const response = await fetch("/api/projects/latest", {
               credentials: "include",
@@ -487,6 +491,9 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
                   detail: { chatId: currentChatId, projectId: nextProjectId },
                 })
               )
+              window.dispatchEvent(new Event("project-files-changed"))
+              window.dispatchEvent(new Event("chat-updated"))
+              onViewModeChange?.("preview")
             }
           } catch {
             // Keep chat usable. User can still open project from My Projects.
