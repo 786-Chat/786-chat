@@ -348,6 +348,27 @@ export default function DashboardLayout({
   ])
 
   useEffect(() => {
+    const handleWorkspaceNewChat = () => {
+      setRuntimeProjectId("")
+      setCurrentProject(null)
+      setPreviewHtml("")
+      setPreviewUrl("")
+      setPreviewOpen(true)
+      setViewMode("preview")
+
+      if (pathname === "/dashboard/chat") {
+        router.replace("/dashboard/chat", { scroll: false })
+      }
+    }
+
+    window.addEventListener("new-chat", handleWorkspaceNewChat)
+
+    return () => {
+      window.removeEventListener("new-chat", handleWorkspaceNewChat)
+    }
+  }, [pathname, router])
+
+  useEffect(() => {
     loadLatestProject()
 
     const handleProjectChanged = (event?: Event) => {
@@ -370,19 +391,12 @@ export default function DashboardLayout({
     window.addEventListener("focus", handleProjectChanged)
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
-    const refreshTimer = window.setInterval(() => {
-      if (isChatWorkspace && userEmail) {
-        handleProjectChanged()
-      }
-    }, 1200)
-
     return () => {
       window.removeEventListener("project-files-changed", handleProjectChanged)
       window.removeEventListener("chat-updated", handleProjectChanged)
       window.removeEventListener("chat-selected", handleProjectChanged)
       window.removeEventListener("focus", handleProjectChanged)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      window.clearInterval(refreshTimer)
     }
   }, [loadLatestProject, isChatWorkspace, userEmail])
 
@@ -696,7 +710,6 @@ export default function DashboardLayout({
         >
           <div className="flex flex-col min-w-0 overflow-hidden flex-1">
             <WorkspaceChatPanel
-              key={isFreshNewProject ? "fresh-new-project" : effectiveProjectId ? `project-${effectiveProjectId}` : "chat-workspace"}
               projectId={effectiveProjectId || undefined}
               onPreviewUpdate={handlePreviewUpdate}
               viewMode={viewMode}
