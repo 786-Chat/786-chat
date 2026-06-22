@@ -277,7 +277,7 @@ export default function DashboardLayout({
 
     window.addEventListener("popstate", syncProjectIdFromBrowser)
     window.addEventListener("project-files-changed", syncProjectIdFromBrowser)
-    window.addEventListener("chat-updated", syncProjectIdFromBrowser)
+    // Avoid sync on every chat update.
     window.addEventListener("chat-selected", handleChatSelected)
 
     syncProjectIdFromBrowser()
@@ -285,7 +285,7 @@ export default function DashboardLayout({
     return () => {
       window.removeEventListener("popstate", syncProjectIdFromBrowser)
       window.removeEventListener("project-files-changed", syncProjectIdFromBrowser)
-      window.removeEventListener("chat-updated", syncProjectIdFromBrowser)
+      // chat-updated sync listener intentionally not registered.
       window.removeEventListener("chat-selected", handleChatSelected)
     }
   }, [])
@@ -348,13 +348,8 @@ export default function DashboardLayout({
 
     window.dispatchEvent(new Event("preview-history-changed"))
 
-    const timer = window.setTimeout(() => {
-      setForceFreshNewChat(true)
-      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
-      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
-    }, 50)
-
-    return () => window.clearTimeout(timer)
+    // Do not dispatch new-chat again from layout. The sidebar already does it.
+    // Dispatching here can create a reset/reload loop and make the chat area jump.
   }, [
     isFreshNewProject,
     previewBackupStorageKey,
@@ -429,14 +424,14 @@ export default function DashboardLayout({
     }
 
     window.addEventListener("project-files-changed", handleProjectChanged)
-    window.addEventListener("chat-updated", handleProjectChanged)
+    // Avoid chat-updated reload loops during typing/new chat.
     window.addEventListener("chat-selected", handleProjectChanged)
     window.addEventListener("focus", handleProjectChanged)
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
       window.removeEventListener("project-files-changed", handleProjectChanged)
-      window.removeEventListener("chat-updated", handleProjectChanged)
+      // chat-updated listener intentionally not registered here.
       window.removeEventListener("chat-selected", handleProjectChanged)
       window.removeEventListener("focus", handleProjectChanged)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
