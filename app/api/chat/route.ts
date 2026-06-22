@@ -703,7 +703,7 @@ export default function PremiumCalculator() {
                   <p className="rounded-2xl bg-slate-950/60 p-3 text-sm text-slate-500">No calculations yet. Try 25 × 4.</p>
                 ) : (
                   history.map((item, index) => (
-                    <div key={`${item.expression}-${index}`} className="rounded-2xl bg-slate-950/60 p-3 text-sm">
+                    <div key={item.expression + "-" + index} className="rounded-2xl bg-slate-950/60 p-3 text-sm">
                       <p className="text-slate-400">{item.expression}</p>
                       <p className="mt-1 font-black text-cyan-200">= {item.result}</p>
                     </div>
