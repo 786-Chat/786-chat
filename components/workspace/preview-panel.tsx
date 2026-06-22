@@ -551,15 +551,17 @@ const safeProjectPreviewHtml =
     : ""
 
 // IMPORTANT:
-// Prefer the preview generated directly from saved project.files.
-// The /api/projects/[id]/preview route is only a fallback now.
-// Before this change, the panel used the API iframe first, so if that API returned
-// black/empty HTML, the user saw a black screen even when real files existed.
-const activePreviewHtml = safePreviewHtml || safeProjectPreviewHtml
+// If a saved project exists, use the API preview iframe first.
+// The API route executes the real React/TSX project with React + Babel.
+// The local JSX-to-HTML preview is only a fallback for non-project HTML.
+// This prevents interactive apps like quiz generators from becoming static
+// "Sample question / Option A" fallback previews.
 const projectPreviewApiUrl =
-  !activePreviewHtml && !isFreshNewProject && project?.id
+  !isFreshNewProject && project?.id
     ? `/api/projects/${encodeURIComponent(project.id)}/preview?raw=1&v=${refreshKey}`
     : ""
+
+const activePreviewHtml = safePreviewHtml || (!projectPreviewApiUrl ? safeProjectPreviewHtml : "")
 
 const [stablePreviewHtml, setStablePreviewHtml] = useState("")
 const [previewFrameReady, setPreviewFrameReady] = useState(false)
