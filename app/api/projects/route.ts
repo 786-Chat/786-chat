@@ -30,56 +30,60 @@ export async function GET(request: Request) {
     const includeDeleted = searchParams.get("includeDeleted") === "true"
 
     /*
-      IMPORTANT:
-      Do not SELECT the full `files` JSON on the projects list page.
+      PostgreSQL does not support jsonb_object_length(jsonb) in your Neon setup.
+      Use jsonb_each + COUNT instead.
 
-      The files JSON can become large for real Replit-style projects.
-      Returning it for every card burns Neon transfer quota very fast and caused:
-      "Your project has exceeded the data transfer quota."
-
-      The projects page only needs fileCount, not full file contents.
-      Full files should be loaded only when opening one project:
+      Also do NOT return full files JSON on the projects list page.
+      My Projects only needs fileCount. Full files should load only from:
       /api/projects/[id]
     */
     const rows = includeDeleted
       ? await sql`
           SELECT
-            id,
-            name,
-            description,
-            domain,
-            custom_domain,
-            status,
-            template,
-            COALESCE(jsonb_object_length(files), 0)::int AS file_count,
-            created_at,
-            updated_at,
-            deleted_at,
-            delete_after
-          FROM projects
-          WHERE user_id = ${session.id}::uuid
-            AND deleted_at IS NOT NULL
-            AND (delete_after IS NULL OR delete_after > NOW())
-          ORDER BY deleted_at DESC, updated_at DESC NULLS LAST, created_at DESC
+            p.id,
+            p.name,
+            p.description,
+            p.domain,
+            p.custom_domain,
+            p.status,
+            p.template,
+            COALESCE(f.file_count, 0)::int AS file_count,
+            p.created_at,
+            p.updated_at,
+            p.deleted_at,
+            p.delete_after
+          FROM projects p
+          LEFT JOIN LATERAL (
+            SELECT COUNT(*)::int AS file_count
+            FROM jsonb_each(COALESCE(p.files, '{}'::jsonb))
+          ) f ON true
+          WHERE p.user_id = ${session.id}::uuid
+            AND p.deleted_at IS NOT NULL
+            AND (p.delete_after IS NULL OR p.delete_after > NOW())
+          ORDER BY p.deleted_at DESC, p.updated_at DESC NULLS LAST, p.created_at DESC
         `
       : await sql`
           SELECT
-            id,
-            name,
-            description,
-            domain,
-            custom_domain,
-            status,
-            template,
-            COALESCE(jsonb_object_length(files), 0)::int AS file_count,
-            created_at,
-            updated_at,
-            deleted_at,
-            delete_after
-          FROM projects
-          WHERE user_id = ${session.id}::uuid
-            AND deleted_at IS NULL
-          ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            p.id,
+            p.name,
+            p.description,
+            p.domain,
+            p.custom_domain,
+            p.status,
+            p.template,
+            COALESCE(f.file_count, 0)::int AS file_count,
+            p.created_at,
+            p.updated_at,
+            p.deleted_at,
+            p.delete_after
+          FROM projects p
+          LEFT JOIN LATERAL (
+            SELECT COUNT(*)::int AS file_count
+            FROM jsonb_each(COALESCE(p.files, '{}'::jsonb))
+          ) f ON true
+          WHERE p.user_id = ${session.id}::uuid
+            AND p.deleted_at IS NULL
+          ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC
         `
 
     return NextResponse.json(
