@@ -22,6 +22,41 @@ type WorkspaceProject = {
   files: ProjectFileMap
 }
 
+function normalizeProjectFiles(value: unknown): ProjectFileMap {
+  if (!value) return {}
+
+  if (typeof value === "string") {
+    try {
+      return normalizeProjectFiles(JSON.parse(value))
+    } catch {
+      return {}
+    }
+  }
+
+  if (typeof value !== "object" || Array.isArray(value)) return {}
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      ([path, content]) => typeof path === "string" && typeof content === "string"
+    )
+  ) as ProjectFileMap
+}
+
+function normalizeWorkspaceProject(project: unknown): WorkspaceProject | null {
+  if (!project || typeof project !== "object" || Array.isArray(project)) return null
+
+  const raw = project as Record<string, unknown>
+  const id = typeof raw.id === "string" ? raw.id : raw.id ? String(raw.id) : ""
+  if (!id) return null
+
+  return {
+    id,
+    name: typeof raw.name === "string" ? raw.name : "AI Generated Project",
+    template: typeof raw.template === "string" ? raw.template : undefined,
+    files: normalizeProjectFiles(raw.files),
+  }
+}
+
 function looksLikeReactOrTsxCode(value: string): boolean {
   const text = value.trim()
   if (!text) return false
@@ -239,17 +274,24 @@ export default function DashboardLayout({
     }
   }, [])
 
-  const loadLatestProject = useCallback(async () => {
+  const loadLatestProject = useCallback(async (projectIdOverride?: string) => {
     if (!userEmail || !isChatWorkspace) return
 
-    if (isFreshNewProject) {
+    if (isFreshNewProject && !projectIdOverride) {
       setCurrentProject(null)
       return
     }
 
+    const browserProjectId =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("projectId") || ""
+        : ""
+
+    const projectIdToLoad = projectIdOverride || browserProjectId || effectiveProjectId
+
     try {
-      const projectEndpoint = effectiveProjectId
-        ? `/api/projects/${encodeURIComponent(effectiveProjectId)}`
+      const projectEndpoint = projectIdToLoad
+        ? `/api/projects/${encodeURIComponent(projectIdToLoad)}`
         : "/api/projects/latest"
 
       const res = await fetch(projectEndpoint, {
@@ -263,7 +305,13 @@ export default function DashboardLayout({
       }
 
       const data = await res.json()
-      setCurrentProject(data.project || null)
+      const nextProject = normalizeWorkspaceProject(data.project)
+
+      setCurrentProject(nextProject)
+
+      if (nextProject?.id) {
+        setRuntimeProjectId(nextProject.id)
+      }
     } catch {
       setCurrentProject(null)
     }
@@ -302,10 +350,17 @@ export default function DashboardLayout({
   useEffect(() => {
     loadLatestProject()
 
-    const handleProjectChanged = () => loadLatestProject()
+    const handleProjectChanged = (event?: Event) => {
+      const detail = event && "detail" in event ? (event as CustomEvent).detail : null
+      const detailProjectId = typeof detail?.projectId === "string" ? detail.projectId : ""
+      const browserProjectId = new URLSearchParams(window.location.search).get("projectId") || ""
+
+      loadLatestProject(detailProjectId || browserProjectId || undefined)
+    }
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        loadLatestProject()
+        handleProjectChanged()
       }
     }
 
@@ -317,9 +372,9 @@ export default function DashboardLayout({
 
     const refreshTimer = window.setInterval(() => {
       if (isChatWorkspace && userEmail) {
-        loadLatestProject()
+        handleProjectChanged()
       }
-    }, 4000)
+    }, 1200)
 
     return () => {
       window.removeEventListener("project-files-changed", handleProjectChanged)
