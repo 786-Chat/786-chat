@@ -300,8 +300,7 @@ export default function DashboardLayout({
       })
 
       if (!res.ok) {
-        // Keep the last visible project in memory when Neon has a temporary
-        // quota/network error. Do not make the UI look like projects vanished.
+        setCurrentProject(null)
         return
       }
 
@@ -314,7 +313,7 @@ export default function DashboardLayout({
         setRuntimeProjectId(nextProject.id)
       }
     } catch {
-      // Keep the last visible project in memory when Neon is temporarily unavailable.
+      setCurrentProject(null)
     }
   }, [userEmail, isChatWorkspace, isFreshNewProject, effectiveProjectId])
 
@@ -357,17 +356,36 @@ export default function DashboardLayout({
       setPreviewOpen(true)
       setViewMode("preview")
 
-      if (pathname === "/dashboard/chat") {
-        router.replace("/dashboard/chat", { scroll: false })
-      }
+      /*
+        Important:
+        Do not call router.replace("/dashboard/chat") here.
+
+        The sidebar already changes the URL to:
+        /dashboard/chat?newProject=1
+
+        If layout removes ?newProject=1, the workspace immediately reloads
+        the latest project again. That is why the old quiz preview comes back,
+        the sidebar history reappears, and the chat area looks like it is jumping.
+      */
+    }
+
+    const handlePreviewCleared = () => {
+      setRuntimeProjectId("")
+      setCurrentProject(null)
+      setPreviewHtml("")
+      setPreviewUrl("")
+      setPreviewOpen(true)
+      setViewMode("preview")
     }
 
     window.addEventListener("new-chat", handleWorkspaceNewChat)
+    window.addEventListener("preview-cleared", handlePreviewCleared)
 
     return () => {
       window.removeEventListener("new-chat", handleWorkspaceNewChat)
+      window.removeEventListener("preview-cleared", handlePreviewCleared)
     }
-  }, [pathname, router])
+  }, [])
 
   useEffect(() => {
     loadLatestProject()
@@ -387,15 +405,14 @@ export default function DashboardLayout({
     }
 
     window.addEventListener("project-files-changed", handleProjectChanged)
-    // Do not reload projects on every chat-updated event. That event fires often
-    // and can burn Neon transfer quota quickly.
+    window.addEventListener("chat-updated", handleProjectChanged)
     window.addEventListener("chat-selected", handleProjectChanged)
     window.addEventListener("focus", handleProjectChanged)
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
       window.removeEventListener("project-files-changed", handleProjectChanged)
-      // chat-updated listener intentionally not registered.
+      window.removeEventListener("chat-updated", handleProjectChanged)
       window.removeEventListener("chat-selected", handleProjectChanged)
       window.removeEventListener("focus", handleProjectChanged)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
