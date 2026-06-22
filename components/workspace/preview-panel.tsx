@@ -508,10 +508,7 @@ export function WorkspacePreviewPanel({
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
-  const [localFreshNewProject, setLocalFreshNewProject] = useState(false)
-
-  const isFreshNewProject =
-    searchParams.get("newProject") === "1" || localFreshNewProject
+  const isFreshNewProject = searchParams.get("newProject") === "1"
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [liveUrl, setLiveUrl] = useState("")
@@ -601,53 +598,6 @@ const defaultFile =
     : "app/page.tsx"
 
 const [selectedFile, setSelectedFile] = useState(defaultFile)
-
-useEffect(() => {
-  const clearFreshPreview = () => {
-    setLocalFreshNewProject(true)
-    setRefreshKey((prev) => prev + 1)
-    setLiveUrl("")
-    setLocalPreviewHtml("")
-    setStablePreviewHtml("")
-    setPreviewFrameReady(false)
-    setSelectedFile("app/page.tsx")
-    setPreviewUrl("")
-
-    try {
-      localStorage.removeItem(previewStorageKey)
-      localStorage.removeItem(previewBackupStorageKey)
-      localStorage.removeItem(previewHistoryStorageKey)
-    } catch {
-      // keep preview usable
-    }
-  }
-
-  const handleProjectChanged = (event: Event) => {
-    const detail = (event as CustomEvent).detail
-
-    if (detail?.projectId || searchParams.get("projectId")) {
-      setLocalFreshNewProject(false)
-    }
-  }
-
-  window.addEventListener("new-chat", clearFreshPreview)
-  window.addEventListener("preview-cleared", clearFreshPreview)
-  window.addEventListener("project-files-changed", handleProjectChanged)
-  window.addEventListener("chat-selected", handleProjectChanged)
-
-  return () => {
-    window.removeEventListener("new-chat", clearFreshPreview)
-    window.removeEventListener("preview-cleared", clearFreshPreview)
-    window.removeEventListener("project-files-changed", handleProjectChanged)
-    window.removeEventListener("chat-selected", handleProjectChanged)
-  }
-}, [
-  previewBackupStorageKey,
-  previewHistoryStorageKey,
-  previewStorageKey,
-  searchParams,
-  setPreviewUrl,
-])
 
 const selectedFileContent =
   projectFiles[selectedFile] ||
