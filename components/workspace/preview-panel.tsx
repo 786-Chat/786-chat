@@ -527,8 +527,6 @@ export function WorkspacePreviewPanel({
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
 
-  const previewHistoryStorageKey = `${previewStorageKey}_history`
-
 
   const currentPreviewHtml = isFreshNewProject ? "" : localPreviewHtml || previewHtml || ""
 
