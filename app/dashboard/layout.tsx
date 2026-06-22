@@ -179,6 +179,7 @@ export default function DashboardLayout({
   const [canRollbackPreview, setCanRollbackPreview] = useState(false)
   const [currentProject, setCurrentProject] = useState<WorkspaceProject | null>(null)
   const [runtimeProjectId, setRuntimeProjectId] = useState("")
+  const [forceFreshNewChat, setForceFreshNewChat] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -237,25 +238,40 @@ export default function DashboardLayout({
   const effectiveProjectId = selectedProjectId || runtimeProjectId
 
   const isFreshNewProject =
-    pathname === "/dashboard/chat" && searchParams.get("newProject") === "1" && !effectiveProjectId
+    pathname === "/dashboard/chat" &&
+    (searchParams.get("newProject") === "1" || forceFreshNewChat) &&
+    !effectiveProjectId
 
   const shouldRedirectOwnerToChat = isOwner && pathname === "/dashboard"
 
   useEffect(() => {
     setRuntimeProjectId(selectedProjectId)
+
+    if (selectedProjectId) {
+      setForceFreshNewChat(false)
+    }
   }, [selectedProjectId])
 
   useEffect(() => {
     const syncProjectIdFromBrowser = () => {
       const params = new URLSearchParams(window.location.search)
       const nextProjectId = params.get("projectId") || ""
+
       setRuntimeProjectId(nextProjectId)
+
+      if (nextProjectId) {
+        setForceFreshNewChat(false)
+      } else if (params.get("newProject") === "1") {
+        setForceFreshNewChat(true)
+      }
     }
 
     const handleChatSelected = (event: Event) => {
       const detail = (event as CustomEvent).detail
-      if (typeof detail?.projectId === "string") {
+
+      if (typeof detail?.projectId === "string" && detail.projectId) {
         setRuntimeProjectId(detail.projectId)
+        setForceFreshNewChat(false)
       }
     }
 
@@ -300,7 +316,6 @@ export default function DashboardLayout({
       })
 
       if (!res.ok) {
-        setCurrentProject(null)
         return
       }
 
@@ -313,7 +328,7 @@ export default function DashboardLayout({
         setRuntimeProjectId(nextProject.id)
       }
     } catch {
-      setCurrentProject(null)
+      // Keep current UI state if the network/database is temporarily unavailable.
     }
   }, [userEmail, isChatWorkspace, isFreshNewProject, effectiveProjectId])
 
@@ -334,8 +349,9 @@ export default function DashboardLayout({
     window.dispatchEvent(new Event("preview-history-changed"))
 
     const timer = window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("new-chat"))
-      window.dispatchEvent(new Event("project-files-changed"))
+      setForceFreshNewChat(true)
+      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
+      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
     }, 50)
 
     return () => window.clearTimeout(timer)
@@ -348,7 +364,8 @@ export default function DashboardLayout({
   ])
 
   useEffect(() => {
-    const handleWorkspaceNewChat = () => {
+    const resetFreshWorkspace = () => {
+      setForceFreshNewChat(true)
       setRuntimeProjectId("")
       setCurrentProject(null)
       setPreviewHtml("")
@@ -356,34 +373,27 @@ export default function DashboardLayout({
       setPreviewOpen(true)
       setViewMode("preview")
 
-      /*
-        Important:
-        Do not call router.replace("/dashboard/chat") here.
-
-        The sidebar already changes the URL to:
-        /dashboard/chat?newProject=1
-
-        If layout removes ?newProject=1, the workspace immediately reloads
-        the latest project again. That is why the old quiz preview comes back,
-        the sidebar history reappears, and the chat area looks like it is jumping.
-      */
+      try {
+        for (const key of Object.keys(window.localStorage)) {
+          if (
+            key.startsWith("mujeebproai_last_preview_html") ||
+            key.includes("preview_history") ||
+            key.includes("_history")
+          ) {
+            window.localStorage.removeItem(key)
+          }
+        }
+      } catch {
+        // keep workspace usable
+      }
     }
 
-    const handlePreviewCleared = () => {
-      setRuntimeProjectId("")
-      setCurrentProject(null)
-      setPreviewHtml("")
-      setPreviewUrl("")
-      setPreviewOpen(true)
-      setViewMode("preview")
-    }
-
-    window.addEventListener("new-chat", handleWorkspaceNewChat)
-    window.addEventListener("preview-cleared", handlePreviewCleared)
+    window.addEventListener("new-chat", resetFreshWorkspace)
+    window.addEventListener("preview-cleared", resetFreshWorkspace)
 
     return () => {
-      window.removeEventListener("new-chat", handleWorkspaceNewChat)
-      window.removeEventListener("preview-cleared", handlePreviewCleared)
+      window.removeEventListener("new-chat", resetFreshWorkspace)
+      window.removeEventListener("preview-cleared", resetFreshWorkspace)
     }
   }, [])
 
@@ -395,7 +405,21 @@ export default function DashboardLayout({
       const detailProjectId = typeof detail?.projectId === "string" ? detail.projectId : ""
       const browserProjectId = new URLSearchParams(window.location.search).get("projectId") || ""
 
-      loadLatestProject(detailProjectId || browserProjectId || undefined)
+      if (detailProjectId) {
+        setForceFreshNewChat(false)
+        loadLatestProject(detailProjectId)
+        return
+      }
+
+      if (browserProjectId) {
+        setForceFreshNewChat(false)
+        loadLatestProject(browserProjectId)
+        return
+      }
+
+      if (!forceFreshNewChat && searchParams.get("newProject") !== "1") {
+        loadLatestProject()
+      }
     }
 
     const handleVisibilityChange = () => {
@@ -417,7 +441,7 @@ export default function DashboardLayout({
       window.removeEventListener("focus", handleProjectChanged)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
-  }, [loadLatestProject, isChatWorkspace, userEmail])
+  }, [loadLatestProject, isChatWorkspace, userEmail, forceFreshNewChat, searchParams])
 
    const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
@@ -575,13 +599,14 @@ export default function DashboardLayout({
 
 
   useEffect(() => {
+    if (isFreshNewProject) return
     if (!effectiveProjectId || !currentProject?.files) return
 
     setPreviewHtml("")
     setPreviewUrl("")
     setPreviewOpen(true)
     setViewMode("preview")
-  }, [effectiveProjectId, currentProject?.id])
+  }, [effectiveProjectId, currentProject?.id, isFreshNewProject])
 
   useEffect(() => {
     const handleResize = () => {
