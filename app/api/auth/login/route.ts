@@ -3,29 +3,43 @@ import { cookies } from "next/headers"
 import { sql } from "@/lib/db"
 import { verifyPassword, createToken } from "@/lib/auth"
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown login error"
+}
+
+function isNeonQuotaError(message: string): boolean {
+  const lower = message.toLowerCase()
+
+  return (
+    lower.includes("exceeded the data transfer quota") ||
+    lower.includes("data transfer quota") ||
+    lower.includes("upgrade your plan") ||
+    lower.includes("neon:retryable") ||
+    lower.includes("http status 402")
+  )
+}
+
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
-    
-    console.log("[MujeebProAI] Login attempt for:", email)
 
-    // Validate input
-    if (!email || !password) {
+    const cleanEmail = String(email || "").trim().toLowerCase()
+
+    if (!cleanEmail || !password) {
       return NextResponse.json(
         { error: "Email and password are required" },
         { status: 400 }
       )
     }
 
-    // Find user
     const users = await sql`
       SELECT id, name, email, password, plan, role
-      FROM users 
-      WHERE email = ${email.toLowerCase()}
+      FROM users
+      WHERE email = ${cleanEmail}
+      LIMIT 1
     `
-    
+
     if (users.length === 0) {
-      console.log("[MujeebProAI] User not found:", email)
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -34,56 +48,66 @@ export async function POST(request: Request) {
 
     const user = users[0]
 
-    // Verify password
     const isValidPassword = await verifyPassword(password, user.password)
+
     if (!isValidPassword) {
-     console.log("[MujeebProAI] Invalid password for:", email)
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       )
     }
 
-    // Get subscription info
-    const subscriptions = await sql`
-      SELECT plan, tokens_used, tokens_limit
-      FROM subscriptions
-      WHERE user_id = ${user.id}
-    `
+    let subscription = {
+      plan: user.plan || "starter",
+      tokens_used: 0,
+      tokens_limit: 10000,
+    }
 
-    const subscription = subscriptions[0] || { plan: 'starter', tokens_used: 0, tokens_limit: 10000 }
+    try {
+      const subscriptions = await sql`
+        SELECT plan, tokens_used, tokens_limit
+        FROM subscriptions
+        WHERE user_id = ${user.id}
+        LIMIT 1
+      `
 
-    // Force owner account to always be admin
-const isOwnerAdmin =
-  user.email?.toLowerCase().trim() === "mujeeb@job4u.com"
+      if (subscriptions[0]) {
+        subscription = {
+          plan: subscriptions[0].plan || user.plan || "starter",
+          tokens_used: Number(subscriptions[0].tokens_used || 0),
+          tokens_limit: Number(subscriptions[0].tokens_limit || 10000),
+        }
+      }
+    } catch (subscriptionError) {
+      /*
+        Keep login working if the optional subscriptions lookup fails.
+        The main user password is already verified. Other API routes can refresh
+        subscription info later when Neon quota/access is healthy.
+      */
+      console.warn("[MujeebProAI] Subscription lookup failed during login:", subscriptionError)
+    }
 
-const userRole = isOwnerAdmin ? "admin" : user.role
+    const isOwnerAdmin = user.email?.toLowerCase().trim() === "mujeeb@job4u.com"
+    const userRole = isOwnerAdmin ? "admin" : user.role
 
-// Create JWT token
-const token = await createToken({
-  id: user.id,
-  email: user.email,
-  name: user.name,
-  plan: subscription.plan,
-  role: userRole,
-})
+    const token = await createToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      plan: subscription.plan,
+      role: userRole,
+    })
 
-    console.log("[MujeebProAI] Login successful, setting cookie for:", email, "role:", userRole)
-
-    // Set auth cookie directly in response
     const cookieStore = await cookies()
-    
-    // Set both cookie names so all routes work:
-    // - auth_token (underscore) used by getSession() and newer routes
-    // - auth-token (hyphen) used by middleware and many API routes
+
     const cookieOptions = {
       httpOnly: true,
       secure: true,
       sameSite: "none" as const,
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: 60 * 60 * 24 * 7,
       path: "/",
     }
-    
+
     cookieStore.set("auth_token", token, cookieOptions)
     cookieStore.set("auth-token", token, cookieOptions)
 
@@ -94,13 +118,30 @@ const token = await createToken({
         name: user.name,
         email: user.email,
         plan: subscription.plan,
-       role: userRole,
+        role: userRole,
       },
     })
   } catch (error) {
-  console.error("[MujeebProAI] Login error:", error)
+    const message = getErrorMessage(error)
+    console.error("[MujeebProAI] Login error:", error)
+
+    if (isNeonQuotaError(message)) {
+      return NextResponse.json(
+        {
+          error: "NEON_QUOTA_EXCEEDED",
+          message:
+            "Database transfer quota is temporarily exceeded. Your account is not deleted. Upgrade/reset Neon quota, then try again.",
+          debug: message,
+        },
+        { status: 402 }
+      )
+    }
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        debug: message,
+      },
       { status: 500 }
     )
   }
