@@ -211,6 +211,16 @@ function looksLikeUsableProjectFiles(files: Record<string, string>): boolean {
   if (looksLikeStarterPage(page)) return false
   if (!page.includes("export default")) return false
 
+  const lowerPage = page.toLowerCase()
+  const hasBadPlaceholder =
+    lowerPage.includes("sample quiz question") ||
+    lowerPage.includes("option a") ||
+    lowerPage.includes("option b") ||
+    lowerPage.includes("lorem ipsum") ||
+    lowerPage.includes("coming soon")
+
+  if (hasBadPlaceholder) return false
+
   return page.trim().length > 120
 }
 
@@ -1648,6 +1658,49 @@ ${String(content).slice(0, 12000)}`)
 // when the owner clearly asks to fix the MujeebProAI platform/codebase/admin system.
 const userTextLower = userText.toLowerCase()
 
+const projectFileIntent =
+  userTextLower.includes("edit") ||
+  userTextLower.includes("create") ||
+  userTextLower.includes("build") ||
+  userTextLower.includes("change") ||
+  userTextLower.includes("add") ||
+  userTextLower.includes("remove") ||
+  userTextLower.includes("delete") ||
+  userTextLower.includes("update") ||
+  userTextLower.includes("fix") ||
+  userTextLower.includes("website") ||
+  userTextLower.includes("homepage") ||
+  userTextLower.includes("software") ||
+  userTextLower.includes("saas") ||
+  userTextLower.includes("dashboard") ||
+  userTextLower.includes("app") ||
+  userTextLower.includes("page") ||
+  userTextLower.includes("form") ||
+  userTextLower.includes("login") ||
+  userTextLower.includes("calculator") ||
+  userTextLower.includes("quiz") ||
+  userTextLower.includes("generator") ||
+  userTextLower.includes("center") ||
+  userTextLower.includes("centre") ||
+  userTextLower.includes("visible") ||
+  userTextLower.includes("mobile") ||
+  userTextLower.includes("tablet") ||
+  userTextLower.includes("responsive") ||
+  userTextLower.includes("overflow") ||
+  userTextLower.includes("color") ||
+  userTextLower.includes("colour") ||
+  userTextLower.includes("font") ||
+  userTextLower.includes("text") ||
+  userTextLower.includes("txt") ||
+  userTextLower.includes("border") ||
+  userTextLower.includes("table") ||
+  userTextLower.includes("tablie") ||
+  userTextLower.includes("animation") ||
+  userTextLower.includes("animate") ||
+  userTextLower.includes("effect") ||
+  userTextLower.includes("position") ||
+  userTextLower.includes("logo")
+
 const ownerExplicitCustomerProjectMode =
   isAdminRequest &&
   (
@@ -1687,7 +1740,7 @@ const ownerPlatformAdminMode =
     userTextLower.includes("route.ts")
   )
 
-const isCustomerProjectModeRequest = isAdminRequest && !ownerPlatformAdminMode
+const isCustomerProjectModeRequest = isAdminRequest && !ownerPlatformAdminMode && projectFileIntent
 const isAdmin = isAdminRequest && ownerPlatformAdminMode
 
 // Admin system prompt - HAS file-editing tools that deploy to the live site
@@ -1760,6 +1813,9 @@ Be helpful, friendly, and precise.`
 const userSystemPrompt = aiSettings.systemPrompt + `
 
 IMPORTANT: You are helping a CUSTOMER with their OWN real code project only.
+
+NORMAL CHAT RULE:
+- If the user only says hello, hi, thanks, ok, or asks a normal question without asking to create/build/edit/change/add/remove/update/fix project files, reply conversationally and DO NOT return createFile/editFile/deleteFile operations.
 
 CUSTOMER SECURITY RULES:
 - Never show, mention, generate, or expose MujeebProAI owner/admin data.
@@ -2046,41 +2102,7 @@ if (hasVisionInput && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     }
   )
 }
-const enableFileMode =
-  userTextLower.includes("edit") ||
-  userTextLower.includes("create") ||
-  userTextLower.includes("build") ||
-  userTextLower.includes("change") ||
-  userTextLower.includes("add") ||
-  userTextLower.includes("remove") ||
-  userTextLower.includes("delete") ||
-  userTextLower.includes("update") ||
-  userTextLower.includes("fix") ||
-  userTextLower.includes("website") ||
-  userTextLower.includes("homepage") ||
-  userTextLower.includes("software") ||
-  userTextLower.includes("saas") ||
-  userTextLower.includes("dashboard") ||
-  userTextLower.includes("center") ||
-  userTextLower.includes("centre") ||
-  userTextLower.includes("visible") ||
-  userTextLower.includes("mobile") ||
-  userTextLower.includes("tablet") ||
-  userTextLower.includes("responsive") ||
-  userTextLower.includes("overflow") ||
-  userTextLower.includes("color") ||
-  userTextLower.includes("colour") ||
-  userTextLower.includes("font") ||
-  userTextLower.includes("text") ||
-  userTextLower.includes("txt") ||
-  userTextLower.includes("border") ||
-  userTextLower.includes("table") ||
-  userTextLower.includes("tablie") ||
-  userTextLower.includes("animation") ||
-  userTextLower.includes("animate") ||
-  userTextLower.includes("effect") ||
-  userTextLower.includes("position") ||
-  userTextLower.includes("logo")
+const enableFileMode = projectFileIntent
 
 const result = await streamText({
   model: hasVisionInput
