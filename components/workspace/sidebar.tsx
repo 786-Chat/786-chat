@@ -209,11 +209,28 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const startNewChat = () => {
     setCurrentChatId(null)
     setChatHistory([])
-    window.dispatchEvent(new CustomEvent("new-chat"))
+    setSearchQuery("")
 
     if (typeof window !== "undefined") {
+      // Clear old HTML previews so the right panel does not keep showing the
+      // previous project when the user starts a new chat.
+      for (const key of Object.keys(window.localStorage)) {
+        if (
+          key.startsWith("mujeebproai_last_preview_html") ||
+          key.includes("_preview_html_") ||
+          key.includes("preview_history")
+        ) {
+          window.localStorage.removeItem(key)
+        }
+      }
+
+      // Move to a clean new-project URL first, then notify the workspace.
+      // Do not dispatch project-files-changed here because that reloads the
+      // latest saved project and brings the old preview back.
       window.history.pushState({}, "", "/dashboard/chat?newProject=1")
       window.dispatchEvent(new PopStateEvent("popstate"))
+      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
+      window.dispatchEvent(new CustomEvent("preview-cleared"))
     }
 
     if (window.innerWidth < 768) onClose()
