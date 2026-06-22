@@ -508,7 +508,10 @@ export function WorkspacePreviewPanel({
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const isOwnerAdmin = user?.email?.toLowerCase() === "mujeeb@job4u.com"
-  const isFreshNewProject = searchParams.get("newProject") === "1"
+  const [localFreshNewProject, setLocalFreshNewProject] = useState(false)
+
+  const isFreshNewProject =
+    searchParams.get("newProject") === "1" || localFreshNewProject
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [liveUrl, setLiveUrl] = useState("")
@@ -523,6 +526,9 @@ export function WorkspacePreviewPanel({
       : "mujeebproai_last_preview_html_guest"
   const previewBackupStorageKey = `${previewStorageKey}_backup`
   const previewHistoryStorageKey = `${previewStorageKey}_history`
+
+  const previewHistoryStorageKey = `${previewStorageKey}_history`
+
 
   const currentPreviewHtml = isFreshNewProject ? "" : localPreviewHtml || previewHtml || ""
 
@@ -597,6 +603,53 @@ const defaultFile =
     : "app/page.tsx"
 
 const [selectedFile, setSelectedFile] = useState(defaultFile)
+
+useEffect(() => {
+  const clearFreshPreview = () => {
+    setLocalFreshNewProject(true)
+    setRefreshKey((prev) => prev + 1)
+    setLiveUrl("")
+    setLocalPreviewHtml("")
+    setStablePreviewHtml("")
+    setPreviewFrameReady(false)
+    setSelectedFile("app/page.tsx")
+    setPreviewUrl("")
+
+    try {
+      localStorage.removeItem(previewStorageKey)
+      localStorage.removeItem(previewBackupStorageKey)
+      localStorage.removeItem(previewHistoryStorageKey)
+    } catch {
+      // keep preview usable
+    }
+  }
+
+  const handleProjectChanged = (event: Event) => {
+    const detail = (event as CustomEvent).detail
+
+    if (detail?.projectId || searchParams.get("projectId")) {
+      setLocalFreshNewProject(false)
+    }
+  }
+
+  window.addEventListener("new-chat", clearFreshPreview)
+  window.addEventListener("preview-cleared", clearFreshPreview)
+  window.addEventListener("project-files-changed", handleProjectChanged)
+  window.addEventListener("chat-selected", handleProjectChanged)
+
+  return () => {
+    window.removeEventListener("new-chat", clearFreshPreview)
+    window.removeEventListener("preview-cleared", clearFreshPreview)
+    window.removeEventListener("project-files-changed", handleProjectChanged)
+    window.removeEventListener("chat-selected", handleProjectChanged)
+  }
+}, [
+  previewBackupStorageKey,
+  previewHistoryStorageKey,
+  previewStorageKey,
+  searchParams,
+  setPreviewUrl,
+])
 
 const selectedFileContent =
   projectFiles[selectedFile] ||
@@ -1137,7 +1190,9 @@ useEffect(() => {
         <div className="flex items-center flex-1 h-7 bg-cyan-500/5 border border-cyan-500/20 rounded-lg px-2.5">
           <div className="w-2 h-2 rounded-full bg-cyan-400 mr-2 animate-pulse" />
           <span className="text-[11px] text-cyan-400/80">
-            {hasPreviewHtml || projectPreviewApiUrl
+            {isFreshNewProject
+              ? "Preview Ready - New Chat"
+              : hasPreviewHtml || projectPreviewApiUrl
               ? "Live Preview - Your AI Generated Project"
               : safeLiveUrl
                 ? viewMode === "code"
@@ -1207,13 +1262,19 @@ useEffect(() => {
             </div>
 
             <h3 className="text-sm font-medium text-white/50 mb-1">
-              {isReactCode || isBadComponentPreview ? "Code is not preview HTML" : "Preview is empty"}
+              {isFreshNewProject
+                ? "New chat ready"
+                : isReactCode || isBadComponentPreview
+                  ? "Code is not preview HTML"
+                  : "Preview is empty"}
             </h3>
 
             <p className="text-xs text-white/25 max-w-[280px] mb-4">
-              {isReactCode || isBadComponentPreview
-                ? "React/TSX code will only show in Code mode. Preview mode only renders real HTML or your live website."
-                : "Ask AI to generate or edit a website. The preview will appear here instead of a blank white page."}
+              {isFreshNewProject
+                ? "Ask MujeebProAI to create a new website or app. The preview will appear here after the new project is saved."
+                : isReactCode || isBadComponentPreview
+                  ? "React/TSX code will only show in Code mode. Preview mode only renders real HTML or your live website."
+                  : "Ask AI to generate or edit a website. The preview will appear here instead of a blank white page."}
             </p>
 
             {isReactCode || isBadComponentPreview ? (
