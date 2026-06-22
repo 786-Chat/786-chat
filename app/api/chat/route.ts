@@ -323,7 +323,7 @@ function createProjectNameFromPrompt(prompt: string): string {
 }
 
 
-type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "quiz" | "login" | "app" | "generic"
+type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "quiz" | "calculator" | "login" | "app" | "generic"
 
 function detectProjectKind(prompt: string): ProjectKind {
   const lower = prompt.toLowerCase()
@@ -333,6 +333,7 @@ function detectProjectKind(prompt: string): ProjectKind {
   if (lower.includes("marketplace") || lower.includes("ecommerce") || lower.includes("shop") || lower.includes("gumtree")) return "marketplace"
   if (lower.includes("saas") || lower.includes("dashboard") || lower.includes("reports") || lower.includes("analytics")) return "saas"
   if (lower.includes("quiz") || lower.includes("question") || lower.includes("answers")) return "quiz"
+  if (lower.includes("calculator") || lower.includes("calc") || lower.includes("math tool")) return "calculator"
   if (lower.includes("login") || lower.includes("sign in") || lower.includes("signin") || lower.includes("register form") || lower.includes("auth form")) return "login"
   if (lower.includes("web app") || lower.includes("app") || lower.includes("interactive") || lower.includes("generator") || lower.includes("tool")) return "app"
 
@@ -353,6 +354,8 @@ Design must be SaaS/software-focused only: sidebar, analytics cards, revenue/use
 Design must be marketplace-focused only: product/category cards, search/filter bar, seller stats, listings, trust badges, checkout/order flow. NEVER use restaurant text like Restaurant Preview, Reserve a Table, View Menu, chef, menu, booking table, or food imagery.`,
     quiz: `PROJECT TYPE: QUIZ GENERATOR WEB APP.
 Design must be an actual interactive quiz app, not a text-only landing page. It must include a topic input, generate quiz button, 5-8 question cards, answer options, score/progress area, reset button, and interactive state with useState. It must be fully responsive on mobile/tablet/desktop.`,
+    calculator: `PROJECT TYPE: CALCULATOR WEB APP.
+Design must be a real working calculator, not a text-only card. It must include number buttons, operators, decimal support, clear/delete, percentage, sign toggle, calculation history, keyboard support, responsive layout, and client state with useState/useEffect. It must calculate immediately in preview.`,
     login: `PROJECT TYPE: LOGIN / AUTH PAGE.
 Design must be a real responsive login UI, not only text. It must include email and password inputs, submit button, remember/forgot links, validation or demo state with useState, and polished auth-card layout.`,
     app: `PROJECT TYPE: INTERACTIVE WEB APP / TOOL.
@@ -471,6 +474,256 @@ function buildUniqueStarterFiles(prompt: string, projectName: string): Record<st
       ...base,
       "components/MarketplaceHome.tsx": `const categories = ["Electronics", "Home", "Vehicles", "Services", "Fashion", "Business"]\n\nexport default function MarketplaceHome() {\n  return (\n    <main className="min-h-screen bg-zinc-950 text-white">\n      <section className="mx-auto max-w-7xl px-6 py-20">\n        <div className="rounded-[2.5rem] bg-gradient-to-br from-emerald-400 to-lime-300 p-10 text-zinc-950 md:p-16">\n          <p className="font-black uppercase tracking-[0.3em]">Local marketplace platform</p>\n          <h1 className="mt-5 max-w-4xl text-6xl font-black md:text-8xl">${title}</h1>\n          <div className="mt-8 flex max-w-3xl rounded-2xl bg-white p-3 shadow-2xl">\n            <input className="flex-1 px-4 text-zinc-900 outline-none" placeholder="Search products, services, and sellers" />\n            <button className="rounded-xl bg-zinc-950 px-7 py-4 font-bold text-white">Search</button>\n          </div>\n        </div>\n        <div className="mt-10 grid gap-5 md:grid-cols-3">\n          {categories.map((category) => <article key={category} className="rounded-3xl border border-white/10 bg-white/[0.04] p-7"><h2 className="text-2xl font-bold">{category}</h2><p className="mt-3 text-zinc-400">Verified listings, trusted sellers, and fast enquiry flow.</p></article>)}\n        </div>\n      </section>\n    </main>\n  )\n}\n`,
       "app/page.tsx": `import MarketplaceHome from "@/components/MarketplaceHome"\n\nexport default function Page() {\n  return <MarketplaceHome />\n}\n`,
+    }
+  }
+
+
+  if (kind === "calculator") {
+    return {
+      ...base,
+      "components/PremiumCalculator.tsx": `"use client"
+
+import { useEffect, useMemo, useState } from "react"
+
+type Operator = "+" | "-" | "×" | "÷" | null
+
+type HistoryItem = {
+  expression: string
+  result: string
+}
+
+const numberButtons = ["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", "."]
+const operators: Exclude<Operator, null>[] = ["÷", "×", "-", "+"]
+
+function formatNumber(value: number) {
+  if (!Number.isFinite(value)) return "Error"
+  const rounded = Math.round(value * 10000000000) / 10000000000
+  return String(rounded)
+}
+
+function calculate(left: number, right: number, operator: Operator) {
+  if (operator === "+") return left + right
+  if (operator === "-") return left - right
+  if (operator === "×") return left * right
+  if (operator === "÷") return right === 0 ? Number.NaN : left / right
+  return right
+}
+
+export default function PremiumCalculator() {
+  const [display, setDisplay] = useState("0")
+  const [storedValue, setStoredValue] = useState<number | null>(null)
+  const [operator, setOperator] = useState<Operator>(null)
+  const [waitingForValue, setWaitingForValue] = useState(false)
+  const [history, setHistory] = useState<HistoryItem[]>([])
+
+  const expression = useMemo(() => {
+    if (storedValue === null || operator === null) return display
+    return \`\${formatNumber(storedValue)} \${operator} \${waitingForValue ? "" : display}\`
+  }, [display, operator, storedValue, waitingForValue])
+
+  function inputDigit(value: string) {
+    if (display === "Error") {
+      setDisplay(value === "." ? "0." : value)
+      setWaitingForValue(false)
+      return
+    }
+
+    if (value === "." && display.includes(".") && !waitingForValue) return
+
+    if (waitingForValue) {
+      setDisplay(value === "." ? "0." : value)
+      setWaitingForValue(false)
+      return
+    }
+
+    setDisplay((current) => {
+      if (value === ".") return current + "."
+      return current === "0" ? value : current + value
+    })
+  }
+
+  function chooseOperator(nextOperator: Exclude<Operator, null>) {
+    const inputValue = Number(display)
+
+    if (storedValue === null) {
+      setStoredValue(inputValue)
+    } else if (operator) {
+      const result = calculate(storedValue, inputValue, operator)
+      const formatted = formatNumber(result)
+      setDisplay(formatted)
+      setStoredValue(result)
+      setHistory((current) => [
+        { expression: \`\${formatNumber(storedValue)} \${operator} \${display}\`, result: formatted },
+        ...current,
+      ].slice(0, 6))
+    }
+
+    setOperator(nextOperator)
+    setWaitingForValue(true)
+  }
+
+  function performCalculation() {
+    if (storedValue === null || operator === null) return
+
+    const inputValue = Number(display)
+    const result = calculate(storedValue, inputValue, operator)
+    const formatted = formatNumber(result)
+
+    setHistory((current) => [
+      { expression: \`\${formatNumber(storedValue)} \${operator} \${display}\`, result: formatted },
+      ...current,
+    ].slice(0, 8))
+    setDisplay(formatted)
+    setStoredValue(null)
+    setOperator(null)
+    setWaitingForValue(true)
+  }
+
+  function clearAll() {
+    setDisplay("0")
+    setStoredValue(null)
+    setOperator(null)
+    setWaitingForValue(false)
+    setHistory([])
+  }
+
+  function deleteLast() {
+    if (waitingForValue || display === "Error") {
+      setDisplay("0")
+      setWaitingForValue(false)
+      return
+    }
+
+    setDisplay((current) => (current.length <= 1 ? "0" : current.slice(0, -1)))
+  }
+
+  function toggleSign() {
+    if (display === "0" || display === "Error") return
+    setDisplay((current) => (current.startsWith("-") ? current.slice(1) : \`-\${current}\`))
+  }
+
+  function percent() {
+    if (display === "Error") return
+    setDisplay((current) => formatNumber(Number(current) / 100))
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (/^[0-9.]$/.test(event.key)) inputDigit(event.key)
+      if (event.key === "+") chooseOperator("+")
+      if (event.key === "-") chooseOperator("-")
+      if (event.key === "*") chooseOperator("×")
+      if (event.key === "/") {
+        event.preventDefault()
+        chooseOperator("÷")
+      }
+      if (event.key === "Enter" || event.key === "=") performCalculation()
+      if (event.key === "Backspace") deleteLast()
+      if (event.key === "Escape") clearAll()
+      if (event.key === "%") percent()
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  })
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-[#050816] text-white">
+      <section className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.24),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.4),rgba(2,6,23,1))]" />
+        <div className="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_420px]">
+          <div className="flex flex-col justify-center rounded-[2rem] border border-white/10 bg-white/[0.05] p-6 shadow-2xl backdrop-blur-xl sm:p-10">
+            <p className="mb-5 inline-flex w-fit rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-cyan-200">
+              Premium Calculator Studio
+            </p>
+            <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-5xl md:text-7xl">
+              Calculator App
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">
+              A real interactive calculator with keyboard support, history, percentage, sign toggle, decimal input, delete, and responsive premium UI.
+            </p>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {["Keyboard ready", "History saved", "Mobile perfect"].map((item) => (
+                <div key={item} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
+                  <div className="mb-4 h-10 w-10 rounded-2xl bg-cyan-300/20" />
+                  <p className="font-black text-cyan-100">{item}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/70 p-5">
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-slate-400">Current expression</p>
+              <p className="mt-3 break-words text-2xl font-black text-cyan-200">{expression}</p>
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-white/10 bg-slate-950/80 p-4 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl sm:p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-5">
+              <div className="min-h-28 rounded-3xl border border-white/10 bg-black/40 p-5 text-right">
+                <p className="min-h-6 break-words text-sm text-slate-400">{expression}</p>
+                <p className="mt-3 break-words text-5xl font-black tracking-tight text-white">{display}</p>
+              </div>
+
+              <div className="mt-5 grid grid-cols-4 gap-3">
+                <button onClick={clearAll} className="rounded-2xl bg-red-400/20 px-4 py-4 font-black text-red-100 transition hover:bg-red-400/30">AC</button>
+                <button onClick={deleteLast} className="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">DEL</button>
+                <button onClick={percent} className="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">%</button>
+                <button onClick={() => chooseOperator("÷")} className="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">÷</button>
+
+                {["7", "8", "9"].map((value) => (
+                  <button key={value} onClick={() => inputDigit(value)} className="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">{value}</button>
+                ))}
+                <button onClick={() => chooseOperator("×")} className="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">×</button>
+
+                {["4", "5", "6"].map((value) => (
+                  <button key={value} onClick={() => inputDigit(value)} className="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">{value}</button>
+                ))}
+                <button onClick={() => chooseOperator("-")} className="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">−</button>
+
+                {["1", "2", "3"].map((value) => (
+                  <button key={value} onClick={() => inputDigit(value)} className="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">{value}</button>
+                ))}
+                <button onClick={() => chooseOperator("+")} className="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">+</button>
+
+                <button onClick={toggleSign} className="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">±</button>
+                <button onClick={() => inputDigit("0")} className="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">0</button>
+                <button onClick={() => inputDigit(".")} className="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">.</button>
+                <button onClick={performCalculation} className="rounded-2xl bg-purple-400 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-purple-300">=</button>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="font-black text-slate-200">History</p>
+                <button onClick={() => setHistory([])} className="text-xs font-bold text-cyan-200 hover:text-cyan-100">Clear</button>
+              </div>
+              <div className="space-y-2">
+                {history.length === 0 ? (
+                  <p className="rounded-2xl bg-slate-950/60 p-3 text-sm text-slate-500">No calculations yet. Try 25 × 4.</p>
+                ) : (
+                  history.map((item, index) => (
+                    <div key={`${item.expression}-${index}`} className="rounded-2xl bg-slate-950/60 p-3 text-sm">
+                      <p className="text-slate-400">{item.expression}</p>
+                      <p className="mt-1 font-black text-cyan-200">= {item.result}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  )
+}
+`,
+      "app/page.tsx": `import PremiumCalculator from "@/components/PremiumCalculator"
+
+export default function Page() {
+  return <PremiumCalculator />
+}
+`,
     }
   }
 
@@ -952,6 +1205,64 @@ function applySimpleHeroTitleFallback(
     ...files,
     [heroPath]: nextHero,
   }
+}
+
+
+async function saveFallbackProjectFiles(
+  userId: string,
+  projectId: string | null,
+  userPrompt: string,
+  projectName?: string
+): Promise<string | null> {
+  const safeProjectName = projectName || createProjectNameFromPrompt(userPrompt)
+  const fallbackFiles = buildUniqueStarterFiles(userPrompt, safeProjectName)
+
+  if (projectId) {
+    const updated = await sql`
+      UPDATE projects
+      SET name = COALESCE(NULLIF(name, ''), ${safeProjectName}),
+          files = ${JSON.stringify(fallbackFiles)}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${projectId}::uuid
+        AND user_id = ${userId}::uuid
+        AND deleted_at IS NULL
+      RETURNING id
+    `
+
+    if (updated[0]?.id) return String(updated[0].id)
+  }
+
+  try {
+    const inserted = await sql`
+      INSERT INTO projects (user_id, name, template, files, created_at, updated_at)
+      VALUES (
+        ${userId}::uuid,
+        ${safeProjectName},
+        'custom',
+        ${JSON.stringify(fallbackFiles)}::jsonb,
+        NOW(),
+        NOW()
+      )
+      RETURNING id
+    `
+    return inserted[0]?.id ? String(inserted[0].id) : null
+  } catch (error) {
+    console.warn("[Chat API] Fallback project insert with template failed, retrying without template", error)
+  }
+
+  const inserted = await sql`
+    INSERT INTO projects (user_id, name, files, created_at, updated_at)
+    VALUES (
+      ${userId}::uuid,
+      ${safeProjectName},
+      ${JSON.stringify(fallbackFiles)}::jsonb,
+      NOW(),
+      NOW()
+    )
+    RETURNING id
+  `
+
+  return inserted[0]?.id ? String(inserted[0].id) : null
 }
 
 async function applyFileOperationsToProject(
@@ -2288,9 +2599,74 @@ Do not say "copy this code".
 
           if (!handledBySafeFallback && operations.length > 0) {
             const verifyOperationSave = await verifySavedProjectFiles(session.id, effectiveProjectId)
-            cleanMessage = verifyOperationSave.ok
-              ? `Project files saved successfully. ${verifyOperationSave.message}`
-              : `Project save failed: ${verifyOperationSave.message}`
+
+            if (!verifyOperationSave.ok && (isNewProjectBuildRequest(userText) || projectFileIntent)) {
+              const fallbackProjectId = await saveFallbackProjectFiles(
+                session.id,
+                effectiveProjectId,
+                userText,
+                createProjectNameFromPrompt(userText)
+              )
+
+              if (fallbackProjectId) {
+                effectiveProjectId = fallbackProjectId
+
+                if (currentChatId) {
+                  try {
+                    await sql`
+                      UPDATE chats
+                      SET project_id = ${fallbackProjectId}::uuid,
+                          updated_at = NOW()
+                      WHERE id = ${currentChatId}
+                        AND user_id = ${session.id}
+                    `
+                  } catch (error) {
+                    console.warn("[Chat API] Could not link fallback project to chat", error)
+                  }
+                }
+              }
+
+              const verifyFallback = await verifySavedProjectFiles(session.id, effectiveProjectId)
+              cleanMessage = verifyFallback.ok
+                ? `Project files saved successfully. ${verifyFallback.message}`
+                : `Project save failed: ${verifyFallback.message}`
+            } else {
+              cleanMessage = verifyOperationSave.ok
+                ? `Project files saved successfully. ${verifyOperationSave.message}`
+                : `Project save failed: ${verifyOperationSave.message}`
+            }
+          }
+
+          if (!handledBySafeFallback && operations.length === 0 && (isNewProjectBuildRequest(userText) || (!ownerPlatformAdminMode && projectFileIntent && effectiveProjectId))) {
+            const fallbackProjectId = await saveFallbackProjectFiles(
+              session.id,
+              effectiveProjectId,
+              userText,
+              createProjectNameFromPrompt(userText)
+            )
+
+            if (fallbackProjectId) {
+              effectiveProjectId = fallbackProjectId
+
+              if (currentChatId) {
+                try {
+                  await sql`
+                    UPDATE chats
+                    SET project_id = ${fallbackProjectId}::uuid,
+                        updated_at = NOW()
+                    WHERE id = ${currentChatId}
+                      AND user_id = ${session.id}
+                  `
+                } catch (error) {
+                  console.warn("[Chat API] Could not link no-operation fallback project to chat", error)
+                }
+              }
+            }
+
+            const verifyFallback = await verifySavedProjectFiles(session.id, effectiveProjectId)
+            cleanMessage = verifyFallback.ok
+              ? `Project files saved successfully. ${verifyFallback.message}`
+              : `Project save failed: ${verifyFallback.message}`
           }
 
           if (cleanMessage) {
