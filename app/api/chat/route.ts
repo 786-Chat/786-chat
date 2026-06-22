@@ -203,6 +203,85 @@ function looksLikeStarterPage(content: string): boolean {
   )
 }
 
+function looksLikeUsableProjectFiles(files: Record<string, string>): boolean {
+  const page = files["app/page.tsx"]
+
+  if (!page || typeof page !== "string") return false
+  if (!page.trim()) return false
+  if (looksLikeStarterPage(page)) return false
+  if (!page.includes("export default")) return false
+
+  return page.trim().length > 120
+}
+
+function normalizeProjectFiles(files: unknown): Record<string, string> {
+  if (!files || typeof files !== "object" || Array.isArray(files)) return {}
+
+  return Object.fromEntries(
+    Object.entries(files as Record<string, unknown>).filter(
+      ([path, value]) => typeof path === "string" && typeof value === "string"
+    )
+  ) as Record<string, string>
+}
+
+async function verifySavedProjectFiles(
+  userId: string,
+  projectId: string | null
+): Promise<{ ok: boolean; message: string }> {
+  if (!projectId) {
+    return {
+      ok: false,
+      message: "No project id was returned after saving files.",
+    }
+  }
+
+  const rows = await sql`
+    SELECT id, files
+    FROM projects
+    WHERE id = ${projectId}::uuid
+      AND user_id = ${userId}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `
+
+  if (!rows[0]) {
+    return {
+      ok: false,
+      message: "Project was not found after save.",
+    }
+  }
+
+  const files = normalizeProjectFiles(rows[0].files)
+  const fileCount = Object.keys(files).length
+
+  if (fileCount === 0) {
+    return {
+      ok: false,
+      message: "Database saved an empty files JSON object.",
+    }
+  }
+
+  if (!files["app/page.tsx"]) {
+    return {
+      ok: false,
+      message: "Database files JSON is missing app/page.tsx.",
+    }
+  }
+
+  if (!looksLikeUsableProjectFiles(files)) {
+    return {
+      ok: false,
+      message: "app/page.tsx still looks empty, placeholder, or not renderable.",
+    }
+  }
+
+  return {
+    ok: true,
+    message: `Saved ${fileCount} real project files.`,
+  }
+}
+
+
 function createProjectNameFromPrompt(prompt: string): string {
   const clean = prompt
     .replace(/CURRENT_PREVIEW_HTML:[\s\S]*/gi, "")
@@ -226,6 +305,7 @@ function createProjectNameFromPrompt(prompt: string): string {
   if (lower.includes("saas")) return "SaaS Project"
   if (lower.includes("dashboard")) return "Dashboard Project"
   if (lower.includes("quiz")) return "Quiz Generator App"
+  if (lower.includes("login") || lower.includes("sign in") || lower.includes("signin")) return "Login Page"
   if (lower.includes("calculator")) return "Calculator App"
   if (lower.includes("todo") || lower.includes("task")) return "Task Manager App"
 
@@ -233,7 +313,7 @@ function createProjectNameFromPrompt(prompt: string): string {
 }
 
 
-type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "quiz" | "app" | "generic"
+type ProjectKind = "restaurant" | "school" | "saas" | "marketplace" | "quiz" | "login" | "app" | "generic"
 
 function detectProjectKind(prompt: string): ProjectKind {
   const lower = prompt.toLowerCase()
@@ -243,6 +323,7 @@ function detectProjectKind(prompt: string): ProjectKind {
   if (lower.includes("marketplace") || lower.includes("ecommerce") || lower.includes("shop") || lower.includes("gumtree")) return "marketplace"
   if (lower.includes("saas") || lower.includes("dashboard") || lower.includes("reports") || lower.includes("analytics")) return "saas"
   if (lower.includes("quiz") || lower.includes("question") || lower.includes("answers")) return "quiz"
+  if (lower.includes("login") || lower.includes("sign in") || lower.includes("signin") || lower.includes("register form") || lower.includes("auth form")) return "login"
   if (lower.includes("web app") || lower.includes("app") || lower.includes("interactive") || lower.includes("generator") || lower.includes("tool")) return "app"
 
   return "generic"
@@ -262,6 +343,8 @@ Design must be SaaS/software-focused only: sidebar, analytics cards, revenue/use
 Design must be marketplace-focused only: product/category cards, search/filter bar, seller stats, listings, trust badges, checkout/order flow. NEVER use restaurant text like Restaurant Preview, Reserve a Table, View Menu, chef, menu, booking table, or food imagery.`,
     quiz: `PROJECT TYPE: QUIZ GENERATOR WEB APP.
 Design must be an actual interactive quiz app, not a text-only landing page. It must include a topic input, generate quiz button, 5-8 question cards, answer options, score/progress area, reset button, and interactive state with useState. It must be fully responsive on mobile/tablet/desktop.`,
+    login: `PROJECT TYPE: LOGIN / AUTH PAGE.
+Design must be a real responsive login UI, not only text. It must include email and password inputs, submit button, remember/forgot links, validation or demo state with useState, and polished auth-card layout.`,
     app: `PROJECT TYPE: INTERACTIVE WEB APP / TOOL.
 Design must be a working interactive app, not only hero text. It must include input controls, buttons, generated results/cards, state handling with useState, responsive layout, and polished app UI.`,
     generic: `PROJECT TYPE: CUSTOM WEBSITE / SOFTWARE.
@@ -565,6 +648,101 @@ export default function Page() {
     }
   }
 
+  if (kind === "login") {
+    return {
+      ...base,
+      "app/page.tsx": `"use client"
+
+import { useState } from "react"
+
+export default function Page() {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [message, setMessage] = useState("Welcome back. Sign in to continue.")
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!email.trim() || !password.trim()) {
+      setMessage("Please enter both email and password.")
+      return
+    }
+
+    setMessage(\`Demo login ready for \${email}. Connect auth API when backend is ready.\`)
+  }
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-slate-950 text-white">
+      <section className="relative flex min-h-screen items-center justify-center px-5 py-10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.25),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.28),transparent_34%)]" />
+        <div className="relative grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl backdrop-blur lg:grid-cols-2">
+          <div className="hidden bg-gradient-to-br from-cyan-300/20 via-purple-400/10 to-slate-950 p-10 lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <p className="inline-flex rounded-full border border-cyan-200/30 bg-cyan-200/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-cyan-100">Secure access</p>
+              <h1 className="mt-8 text-5xl font-black leading-tight">${title}</h1>
+              <p className="mt-5 max-w-md text-lg leading-8 text-slate-300">A polished login experience with responsive layout, real form controls, and interactive demo validation.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              {["Fast", "Secure", "Responsive"].map((item) => (
+                <div key={item} className="rounded-2xl border border-white/10 bg-white/10 p-4 text-sm font-bold">{item}</div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 sm:p-10">
+            <div className="mx-auto max-w-md">
+              <div className="mb-8 text-center lg:text-left">
+                <p className="text-sm font-bold uppercase tracking-[0.25em] text-cyan-200">MujeebProAI Auth</p>
+                <h2 className="mt-3 text-4xl font-black">Sign in</h2>
+                <p className="mt-3 text-slate-300">{message}</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-300">Email address</span>
+                  <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    type="email"
+                    placeholder="you@example.com"
+                    className="min-h-14 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 text-white outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-4"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-300">Password</span>
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type="password"
+                    placeholder="Enter password"
+                    className="min-h-14 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 text-white outline-none ring-cyan-300/30 placeholder:text-slate-500 focus:ring-4"
+                  />
+                </label>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-slate-900" />
+                    Remember me
+                  </label>
+                  <a href="#" className="font-bold text-cyan-200">Forgot password?</a>
+                </div>
+
+                <button className="min-h-14 w-full rounded-2xl bg-cyan-300 px-6 font-black text-slate-950 transition hover:scale-[1.01] hover:bg-cyan-200">
+                  Login Now
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  )
+}
+`,
+    }
+  }
+
   if (kind === "app") {
     return {
       ...base,
@@ -689,7 +867,11 @@ function isNewProjectBuildRequest(prompt: string): boolean {
     lower.includes("dashboard") ||
     lower.includes("system") ||
     lower.includes("app") ||
-    lower.includes("portal")
+    lower.includes("portal") ||
+    lower.includes("page") ||
+    lower.includes("form") ||
+    lower.includes("login") ||
+    lower.includes("register")
 
   return hasCreateIntent && hasProjectType && !isEditOnlyProjectRequest(prompt)
 }
@@ -1970,15 +2152,15 @@ Do not say "copy this code".
         if (assistantText) {
           const operations = extractFileOperations(assistantText)
 
+          let handledBySafeFallback = false
+
           if (!ownerPlatformAdminMode) {
             const userMessageCount = messages.filter((message) => message.role === "user").length
             const shouldCreateNewProject =
               !effectiveProjectId &&
               !chatId &&
               userMessageCount <= 1 &&
-              isNewProjectBuildRequest(userText)
-
-            let handledBySafeFallback = false
+              (isNewProjectBuildRequest(userText) || operations.length > 0)
 
             // FIRST priority for selected project title edits:
             // Preserve the existing project files and update only the title text.
@@ -2043,10 +2225,25 @@ Do not say "copy this code".
             }
           }
 
-          const cleanMessage =
-            operations.length > 0
-              ? "Project files updated successfully."
-              : assistantText.trim()
+          let cleanMessage = assistantText.trim()
+
+          if (operations.length > 0) {
+            cleanMessage = "Project file operations were generated, but they were not saved. Please try again."
+          }
+
+          if (handledBySafeFallback && effectiveProjectId) {
+            const verifyFallbackSave = await verifySavedProjectFiles(session.id, effectiveProjectId)
+            cleanMessage = verifyFallbackSave.ok
+              ? `Project files saved successfully. ${verifyFallbackSave.message}`
+              : `Project save failed: ${verifyFallbackSave.message}`
+          }
+
+          if (!handledBySafeFallback && operations.length > 0) {
+            const verifyOperationSave = await verifySavedProjectFiles(session.id, effectiveProjectId)
+            cleanMessage = verifyOperationSave.ok
+              ? `Project files saved successfully. ${verifyOperationSave.message}`
+              : `Project save failed: ${verifyOperationSave.message}`
+          }
 
           if (cleanMessage) {
             await sql`
