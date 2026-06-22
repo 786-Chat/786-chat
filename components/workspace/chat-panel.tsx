@@ -1,4 +1,4 @@
-components/workspace/chat-panel.tsx"use client"
+"use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
