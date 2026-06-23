@@ -552,17 +552,16 @@ const safeProjectPreviewHtml =
     : ""
 
 // IMPORTANT:
-// If a saved project exists, use the API preview iframe first.
-// The API route executes the real React/TSX project with React + Babel.
-// The local JSX-to-HTML preview is only a fallback for non-project HTML.
-// This prevents interactive apps like quiz generators from becoming static
-// "Sample question / Option A" fallback previews.
+// If a saved project exists, always use the project preview API iframe first.
+// Do not allow old chat HTML or localStorage previews to override a saved project.
+// The API route will use the runtime worker when RUNTIME_WORKER_URL is configured,
+// and will keep a safe fallback preview until the VPS runtime server is ready.
 const projectPreviewApiUrl =
   !isFreshNewProject && project?.id
     ? `/api/projects/${encodeURIComponent(project.id)}/preview?raw=1&v=${refreshKey}`
     : ""
 
-const activePreviewHtml = safePreviewHtml || (!projectPreviewApiUrl ? safeProjectPreviewHtml : "")
+const activePreviewHtml = projectPreviewApiUrl ? "" : safePreviewHtml || safeProjectPreviewHtml
 
 const [stablePreviewHtml, setStablePreviewHtml] = useState("")
 const [previewFrameReady, setPreviewFrameReady] = useState(false)
@@ -582,7 +581,7 @@ useEffect(() => {
   }
 }, [activePreviewHtml, isFreshNewProject])
 
-const displayPreviewHtml = isFreshNewProject ? "" : activePreviewHtml || stablePreviewHtml
+const displayPreviewHtml = isFreshNewProject || projectPreviewApiUrl ? "" : activePreviewHtml || stablePreviewHtml
 const hasPreviewHtml = Boolean(displayPreviewHtml)
 const projectFilePaths = Object.keys(projectFiles).sort((a, b) => {
   const priority = ["app/page.tsx", "app/layout.tsx", "components/Hero.tsx", "backend/orders.php", "python/ai.py"]
@@ -680,6 +679,8 @@ useEffect(() => {
 
     setLiveUrl("")
     setPreviewUrl("")
+    setStablePreviewHtml("")
+    setLocalPreviewHtml("")
     setRefreshKey((prev) => prev + 1)
     setPreviewFrameReady(false)
   }, [project?.id, setPreviewUrl])
