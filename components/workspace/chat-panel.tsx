@@ -1021,11 +1021,11 @@ hardClearComposer()
   }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin, projectId])
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
+   <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
       <div
         ref={chatContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+      className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
       >
         <div className="max-w-3xl mx-auto px-4 pt-12 pb-6 space-y-6">
           {messages.length === 0 && !error && (
@@ -1237,7 +1237,7 @@ hardClearComposer()
         )}
       </AnimatePresence>
 
-      <div className="border-t border-gray-800/50 bg-gray-900/80 backdrop-blur-sm">
+   <div className="shrink-0 border-t border-gray-800/50 bg-gray-900/95 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
