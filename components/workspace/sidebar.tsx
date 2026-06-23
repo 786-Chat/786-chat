@@ -31,8 +31,6 @@ interface UsageData {
   limit: number
   plan: string
   balance?: number
-  freeMessagesUsed?: number
-  freeMessagesLimit?: number
   freeMessagesRemaining?: number
   costPerMessage?: number
   unlimited?: boolean
@@ -44,7 +42,6 @@ interface SidebarProps {
 }
 
 type DbMessage = {
-  id?: string
   role?: string
   content?: string
   created_at?: string
@@ -60,74 +57,88 @@ function makeProjectChatTitle(messages: DbMessage[], fallback: string) {
   return title.length > 42 ? `${title.slice(0, 42)}...` : title || "Project Chat"
 }
 
+function clearPreviewStorage() {
+  if (typeof window === "undefined") return
+
+  for (const key of Object.keys(window.localStorage)) {
+    if (
+      key.startsWith("mujeebproai_last_preview_html") ||
+      key.includes("preview_history") ||
+      key.includes("_history")
+    ) {
+      window.localStorage.removeItem(key)
+    }
+  }
+}
+
 export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+
   const selectedProjectId = searchParams.get("projectId")
+  const isNewProjectParam = searchParams.get("newProject") === "1"
+
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [localFreshNewChat, setLocalFreshNewChat] = useState(false)
-  const isFreshNewProject = searchParams.get("newProject") === "1" || localFreshNewChat
+
+  const isFreshNewProject = isNewProjectParam || localFreshNewChat
 
   const deletedChatKey = user?.email
     ? `mujeebproai_deleted_chats_${user.email.toLowerCase()}`
     : "mujeebproai_deleted_chats_guest"
 
   useEffect(() => {
-    if (searchParams.get("newProject") === "1") {
+    if (isNewProjectParam) {
       setLocalFreshNewChat(true)
-    } else if (searchParams.get("projectId")) {
+      setCurrentChatId(null)
+      setChatHistory([])
+    } else if (selectedProjectId) {
       setLocalFreshNewChat(false)
     }
-  }, [searchParams])
+  }, [isNewProjectParam, selectedProjectId])
+
+  const loadUsage = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const [usageResponse, balanceResponse] = await Promise.all([
+        fetch("/api/usage", { credentials: "include", cache: "no-store" }),
+        fetch("/api/balance", { credentials: "include", cache: "no-store" }),
+      ])
+
+      const isOwner = user.email?.toLowerCase() === "mujeeb@job4u.com"
+      const usageData = usageResponse.ok ? await usageResponse.json() : null
+      const balanceData = balanceResponse.ok ? await balanceResponse.json() : null
+
+      if (!usageData) return
+
+      const used = Number(usageData.used ?? 0)
+      const limit = Number(usageData.limit ?? 10)
+
+      setUsage({
+        used,
+        limit: isOwner ? 999999999 : limit,
+        plan: usageData.plan || "free",
+        balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
+        freeMessagesRemaining: isOwner
+          ? 999999999
+          : usageData.freeMessagesRemaining ?? Math.max(limit - used, 0),
+        costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
+        unlimited: Boolean(isOwner || usageData.unlimited),
+      })
+    } catch {}
+  }, [user])
 
   const fetchChatHistory = useCallback(async () => {
     if (!user) return
 
-    const loadUsage = async () => {
-      try {
-        const [usageResponse, balanceResponse] = await Promise.all([
-          fetch("/api/usage", { credentials: "include", cache: "no-store" }),
-          fetch("/api/balance", { credentials: "include", cache: "no-store" }),
-        ])
-
-        const isOwner = user?.email?.toLowerCase() === "mujeeb@job4u.com"
-        let usageData: any = null
-        let balanceData: any = null
-
-        if (usageResponse.ok) usageData = await usageResponse.json()
-        if (balanceResponse.ok) balanceData = await balanceResponse.json()
-
-        if (usageData) {
-          const used = Number(usageData.used ?? 0)
-          const limit = Number(usageData.limit ?? 10)
-          const remaining =
-            usageData.freeMessagesRemaining ??
-            Math.max(limit - used, 0)
-
-          setUsage({
-            used,
-            limit: isOwner ? 999999999 : limit,
-            plan: usageData.plan || "free",
-            balance: Number(balanceData?.balance ?? usageData.balance ?? 0),
-            freeMessagesUsed: used,
-            freeMessagesLimit: isOwner ? 999999999 : limit,
-            freeMessagesRemaining: isOwner ? 999999999 : remaining,
-            costPerMessage: Number(balanceData?.pricing?.costPerMessage ?? 0.0005),
-            unlimited: Boolean(isOwner || usageData.unlimited),
-          })
-        }
-      } catch {
-        // Keep sidebar usable.
-      }
-    }
-
     await loadUsage()
 
-    if (isFreshNewProject && !selectedProjectId) {
+    if (isFreshNewProject) {
       setChatHistory([])
       setCurrentChatId(null)
       return
@@ -140,17 +151,17 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
           : []
 
       if (selectedProjectId) {
-        const projectChatResponse = await fetch(
+        const response = await fetch(
           `/api/chat?projectId=${encodeURIComponent(selectedProjectId)}`,
           { credentials: "include", cache: "no-store" }
         )
 
-        if (!projectChatResponse.ok) {
+        if (!response.ok) {
           setChatHistory([])
           return
         }
 
-        const data = await projectChatResponse.json()
+        const data = await response.json()
         const chatId = data.chatId ? String(data.chatId) : ""
         const messages = Array.isArray(data.messages) ? data.messages : []
 
@@ -165,9 +176,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
             id: chatId,
             title: makeProjectChatTitle(messages, "Project Chat"),
             createdAt:
-              messages[0]?.created_at ||
-              data.createdAt ||
-              new Date().toISOString(),
+              messages[0]?.created_at || data.createdAt || new Date().toISOString(),
             messageCount: messages.length,
           },
         ])
@@ -176,17 +185,17 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
         return
       }
 
-      const chatResponse = await fetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         credentials: "include",
         cache: "no-store",
       })
 
-      if (!chatResponse.ok) {
+      if (!response.ok) {
         setChatHistory([])
         return
       }
 
-      const data = await chatResponse.json()
+      const data = await response.json()
 
       setChatHistory(
         (data.chats || []).filter(
@@ -196,7 +205,8 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     } catch {
       setChatHistory([])
     }
-  }, [user, deletedChatKey, isFreshNewProject, selectedProjectId])
+  }, [user, loadUsage, deletedChatKey, isFreshNewProject, selectedProjectId])
+
   useEffect(() => {
     if (user) fetchChatHistory()
   }, [user, fetchChatHistory])
@@ -210,38 +220,48 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail
-      if (detail?.chatId) setCurrentChatId(detail.chatId)
+
+      if (detail?.chatId) {
+        setLocalFreshNewChat(false)
+        setCurrentChatId(detail.chatId)
+      }
+
+      if (detail?.chatId === null) {
+        setCurrentChatId(null)
+      }
     }
+
     window.addEventListener("chat-selected", handler)
     return () => window.removeEventListener("chat-selected", handler)
   }, [])
+
+  const forceNewChatState = () => {
+    window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
+    window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
+    window.dispatchEvent(
+      new CustomEvent("chat-selected", { detail: { chatId: null, projectId: null } })
+    )
+    window.dispatchEvent(new Event("project-files-changed"))
+    window.dispatchEvent(new Event("preview-history-changed"))
+  }
 
   const startNewChat = () => {
     setLocalFreshNewChat(true)
     setCurrentChatId(null)
     setChatHistory([])
     setSearchQuery("")
+    clearPreviewStorage()
 
-    if (typeof window !== "undefined") {
-      for (const key of Object.keys(window.localStorage)) {
-        if (
-          key.startsWith("mujeebproai_last_preview_html") ||
-          key.includes("preview_history") ||
-          key.includes("_history")
-        ) {
-          window.localStorage.removeItem(key)
-        }
-      }
-    }
+    forceNewChatState()
 
-    router.replace("/dashboard/chat?newProject=1", { scroll: false })
+    router.replace(`/dashboard/chat?newProject=1&fresh=${Date.now()}`, {
+      scroll: false,
+    })
 
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("new-chat", { detail: { fresh: true } }))
-      window.dispatchEvent(new CustomEvent("preview-cleared", { detail: { fresh: true } }))
-    }, 0)
+    setTimeout(forceNewChatState, 0)
+    setTimeout(forceNewChatState, 80)
 
-    if (window.innerWidth < 768) onClose()
+    if (typeof window !== "undefined" && window.innerWidth < 768) onClose()
   }
 
   const loadChat = (chatId: string) => {
@@ -254,7 +274,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     }
 
     window.dispatchEvent(new CustomEvent("load-chat", { detail: { chatId } }))
-    if (window.innerWidth < 768) onClose()
+    if (typeof window !== "undefined" && window.innerWidth < 768) onClose()
   }
 
   const deleteChat = (chatId: string, e: React.MouseEvent) => {
@@ -269,8 +289,7 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     if (currentChatId === chatId) setCurrentChatId(null)
   }
 
-  const visibleChatHistory =
-    isFreshNewProject && !selectedProjectId ? [] : chatHistory
+  const visibleChatHistory = isFreshNewProject ? [] : chatHistory
 
   const filteredChats = visibleChatHistory.filter((chat) =>
     chat.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -278,14 +297,12 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
 
   const todayChats = filteredChats.filter((c) => {
     const d = new Date(c.createdAt)
-    const now = new Date()
-    return d.toDateString() === now.toDateString()
+    return d.toDateString() === new Date().toDateString()
   })
 
   const olderChats = filteredChats.filter((c) => {
     const d = new Date(c.createdAt)
-    const now = new Date()
-    return d.toDateString() !== now.toDateString()
+    return d.toDateString() !== new Date().toDateString()
   })
 
   return (
@@ -336,7 +353,11 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={selectedProjectId ? "Search project chat..." : "Search chats..."}
+                placeholder={
+                  selectedProjectId && !isFreshNewProject
+                    ? "Search project chat..."
+                    : "Search chats..."
+                }
                 className="w-full h-8 pl-8 pr-3 text-xs bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-cyan-500/30"
               />
             </div>
