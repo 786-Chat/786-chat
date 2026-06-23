@@ -139,22 +139,39 @@ export default function DashboardProjectsPage() {
     return Math.max(diff, 0)
   }
 
-  const startNewProject = () => {
-    try {
-      const keysToRemove = Object.keys(window.localStorage).filter((key) =>
-        key.startsWith("mujeebproai_last_preview_html")
-      )
-
-      for (const key of keysToRemove) {
+ const startNewProject = () => {
+  try {
+    for (const key of Object.keys(window.localStorage)) {
+      if (
+        key.startsWith("mujeebproai_last_preview_html") ||
+        key.includes("preview_history") ||
+        key.includes("_history")
+      ) {
         window.localStorage.removeItem(key)
       }
-
-      window.dispatchEvent(new CustomEvent("new-chat"))
-      window.dispatchEvent(new Event("project-files-changed"))
-    } catch {
-      // keep navigation working
     }
+
+    window.dispatchEvent(
+      new CustomEvent("chat-selected", {
+        detail: { chatId: null, projectId: null },
+      })
+    )
+    window.dispatchEvent(
+      new CustomEvent("new-chat", {
+        detail: { fresh: true },
+      })
+    )
+    window.dispatchEvent(
+      new CustomEvent("preview-cleared", {
+        detail: { fresh: true },
+      })
+    )
+    window.dispatchEvent(new Event("project-files-changed"))
+    window.dispatchEvent(new Event("preview-history-changed"))
+  } catch {
+    // keep navigation working
   }
+}
 
   const softDeleteProject = async (projectId: string) => {
     setBusyProjectId(projectId)
