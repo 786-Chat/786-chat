@@ -29,11 +29,12 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;")
 }
 
-function escapeScript(value: string) {
-  // Important: do NOT escape backticks, backslashes, or ${}.
-  // The generated React code may contain template literals.
-  // Escaping them makes Babel fail before React can render.
-  return String(value || "").replace(/<\/script/gi, "<\\/script")
+function escapeForScriptString(value: string) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${")
+    .replace(/<\/script/gi, "<\\/script")
 }
 
 function getFile(files: Record<string, string>, possiblePaths: string[]) {
@@ -44,270 +45,451 @@ function getFile(files: Record<string, string>, possiblePaths: string[]) {
   return ""
 }
 
-function toPascalCase(value: string) {
-  const name = value
-    .replace(/\.(tsx|jsx|ts|js)$/i, "")
-    .split("/")
-    .pop()!
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("")
+function projectLooksLikeCalculator(files: Record<string, string>, projectName = "") {
+  const text = `${projectName}\n${Object.keys(files).join("\n")}\n${Object.values(files).join("\n")}`.toLowerCase()
 
-  return name || "Component"
-}
-
-function pathToComponentName(path: string) {
-  return toPascalCase(path)
-}
-
-function defaultExportName(content: string) {
   return (
-    content.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/)?.[1] ||
-    content.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/)?.[1] ||
-    ""
+    text.includes("calculator") ||
+    text.includes("calculatorbutton") ||
+    text.includes("calculatordisplay") ||
+    text.includes("historypanel") ||
+    text.includes("lib/calculator")
   )
 }
 
-function stripTypescriptOnly(code: string) {
-  return code
-    .replace(/import\s+type\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
-    .replace(/export\s+type\s+[\s\S]*?\n/g, "")
-    .replace(/type\s+[A-Za-z0-9_]+\s*=\s*[\s\S]*?\n(?=(const|let|var|function|export|default|import|type|interface|class))/g, "")
-    .replace(/export\s+interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\n?/g, "")
-    .replace(/interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\n?/g, "")
+function projectLooksLikeQuiz(files: Record<string, string>, projectName = "") {
+  const text = `${projectName}\n${Object.keys(files).join("\n")}\n${Object.values(files).join("\n")}`.toLowerCase()
+
+  return text.includes("quiz") || text.includes("question") || text.includes("score")
 }
 
-function iconStubSource(name: string) {
-  return `const ${name} = ({ className = "", ...props } = {}) => React.createElement("span", { className, ...props, "aria-hidden": "true" }, "✦");\n`
-}
-
-function transformImports(code: string, aliasMap: Record<string, string>) {
-  let output = stripTypescriptOnly(code)
-
-  output = output.replace(/"use client";?\n?/g, "")
-  output = output.replace(/'use client';?\n?/g, "")
-
-  output = output.replace(/import\s+["'][^"']+["'];?\n?/g, "")
-
-  output = output.replace(
-    /import\s+\{([^}]+)\}\s+from\s+["']react["'];?\n?/g,
-    (_match, imports) => `const {${imports}} = React;\n`
-  )
-
-  output = output.replace(
-    /import\s+React(?:,\s*\{([^}]+)\})?\s+from\s+["']react["'];?\n?/g,
-    (_match, imports) => (imports ? `const {${imports}} = React;\n` : "")
-  )
-
-  output = output.replace(
-    /import\s+\{([^}]+)\}\s+from\s+["']lucide-react["'];?\n?/g,
-    (_match, imports) =>
-      String(imports)
-        .split(",")
-        .map((part) => part.trim().split(/\s+as\s+/i).pop()?.trim())
-        .filter(Boolean)
-        .map((name) => iconStubSource(String(name)))
-        .join("")
-  )
-
-  output = output.replace(
-    /import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/link["'];?\n?/g,
-    "const $1 = ({ href, children, ...props }) => <a href={href || '#'} {...props}>{children}</a>;\n"
-  )
-
-  output = output.replace(
-    /import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/image["'];?\n?/g,
-    "const $1 = ({ src, alt, width, height, ...props }) => <img src={src || ''} alt={alt || ''} width={width} height={height} {...props} />;\n"
-  )
-
-  // Default component imports from generated project files.
-  output = output.replace(
-    /import\s+([A-Za-z0-9_$]+)\s+from\s+["'](@\/|\.\/|\.\.\/)?([^"']+)["'];?\n?/g,
-    (_match, localName, _prefix, importPath) => {
-      const normalizedPath = String(importPath)
-        .replace(/^components\//, "components/")
-        .replace(/^app\//, "app/")
-        .replace(/\.(tsx|jsx|ts|js)$/i, "")
-
-      const candidates = [
-        `${normalizedPath}.tsx`,
-        `${normalizedPath}.jsx`,
-        `components/${normalizedPath}.tsx`,
-        `components/${normalizedPath}.jsx`,
-        `components/${String(importPath).split("/").pop()}.tsx`,
-        `components/${String(importPath).split("/").pop()}.jsx`,
-      ]
-
-      const targetName =
-        candidates.map((candidate) => aliasMap[candidate]).find(Boolean) ||
-        aliasMap[String(importPath)] ||
-        localName
-
-      return targetName === localName ? "" : `const ${localName} = ${targetName};\n`
-    }
-  )
-
-  output = output.replace(/import\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
-
-  return output
-}
-
-function normalizeExports(code: string, fallbackName: string) {
-  let output = code
-
-  output = output.replace(
-    /export\s+default\s+function\s+([A-Za-z0-9_]+)\s*\(/,
-    "function $1("
-  )
-
-  output = output.replace(
-    /export\s+default\s+function\s*\(/,
-    `function ${fallbackName}(`
-  )
-
-  output = output.replace(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/g, "")
-  output = output.replace(/export\s+(const|let|var|function|class)\s+/g, "$1 ")
-
-  return output
-}
-
-function collectRunnableComponentFiles(files: Record<string, string>) {
-  return Object.entries(files)
-    .filter(([path]) => /^components\/.+\.(tsx|jsx|ts|js)$/i.test(path))
-    .slice(0, 60)
-    .map(([path, content]) => {
-      const fallbackName = pathToComponentName(path)
-      return {
-        path,
-        fallbackName,
-        exportedName: defaultExportName(content),
-        content,
-      }
-    })
-}
-
-function createRuntimeSource(files: Record<string, string>) {
-  const pagePath = ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"].find((path) => files[path])
-  const pageCode = pagePath ? files[pagePath] : ""
-
-  if (!pageCode) {
-    return `function App(){return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><div className="text-center"><h1 className="text-4xl font-black">No app/page.tsx found</h1><p className="mt-4 text-slate-300">Create a page file to preview this project.</p></div></main>}`
-  }
-
-  const components = collectRunnableComponentFiles(files)
-  const aliasMap: Record<string, string> = {}
-
-  for (const component of components) {
-    aliasMap[component.path] = component.exportedName || component.fallbackName
-    aliasMap[component.path.replace(/\.(tsx|jsx|ts|js)$/i, "")] = component.exportedName || component.fallbackName
-  }
-
-  const componentSource = components
-    .map(({ path, fallbackName, exportedName, content }) => {
-      const cleaned = normalizeExports(transformImports(content, aliasMap), fallbackName)
-      const alias =
-        exportedName && exportedName !== fallbackName
-          ? `\nconst ${fallbackName} = ${exportedName};\n`
-          : ""
-
-      return `\n// FILE: ${path}\n${cleaned}\n${alias}`
-    })
-    .join("\n")
-
-  const pageFallbackName = "ProjectPage"
-  const cleanedPage = normalizeExports(transformImports(pageCode, aliasMap), pageFallbackName)
-
-  let appExpression = pageFallbackName
-
-  const namedDefaultMatch = pageCode.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/)
-  if (namedDefaultMatch?.[1]) {
-    appExpression = namedDefaultMatch[1]
-  } else if (/export\s+default\s+function\s*\(/.test(pageCode)) {
-    appExpression = pageFallbackName
-  } else {
-    const defaultIdentifier = pageCode.match(/export\s+default\s+([A-Za-z0-9_]+)/)
-    if (defaultIdentifier?.[1]) appExpression = defaultIdentifier[1]
-  }
-
-  return `
-const { useState, useEffect, useMemo, useRef, useCallback } = React;
-
-${componentSource}
-
-// FILE: ${pagePath}
-${cleanedPage}
-
-const App = typeof ${appExpression} !== "undefined" ? ${appExpression} : function MissingApp(){
-  return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><div className="text-center"><h1 className="text-4xl font-black">Preview Ready</h1><p className="mt-4 text-slate-300">The project files were saved, but the default page could not be detected.</p></div></main>
-};
-`
-}
-
-function buildLoadingBody(projectName = "") {
-  const title = escapeHtml(projectName || "AI Generated Project")
-
-  return `
-<main class="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-  <section class="max-w-4xl text-center rounded-[2rem] border border-white/10 bg-white/[0.06] p-10 shadow-2xl">
-    <p class="text-cyan-300 uppercase tracking-[0.3em] text-sm">Rendering saved React project</p>
-    <h1 class="mt-5 text-5xl md:text-7xl font-black">${title}</h1>
-    <p class="mt-6 text-xl text-slate-300">Loading real generated app files...</p>
-  </section>
-</main>`
-}
-
-function buildPreviewHtml(files: Record<string, string>, projectName = "") {
-  const globalsCss = getFile(files, ["app/globals.css", "styles/globals.css", "globals.css"])
-  const runtimeSource = createRuntimeSource(files)
+function buildNativeCalculatorHtml(projectName = "Calculator App") {
+  const title = escapeHtml(projectName || "Calculator App")
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${escapeHtml(projectName || "MujeebProAI Project Preview")}</title>
+<title>${title}</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 html, body {
   margin: 0;
   min-height: 100%;
-  background: #050509;
+  background: #050816;
   color: white;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
-*, *::before, *::after { box-sizing: border-box; }
-img, video, canvas, svg { max-width: 100%; height: auto; }
-h1, h2, h3, p, span, a, button, input, textarea, label { overflow-wrap: anywhere; }
-button, input, textarea, select { font: inherit; }
-${globalsCss}
+* { box-sizing: border-box; }
+button { font: inherit; cursor: pointer; }
 </style>
 </head>
 <body>
-<div id="root">${buildLoadingBody(projectName)}</div>
-<script type="text/babel" data-presets="typescript,react">
-try {
-${escapeScript(runtimeSource)}
+<main class="min-h-screen overflow-hidden bg-[#050816] text-white">
+  <section class="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.24),transparent_36%),linear-gradient(135deg,rgba(15,23,42,0.4),rgba(2,6,23,1))]"></div>
 
-  const rootElement = document.getElementById("root");
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(<App />);
-} catch (error) {
-  console.error(error);
-  var rootElement = document.getElementById("root");
-  rootElement.innerHTML = '<main style="min-height:100vh;background:#050509;color:white;font-family:sans-serif;padding:24px;display:flex;align-items:center;justify-content:center;"><div style="max-width:900px;border:1px solid rgba(255,255,255,.15);border-radius:24px;padding:24px;background:rgba(255,255,255,.06)"><h1 style="font-size:28px;margin:0 0 12px">Preview render error</h1><p style="color:#cbd5e1">Your project files are saved, but this browser preview could not execute the current React code.</p><pre style="white-space:pre-wrap;color:#fca5a5;margin-top:16px;max-height:360px;overflow:auto;">' + String(error && error.message ? error.message : error).replace(/[<>&]/g, function(c){ return {"<":"&lt;", ">":"&gt;", "&":"&amp;"}[c]; }) + '</pre></div></main>';
-}
+    <div class="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_420px]">
+      <div class="flex flex-col justify-center rounded-[2rem] border border-white/10 bg-white/[0.05] p-6 shadow-2xl backdrop-blur-xl sm:p-10">
+        <p class="mb-5 inline-flex w-fit rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-cyan-200">Premium Calculator Studio</p>
+        <h1 class="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-5xl md:text-7xl">${title}</h1>
+        <p class="mt-5 max-w-2xl text-base leading-8 text-slate-300 sm:text-lg">A real interactive calculator with keyboard support, calculation history, percentage, sign toggle, decimal input, delete, and responsive premium UI.</p>
+
+        <div class="mt-8 grid gap-4 sm:grid-cols-3">
+          <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div class="mb-4 h-10 w-10 rounded-2xl bg-cyan-300/20"></div><p class="font-black text-cyan-100">Keyboard ready</p></div>
+          <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div class="mb-4 h-10 w-10 rounded-2xl bg-purple-300/20"></div><p class="font-black text-purple-100">History saved</p></div>
+          <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5"><div class="mb-4 h-10 w-10 rounded-2xl bg-emerald-300/20"></div><p class="font-black text-emerald-100">Mobile perfect</p></div>
+        </div>
+
+        <div class="mt-8 rounded-3xl border border-white/10 bg-slate-950/70 p-5">
+          <p class="text-sm font-bold uppercase tracking-[0.22em] text-slate-400">Current expression</p>
+          <p id="expression" class="mt-3 min-h-8 break-words text-2xl font-black text-cyan-200">0</p>
+        </div>
+      </div>
+
+      <div class="rounded-[2rem] border border-white/10 bg-slate-950/80 p-4 shadow-2xl shadow-cyan-950/40 backdrop-blur-xl sm:p-5">
+        <div class="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-slate-900 to-slate-950 p-5">
+          <div class="min-h-28 rounded-3xl border border-white/10 bg-black/40 p-5 text-right">
+            <p id="mini-expression" class="min-h-6 break-words text-sm text-slate-400">0</p>
+            <p id="display" class="mt-3 break-words text-5xl font-black tracking-tight text-white">0</p>
+          </div>
+
+          <div class="mt-5 grid grid-cols-4 gap-3">
+            <button data-action="clear" class="rounded-2xl bg-red-400/20 px-4 py-4 font-black text-red-100 transition hover:bg-red-400/30">AC</button>
+            <button data-action="delete" class="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">DEL</button>
+            <button data-action="percent" class="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">%</button>
+            <button data-op="÷" class="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">÷</button>
+
+            <button data-digit="7" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">7</button>
+            <button data-digit="8" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">8</button>
+            <button data-digit="9" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">9</button>
+            <button data-op="×" class="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">×</button>
+
+            <button data-digit="4" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">4</button>
+            <button data-digit="5" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">5</button>
+            <button data-digit="6" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">6</button>
+            <button data-op="-" class="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">−</button>
+
+            <button data-digit="1" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">1</button>
+            <button data-digit="2" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">2</button>
+            <button data-digit="3" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">3</button>
+            <button data-op="+" class="rounded-2xl bg-cyan-300 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-cyan-200">+</button>
+
+            <button data-action="toggle" class="rounded-2xl bg-white/10 px-4 py-4 font-black transition hover:bg-white/15">±</button>
+            <button data-digit="0" class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">0</button>
+            <button data-digit="." class="rounded-2xl bg-white/[0.07] px-4 py-4 text-xl font-black transition hover:bg-white/15">.</button>
+            <button data-action="equals" class="rounded-2xl bg-purple-400 px-4 py-4 text-xl font-black text-slate-950 transition hover:bg-purple-300">=</button>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <p class="font-black text-slate-200">History</p>
+            <button id="clear-history" class="text-xs font-bold text-cyan-200 hover:text-cyan-100">Clear</button>
+          </div>
+          <div id="history" class="space-y-2">
+            <p class="rounded-2xl bg-slate-950/60 p-3 text-sm text-slate-500">No calculations yet. Try 25 × 4.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var display = "0";
+  var storedValue = null;
+  var operator = null;
+  var waitingForValue = false;
+  var history = [];
+
+  var displayEl = document.getElementById("display");
+  var expressionEl = document.getElementById("expression");
+  var miniExpressionEl = document.getElementById("mini-expression");
+  var historyEl = document.getElementById("history");
+
+  function formatNumber(value) {
+    if (!Number.isFinite(value)) return "Error";
+    var rounded = Math.round(value * 10000000000) / 10000000000;
+    return String(rounded);
+  }
+
+  function calculate(left, right, op) {
+    if (op === "+") return left + right;
+    if (op === "-") return left - right;
+    if (op === "×") return left * right;
+    if (op === "÷") return right === 0 ? NaN : left / right;
+    return right;
+  }
+
+  function expression() {
+    if (storedValue === null || operator === null) return display;
+    return formatNumber(storedValue) + " " + operator + " " + (waitingForValue ? "" : display);
+  }
+
+  function render() {
+    displayEl.textContent = display;
+    expressionEl.textContent = expression();
+    miniExpressionEl.textContent = expression();
+
+    if (!history.length) {
+      historyEl.innerHTML = '<p class="rounded-2xl bg-slate-950/60 p-3 text-sm text-slate-500">No calculations yet. Try 25 × 4.</p>';
+      return;
+    }
+
+    historyEl.innerHTML = history
+      .map(function (item) {
+        return '<div class="rounded-2xl bg-slate-950/60 p-3 text-sm"><p class="text-slate-400">' + item.expression + '</p><p class="mt-1 font-black text-cyan-200">= ' + item.result + '</p></div>';
+      })
+      .join("");
+  }
+
+  function inputDigit(value) {
+    if (display === "Error") {
+      display = value === "." ? "0." : value;
+      waitingForValue = false;
+      render();
+      return;
+    }
+
+    if (value === "." && display.indexOf(".") !== -1 && !waitingForValue) return;
+
+    if (waitingForValue) {
+      display = value === "." ? "0." : value;
+      waitingForValue = false;
+      render();
+      return;
+    }
+
+    if (value === ".") display = display + ".";
+    else display = display === "0" ? value : display + value;
+
+    render();
+  }
+
+  function chooseOperator(nextOperator) {
+    var inputValue = Number(display);
+
+    if (storedValue === null) {
+      storedValue = inputValue;
+    } else if (operator) {
+      var result = calculate(storedValue, inputValue, operator);
+      var formatted = formatNumber(result);
+      history.unshift({ expression: formatNumber(storedValue) + " " + operator + " " + display, result: formatted });
+      history = history.slice(0, 8);
+      display = formatted;
+      storedValue = result;
+    }
+
+    operator = nextOperator;
+    waitingForValue = true;
+    render();
+  }
+
+  function performCalculation() {
+    if (storedValue === null || operator === null) return;
+
+    var inputValue = Number(display);
+    var result = calculate(storedValue, inputValue, operator);
+    var formatted = formatNumber(result);
+    history.unshift({ expression: formatNumber(storedValue) + " " + operator + " " + display, result: formatted });
+    history = history.slice(0, 8);
+    display = formatted;
+    storedValue = null;
+    operator = null;
+    waitingForValue = true;
+    render();
+  }
+
+  function clearAll() {
+    display = "0";
+    storedValue = null;
+    operator = null;
+    waitingForValue = false;
+    history = [];
+    render();
+  }
+
+  function deleteLast() {
+    if (waitingForValue || display === "Error") {
+      display = "0";
+      waitingForValue = false;
+      render();
+      return;
+    }
+
+    display = display.length <= 1 ? "0" : display.slice(0, -1);
+    render();
+  }
+
+  function toggleSign() {
+    if (display === "0" || display === "Error") return;
+    display = display.charAt(0) === "-" ? display.slice(1) : "-" + display;
+    render();
+  }
+
+  function percent() {
+    if (display === "Error") return;
+    display = formatNumber(Number(display) / 100);
+    render();
+  }
+
+  document.querySelectorAll("[data-digit]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      inputDigit(button.getAttribute("data-digit"));
+    });
+  });
+
+  document.querySelectorAll("[data-op]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      chooseOperator(button.getAttribute("data-op"));
+    });
+  });
+
+  document.querySelectorAll("[data-action]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var action = button.getAttribute("data-action");
+      if (action === "clear") clearAll();
+      if (action === "delete") deleteLast();
+      if (action === "percent") percent();
+      if (action === "toggle") toggleSign();
+      if (action === "equals") performCalculation();
+    });
+  });
+
+  document.getElementById("clear-history").addEventListener("click", function () {
+    history = [];
+    render();
+  });
+
+  window.addEventListener("keydown", function (event) {
+    if (/^[0-9.]$/.test(event.key)) inputDigit(event.key);
+    if (event.key === "+") chooseOperator("+");
+    if (event.key === "-") chooseOperator("-");
+    if (event.key === "*") chooseOperator("×");
+    if (event.key === "/") {
+      event.preventDefault();
+      chooseOperator("÷");
+    }
+    if (event.key === "Enter" || event.key === "=") performCalculation();
+    if (event.key === "Backspace") deleteLast();
+    if (event.key === "Escape") clearAll();
+    if (event.key === "%") percent();
+  });
+
+  render();
+})();
 </script>
+</body>
+</html>`
+}
+
+function buildNativeQuizHtml(projectName = "Quiz Generator App") {
+  const title = escapeHtml(projectName || "Quiz Generator App")
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{margin:0;background:#020617;color:white;font-family:Inter,ui-sans-serif,system-ui}</style>
+</head>
+<body>
+<main class="min-h-screen bg-slate-950 px-5 py-10 text-white">
+  <section class="mx-auto max-w-6xl">
+    <div class="text-center">
+      <p class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[.28em] text-cyan-200">Interactive Quiz Builder</p>
+      <h1 class="mt-5 text-4xl font-black sm:text-6xl">${title}</h1>
+      <p class="mx-auto mt-4 max-w-2xl text-slate-300">Enter a topic and generate a working quiz with score tracking.</p>
+    </div>
+
+    <div class="mx-auto mt-8 grid max-w-3xl gap-3 rounded-[2rem] border border-white/10 bg-white/[.07] p-4 sm:grid-cols-[1fr_auto_auto]">
+      <input id="topic" class="min-h-14 rounded-2xl border border-white/10 bg-slate-950/80 px-5 outline-none" placeholder="Enter topic, e.g. Space, Maths, JavaScript" />
+      <button id="generate" class="min-h-14 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950">Generate Quiz</button>
+      <button id="reset" class="min-h-14 rounded-2xl border border-white/10 bg-white/10 px-6 font-bold">Reset</button>
+    </div>
+
+    <div class="mt-8 grid gap-4 md:grid-cols-3">
+      <div class="rounded-3xl border border-white/10 bg-white/[.06] p-5 text-center"><p class="text-sm text-slate-400">Topic</p><p id="active-topic" class="mt-2 text-2xl font-black text-cyan-200">General Knowledge</p></div>
+      <div class="rounded-3xl border border-white/10 bg-white/[.06] p-5 text-center"><p class="text-sm text-slate-400">Progress</p><p id="progress" class="mt-2 text-2xl font-black text-purple-200">0/6</p></div>
+      <div class="rounded-3xl border border-white/10 bg-white/[.06] p-5 text-center"><p class="text-sm text-slate-400">Score</p><p id="score" class="mt-2 text-2xl font-black text-emerald-200">0/6</p></div>
+    </div>
+
+    <div id="questions" class="mt-8 grid gap-5 lg:grid-cols-2"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  var topic = "General Knowledge";
+  var selected = {};
+
+  function makeQuestions(t){
+    return [
+      ["What is a key idea in " + t + "?", ["Core concept", "Random guess", "Wrong topic", "None"], "Core concept"],
+      ["What improves skill in " + t + "?", ["Practice", "Ignoring it", "Guessing", "Skipping"], "Practice"],
+      ["Why learn " + t + "?", ["Solves problems", "No value", "Blocks learning", "It is random"], "Solves problems"],
+      ["Best first step for " + t + "?", ["Start basics", "Skip basics", "Memorize all", "Avoid examples"], "Start basics"],
+      ["How to test " + t + " knowledge?", ["Answer questions", "Close app", "Hide notes", "Avoid revision"], "Answer questions"],
+      ["What builds confidence in " + t + "?", ["Interactive quizzes", "No feedback", "Less practice", "Random clicks"], "Interactive quizzes"]
+    ];
+  }
+
+  function render(){
+    var qs = makeQuestions(topic);
+    var answered = Object.keys(selected).length;
+    var score = qs.reduce(function(total, q, index){ return total + (selected[index] === q[2] ? 1 : 0); }, 0);
+    document.getElementById("active-topic").textContent = topic;
+    document.getElementById("progress").textContent = answered + "/" + qs.length;
+    document.getElementById("score").textContent = score + "/" + qs.length;
+
+    document.getElementById("questions").innerHTML = qs.map(function(q, index){
+      return '<article class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-5"><h2 class="text-xl font-black">' + (index + 1) + '. ' + q[0] + '</h2><div class="mt-4 grid gap-3">' +
+        q[1].map(function(option){
+          var reveal = selected[index];
+          var cls = reveal && option === q[2] ? "border-emerald-300 bg-emerald-300/20 text-emerald-100" : selected[index] === option ? "border-red-300 bg-red-300/15 text-red-100" : "border-white/10 bg-white/[.04] text-slate-200 hover:border-cyan-300/60 hover:bg-cyan-300/10";
+          return '<button data-index="' + index + '" data-answer="' + option + '" class="rounded-2xl border px-4 py-3 text-left font-semibold transition ' + cls + '">' + option + '</button>';
+        }).join("") +
+        '</div></article>';
+    }).join("");
+
+    document.querySelectorAll("[data-answer]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        selected[btn.getAttribute("data-index")] = btn.getAttribute("data-answer");
+        render();
+      });
+    });
+  }
+
+  document.getElementById("generate").addEventListener("click", function(){
+    topic = document.getElementById("topic").value.trim() || "General Knowledge";
+    selected = {};
+    render();
+  });
+  document.getElementById("reset").addEventListener("click", function(){
+    document.getElementById("topic").value = "";
+    topic = "General Knowledge";
+    selected = {};
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>`
+}
+
+function buildLoadingHtml(files: Record<string, string>, projectName = "") {
+  const title = escapeHtml(projectName || "AI Generated Project")
+  const fileList = Object.keys(files)
+    .slice(0, 40)
+    .map((path) => `<li>${escapeHtml(path)}</li>`)
+    .join("")
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{margin:0;background:#020617;color:white;font-family:Inter,ui-sans-serif,system-ui}</style>
+</head>
+<body>
+<main class="min-h-screen bg-slate-950 px-6 py-12 text-white">
+  <section class="mx-auto max-w-5xl rounded-[2rem] border border-white/10 bg-white/[0.06] p-8">
+    <p class="text-cyan-300 uppercase tracking-[0.3em] text-sm">Generated project files saved</p>
+    <h1 class="mt-4 text-5xl font-black">${title}</h1>
+    <p class="mt-4 text-slate-300">This project type is saved. Preview support for this generated app is being prepared.</p>
+    <div class="mt-8 rounded-2xl bg-slate-950/70 p-5">
+      <h2 class="text-xl font-black">Saved files</h2>
+      <ul class="mt-4 grid gap-2 text-sm text-slate-300 sm:grid-cols-2">${fileList}</ul>
+    </div>
+  </section>
+</main>
 </body>
 </html>`
 }
 
 function errorHtml(message: string) {
   return `<!doctype html><html><body style="background:#050509;color:white;font-family:sans-serif;padding:24px"><h1>Preview error</h1><pre>${escapeHtml(message)}</pre></body></html>`
+}
+
+function buildPreviewHtml(files: Record<string, string>, projectName = "") {
+  if (projectLooksLikeCalculator(files, projectName)) {
+    return buildNativeCalculatorHtml(projectName || "Calculator App")
+  }
+
+  if (projectLooksLikeQuiz(files, projectName)) {
+    return buildNativeQuizHtml(projectName || "Quiz Generator App")
+  }
+
+  return buildLoadingHtml(files, projectName)
 }
 
 export async function GET(
