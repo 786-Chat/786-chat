@@ -29,7 +29,9 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;")
 }
 
-function escapeScript(value: string) {
+function safeScriptSource(value: string) {
+  // This code is inserted as real JavaScript/JSX source inside a script tag.
+  // Do not escape backticks, quotes, or backslashes, because that changes the generated React code.
   return String(value || "").replace(/<\/script/gi, "<\\/script")
 }
 
@@ -41,134 +43,125 @@ function getFile(files: Record<string, string>, possiblePaths: string[]) {
   return ""
 }
 
-function getPagePath(files: Record<string, string>) {
-  return ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"].find(
-    (path) => typeof files[path] === "string" && files[path].trim()
-  )
-}
-
-function componentNameFromPath(path: string) {
-  const fileName = path.split("/").pop() || "Component"
-  const baseName = fileName.replace(/\.(tsx|jsx|ts|js)$/i, "")
-  const name = baseName
-    .replace(/[^a-zA-Z0-9]+/g, " ")
+function toIdentifier(value: string) {
+  const cleaned = value
+    .replace(/\.(tsx|jsx|ts|js)$/i, "")
+    .replace(/[^a-zA-Z0-9_$]+/g, " ")
     .split(" ")
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join("")
 
-  return name || "Component"
+  if (!cleaned) return "Component"
+  if (/^[0-9]/.test(cleaned)) return `Component${cleaned}`
+  return cleaned
 }
 
-function getDefaultExportName(content: string) {
+function componentNameFromPath(path: string) {
+  const fileName = path.split("/").pop() || "Component"
+  return toIdentifier(fileName)
+}
+
+function importPathToComponentName(importPath: string) {
+  const normalized = importPath
+    .replace(/^@\//, "")
+    .replace(/^\.\//, "")
+    .replace(/^\.\.\//, "")
+    .replace(/\.(tsx|jsx|ts|js)$/i, "")
+
+  const fileName = normalized.split("/").pop() || "Component"
+  return toIdentifier(fileName)
+}
+
+function getDefaultExportName(code: string) {
   return (
-    content.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/)?.[1] ||
-    content.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/)?.[1] ||
+    code.match(/export\s+default\s+function\s+([A-Za-z_$][A-Za-z0-9_$]*)/)?.[1] ||
+    code.match(/export\s+default\s+class\s+([A-Za-z_$][A-Za-z0-9_$]*)/)?.[1] ||
+    code.match(/export\s+default\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;?/)?.[1] ||
     ""
   )
 }
 
-function makeIconStub(name: string) {
-  return `const ${name} = (props = {}) => React.createElement("span", { ...props, "aria-hidden": "true" }, "✦");\n`
-}
-
-function removeTypeScriptOnlySyntax(code: string) {
+function stripUseClient(code: string) {
   return code
-    .replace(/^\s*"use client"\s*;?\s*$/gm, "")
-    .replace(/^\s*"use server"\s*;?\s*$/gm, "")
-    .replace(/export\s+type\s+[\s\S]*?\n/g, "")
-    .replace(/type\s+[A-Za-z0-9_]+\s*=\s*\{[\s\S]*?\}\s*/g, "")
-    .replace(/export\s+interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*/g, "")
-    .replace(/interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*/g, "")
+    .replace(/^\s*["']use client["'];?\s*/m, "")
+    .replace(/^\s*["']use server["'];?\s*/m, "")
 }
 
-function transformImports(code: string, files: Record<string, string>) {
-  let output = removeTypeScriptOnlySyntax(code)
+function iconStubSource(names: string[]) {
+  return names
+    .filter(Boolean)
+    .map((name) => {
+      const safeName = toIdentifier(name)
+      return `const ${safeName} = ({ className = "", size = 18, ...props } = {}) => React.createElement("span", { className, style: { display: "inline-flex", width: size, height: size, alignItems: "center", justifyContent: "center" }, ...props }, "✦");`
+    })
+    .join("\n")
+}
+
+function transformImports(code: string) {
+  let iconStubs = ""
+  let output = stripUseClient(code)
 
   output = output.replace(/import\s+type\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
   output = output.replace(/import\s+["'][^"']+["'];?\n?/g, "")
 
+  // React hooks are provided once globally. Removing these prevents duplicate
+  // "Identifier has already been declared" parse errors in the browser preview.
+  output = output.replace(/import\s+\{[^}]+\}\s+from\s+["']react["'];?\n?/g, "")
+  output = output.replace(/import\s+React(?:,\s*\{[^}]+\})?\s+from\s+["']react["'];?\n?/g, "")
+
   output = output.replace(
-    /import\s+\{([^}]+)\}\s+from\s+["']react["'];?\n?/g,
-    (_match, imports) => `const {${imports}} = React;\n`
+    /import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+["']next\/link["'];?\n?/g,
+    (_match, name) => `const ${name} = PreviewLink;\n`
   )
 
   output = output.replace(
-    /import\s+React(?:,\s*\{([^}]+)\})?\s+from\s+["']react["'];?\n?/g,
-    (_match, imports) => (imports ? `const {${imports}} = React;\n` : "")
+    /import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+["']next\/image["'];?\n?/g,
+    (_match, name) => `const ${name} = PreviewImage;\n`
   )
 
   output = output.replace(
     /import\s+\{([^}]+)\}\s+from\s+["']lucide-react["'];?\n?/g,
     (_match, imports) => {
-      return String(imports)
+      const names = String(imports)
         .split(",")
-        .map((part) => part.trim().split(/\s+as\s+/i).pop()?.trim())
+        .map((part) => part.trim().split(/\s+as\s+/i).pop()?.trim() || "")
         .filter(Boolean)
-        .map((name) => makeIconStub(String(name)))
-        .join("")
+      iconStubs += iconStubSource(names) + "\n"
+      return ""
     }
   )
 
-  output = output.replace(/import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/link["'];?\n?/g, "const $1 = Link;\n")
-  output = output.replace(/import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/image["'];?\n?/g, "const $1 = Image;\n")
-
+  // Convert local default component imports to the component names generated
+  // from their file paths. This supports imports like:
+  // import CalculatorButton from "@/components/CalculatorButton"
   output = output.replace(
-    /import\s+([A-Za-z0-9_$]+)\s+from\s+["']@\/([^"']+)["'];?\n?/g,
+    /import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+["']([^"']+)["'];?\n?/g,
     (_match, importedName, importPath) => {
-      const candidates = [
-        `${importPath}.tsx`,
-        `${importPath}.jsx`,
-        `${importPath}.ts`,
-        `${importPath}.js`,
-        `${importPath}/index.tsx`,
-        `${importPath}/index.jsx`,
-      ]
-
-      const matchedPath = candidates.find((path) => files[path])
-      const realName = matchedPath ? componentNameFromPath(matchedPath) : String(importedName)
-
-      return realName === importedName ? "" : `const ${importedName} = ${realName};\n`
+      const componentName = importPathToComponentName(String(importPath))
+      if (componentName === importedName) return ""
+      return `const ${importedName} = ${componentName};\n`
     }
   )
 
-  output = output.replace(
-    /import\s+\{([^}]+)\}\s+from\s+["']@\/([^"']+)["'];?\n?/g,
-    (_match, imports, importPath) => {
-      const candidates = [
-        `${importPath}.tsx`,
-        `${importPath}.jsx`,
-        `${importPath}.ts`,
-        `${importPath}.js`,
-        `${importPath}/index.tsx`,
-        `${importPath}/index.jsx`,
-      ]
-
-      const matchedPath = candidates.find((path) => files[path])
-      if (!matchedPath) return ""
-
-      return String(imports)
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean)
-        .map((part) => {
-          const [original, alias] = part.split(/\s+as\s+/i).map((value) => value.trim())
-          return alias ? `const ${alias} = ${original};\n` : ""
-        })
-        .join("")
-    }
-  )
-
+  // Remove remaining named local imports. Generated projects should prefer default
+  // component imports. Keeping unknown named imports breaks the browser renderer.
+  output = output.replace(/import\s+\{[^}]+\}\s+from\s+["'][^"']+["'];?\n?/g, "")
   output = output.replace(/import\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
 
-  return output
+  return `${iconStubs}${output}`
 }
 
 function normalizeExports(code: string, fallbackName: string) {
   let output = code
 
+  output = output.replace(/export\s+type\s+[\s\S]*?\n/g, "")
+  output = output.replace(/export\s+interface\s+[A-Za-z0-9_$]+\s*\{[\s\S]*?\}\n?/g, "")
+  output = output.replace(/interface\s+[A-Za-z0-9_$]+\s*\{[\s\S]*?\}\n?/g, "")
+  output = output.replace(/type\s+[A-Za-z0-9_$]+\s*=\s*[\s\S]*?\n/g, "")
+
   output = output.replace(
-    /export\s+default\s+function\s+([A-Za-z0-9_]+)\s*\(/,
+    /export\s+default\s+function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/,
     "function $1("
   )
 
@@ -177,7 +170,12 @@ function normalizeExports(code: string, fallbackName: string) {
     `function ${fallbackName}(`
   )
 
-  output = output.replace(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/g, "")
+  output = output.replace(
+    /export\s+default\s+class\s+([A-Za-z_$][A-Za-z0-9_$]*)/,
+    "class $1"
+  )
+
+  output = output.replace(/export\s+default\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*;?/g, "")
   output = output.replace(/export\s+(const|let|var|function|class)\s+/g, "$1 ")
 
   return output
@@ -186,7 +184,7 @@ function normalizeExports(code: string, fallbackName: string) {
 function collectComponentFiles(files: Record<string, string>) {
   return Object.entries(files)
     .filter(([path]) => /^components\/.+\.(tsx|jsx|ts|js)$/i.test(path))
-    .slice(0, 60)
+    .slice(0, 80)
     .map(([path, content]) => ({
       path,
       name: componentNameFromPath(path),
@@ -209,7 +207,7 @@ function buildLoadingBody(projectName = "") {
 }
 
 function createRuntimeSource(files: Record<string, string>) {
-  const pagePath = getPagePath(files)
+  const pagePath = ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"].find((path) => files[path])
   const pageCode = pagePath ? files[pagePath] : ""
 
   if (!pageCode) {
@@ -220,35 +218,45 @@ function createRuntimeSource(files: Record<string, string>) {
 
   const componentSource = components
     .map(({ path, name, exportedName, content }) => {
-      const cleaned = normalizeExports(transformImports(content, files), name)
+      const cleaned = normalizeExports(transformImports(content), name)
       const alias =
         exportedName && exportedName !== name
           ? `\nif (typeof ${name} === "undefined" && typeof ${exportedName} !== "undefined") { var ${name} = ${exportedName}; }\n`
           : ""
-
       return `\n// FILE: ${path}\n${cleaned}\n${alias}`
     })
     .join("\n")
 
   const pageFallbackName = "ProjectPage"
-  const cleanedPage = normalizeExports(transformImports(pageCode, files), pageFallbackName)
+  const cleanedPage = normalizeExports(transformImports(pageCode), pageFallbackName)
 
   let appExpression = pageFallbackName
 
-  const namedDefaultMatch = pageCode.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/)
+  const namedDefaultMatch = pageCode.match(/export\s+default\s+function\s+([A-Za-z_$][A-Za-z0-9_$]*)/)
   if (namedDefaultMatch?.[1]) {
     appExpression = namedDefaultMatch[1]
   } else if (/export\s+default\s+function\s*\(/.test(pageCode)) {
     appExpression = pageFallbackName
   } else {
-    const defaultIdentifier = pageCode.match(/export\s+default\s+([A-Za-z0-9_]+)/)
+    const defaultIdentifier = pageCode.match(/export\s+default\s+([A-Za-z_$][A-Za-z0-9_$]*)/)
     if (defaultIdentifier?.[1]) appExpression = defaultIdentifier[1]
   }
 
   return `
-const { useState, useEffect, useMemo, useRef, useCallback } = React;
-const Link = ({ href, children, ...props }) => <a href={href || "#"} {...props}>{children}</a>;
-const Image = ({ src, alt, width, height, ...props }) => <img src={src || ""} alt={alt || ""} width={width} height={height} {...props} />;
+const {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useReducer,
+  createContext,
+  useContext,
+  Fragment,
+} = React;
+
+const PreviewLink = ({ href, children, ...props }) => <a href={href || "#"} {...props}>{children}</a>;
+const PreviewImage = ({ src, alt, width, height, ...props }) => <img src={src || ""} alt={alt || ""} width={width} height={height} {...props} />;
 
 ${componentSource}
 
@@ -263,6 +271,7 @@ const App = typeof ${appExpression} !== "undefined" ? ${appExpression} : functio
 
 function buildPreviewHtml(files: Record<string, string>, projectName = "") {
   const globalsCss = getFile(files, ["app/globals.css", "styles/globals.css", "globals.css"])
+  const fallbackBody = buildLoadingBody(projectName)
   const runtimeSource = createRuntimeSource(files)
 
   return `<!DOCTYPE html>
@@ -291,10 +300,10 @@ ${globalsCss}
 </style>
 </head>
 <body>
-<div id="root">${buildLoadingBody(projectName)}</div>
+<div id="root">${fallbackBody}</div>
 <script type="text/babel" data-presets="typescript,react">
 try {
-${escapeScript(runtimeSource)}
+${safeScriptSource(runtimeSource)}
 
   const rootElement = document.getElementById("root");
   const root = ReactDOM.createRoot(rootElement);
