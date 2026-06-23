@@ -30,11 +30,7 @@ function escapeHtml(value: string) {
 }
 
 function escapeScript(value: string) {
-  return String(value || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/`/g, "\\`")
-    .replace(/\$\{/g, "\\${")
-    .replace(/<\/script/gi, "<\\/script")
+  return String(value || "").replace(/<\/script/gi, "<\\/script")
 }
 
 function getFile(files: Record<string, string>, possiblePaths: string[]) {
@@ -45,43 +41,10 @@ function getFile(files: Record<string, string>, possiblePaths: string[]) {
   return ""
 }
 
-function stripImports(code: string) {
-  return code
-    .replace(/import\s+type\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
-    .replace(/import\s+["'][^"']+["'];?\n?/g, "")
-    .replace(/import\s+\{([^}]+)\}\s+from\s+["']react["'];?\n?/g, (_match, imports) => {
-      return `const {${imports}} = React;\n`
-    })
-    .replace(/import\s+React(?:,\s*\{([^}]+)\})?\s+from\s+["']react["'];?\n?/g, (_match, imports) => {
-      return imports ? `const {${imports}} = React;\n` : ""
-    })
-    .replace(/import\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
-}
-
-function normalizeExports(code: string, fallbackName: string) {
-  let output = code
-
-  output = output.replace(/export\s+type\s+[\s\S]*?\n/g, "")
-  output = output.replace(/export\s+interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\n?/g, "")
-
-  output = output.replace(
-    /export\s+default\s+function\s+([A-Za-z0-9_]+)\s*\(/,
-    "function $1("
+function getPagePath(files: Record<string, string>) {
+  return ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"].find(
+    (path) => typeof files[path] === "string" && files[path].trim()
   )
-
-  output = output.replace(
-    /export\s+default\s+function\s*\(/,
-    `function ${fallbackName}(`
-  )
-
-  output = output.replace(
-    /export\s+default\s+([A-Za-z0-9_]+)\s*;?/g,
-    "const __DEFAULT_EXPORT__ = $1;"
-  )
-
-  output = output.replace(/export\s+(const|let|var|function|class)\s+/g, "$1 ")
-
-  return output
 }
 
 function componentNameFromPath(path: string) {
@@ -97,160 +60,156 @@ function componentNameFromPath(path: string) {
   return name || "Component"
 }
 
+function getDefaultExportName(content: string) {
+  return (
+    content.match(/export\s+default\s+function\s+([A-Za-z0-9_]+)/)?.[1] ||
+    content.match(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/)?.[1] ||
+    ""
+  )
+}
+
+function makeIconStub(name: string) {
+  return `const ${name} = (props = {}) => React.createElement("span", { ...props, "aria-hidden": "true" }, "✦");\n`
+}
+
+function removeTypeScriptOnlySyntax(code: string) {
+  return code
+    .replace(/^\s*"use client"\s*;?\s*$/gm, "")
+    .replace(/^\s*"use server"\s*;?\s*$/gm, "")
+    .replace(/export\s+type\s+[\s\S]*?\n/g, "")
+    .replace(/type\s+[A-Za-z0-9_]+\s*=\s*\{[\s\S]*?\}\s*/g, "")
+    .replace(/export\s+interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*/g, "")
+    .replace(/interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*/g, "")
+}
+
+function transformImports(code: string, files: Record<string, string>) {
+  let output = removeTypeScriptOnlySyntax(code)
+
+  output = output.replace(/import\s+type\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
+  output = output.replace(/import\s+["'][^"']+["'];?\n?/g, "")
+
+  output = output.replace(
+    /import\s+\{([^}]+)\}\s+from\s+["']react["'];?\n?/g,
+    (_match, imports) => `const {${imports}} = React;\n`
+  )
+
+  output = output.replace(
+    /import\s+React(?:,\s*\{([^}]+)\})?\s+from\s+["']react["'];?\n?/g,
+    (_match, imports) => (imports ? `const {${imports}} = React;\n` : "")
+  )
+
+  output = output.replace(
+    /import\s+\{([^}]+)\}\s+from\s+["']lucide-react["'];?\n?/g,
+    (_match, imports) => {
+      return String(imports)
+        .split(",")
+        .map((part) => part.trim().split(/\s+as\s+/i).pop()?.trim())
+        .filter(Boolean)
+        .map((name) => makeIconStub(String(name)))
+        .join("")
+    }
+  )
+
+  output = output.replace(/import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/link["'];?\n?/g, "const $1 = Link;\n")
+  output = output.replace(/import\s+([A-Za-z0-9_$]+)\s+from\s+["']next\/image["'];?\n?/g, "const $1 = Image;\n")
+
+  output = output.replace(
+    /import\s+([A-Za-z0-9_$]+)\s+from\s+["']@\/([^"']+)["'];?\n?/g,
+    (_match, importedName, importPath) => {
+      const candidates = [
+        `${importPath}.tsx`,
+        `${importPath}.jsx`,
+        `${importPath}.ts`,
+        `${importPath}.js`,
+        `${importPath}/index.tsx`,
+        `${importPath}/index.jsx`,
+      ]
+
+      const matchedPath = candidates.find((path) => files[path])
+      const realName = matchedPath ? componentNameFromPath(matchedPath) : String(importedName)
+
+      return realName === importedName ? "" : `const ${importedName} = ${realName};\n`
+    }
+  )
+
+  output = output.replace(
+    /import\s+\{([^}]+)\}\s+from\s+["']@\/([^"']+)["'];?\n?/g,
+    (_match, imports, importPath) => {
+      const candidates = [
+        `${importPath}.tsx`,
+        `${importPath}.jsx`,
+        `${importPath}.ts`,
+        `${importPath}.js`,
+        `${importPath}/index.tsx`,
+        `${importPath}/index.jsx`,
+      ]
+
+      const matchedPath = candidates.find((path) => files[path])
+      if (!matchedPath) return ""
+
+      return String(imports)
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => {
+          const [original, alias] = part.split(/\s+as\s+/i).map((value) => value.trim())
+          return alias ? `const ${alias} = ${original};\n` : ""
+        })
+        .join("")
+    }
+  )
+
+  output = output.replace(/import\s+[\s\S]*?from\s+["'][^"']+["'];?\n?/g, "")
+
+  return output
+}
+
+function normalizeExports(code: string, fallbackName: string) {
+  let output = code
+
+  output = output.replace(
+    /export\s+default\s+function\s+([A-Za-z0-9_]+)\s*\(/,
+    "function $1("
+  )
+
+  output = output.replace(
+    /export\s+default\s+function\s*\(/,
+    `function ${fallbackName}(`
+  )
+
+  output = output.replace(/export\s+default\s+([A-Za-z0-9_]+)\s*;?/g, "")
+  output = output.replace(/export\s+(const|let|var|function|class)\s+/g, "$1 ")
+
+  return output
+}
+
 function collectComponentFiles(files: Record<string, string>) {
   return Object.entries(files)
     .filter(([path]) => /^components\/.+\.(tsx|jsx|ts|js)$/i.test(path))
-    .slice(0, 40)
+    .slice(0, 60)
     .map(([path, content]) => ({
       path,
       name: componentNameFromPath(path),
+      exportedName: getDefaultExportName(content),
       content,
     }))
 }
 
-function extractReturnJsx(code: string): string {
-  const returnIndex = code.indexOf("return")
-  if (returnIndex === -1) return ""
-
-  const firstParen = code.indexOf("(", returnIndex)
-  if (firstParen === -1) return ""
-
-  let depth = 0
-  let end = -1
-
-  for (let i = firstParen; i < code.length; i++) {
-    const char = code[i]
-    if (char === "(") depth++
-    if (char === ")") depth--
-    if (depth === 0) {
-      end = i
-      break
-    }
-  }
-
-  if (end === -1) return ""
-  return code.slice(firstParen + 1, end).trim()
-}
-
-function jsxToStaticHtml(jsx: string): string {
-  return jsx
-    .replace(/<>/g, "")
-    .replace(/<\/>/g, "")
-    .replace(/className=/g, "class=")
-    .replace(/htmlFor=/g, "for=")
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-    .replace(/\s+key=\{[^}]*\}/g, "")
-    .replace(/\s+on[A-Z][A-Za-z0-9_]*=\{[\s\S]*?\}/g, "")
-    .replace(/\s+style=\{\{[\s\S]*?\}\}/g, "")
-    .replace(/\{`([\s\S]*?)`\}/g, "$1")
-    .replace(/\{\"([^\"]*)\"\}/g, "$1")
-    .replace(/\{'([^']*)'\}/g, "$1")
-    .replace(/\{([^{}]*)\}/g, "")
-    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?\s*\/>/g, "")
-    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
-}
-
-function hasUsefulText(html: string): boolean {
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-
-  return text.length > 20
-}
-
-function buildSmartFallbackBody(files: Record<string, string>, projectName = "") {
-  const allText = Object.values(files).join("\n").toLowerCase()
-  const fileNames = Object.keys(files).join(" ").toLowerCase()
-  const title = escapeHtml(projectName || "MujeebProAI Project")
-
-  const isQuiz =
-    allText.includes("quiz") ||
-    allText.includes("question") ||
-    allText.includes("score") ||
-    allText.includes("generate quiz") ||
-    fileNames.includes("quiz")
-
-  const isLogin =
-    allText.includes("login") ||
-    allText.includes("sign in") ||
-    allText.includes("password") ||
-    allText.includes("email") ||
-    fileNames.includes("login")
-
-  if (isQuiz) {
-    return `
-<main class="min-h-screen bg-slate-950 text-white px-6 py-10">
-  <section class="mx-auto max-w-6xl">
-    <div class="text-center">
-      <p class="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.28em] text-cyan-200">Interactive Quiz Builder</p>
-      <h1 class="mx-auto mt-5 max-w-4xl text-5xl font-black leading-tight md:text-7xl">Quiz Generator Web App</h1>
-      <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-300">Enter a topic, generate 5-8 quiz questions, choose answers, and track your score.</p>
-    </div>
-    <div class="mx-auto mt-10 grid max-w-4xl gap-3 rounded-[2rem] border border-white/10 bg-white/[0.07] p-5 md:grid-cols-[1fr_auto_auto]">
-      <input class="min-h-14 rounded-2xl border border-white/10 bg-slate-950/80 px-5 text-white" placeholder="Enter topic, e.g. Maths, Space, JavaScript" />
-      <button class="min-h-14 rounded-2xl bg-cyan-300 px-6 font-black text-slate-950">Generate Quiz</button>
-      <button class="min-h-14 rounded-2xl border border-white/10 bg-white/10 px-6 font-bold text-white">Reset</button>
-    </div>
-    <div class="mt-8 grid gap-4 md:grid-cols-3">
-      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Topic</p><p class="mt-2 text-2xl font-black text-cyan-200">General Knowledge</p></div>
-      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Progress</p><p class="mt-2 text-2xl font-black text-purple-200">0/6</p></div>
-      <div class="rounded-3xl border border-white/10 bg-white/[0.06] p-5 text-center"><p class="text-sm text-slate-400">Score</p><p class="mt-2 text-2xl font-black text-emerald-200">0/6</p></div>
-    </div>
-    <div class="mt-8 grid gap-5 lg:grid-cols-2">
-      ${[1, 2, 3, 4, 5, 6].map((num) => `<article class="rounded-[2rem] border border-white/10 bg-slate-900/80 p-6"><h2 class="text-xl font-black">${num}. Sample quiz question ${num}</h2><div class="mt-4 grid gap-3"><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option A</button><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option B</button><button class="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left">Option C</button></div></article>`).join("")}
-    </div>
-  </section>
-</main>`
-  }
-
-  if (isLogin) {
-    return `
-<main class="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
-  <section class="grid w-full max-w-6xl overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/[0.06] shadow-2xl md:grid-cols-2">
-    <div class="bg-gradient-to-br from-cyan-400 to-purple-500 p-10 text-slate-950 md:p-14">
-      <p class="font-black uppercase tracking-[0.25em]">Secure Access</p>
-      <h1 class="mt-6 text-5xl font-black leading-tight md:text-7xl">Login Page</h1>
-      <p class="mt-6 text-lg font-medium text-slate-900/80">A polished authentication screen with email, password, remember me, forgot password, and sign in button.</p>
-    </div>
-    <form class="p-8 md:p-12">
-      <h2 class="text-3xl font-black">Welcome back</h2>
-      <p class="mt-2 text-slate-400">Sign in to continue to your dashboard.</p>
-      <label class="mt-8 block text-sm font-bold text-slate-300">Email address</label>
-      <input class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white" placeholder="you@example.com" />
-      <label class="mt-5 block text-sm font-bold text-slate-300">Password</label>
-      <input type="password" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-5 py-4 text-white" placeholder="••••••••" />
-      <div class="mt-5 flex items-center justify-between text-sm"><label class="flex items-center gap-2 text-slate-300"><input type="checkbox" /> Remember me</label><a class="text-cyan-300" href="#">Forgot password?</a></div>
-      <button class="mt-8 w-full rounded-2xl bg-cyan-300 px-6 py-4 font-black text-slate-950">Sign In</button>
-      <p class="mt-6 text-center text-sm text-slate-400">No account? <a class="text-cyan-300" href="#">Create one</a></p>
-    </form>
-  </section>
-</main>`
-  }
-
-  const pageCode = getFile(files, ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"])
-  const pageJsx = extractReturnJsx(pageCode)
-  const converted = jsxToStaticHtml(pageJsx)
-
-  if (hasUsefulText(converted)) {
-    return converted
-  }
+function buildLoadingBody(projectName = "") {
+  const title = escapeHtml(projectName || "AI Generated Project")
 
   return `
 <main class="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-  <section class="max-w-4xl text-center rounded-[2rem] border border-white/10 bg-white/[0.06] p-10">
-    <p class="text-cyan-300 uppercase tracking-[0.3em] text-sm">AI Generated Project</p>
+  <section class="max-w-4xl text-center rounded-[2rem] border border-white/10 bg-white/[0.06] p-10 shadow-2xl">
+    <p class="text-cyan-300 uppercase tracking-[0.3em] text-sm">Rendering saved React project</p>
     <h1 class="mt-5 text-5xl md:text-7xl font-black">${title}</h1>
-    <p class="mt-6 text-xl text-slate-300">Project files are saved. The preview fallback is showing because the browser runtime did not render the React app yet.</p>
+    <p class="mt-6 text-xl text-slate-300">Loading real generated app files...</p>
   </section>
 </main>`
 }
 
 function createRuntimeSource(files: Record<string, string>) {
-  const pagePath = ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"].find((path) => files[path])
+  const pagePath = getPagePath(files)
   const pageCode = pagePath ? files[pagePath] : ""
 
   if (!pageCode) {
@@ -260,14 +219,19 @@ function createRuntimeSource(files: Record<string, string>) {
   const components = collectComponentFiles(files)
 
   const componentSource = components
-    .map(({ path, name, content }) => {
-      const cleaned = normalizeExports(stripImports(content), name)
-      return `\n// FILE: ${path}\n${cleaned}\n`
+    .map(({ path, name, exportedName, content }) => {
+      const cleaned = normalizeExports(transformImports(content, files), name)
+      const alias =
+        exportedName && exportedName !== name
+          ? `\nif (typeof ${name} === "undefined" && typeof ${exportedName} !== "undefined") { var ${name} = ${exportedName}; }\n`
+          : ""
+
+      return `\n// FILE: ${path}\n${cleaned}\n${alias}`
     })
     .join("\n")
 
   const pageFallbackName = "ProjectPage"
-  const cleanedPage = normalizeExports(stripImports(pageCode), pageFallbackName)
+  const cleanedPage = normalizeExports(transformImports(pageCode, files), pageFallbackName)
 
   let appExpression = pageFallbackName
 
@@ -283,21 +247,22 @@ function createRuntimeSource(files: Record<string, string>) {
 
   return `
 const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const Link = ({ href, children, ...props }) => <a href={href || "#"} {...props}>{children}</a>;
+const Image = ({ src, alt, width, height, ...props }) => <img src={src || ""} alt={alt || ""} width={width} height={height} {...props} />;
 
 ${componentSource}
 
 // FILE: ${pagePath}
 ${cleanedPage}
 
-const App = typeof ${appExpression} !== "undefined" ? ${appExpression} : (typeof __DEFAULT_EXPORT__ !== "undefined" ? __DEFAULT_EXPORT__ : function MissingApp(){
+const App = typeof ${appExpression} !== "undefined" ? ${appExpression} : function MissingApp(){
   return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6"><div className="text-center"><h1 className="text-4xl font-black">Preview Ready</h1><p className="mt-4 text-slate-300">The project files were saved, but the default page could not be detected.</p></div></main>
-});
+};
 `
 }
 
 function buildPreviewHtml(files: Record<string, string>, projectName = "") {
   const globalsCss = getFile(files, ["app/globals.css", "styles/globals.css", "globals.css"])
-  const fallbackBody = buildSmartFallbackBody(files, projectName)
   const runtimeSource = createRuntimeSource(files)
 
   return `<!DOCTYPE html>
@@ -326,7 +291,7 @@ ${globalsCss}
 </style>
 </head>
 <body>
-<div id="root">${fallbackBody}</div>
+<div id="root">${buildLoadingBody(projectName)}</div>
 <script type="text/babel" data-presets="typescript,react">
 try {
 ${escapeScript(runtimeSource)}
@@ -337,7 +302,7 @@ ${escapeScript(runtimeSource)}
 } catch (error) {
   console.error(error);
   var rootElement = document.getElementById("root");
-  rootElement.innerHTML = rootElement.innerHTML || '<main style="min-height:100vh;background:#050509;color:white;font-family:sans-serif;padding:24px;display:flex;align-items:center;justify-content:center;"><div style="max-width:720px;border:1px solid rgba(255,255,255,.15);border-radius:24px;padding:24px;background:rgba(255,255,255,.06)"><h1 style="font-size:28px;margin:0 0 12px">Preview render error</h1><p style="color:#cbd5e1">Your project files are saved, but this browser preview could not execute the current React code.</p><pre style="white-space:pre-wrap;color:#fca5a5;margin-top:16px">' + String(error && error.message ? error.message : error).replace(/[<>&]/g, function(c){ return {"<":"&lt;", ">":"&gt;", "&":"&amp;"}[c]; }) + '</pre></div></main>';
+  rootElement.innerHTML = '<main style="min-height:100vh;background:#050509;color:white;font-family:sans-serif;padding:24px;display:flex;align-items:center;justify-content:center;"><div style="max-width:900px;border:1px solid rgba(255,255,255,.15);border-radius:24px;padding:24px;background:rgba(255,255,255,.06)"><h1 style="font-size:28px;margin:0 0 12px">Preview render error</h1><p style="color:#cbd5e1">Your project files are saved, but this browser preview could not execute the current React code.</p><pre style="white-space:pre-wrap;color:#fca5a5;margin-top:16px;max-height:360px;overflow:auto;">' + String(error && error.message ? error.message : error).replace(/[<>&]/g, function(c){ return {"<":"&lt;", ">":"&gt;", "&":"&amp;"}[c]; }) + '</pre></div></main>';
 }
 </script>
 </body>
