@@ -379,7 +379,22 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
+  const [newChatResetKey, setNewChatResetKey] = useState(0)
   const lastProjectRefreshRef = useRef<string | null>(null)
+  const newChatResetRef = useRef(0)
+
+  const hardClearComposer = useCallback(() => {
+    setInput("")
+    setAttachedFiles([])
+
+    if (textareaRef.current) {
+      textareaRef.current.value = ""
+      textareaRef.current.style.height = "auto"
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    if (imageInputRef.current) imageInputRef.current.value = ""
+  }, [])
 
   const savePreviewWithBackup = useCallback(
     (nextHtml: string) => {
@@ -514,8 +529,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     const resetPanel = () => {
       setCurrentChatId(null)
       setMessages([] as any)
-      setInput("")
-      setAttachedFiles([])
+      hardClearComposer()
       onPreviewUpdate?.("")
       onViewModeChange?.(projectId ? "preview" : "preview")
       window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
@@ -523,6 +537,16 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     }
 
     const loadProjectChat = async () => {
+      const startedResetVersion = newChatResetRef.current
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get("newProject") === "1") {
+          resetPanel()
+          return
+        }
+      }
+
       if (!projectId) {
         resetPanel()
         return
@@ -540,15 +564,14 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         }
 
         const data = await response.json()
-        if (cancelled) return
+        if (cancelled || startedResetVersion !== newChatResetRef.current) return
 
         const dbMessages = Array.isArray(data.messages) ? data.messages : []
         const nextChatId = data.chatId ? String(data.chatId) : null
 
         setCurrentChatId(nextChatId)
         setMessages(toUiMessages(dbMessages) as any)
-        setInput("")
-        setAttachedFiles([])
+        hardClearComposer()
         onPreviewUpdate?.("")
         onViewModeChange?.("preview")
         window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: nextChatId, projectId } }))
@@ -563,7 +586,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     return () => {
       cancelled = true
     }
-  }, [projectId, onPreviewUpdate, onViewModeChange, setMessages])
+  }, [projectId, onPreviewUpdate, onViewModeChange, setMessages, hardClearComposer])
 
   const refreshUsage = useCallback(() => {
     fetch("/api/usage")
@@ -600,8 +623,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
 
                setCurrentChatId(chatId)
         setMessages(toUiMessages(dbMessages) as any)
-        setAttachedFiles([])
-        setInput("")
+        hardClearComposer()
 
         const lastUserText =
           [...dbMessages].reverse().find((m) => m.role === "user")?.content || ""
@@ -637,10 +659,16 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     }
 
     const handleNewChat = () => {
+      newChatResetRef.current += 1
+      setNewChatResetKey((prev) => prev + 1)
+
+      if (status === "streaming" || status === "submitted") {
+        stop()
+      }
+
       setCurrentChatId(null)
       setMessages([] as any)
-      setInput("")
-      setAttachedFiles([])
+      hardClearComposer()
       localStorage.removeItem(previewStorageKey)
       localStorage.removeItem(previewBackupStorageKey)
       localStorage.removeItem(previewHistoryStorageKey)
@@ -658,6 +686,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       window.removeEventListener("new-chat", handleNewChat)
     }
   }, [
+    hardClearComposer,
     onPreviewUpdate,
     onViewModeChange,
     previewBackupStorageKey,
@@ -665,6 +694,8 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     previewStorageKey,
     projectId,
     setMessages,
+    status,
+    stop,
   ])
 
   useEffect(() => {
@@ -748,8 +779,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         },
       ] as any)
 
-      setInput("")
-      setAttachedFiles([])
+      hardClearComposer()
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
       }, 50)
@@ -791,8 +821,7 @@ sendMessage({
   ],
 } as any)
 
-setInput("")
-setAttachedFiles([])
+hardClearComposer()
   }
 
   const handleCopy = async (text: string, id: string) => {
@@ -1245,6 +1274,7 @@ setAttachedFiles([])
           <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <div className="flex-1 relative">
               <textarea
+                key={`composer-${currentChatId || projectId || "new"}-${newChatResetKey}`}
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
