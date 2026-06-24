@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Bell,
   Bot,
@@ -13,6 +13,7 @@ import {
   Globe2,
   HelpCircle,
   Home,
+  ImageIcon,
   Import,
   Laptop,
   LayoutDashboard,
@@ -70,6 +71,33 @@ const themeOptions: { label: string; value: ThemeMode; icon: typeof Sun }[] = [
   { label: "System", value: "system", icon: Laptop },
 ]
 
+const wallpaperSlides = [
+  {
+    title: "Nordic Coast",
+    subtitle: "VIP wallpaper mode",
+    image:
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2200&q=80",
+  },
+  {
+    title: "Mountain Glass",
+    subtitle: "Animated dashboard background",
+    image:
+      "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=2200&q=80",
+  },
+  {
+    title: "Neon City",
+    subtitle: "Premium 786.Chat system style",
+    image:
+      "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2200&q=80",
+  },
+  {
+    title: "Ocean Light",
+    subtitle: "PNG/JPG style image slider",
+    image:
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2200&q=80",
+  },
+]
+
 const recentProjects = [
   {
     name: "786 Admin Portal",
@@ -101,9 +129,9 @@ export default function SevenEightSixAdminDashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark")
-  const [systemPrefersDark, setSystemPrefersDark] = useState(true)
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
   const [activeDevice, setActiveDevice] = useState<DeviceMode>("Desktop")
+  const [activeWallpaper, setActiveWallpaper] = useState(0)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -117,23 +145,27 @@ export default function SevenEightSixAdminDashboardPage() {
   }, [isAdmin, isLoading, router])
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const syncSystemTheme = () => setSystemPrefersDark(media.matches)
+    if (themeMode !== "system") return
 
-    syncSystemTheme()
-    media.addEventListener("change", syncSystemTheme)
+    const timer = window.setInterval(() => {
+      setActiveWallpaper((current) => (current + 1) % wallpaperSlides.length)
+    }, 5500)
 
-    return () => media.removeEventListener("change", syncSystemTheme)
-  }, [])
+    return () => window.clearInterval(timer)
+  }, [themeMode])
 
-  const isDarkTheme = themeMode === "dark" || (themeMode === "system" && systemPrefersDark)
+  const isWallpaperMode = themeMode === "system"
+  const isDarkTheme = themeMode === "dark" || isWallpaperMode
   const activeThemeLabel = themeMode === "system" ? "System" : isDarkTheme ? "Dark" : "Light"
   const activeDeviceInfo = deviceLinks.find((device) => device.label === activeDevice) || deviceLinks[0]
   const ActiveDeviceIcon = activeDeviceInfo.icon
+  const currentWallpaper = wallpaperSlides[activeWallpaper]
 
-  const pageClass = isDarkTheme
+  const pageClass = isWallpaperMode
     ? "bg-[#050713] text-white"
-    : "bg-[#f5f8ff] text-slate-950"
+    : isDarkTheme
+      ? "bg-[#050713] text-white"
+      : "bg-[#f5f8ff] text-slate-950"
 
   const glowClass = isDarkTheme
     ? "bg-[radial-gradient(circle_at_30%_0%,rgba(0,255,255,0.17),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.18),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(0,160,255,0.08),transparent_34%)]"
@@ -144,16 +176,16 @@ export default function SevenEightSixAdminDashboardPage() {
     : "border-slate-200 bg-white/90 text-slate-950 shadow-[8px_0_40px_rgba(15,23,42,0.05)]"
 
   const cardClass = isDarkTheme
-    ? "border-white/10 bg-white/[0.045] text-white shadow-[0_0_45px_rgba(0,0,0,0.20)]"
+    ? "border-white/10 bg-white/[0.065] text-white shadow-[0_0_45px_rgba(0,0,0,0.25)]"
     : "border-slate-200 bg-white text-slate-950 shadow-[0_14px_45px_rgba(15,23,42,0.08)]"
 
   const softCardClass = isDarkTheme
     ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-100"
     : "border-cyan-200 bg-cyan-50 text-cyan-900"
 
-  const mutedTextClass = isDarkTheme ? "text-slate-400" : "text-slate-600"
+  const mutedTextClass = isDarkTheme ? "text-slate-300" : "text-slate-600"
   const strongTextClass = isDarkTheme ? "text-white" : "text-slate-950"
-  const inputTextClass = isDarkTheme ? "text-white placeholder:text-slate-500" : "text-slate-950 placeholder:text-slate-400"
+  const inputTextClass = isDarkTheme ? "text-white placeholder:text-slate-400" : "text-slate-950 placeholder:text-slate-400"
   const menuClass = isDarkTheme
     ? "border-white/10 bg-[#101421]/95 text-slate-200 shadow-[0_18px_50px_rgba(0,0,0,0.30)]"
     : "border-slate-200 bg-white text-slate-800 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
@@ -170,8 +202,26 @@ export default function SevenEightSixAdminDashboardPage() {
   }
 
   return (
-    <main className={`min-h-screen overflow-hidden transition-colors duration-300 ${pageClass}`}>
-      <div className={`absolute inset-0 transition-colors duration-300 ${glowClass}`} />
+    <main className={`relative min-h-screen overflow-hidden transition-colors duration-300 ${pageClass}`}>
+      {isWallpaperMode ? (
+        <>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentWallpaper.image}
+              initial={{ opacity: 0, scale: 1.04 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.02 }}
+              transition={{ duration: 1.1, ease: "easeOut" }}
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${currentWallpaper.image})` }}
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-[#050713]/70 to-[#050713]/95" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(0,255,255,0.22),transparent_28%),radial-gradient(circle_at_30%_80%,rgba(125,92,255,0.18),transparent_35%)]" />
+        </>
+      ) : (
+        <div className={`absolute inset-0 transition-colors duration-300 ${glowClass}`} />
+      )}
 
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
         <aside className={`hidden border-r p-4 backdrop-blur-2xl transition-colors duration-300 lg:block ${sidebarClass}`}>
@@ -310,7 +360,7 @@ export default function SevenEightSixAdminDashboardPage() {
         </aside>
 
         <section className="relative overflow-y-auto overflow-x-hidden px-5 py-6 lg:px-10 lg:py-8">
-          <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-3 lg:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
               <div>
@@ -329,7 +379,7 @@ export default function SevenEightSixAdminDashboardPage() {
                 onClick={() => setDeviceMenuOpen((current) => !current)}
                 className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
                   isDarkTheme
-                    ? "border-cyan-300/20 bg-white/[0.04] text-slate-200 hover:border-cyan-300/40 hover:bg-cyan-300/10 hover:text-cyan-100"
+                    ? "border-cyan-300/20 bg-white/[0.08] text-slate-100 hover:border-cyan-300/40 hover:bg-cyan-300/10 hover:text-cyan-100"
                     : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"
                 }`}
               >
@@ -368,6 +418,43 @@ export default function SevenEightSixAdminDashboardPage() {
               )}
             </div>
           </header>
+
+          {isWallpaperMode && (
+            <section className="mb-8 overflow-hidden rounded-3xl border border-white/15 bg-black/25 p-3 shadow-[0_22px_70px_rgba(0,0,0,0.30)] backdrop-blur-xl">
+              <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <ImageIcon className="h-4 w-4 text-cyan-200" />
+                    VIP System Wallpaper
+                  </p>
+                  <p className="text-xs text-slate-300">{currentWallpaper.title} — {currentWallpaper.subtitle}</p>
+                </div>
+                <div className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs text-cyan-100">
+                  Auto slider
+                </div>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {wallpaperSlides.map((slide, index) => (
+                  <button
+                    key={slide.title}
+                    onClick={() => setActiveWallpaper(index)}
+                    className={`relative h-20 min-w-[150px] overflow-hidden rounded-2xl border transition ${
+                      activeWallpaper === index
+                        ? "border-cyan-300 shadow-[0_0_24px_rgba(0,255,255,0.22)]"
+                        : "border-white/15 opacity-80 hover:opacity-100"
+                    }`}
+                  >
+                    <div
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url(${slide.image})` }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 to-transparent" />
+                    <span className="absolute bottom-2 left-2 text-xs font-medium text-white">{slide.title}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -414,9 +501,9 @@ export default function SevenEightSixAdminDashboardPage() {
                 return (
                   <button
                     key={item.label}
-                    className={`group flex flex-col items-center gap-2 text-xs transition ${isDarkTheme ? "text-slate-400 hover:text-cyan-100" : "text-slate-500 hover:text-cyan-700"}`}
+                    className={`group flex flex-col items-center gap-2 text-xs transition ${isDarkTheme ? "text-slate-300 hover:text-cyan-100" : "text-slate-500 hover:text-cyan-700"}`}
                   >
-                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${isDarkTheme ? "border-white/10 bg-white/[0.04] group-hover:border-cyan-300/30 group-hover:bg-cyan-300/10 group-hover:shadow-[0_0_28px_rgba(0,255,255,0.12)]" : "border-slate-200 bg-white shadow-sm group-hover:border-cyan-300 group-hover:bg-cyan-50"}`}>
+                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${isDarkTheme ? "border-white/10 bg-white/[0.06] group-hover:border-cyan-300/30 group-hover:bg-cyan-300/10 group-hover:shadow-[0_0_28px_rgba(0,255,255,0.12)]" : "border-slate-200 bg-white shadow-sm group-hover:border-cyan-300 group-hover:bg-cyan-50"}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                     {item.label}
@@ -427,8 +514,8 @@ export default function SevenEightSixAdminDashboardPage() {
 
             <section className="mt-20">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className={`text-sm font-medium ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>Your recent Projects</h2>
-                <button className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${isDarkTheme ? "border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-300/25 hover:text-cyan-100" : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"}`}>
+                <h2 className={`text-sm font-medium ${isDarkTheme ? "text-slate-200" : "text-slate-700"}`}>Your recent Projects</h2>
+                <button className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${isDarkTheme ? "border-white/10 bg-white/[0.07] text-slate-200 hover:border-cyan-300/25 hover:text-cyan-100" : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"}`}>
                   View All
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
