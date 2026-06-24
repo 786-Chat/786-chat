@@ -235,13 +235,13 @@ export default function SevenEightSixAdminDashboardPage() {
 
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
         <aside className={`hidden border-r p-4 backdrop-blur-2xl transition-all duration-700 lg:block ${sidebarClass}`}>
-          <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-3 py-3 ${softCardClass}`}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-sm font-bold text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.35)]">
+          <div className={`mb-5 flex flex-col items-center justify-center rounded-2xl border px-3 py-5 text-center ${softCardClass}`}>
+            <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-300 text-xl font-bold text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.45)]">
               786
             </div>
             <div>
-              <p className="text-sm font-semibold">Admin 786 Dashboard</p>
-              <p className={`text-xs ${mutedTextClass}`}>mujeeb workspace</p>
+              <p className="text-lg font-bold leading-tight">Admin 786</p>
+              <p className={`mt-1 text-sm ${mutedTextClass}`}>Dashboard</p>
             </div>
           </div>
 
@@ -371,12 +371,12 @@ export default function SevenEightSixAdminDashboardPage() {
 
         <section className="relative overflow-y-auto overflow-x-hidden px-5 py-6 lg:px-10 lg:py-8">
           <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-3 lg:hidden">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
-              <div>
-                <p className="font-semibold">Admin 786</p>
-                <p className={`text-xs ${mutedTextClass}`}>Dashboard</p>
+            <div className={`flex w-full flex-col items-center justify-center rounded-2xl border px-4 py-5 text-center lg:hidden ${softCardClass}`}>
+              <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-300 text-xl font-bold text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.45)]">
+                786
               </div>
+              <p className="text-lg font-bold leading-tight">Admin 786</p>
+              <p className={`mt-1 text-sm ${mutedTextClass}`}>Dashboard</p>
             </div>
 
             <div className={`hidden max-w-sm flex-1 items-center gap-2 rounded-2xl border px-3 py-2 lg:flex ${cardClass}`}>
@@ -477,10 +477,10 @@ export default function SevenEightSixAdminDashboardPage() {
                 <ShieldCheck className="h-4 w-4" />
                 Owner logged in as {user.email}
               </div>
-              <h1 className={`text-3xl font-semibold tracking-tight sm:text-4xl ${strongTextClass}`}>
+              <h1 className={`text-center text-3xl font-semibold tracking-tight sm:text-4xl ${strongTextClass}`}>
                 Hi Mujeeb, what do you want to make?
               </h1>
-              <p className={`mt-3 text-sm ${mutedTextClass}`}>
+              <p className={`mx-auto mt-3 max-w-2xl text-center text-sm ${mutedTextClass}`}>
                 Admin 786 Dashboard — build, edit, design, fix and deploy step by step.
               </p>
             </div>
