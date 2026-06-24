@@ -459,7 +459,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         setCurrentChatId(nextChatId)
         window.dispatchEvent(
           new CustomEvent("chat-selected", {
-            detail: { chatId: nextChatId, projectId: nextProjectId || projectId || null },
+            detail: { chatId: nextChatId, projectId: nextProjectId || null },
           })
         )
       }
@@ -532,7 +532,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       hardClearComposer()
       onPreviewUpdate?.("")
       onViewModeChange?.(projectId ? "preview" : "preview")
-      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
+      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: null } }))
       window.dispatchEvent(new Event("project-files-changed"))
     }
 
@@ -675,7 +675,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       onPreviewUpdate?.("")
       onViewModeChange?.("preview")
       window.dispatchEvent(new Event("preview-history-changed"))
-      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: projectId || null } }))
+      window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: null } }))
     }
 
     window.addEventListener("load-chat", handleLoadChat)
