@@ -722,9 +722,6 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
 
     window.dispatchEvent(new Event("project-files-changed"))
     onViewModeChange?.("preview")
-
-    setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 800)
-    setTimeout(() => window.dispatchEvent(new Event("project-files-changed")), 2000)
   }, [messages, status, onViewModeChange])
 
   useEffect(() => {
@@ -748,9 +745,15 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
-    if (!isOwnerAdmin && usage?.canSend === false && !isLoading) {
+    if (isLoading) {
+      stop()
+      return
+    }
+
+    if (!input.trim() && attachedFiles.length === 0) return
+
+    if (!isOwnerAdmin && usage?.canSend === false) {
       setShowUpgrade(true)
       return
     }
@@ -1283,7 +1286,6 @@ hardClearComposer()
                 placeholder="Ask me anything... (Ctrl+V to paste images)"
                 rows={1}
                 className="w-full bg-gray-800/50 border border-gray-700/50 rounded-xl pl-16 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 resize-none scrollbar-thin"
-                disabled={isLoading}
               />
 
               <div className="absolute left-2 bottom-2 flex items-center gap-1">
@@ -1327,7 +1329,13 @@ hardClearComposer()
 
                         <Button
               type="submit"
-              disabled={isLoading || (!input.trim() && attachedFiles.length === 0)}
+              onClick={(event) => {
+                if (isLoading) {
+                  event.preventDefault()
+                  stop()
+                }
+              }}
+              disabled={!isLoading && !input.trim() && attachedFiles.length === 0}
               className={cn(
                 "rounded-xl px-4 py-3 h-auto",
                 "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500",
@@ -1337,7 +1345,7 @@ hardClearComposer()
               )}
             >
               {isLoading ? (
-                <StopCircle className="w-5 h-5" onClick={stop} />
+                <StopCircle className="w-5 h-5" />
               ) : (
                 <Zap className="w-5 h-5" />
               )}
