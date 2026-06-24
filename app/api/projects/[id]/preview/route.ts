@@ -46,6 +46,24 @@ function getRuntimeWorkerUrl() {
   return raw.trim().replace(/\/+$/, "")
 }
 
+function getPageCode(files: Record<string, string>) {
+  return files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || files["pages/index.jsx"] || ""
+}
+
+function getFallbackLabel(files: Record<string, string>) {
+  const pageCode = getPageCode(files)
+
+  if (/Ayesha/i.test(pageCode)) return "Ayesha"
+
+  const labelMatch = pageCode.match(/(?:tracking|uppercase|eyebrow|badge)[\s\S]{0,220}>([^<{]{2,60})</i)
+  if (labelMatch?.[1]) return labelMatch[1].trim()
+
+  const quotedLabel = pageCode.match(/["'`]([^"'`]{2,40}(?:Preview|Ayesha|Brand|Label)[^"'`]*)["'`]/i)
+  if (quotedLabel?.[1]) return quotedLabel[1].trim()
+
+  return "MujeebProAI Preview"
+}
+
 function buildRuntimeWorkerHtml(projectId: string, projectName = "") {
   const runtimeWorkerUrl = getRuntimeWorkerUrl()
   if (!runtimeWorkerUrl) return ""
@@ -75,8 +93,9 @@ setTimeout(function(){var el=document.querySelector('.loading');if(el)el.remove(
 </html>`
 }
 
-function buildCalculatorHtml(projectName = "Calculator App") {
+function buildCalculatorHtml(files: Record<string, string>, projectName = "Calculator App") {
   const title = escapeHtml(projectName || "Calculator App")
+  const label = escapeHtml(getFallbackLabel(files))
 
   return `<!doctype html>
 <html lang="en">
@@ -91,7 +110,7 @@ function buildCalculatorHtml(projectName = "Calculator App") {
 <main class="min-h-screen bg-slate-950 text-white px-4 py-8 flex items-center justify-center">
   <section class="w-full max-w-5xl grid gap-6 lg:grid-cols-[1fr_380px]">
     <div class="rounded-[2rem] border border-white/10 bg-white/[0.06] p-8">
-      <p class="text-cyan-300 uppercase tracking-[0.3em] text-xs font-black">MujeebProAI Preview</p>
+      <p class="text-cyan-300 uppercase tracking-[0.3em] text-xs font-black">${label}</p>
       <h1 class="mt-4 text-5xl font-black">${title}</h1>
       <p class="mt-4 text-slate-300">Temporary working fallback until the runtime worker server is connected.</p>
       <div class="mt-8 rounded-2xl bg-slate-900 p-5">
@@ -143,9 +162,10 @@ function buildCalculatorHtml(projectName = "Calculator App") {
 </html>`
 }
 
-function buildQuizHtml(projectName = "Quiz Generator App") {
+function buildQuizHtml(files: Record<string, string>, projectName = "Quiz Generator App") {
   const title = escapeHtml(projectName || "Quiz Generator App")
-  return `<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${title}</title><script src="https://cdn.tailwindcss.com"></script><style>body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-serif}</style></head><body><main class="min-h-screen bg-slate-950 px-5 py-10 text-white"><section class="mx-auto max-w-5xl"><div class="text-center"><p class="text-cyan-300 uppercase tracking-[.3em] text-xs font-black">MujeebProAI Preview</p><h1 class="mt-4 text-5xl font-black">${title}</h1><p class="mt-4 text-slate-300">Temporary working fallback until the runtime worker server is connected.</p></div><div class="mx-auto mt-8 flex max-w-2xl gap-3"><input id="topic" class="min-h-12 flex-1 rounded-xl bg-white/10 px-4" placeholder="Enter topic"/><button id="generate" class="rounded-xl bg-cyan-300 px-5 font-black text-slate-950">Generate</button></div><div class="mt-8 grid gap-4" id="questions"></div><p class="mt-6 text-center text-2xl font-black text-emerald-300" id="score">Score: 0/5</p></section></main><script>(function(){var selected={};var topic='General Knowledge';function render(){var qs=[1,2,3,4,5].map(function(n){return {q:'Question '+n+' about '+topic,a:'Correct answer',o:['Correct answer','Wrong answer','Another option']}});var score=0;document.getElementById('questions').innerHTML=qs.map(function(item,i){if(selected[i]===item.a)score++;return '<article class="rounded-2xl border border-white/10 bg-white/[.06] p-5"><h2 class="font-black">'+item.q+'</h2><div class="mt-3 grid gap-2">'+item.o.map(function(o){return '<button data-i="'+i+'" data-a="'+o+'" class="rounded-xl bg-white/10 px-4 py-3 text-left">'+o+'</button>'}).join('')+'</div></article>'}).join('');document.getElementById('score').textContent='Score: '+score+'/5';document.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){selected[b.getAttribute('data-i')]=b.getAttribute('data-a');render()}})}document.getElementById('generate').onclick=function(){topic=document.getElementById('topic').value||'General Knowledge';selected={};render()};render()})();</script></body></html>`
+  const label = escapeHtml(getFallbackLabel(files))
+  return `<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>${title}</title><script src="https://cdn.tailwindcss.com"></script><style>body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-serif}</style></head><body><main class="min-h-screen bg-slate-950 px-5 py-10 text-white"><section class="mx-auto max-w-5xl"><div class="text-center"><p class="text-cyan-300 uppercase tracking-[.3em] text-xs font-black">${label}</p><h1 class="mt-4 text-5xl font-black">${title}</h1><p class="mt-4 text-slate-300">Temporary working fallback until the runtime worker server is connected.</p></div><div class="mx-auto mt-8 flex max-w-2xl gap-3"><input id="topic" class="min-h-12 flex-1 rounded-xl bg-white/10 px-4" placeholder="Enter topic"/><button id="generate" class="rounded-xl bg-cyan-300 px-5 font-black text-slate-950">Generate</button></div><div class="mt-8 grid gap-4" id="questions"></div><p class="mt-6 text-center text-2xl font-black text-emerald-300" id="score">Score: 0/5</p></section></main><script>(function(){var selected={};var topic='General Knowledge';function render(){var qs=[1,2,3,4,5].map(function(n){return {q:'Question '+n+' about '+topic,a:'Correct answer',o:['Correct answer','Wrong answer','Another option']}});var score=0;document.getElementById('questions').innerHTML=qs.map(function(item,i){if(selected[i]===item.a)score++;return '<article class="rounded-2xl border border-white/10 bg-white/[.06] p-5"><h2 class="font-black">'+item.q+'</h2><div class="mt-3 grid gap-2">'+item.o.map(function(o){return '<button data-i="'+i+'" data-a="'+o+'" class="rounded-xl bg-white/10 px-4 py-3 text-left">'+o+'</button>'}).join('')+'</div></article>'}).join('');document.getElementById('score').textContent='Score: '+score+'/5';document.querySelectorAll('[data-a]').forEach(function(b){b.onclick=function(){selected[b.getAttribute('data-i')]=b.getAttribute('data-a');render()}})}document.getElementById('generate').onclick=function(){topic=document.getElementById('topic').value||'General Knowledge';selected={};render()};render()})();</script></body></html>`
 }
 
 function extractReturnJsx(code: string) {
@@ -178,7 +198,7 @@ function jsxToHtml(jsx: string) {
 
 function buildStaticHtml(files: Record<string, string>, projectName = "") {
   const title = escapeHtml(projectName || "AI Generated Project")
-  const pageCode = files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || files["pages/index.jsx"] || ""
+  const pageCode = getPageCode(files)
   const css = files["app/globals.css"] || files["styles/globals.css"] || ""
   const jsx = extractReturnJsx(pageCode)
   const body = jsx ? jsxToHtml(jsx) : ""
@@ -199,8 +219,8 @@ function buildPreviewHtml(projectId: string, files: Record<string, string>, proj
   const runtimeHtml = buildRuntimeWorkerHtml(projectId, projectName)
   if (runtimeHtml) return runtimeHtml
 
-  if (projectLooksLikeCalculator(files, projectName)) return buildCalculatorHtml(projectName || "Calculator App")
-  if (projectLooksLikeQuiz(files, projectName)) return buildQuizHtml(projectName || "Quiz Generator App")
+  if (projectLooksLikeCalculator(files, projectName)) return buildCalculatorHtml(files, projectName || "Calculator App")
+  if (projectLooksLikeQuiz(files, projectName)) return buildQuizHtml(files, projectName || "Quiz Generator App")
   return buildStaticHtml(files, projectName)
 }
 
