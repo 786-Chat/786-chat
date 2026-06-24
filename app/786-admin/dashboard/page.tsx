@@ -14,12 +14,15 @@ import {
   Import,
   LayoutDashboard,
   LockKeyhole,
+  Monitor,
   Plus,
   Rocket,
   Search,
   Settings,
   ShieldCheck,
+  Smartphone,
   Sparkles,
+  Tablet,
   Wand2,
   Zap,
 } from "lucide-react"
@@ -44,6 +47,12 @@ const quickTypes = [
   { label: "Design", icon: Wand2 },
   { label: "API", icon: Code2 },
   { label: "Deploy", icon: Rocket },
+]
+
+const deviceLinks = [
+  { label: "Desktop", icon: Monitor },
+  { label: "Tablet", icon: Tablet },
+  { label: "Mobile", icon: Smartphone },
 ]
 
 const recentProjects = [
@@ -149,7 +158,7 @@ export default function SevenEightSixAdminDashboardPage() {
         </aside>
 
         <section className="relative overflow-y-auto px-5 py-6 lg:px-10 lg:py-8">
-          <header className="mb-10 flex items-center justify-between gap-4">
+          <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3 lg:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
               <div>
@@ -161,6 +170,21 @@ export default function SevenEightSixAdminDashboardPage() {
             <div className="hidden max-w-sm flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-slate-500 lg:flex">
               <Search className="h-4 w-4" />
               <span className="text-sm">Search projects, files, APIs...</span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+              {deviceLinks.map((item) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.label}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/15 bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-200 shadow-[0_0_20px_rgba(0,255,255,0.06)] transition hover:border-cyan-300/35 hover:bg-cyan-300/10 hover:text-cyan-100"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                )
+              })}
             </div>
           </header>
 
