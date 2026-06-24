@@ -18,37 +18,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const CARD_THEMES = [
-  {
-    shell: "from-cyan-500/20 via-blue-500/10 to-fuchsia-500/20",
-    border: "border-cyan-300/25 hover:border-cyan-300/50",
-    icon: "from-cyan-400 to-blue-500 text-white shadow-cyan-500/30",
-    pill: "border-cyan-300/25 bg-cyan-400/10 text-cyan-100",
-    button: "bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/25",
-  },
-  {
-    shell: "from-fuchsia-500/20 via-purple-500/10 to-pink-500/20",
-    border: "border-fuchsia-300/25 hover:border-fuchsia-300/50",
-    icon: "from-fuchsia-400 to-pink-500 text-white shadow-fuchsia-500/30",
-    pill: "border-fuchsia-300/25 bg-fuchsia-400/10 text-fuchsia-100",
-    button: "bg-fuchsia-400/15 text-fuchsia-100 hover:bg-fuchsia-400/25",
-  },
-  {
-    shell: "from-amber-500/20 via-orange-500/10 to-red-500/20",
-    border: "border-amber-300/25 hover:border-amber-300/50",
-    icon: "from-amber-300 to-orange-500 text-black shadow-amber-500/30",
-    pill: "border-amber-300/25 bg-amber-400/10 text-amber-100",
-    button: "bg-amber-400/15 text-amber-100 hover:bg-amber-400/25",
-  },
-  {
-    shell: "from-emerald-500/20 via-teal-500/10 to-cyan-500/20",
-    border: "border-emerald-300/25 hover:border-emerald-300/50",
-    icon: "from-emerald-300 to-teal-500 text-black shadow-emerald-500/30",
-    pill: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100",
-    button: "bg-emerald-400/15 text-emerald-100 hover:bg-emerald-400/25",
-  },
-]
-
 type Project = {
   id: string
   name: string
@@ -161,8 +130,6 @@ export default function DashboardProjectsPage() {
         .includes(cleanQuery)
     )
   }, [projects, query])
-
-  const totalFiles = projects.reduce((sum, project) => sum + (project.fileCount || 0), 0)
 
   const getRecoverDaysLeft = (project: Project) => {
     if (!project.delete_after) return 7
@@ -331,280 +298,244 @@ export default function DashboardProjectsPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050510] text-white">
-      <div className="pointer-events-none fixed inset-0 opacity-80">
-        <div className="absolute -left-32 top-0 h-80 w-80 rounded-full bg-cyan-500/20 blur-3xl" />
-        <div className="absolute right-0 top-16 h-96 w-96 rounded-full bg-fuchsia-500/20 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-amber-500/10 blur-3xl" />
-      </div>
-
-      <div className="relative mx-auto max-w-7xl px-5 py-8">
-        <motion.section
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl md:p-8"
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.22),transparent_30%),radial-gradient(circle_at_80%_0%,rgba(217,70,239,0.22),transparent_30%),linear-gradient(135deg,rgba(59,130,246,0.16),rgba(236,72,153,0.10),rgba(251,191,36,0.12))]" />
-          <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-cyan-300 via-fuchsia-400 via-amber-300 to-emerald-300" />
-
-          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/25 px-4 py-2 text-xs font-semibold text-white/80 shadow-lg shadow-black/20 backdrop-blur">
-                <ShieldCheck className="h-3.5 w-3.5 text-cyan-200" />
-                Private AI software builder workspace
-              </div>
-
-              <h1 className="text-4xl font-black tracking-tight md:text-6xl">
-                {isRecoverMode ? "Recover Projects" : "My Projects"}
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65 md:text-base">
-                {isRecoverMode
-                  ? "Restore important work safely or permanently delete test projects you no longer need."
-                  : "A premium command center for every website, app, backend, Python tool, dashboard and full software project created by your AI builder."}
-              </p>
+    <main className="min-h-screen bg-[#070711] text-white">
+      <div className="mx-auto max-w-7xl px-5 py-8">
+        <div className="flex flex-col gap-5 border-b border-white/10 pb-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Your private projects only
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[430px]">
-              <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4 backdrop-blur">
-                <div className="text-2xl font-black text-cyan-100">{projects.length}</div>
-                <div className="mt-1 text-xs text-cyan-100/65">Saved projects</div>
-              </div>
-              <div className="rounded-2xl border border-fuchsia-300/20 bg-fuchsia-300/10 p-4 backdrop-blur">
-                <div className="text-2xl font-black text-fuchsia-100">{totalFiles}</div>
-                <div className="mt-1 text-xs text-fuchsia-100/65">Real code files</div>
-              </div>
-              <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 backdrop-blur">
-                <div className="text-2xl font-black text-amber-100">AI</div>
-                <div className="mt-1 text-xs text-amber-100/65">Builder ready</div>
-              </div>
-            </div>
+            <h1 className="text-3xl font-black tracking-tight md:text-4xl">
+              {isRecoverMode ? "Recover Projects" : "My Projects"}
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm text-white/45">
+              {isRecoverMode
+                ? "Search deleted projects, recover important work, or permanently delete test projects."
+                : "All projects created by your MujeebProAI chat are saved here. Each login can only see its own projects."}
+            </p>
           </div>
 
-          <div className="relative mt-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-xl">
-              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={isRecoverMode ? "Search deleted projects..." : "Search websites, apps, dashboards, Python, PHP..."}
-                className="h-13 w-full rounded-2xl border border-white/10 bg-black/25 py-4 pl-11 pr-4 text-sm text-white outline-none placeholder:text-white/35 shadow-inner shadow-black/20 backdrop-blur focus:border-cyan-300/45 focus:bg-black/35"
-              />
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setQuery("")
+                setErrorMessage("")
+                setViewMode(isRecoverMode ? "active" : "recover")
+              }}
+              className={
+                isRecoverMode
+                  ? "border-cyan-500/25 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                  : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+              }
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              {isRecoverMode ? "My Projects" : "Recover Projects"}
+            </Button>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs font-semibold text-white/55 backdrop-blur">
-                {filteredProjects.length} {isRecoverMode ? "recoverable" : "project"}
-                {filteredProjects.length === 1 ? "" : "s"}
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setQuery("")
-                  setErrorMessage("")
-                  setViewMode(isRecoverMode ? "active" : "recover")
-                }}
-                className={
-                  isRecoverMode
-                    ? "h-11 rounded-full border-cyan-300/25 bg-cyan-400/10 px-5 text-cyan-100 hover:bg-cyan-400/20"
-                    : "h-11 rounded-full border-white/10 bg-white/[0.06] px-5 text-white/75 hover:bg-white/[0.12] hover:text-white"
-                }
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                {isRecoverMode ? "My Projects" : "Recover Projects"}
+            <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
+              <Button className="bg-cyan-500 text-black hover:bg-cyan-400">
+                <Plus className="mr-2 h-4 w-4" />
+                New Project
               </Button>
-
-              <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
-                <Button className="h-11 rounded-full bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 px-6 font-black text-black shadow-lg shadow-fuchsia-500/20 hover:opacity-90">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Project
-                </Button>
-              </Link>
-            </div>
+            </Link>
           </div>
-        </motion.section>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={isRecoverMode ? "Search deleted projects..." : "Search projects..."}
+              className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-cyan-500/40"
+            />
+          </div>
+
+          <div className="text-xs text-white/35">
+            {filteredProjects.length} {isRecoverMode ? "recoverable" : "project"}
+            {filteredProjects.length === 1 ? "" : "s"}
+          </div>
+        </div>
 
         {errorMessage && (
-          <div className="mt-5 rounded-2xl border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100/85 shadow-lg shadow-red-950/20 backdrop-blur">
+          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100/80">
             {errorMessage}
           </div>
         )}
 
         {isRecoverMode && (
-          <div className="mt-5 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm text-cyan-50/80 backdrop-blur">
+          <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100/75">
             Deleted projects stay here for 7 days. Use Recover for real projects or Delete Forever to clear test projects permanently.
           </div>
         )}
 
         {loading ? (
-          <div className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.04] p-12 text-center text-sm text-white/55 shadow-2xl shadow-black/20 backdrop-blur">
-            Loading premium project dashboard...
+          <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-sm text-white/45">
+            Loading projects...
           </div>
         ) : filteredProjects.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.045] p-12 text-center shadow-2xl shadow-black/20 backdrop-blur"
-          >
-            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-300 via-fuchsia-300 to-amber-200 shadow-2xl shadow-fuchsia-500/20">
-              <FolderKanban className="h-9 w-9 text-black" />
+          <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-12 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10">
+              <FolderKanban className="h-8 w-8 text-cyan-300" />
             </div>
 
-            <h2 className="text-2xl font-black">
+            <h2 className="text-xl font-bold">
               {isRecoverMode ? "No deleted projects" : "No projects yet"}
             </h2>
 
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-white/55">
+            <p className="mx-auto mt-2 max-w-md text-sm text-white/45">
               {isRecoverMode
                 ? "Deleted projects will appear here for 7 days after deletion."
-                : "Start a new project and ask the AI to create a website, SaaS app, school system, restaurant system, booking software, PHP backend or Python tool."}
+                : "Start a new project and ask MujeebProAI to create a website, SaaS app, school system, restaurant system, or custom software."}
             </p>
 
             {!isRecoverMode && (
               <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
-                <Button className="mt-7 rounded-full bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-200 px-7 font-black text-black hover:opacity-90">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Project
+                <Button className="mt-6 bg-cyan-500 text-black hover:bg-cyan-400">
+                  New Project
                 </Button>
               </Link>
             )}
-          </motion.div>
+          </div>
         ) : (
-          <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project, index) => {
               const daysLeft = getRecoverDaysLeft(project)
               const projectName = project.name || "AI Project"
-              const theme = CARD_THEMES[index % CARD_THEMES.length]
 
               return (
                 <motion.div
                   key={project.id}
-                  initial={{ opacity: 0, y: 22, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  whileHover={{ y: -8, scale: 1.015 }}
-                  transition={{ delay: index * 0.045, duration: 0.28 }}
-                  className={`group relative overflow-hidden rounded-[2rem] border ${isRecoverMode ? "border-cyan-300/25" : theme.border} bg-gradient-to-br ${isRecoverMode ? "from-cyan-500/15 via-blue-500/10 to-slate-500/10" : theme.shell} p-[1px] shadow-2xl shadow-black/25`}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.04 }}
+                  className={`group rounded-3xl border p-5 shadow-2xl shadow-black/20 transition ${
+                    isRecoverMode
+                      ? "border-cyan-500/20 bg-cyan-500/[0.045] hover:border-cyan-500/35"
+                      : "border-white/10 bg-white/[0.035] hover:border-cyan-500/35 hover:bg-white/[0.055]"
+                  }`}
                 >
-                  <div className="absolute inset-0 opacity-0 transition duration-500 group-hover:opacity-100">
-                    <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/20 blur-3xl" />
-                    <div className="absolute -bottom-20 left-6 h-40 w-40 rounded-full bg-cyan-300/20 blur-3xl" />
-                  </div>
-
-                  <div className="relative h-full rounded-[calc(2rem-1px)] bg-[#080814]/88 p-5 backdrop-blur-xl">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${isRecoverMode ? "from-cyan-300 to-blue-500 text-black shadow-cyan-500/25" : theme.icon} shadow-xl`}>
-                        <FolderKanban className="h-7 w-7" />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded-full border px-3 py-1 text-[11px] font-bold capitalize ${isRecoverMode ? "border-cyan-300/25 bg-cyan-400/10 text-cyan-100" : theme.pill}`}>
-                          {isRecoverMode ? "recoverable" : project.status || "active"}
-                        </span>
-
-                        {!isRecoverMode && (
-                          <button
-                            type="button"
-                            disabled={busyProjectId === project.id}
-                            onClick={() => softDeleteProject(project.id)}
-                            className="rounded-full border border-red-400/25 bg-red-500/10 p-2 text-red-200 opacity-80 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
-                            title="Move to Recover Projects"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-
-                        {isRecoverMode && (
-                          <button
-                            type="button"
-                            disabled={busyProjectId === project.id}
-                            onClick={() => deleteForeverProject(project.id, projectName)}
-                            className="rounded-full border border-red-400/25 bg-red-500/10 p-2 text-red-200 opacity-90 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
-                            title="Delete Forever"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10">
+                      <FolderKanban className="h-6 w-6 text-cyan-300" />
                     </div>
 
-                    <h3 className="mt-6 line-clamp-2 text-xl font-black tracking-tight text-white">
-                      {projectName}
-                    </h3>
-
-                    <p className="mt-3 line-clamp-2 min-h-[44px] text-sm leading-6 text-white/52">
-                      {isRecoverMode
-                        ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup, or delete forever now.`
-                        : project.description ||
-                          `Real file-based project with ${project.fileCount || 0} saved file${project.fileCount === 1 ? "" : "s"}.`}
-                    </p>
-
-                    <div className="mt-6 grid grid-cols-2 gap-3 text-xs text-white/48">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 transition group-hover:bg-white/[0.07]">
-                        <div className="mb-2 flex items-center gap-1.5">
-                          <Code className="h-3.5 w-3.5" />
-                          Files
-                        </div>
-                        <div className="text-lg font-black text-white">{project.fileCount || 0}</div>
-                      </div>
-
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 transition group-hover:bg-white/[0.07]">
-                        <div className="mb-2 flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5" />
-                          {isRecoverMode ? "Recover" : "Updated"}
-                        </div>
-                        <div className="text-lg font-black text-white">
-                          {isRecoverMode
-                            ? `${daysLeft} day${daysLeft === 1 ? "" : "s"}`
-                            : project.updated_at
-                              ? new Date(project.updated_at).toLocaleDateString()
-                              : "-"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 flex items-center justify-between gap-3 border-t border-white/10 pt-5 text-[11px] text-white/35">
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {project.created_at
-                          ? new Date(project.created_at).toLocaleDateString()
-                          : "Created"}
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full border px-3 py-1 text-[11px] capitalize ${
+                        isRecoverMode
+                          ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200"
+                          : "border-white/10 bg-black/20 text-white/50"
+                      }`}>
+                        {isRecoverMode ? "recoverable" : project.status || "active"}
                       </span>
 
-                      {isRecoverMode ? (
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          <button
-                            type="button"
-                            disabled={busyProjectId === project.id}
-                            onClick={() => deleteForeverProject(project.id, projectName)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-200 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
-                          >
-                            Delete Forever
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busyProjectId === project.id}
-                            onClick={() => recoverProject(project.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-cyan-400/15 px-3 py-1.5 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-40"
-                          >
-                            Recover
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
+                      {!isRecoverMode && (
                         <button
                           type="button"
-                          onClick={() => openProjectChat(project.id)}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-black transition ${theme.button}`}
+                          disabled={busyProjectId === project.id}
+                          onClick={() => softDeleteProject(project.id)}
+                          className="rounded-full border border-red-500/20 bg-red-500/10 p-2 text-red-300 opacity-80 transition hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40"
+                          title="Move to Recover Projects"
                         >
-                          Open Chat
-                          <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {isRecoverMode && (
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => deleteForeverProject(project.id, projectName)}
+                          className="rounded-full border border-red-500/25 bg-red-500/10 p-2 text-red-300 opacity-90 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
+                          title="Delete Forever"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
+                  </div>
+
+                  <h3 className="mt-5 line-clamp-2 text-lg font-bold">
+                    {projectName}
+                  </h3>
+
+                  <p className="mt-2 line-clamp-2 min-h-[40px] text-sm text-white/42">
+                    {isRecoverMode
+                      ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup, or delete forever now.`
+                      : project.description ||
+                        `Real file-based project with ${project.fileCount || 0} saved file${project.fileCount === 1 ? "" : "s"}.`}
+                  </p>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/40">
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <Code className="h-3.5 w-3.5" />
+                        Files
+                      </div>
+                      <div className="font-semibold text-white/70">{project.fileCount || 0}</div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {isRecoverMode ? "Recover" : "Updated"}
+                      </div>
+                      <div className="font-semibold text-white/70">
+                        {isRecoverMode
+                          ? `${daysLeft} day${daysLeft === 1 ? "" : "s"}`
+                          : project.updated_at
+                            ? new Date(project.updated_at).toLocaleDateString()
+                            : "-"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-[11px] text-white/30">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {project.created_at
+                        ? new Date(project.created_at).toLocaleDateString()
+                        : "Created"}
+                    </span>
+
+                    {isRecoverMode ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => deleteForeverProject(project.id, projectName)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
+                        >
+                          Delete Forever
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busyProjectId === project.id}
+                          onClick={() => recoverProject(project.id)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
+                        >
+                          Recover
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openProjectChat(project.id)}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                      >
+                        Open Chat
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )
