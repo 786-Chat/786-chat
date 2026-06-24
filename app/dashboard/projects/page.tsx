@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import {
   FolderKanban,
@@ -33,6 +34,7 @@ type Project = {
 type ViewMode = "active" | "recover"
 
 export default function DashboardProjectsPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
@@ -139,39 +141,68 @@ export default function DashboardProjectsPage() {
     return Math.max(diff, 0)
   }
 
- const startNewProject = () => {
-  try {
-    for (const key of Object.keys(window.localStorage)) {
-      if (
-        key.startsWith("mujeebproai_last_preview_html") ||
-        key.includes("preview_history") ||
-        key.includes("_history")
-      ) {
-        window.localStorage.removeItem(key)
+  const clearWorkspacePreviewState = () => {
+    try {
+      for (const key of Object.keys(window.localStorage)) {
+        if (
+          key.startsWith("mujeebproai_last_preview_html") ||
+          key.includes("preview_history") ||
+          key.includes("_history")
+        ) {
+          window.localStorage.removeItem(key)
+        }
       }
+    } catch {
+      // keep navigation working
+    }
+  }
+
+  const startNewProject = () => {
+    clearWorkspacePreviewState()
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("chat-selected", {
+          detail: { chatId: null, projectId: null },
+        })
+      )
+      window.dispatchEvent(
+        new CustomEvent("new-chat", {
+          detail: { fresh: true },
+        })
+      )
+      window.dispatchEvent(
+        new CustomEvent("preview-cleared", {
+          detail: { fresh: true },
+        })
+      )
+      window.dispatchEvent(new Event("preview-history-changed"))
+    } catch {
+      // keep navigation working
+    }
+  }
+
+  const openProjectChat = (projectId: string) => {
+    clearWorkspacePreviewState()
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent("chat-selected", {
+          detail: { chatId: null, projectId: null },
+        })
+      )
+      window.dispatchEvent(
+        new CustomEvent("preview-cleared", {
+          detail: { fresh: true },
+        })
+      )
+      window.dispatchEvent(new Event("preview-history-changed"))
+    } catch {
+      // keep navigation working
     }
 
-    window.dispatchEvent(
-      new CustomEvent("chat-selected", {
-        detail: { chatId: null, projectId: null },
-      })
-    )
-    window.dispatchEvent(
-      new CustomEvent("new-chat", {
-        detail: { fresh: true },
-      })
-    )
-    window.dispatchEvent(
-      new CustomEvent("preview-cleared", {
-        detail: { fresh: true },
-      })
-    )
-    window.dispatchEvent(new Event("project-files-changed"))
-    window.dispatchEvent(new Event("preview-history-changed"))
-  } catch {
-    // keep navigation working
+    router.push(`/dashboard/chat?projectId=${encodeURIComponent(projectId)}`)
   }
-}
 
   const softDeleteProject = async (projectId: string) => {
     setBusyProjectId(projectId)
@@ -514,13 +545,14 @@ export default function DashboardProjectsPage() {
                         </button>
                       </div>
                     ) : (
-                      <Link
-                        href={`/dashboard/chat?projectId=${encodeURIComponent(project.id)}`}
+                      <button
+                        type="button"
+                        onClick={() => openProjectChat(project.id)}
                         className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
                       >
                         Open Chat
                         <ArrowRight className="h-3.5 w-3.5" />
-                      </Link>
+                      </button>
                     )}
                   </div>
                 </motion.div>
