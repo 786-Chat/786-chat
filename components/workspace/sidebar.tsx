@@ -241,11 +241,17 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
     window.dispatchEvent(
       new CustomEvent("chat-selected", { detail: { chatId: null, projectId: null } })
     )
-    window.dispatchEvent(new Event("project-files-changed"))
     window.dispatchEvent(new Event("preview-history-changed"))
   }
 
   const startNewChat = () => {
+    const freshUrl = `/dashboard/chat?newProject=1&fresh=${Date.now()}`
+
+    if (typeof window !== "undefined") {
+      window.history.replaceState({}, "", freshUrl)
+      window.dispatchEvent(new PopStateEvent("popstate"))
+    }
+
     setLocalFreshNewChat(true)
     setCurrentChatId(null)
     setChatHistory([])
@@ -254,12 +260,9 @@ export function WorkspaceSidebar({ isOpen, onClose }: SidebarProps) {
 
     forceNewChatState()
 
-    router.replace(`/dashboard/chat?newProject=1&fresh=${Date.now()}`, {
+    router.replace(freshUrl, {
       scroll: false,
     })
-
-    setTimeout(forceNewChatState, 0)
-    setTimeout(forceNewChatState, 80)
 
     if (typeof window !== "undefined" && window.innerWidth < 768) onClose()
   }
