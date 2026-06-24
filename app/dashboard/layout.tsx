@@ -272,6 +272,19 @@ export default function DashboardLayout({
       if (typeof detail?.projectId === "string" && detail.projectId) {
         setRuntimeProjectId(detail.projectId)
         setForceFreshNewChat(false)
+        return
+      }
+
+      if (detail && "projectId" in detail && !detail.projectId) {
+        setRuntimeProjectId("")
+        setCurrentProject(null)
+        setPreviewHtml("")
+        setPreviewUrl("")
+        setViewMode("preview")
+
+        if (!detail.chatId) {
+          setForceFreshNewChat(true)
+        }
       }
     }
 
@@ -399,21 +412,28 @@ export default function DashboardLayout({
       const detail = event && "detail" in event ? (event as CustomEvent).detail : null
       const detailProjectId = typeof detail?.projectId === "string" ? detail.projectId : ""
       const browserProjectId = new URLSearchParams(window.location.search).get("projectId") || ""
+      const projectIdToRefresh = detailProjectId || browserProjectId || effectiveProjectId
 
-      if (detailProjectId) {
-        setForceFreshNewChat(false)
-        loadLatestProject(detailProjectId)
-        return
+      const refreshProject = (id?: string) => {
+        setPreviewHtml("")
+        setPreviewUrl("")
+        setPreviewOpen(true)
+        setViewMode("preview")
+        loadLatestProject(id)
+
+        window.setTimeout(() => loadLatestProject(id), 450)
+        window.setTimeout(() => loadLatestProject(id), 1400)
+        window.setTimeout(() => loadLatestProject(id), 2600)
       }
 
-      if (browserProjectId) {
+      if (projectIdToRefresh) {
         setForceFreshNewChat(false)
-        loadLatestProject(browserProjectId)
+        refreshProject(projectIdToRefresh)
         return
       }
 
       if (!forceFreshNewChat && searchParams.get("newProject") !== "1") {
-        loadLatestProject()
+        refreshProject()
       }
     }
 
@@ -436,7 +456,7 @@ export default function DashboardLayout({
       window.removeEventListener("focus", handleProjectChanged)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
-  }, [loadLatestProject, isChatWorkspace, userEmail, forceFreshNewChat, searchParams])
+  }, [loadLatestProject, isChatWorkspace, userEmail, forceFreshNewChat, searchParams, effectiveProjectId])
 
    const handlePreviewUpdate = useCallback(
     (nextHtml: string) => {
