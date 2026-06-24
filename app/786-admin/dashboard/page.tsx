@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/auth-context"
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 
 type ThemeMode = "light" | "dark" | "system"
+type DeviceMode = "Desktop" | "Tablet" | "Mobile"
 
 const navItems = [
   { label: "Home", icon: Home, active: true },
@@ -57,7 +58,7 @@ const quickTypes = [
   { label: "Deploy", icon: Rocket },
 ]
 
-const deviceLinks = [
+const deviceLinks: { label: DeviceMode; icon: typeof Monitor }[] = [
   { label: "Desktop", icon: Monitor },
   { label: "Tablet", icon: Tablet },
   { label: "Mobile", icon: Smartphone },
@@ -101,6 +102,8 @@ export default function SevenEightSixAdminDashboardPage() {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark")
   const [systemPrefersDark, setSystemPrefersDark] = useState(true)
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
+  const [activeDevice, setActiveDevice] = useState<DeviceMode>("Desktop")
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -125,6 +128,8 @@ export default function SevenEightSixAdminDashboardPage() {
 
   const isDarkTheme = themeMode === "dark" || (themeMode === "system" && systemPrefersDark)
   const activeThemeLabel = themeMode === "system" ? "System" : isDarkTheme ? "Dark" : "Light"
+  const activeDeviceInfo = deviceLinks.find((device) => device.label === activeDevice) || deviceLinks[0]
+  const ActiveDeviceIcon = activeDeviceInfo.icon
 
   const pageClass = isDarkTheme
     ? "bg-[#050713] text-white"
@@ -304,7 +309,7 @@ export default function SevenEightSixAdminDashboardPage() {
           </div>
         </aside>
 
-        <section className="relative overflow-y-auto px-5 py-6 lg:px-10 lg:py-8">
+        <section className="relative overflow-y-auto overflow-x-hidden px-5 py-6 lg:px-10 lg:py-8">
           <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3 lg:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
@@ -319,23 +324,48 @@ export default function SevenEightSixAdminDashboardPage() {
               <span className={`text-sm ${mutedTextClass}`}>Search projects, files, APIs...</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-              {deviceLinks.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.label}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
-                      isDarkTheme
-                        ? "border-cyan-300/20 bg-white/[0.04] text-slate-200 hover:border-cyan-300/40 hover:bg-cyan-300/10 hover:text-cyan-100"
-                        : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                )
-              })}
+            <div className="relative flex justify-start sm:justify-end">
+              <button
+                onClick={() => setDeviceMenuOpen((current) => !current)}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
+                  isDarkTheme
+                    ? "border-cyan-300/20 bg-white/[0.04] text-slate-200 hover:border-cyan-300/40 hover:bg-cyan-300/10 hover:text-cyan-100"
+                    : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"
+                }`}
+              >
+                <ActiveDeviceIcon className="h-4 w-4" />
+                {activeDevice}
+                <ChevronRight className={`h-3.5 w-3.5 transition ${deviceMenuOpen ? "rotate-90" : ""}`} />
+              </button>
+
+              {deviceMenuOpen && (
+                <div className={`absolute right-0 top-11 z-50 w-44 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border p-2 ${menuClass}`}>
+                  {deviceLinks.map((item) => {
+                    const Icon = item.icon
+                    const active = activeDevice === item.label
+
+                    return (
+                      <button
+                        key={item.label}
+                        onClick={() => {
+                          setActiveDevice(item.label)
+                          setDeviceMenuOpen(false)
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
+                          active
+                            ? isDarkTheme
+                              ? "bg-cyan-300/15 text-cyan-100"
+                              : "bg-cyan-100 text-cyan-900"
+                            : "hover:bg-cyan-300/10"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </header>
 
