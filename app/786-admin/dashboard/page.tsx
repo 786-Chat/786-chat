@@ -9,12 +9,14 @@ import {
   ChevronRight,
   Code2,
   FileCode2,
+  FileText,
   Globe2,
   Home,
   Import,
   LayoutDashboard,
   LockKeyhole,
   Monitor,
+  PanelTop,
   Plus,
   Rocket,
   Search,
@@ -53,6 +55,12 @@ const deviceLinks = [
   { label: "Desktop", icon: Monitor },
   { label: "Tablet", icon: Tablet },
   { label: "Mobile", icon: Smartphone },
+]
+
+const desktopWorkModes = [
+  { label: "Actual Page", icon: Globe2 },
+  { label: "Layout", icon: PanelTop },
+  { label: "White Page", icon: FileText },
 ]
 
 const recentProjects = [
@@ -158,7 +166,7 @@ export default function SevenEightSixAdminDashboardPage() {
         </aside>
 
         <section className="relative overflow-y-auto px-5 py-6 lg:px-10 lg:py-8">
-          <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <header className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-3 lg:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
               <div>
@@ -172,8 +180,31 @@ export default function SevenEightSixAdminDashboardPage() {
               <span className="text-sm">Search projects, files, APIs...</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-              {deviceLinks.map((item) => {
+            <div className="flex flex-wrap items-start justify-start gap-2 sm:justify-end">
+              <div className="relative">
+                <button className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-medium text-cyan-100 shadow-[0_0_20px_rgba(0,255,255,0.08)] transition hover:border-cyan-300/45 hover:bg-cyan-300/15">
+                  <Monitor className="h-4 w-4" />
+                  Desktop
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+
+                <div className="absolute right-0 top-11 z-20 w-44 rounded-2xl border border-white/10 bg-[#101421]/95 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+                  {desktopWorkModes.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <button
+                        key={item.label}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs text-slate-200 transition hover:bg-cyan-300/10 hover:text-cyan-100"
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {deviceLinks.slice(1).map((item) => {
                 const Icon = item.icon
                 return (
                   <button
