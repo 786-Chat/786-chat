@@ -1857,6 +1857,25 @@ if (!isAdminRequest) {
 
       if (effectiveProjectId) {
         try {
+          const existingProjectChat = await sql`
+            SELECT id
+            FROM chats
+            WHERE user_id = ${session.id}
+              AND project_id = ${effectiveProjectId}::uuid
+            ORDER BY created_at ASC
+            LIMIT 1
+          `
+
+          if (existingProjectChat[0]?.id) {
+            currentChatId = existingProjectChat[0].id
+          }
+        } catch (error) {
+          console.warn("[Chat API] Could not reuse existing project chat before insert", error)
+        }
+      }
+
+      if (!currentChatId && effectiveProjectId) {
+        try {
           const projectChat = await sql`
             INSERT INTO chats (user_id, project_id, title)
             VALUES (${session.id}, ${effectiveProjectId}::uuid, ${title || "New chat"})
@@ -2792,7 +2811,7 @@ export async function GET(request: Request) {
           FROM chats
           WHERE user_id = ${session.id}
             AND project_id = ${projectId}::uuid
-          ORDER BY updated_at DESC
+          ORDER BY created_at ASC
           LIMIT 1
         `
 
