@@ -77,24 +77,32 @@ const wallpaperSlides = [
     subtitle: "VIP wallpaper mode",
     image:
       "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=2200&q=80",
+    sidebar:
+      "border-cyan-200/25 bg-gradient-to-b from-cyan-950/86 via-slate-950/84 to-blue-950/86 text-white shadow-[10px_0_55px_rgba(34,211,238,0.16)]",
   },
   {
     title: "Mountain Glass",
     subtitle: "Animated dashboard background",
     image:
       "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=2200&q=80",
+    sidebar:
+      "border-emerald-200/25 bg-gradient-to-b from-emerald-950/86 via-slate-950/84 to-teal-950/86 text-white shadow-[10px_0_55px_rgba(52,211,153,0.16)]",
   },
   {
     title: "Neon City",
     subtitle: "Premium 786.Chat system style",
     image:
       "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2200&q=80",
+    sidebar:
+      "border-fuchsia-200/25 bg-gradient-to-b from-fuchsia-950/86 via-slate-950/84 to-violet-950/86 text-white shadow-[10px_0_55px_rgba(217,70,239,0.16)]",
   },
   {
     title: "Ocean Light",
     subtitle: "PNG/JPG style image slider",
     image:
       "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2200&q=80",
+    sidebar:
+      "border-sky-200/25 bg-gradient-to-b from-sky-950/86 via-slate-950/84 to-cyan-950/86 text-white shadow-[10px_0_55px_rgba(56,189,248,0.16)]",
   },
 ]
 
@@ -171,9 +179,11 @@ export default function SevenEightSixAdminDashboardPage() {
     ? "bg-[radial-gradient(circle_at_30%_0%,rgba(0,255,255,0.17),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.18),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(0,160,255,0.08),transparent_34%)]"
     : "bg-[radial-gradient(circle_at_28%_0%,rgba(14,165,233,0.18),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.12),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_34%)]"
 
-  const sidebarClass = isDarkTheme
-    ? "border-white/10 bg-[#0b1020]/82 text-white"
-    : "border-slate-200 bg-white/90 text-slate-950 shadow-[8px_0_40px_rgba(15,23,42,0.05)]"
+  const sidebarClass = isWallpaperMode
+    ? currentWallpaper.sidebar
+    : isDarkTheme
+      ? "border-white/10 bg-[#0b1020]/82 text-white"
+      : "border-slate-200 bg-white/90 text-slate-950 shadow-[8px_0_40px_rgba(15,23,42,0.05)]"
 
   const cardClass = isDarkTheme
     ? "border-white/10 bg-white/[0.065] text-white shadow-[0_0_45px_rgba(0,0,0,0.25)]"
@@ -224,7 +234,7 @@ export default function SevenEightSixAdminDashboardPage() {
       )}
 
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
-        <aside className={`hidden border-r p-4 backdrop-blur-2xl transition-colors duration-300 lg:block ${sidebarClass}`}>
+        <aside className={`hidden border-r p-4 backdrop-blur-2xl transition-all duration-700 lg:block ${sidebarClass}`}>
           <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-3 py-3 ${softCardClass}`}>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-sm font-bold text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.35)]">
               786
