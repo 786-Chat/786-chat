@@ -8,7 +8,6 @@ import {
   Box,
   ChevronRight,
   Code2,
-  Download,
   FileCode2,
   Globe2,
   Home,
@@ -21,7 +20,6 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-  UploadCloud,
   Wand2,
   Zap,
 } from "lucide-react"
@@ -164,11 +162,6 @@ export default function SevenEightSixAdminDashboardPage() {
               <Search className="h-4 w-4" />
               <span className="text-sm">Search projects, files, APIs...</span>
             </div>
-
-            <Button className="gap-2 border border-cyan-300/20 bg-white/[0.05] text-cyan-100 hover:bg-cyan-300/10">
-              <UploadCloud className="h-4 w-4" />
-              Deploy later
-            </Button>
           </header>
 
           <motion.div
