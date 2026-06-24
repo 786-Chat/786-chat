@@ -130,6 +130,52 @@ const recentProjects = [
   },
 ]
 
+const allProjects = [
+  ...recentProjects,
+  {
+    name: "Food Data Miner",
+    status: "Admin project",
+    age: "53 minutes ago",
+    icon: Box,
+    glow: "from-sky-300/50 to-blue-600/25",
+  },
+  {
+    name: "Food Safety Hub",
+    status: "Admin project",
+    age: "4 days ago",
+    icon: Globe2,
+    glow: "from-blue-300/50 to-cyan-600/25",
+  },
+  {
+    name: "AttachmentAnalyzer",
+    status: "Tool project",
+    age: "last week",
+    icon: Code2,
+    glow: "from-purple-300/50 to-pink-600/25",
+  },
+  {
+    name: "Language Tutor",
+    status: "Learning project",
+    age: "last month",
+    icon: Bot,
+    glow: "from-amber-300/50 to-orange-600/25",
+  },
+  {
+    name: "Roblox Builder",
+    status: "Game project",
+    age: "2 months ago",
+    icon: Rocket,
+    glow: "from-red-300/50 to-orange-600/25",
+  },
+  {
+    name: "RestaurantContractPortal",
+    status: "Business project",
+    age: "2 months ago",
+    icon: FileCode2,
+    glow: "from-indigo-300/50 to-blue-600/25",
+  },
+]
+
 export default function SevenEightSixAdminDashboardPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
@@ -140,6 +186,7 @@ export default function SevenEightSixAdminDashboardPage() {
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
   const [activeDevice, setActiveDevice] = useState<DeviceMode>("Desktop")
   const [activeWallpaper, setActiveWallpaper] = useState(0)
+  const [showAllProjects, setShowAllProjects] = useState(false)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -168,6 +215,7 @@ export default function SevenEightSixAdminDashboardPage() {
   const activeDeviceInfo = deviceLinks.find((device) => device.label === activeDevice) || deviceLinks[0]
   const ActiveDeviceIcon = activeDeviceInfo.icon
   const currentWallpaper = wallpaperSlides[activeWallpaper]
+  const visibleProjects = showAllProjects ? allProjects : recentProjects
 
   const pageClass = isWallpaperMode
     ? "bg-[#050713] text-white"
@@ -536,15 +584,20 @@ export default function SevenEightSixAdminDashboardPage() {
 
             <section className="mt-20">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className={`text-sm font-medium ${isDarkTheme ? "text-slate-200" : "text-slate-700"}`}>Your recent Projects</h2>
-                <button className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${isDarkTheme ? "border-white/10 bg-white/[0.07] text-slate-200 hover:border-cyan-300/25 hover:text-cyan-100" : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"}`}>
-                  View All
-                  <ChevronRight className="h-3.5 w-3.5" />
+                <h2 className={`text-sm font-medium ${isDarkTheme ? "text-slate-200" : "text-slate-700"}`}>
+                  {showAllProjects ? "All Projects" : "Your recent Projects"}
+                </h2>
+                <button
+                  onClick={() => setShowAllProjects((current) => !current)}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${isDarkTheme ? "border-white/10 bg-white/[0.07] text-slate-200 hover:border-cyan-300/25 hover:text-cyan-100" : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"}`}
+                >
+                  {showAllProjects ? "Show Recent" : "View All"}
+                  <ChevronRight className={`h-3.5 w-3.5 transition ${showAllProjects ? "rotate-180" : ""}`} />
                 </button>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
-                {recentProjects.map((project) => {
+                {visibleProjects.map((project) => {
                   const Icon = project.icon
                   return (
                     <div
