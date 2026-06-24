@@ -183,24 +183,6 @@ export default function DashboardProjectsPage() {
   }
 
   const openProjectChat = (projectId: string) => {
-    clearWorkspacePreviewState()
-
-    try {
-      window.dispatchEvent(
-        new CustomEvent("chat-selected", {
-          detail: { chatId: null, projectId: null },
-        })
-      )
-      window.dispatchEvent(
-        new CustomEvent("preview-cleared", {
-          detail: { fresh: true },
-        })
-      )
-      window.dispatchEvent(new Event("preview-history-changed"))
-    } catch {
-      // keep navigation working
-    }
-
     router.push(`/dashboard/chat?projectId=${encodeURIComponent(projectId)}`)
   }
 
