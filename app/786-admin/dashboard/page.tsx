@@ -361,6 +361,18 @@ export default function SevenEightSixAdminDashboardPage() {
                 </div>
               )}
             </div>
+
+            <button
+              onClick={() => router.push("/786-admin/vip")}
+              className={`mt-2 flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+                isDarkTheme
+                  ? "border-cyan-300/25 bg-cyan-300/10 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.10)] hover:border-cyan-300/45 hover:bg-cyan-300/15"
+                  : "border-cyan-200 bg-cyan-50 text-cyan-900 hover:bg-cyan-100"
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              Go To 786 Admin VIP
+            </button>
           </nav>
 
           <div className={`absolute bottom-4 left-4 right-4 rounded-2xl border p-4 text-xs ${softCardClass}`}>
