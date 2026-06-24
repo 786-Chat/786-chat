@@ -1,0 +1,33 @@
+/* Chat dashboard empty-state branding.
+   This targets the current WorkspaceChatPanel welcome title only. */
+h1.text-3xl.font-bold.text-white.mb-2 {
+  color: transparent;
+  font-size: 0;
+  line-height: 1.05;
+}
+
+h1.text-3xl.font-bold.text-white.mb-2::after {
+  content: "Welcome to 786.Chat";
+  display: block;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, #22d3ee, #38bdf8, #a78bfa, #f472b6, #facc15);
+  background-size: 260% 260%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.25));
+  animation: chat-welcome-gradient 5s ease infinite;
+}
+
+h1.text-3xl.font-bold.text-white.mb-2 + p {
+  color: rgba(186, 230, 253, 0.86);
+  font-weight: 500;
+  text-shadow: 0 0 18px rgba(14, 165, 233, 0.14);
+}
+
+@keyframes chat-welcome-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
