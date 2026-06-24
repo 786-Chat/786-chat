@@ -50,18 +50,40 @@ function getPageCode(files: Record<string, string>) {
   return files["app/page.tsx"] || files["app/page.jsx"] || files["pages/index.tsx"] || files["pages/index.jsx"] || ""
 }
 
+function cleanVisibleText(value: string) {
+  return value.replace(/\s+/g, " ").trim().replace(/[.!?]\s*$/, "")
+}
+
 function getFallbackLabel(files: Record<string, string>) {
   const pageCode = getPageCode(files)
 
   if (/Ayesha/i.test(pageCode)) return "Ayesha"
 
   const labelMatch = pageCode.match(/(?:tracking|uppercase|eyebrow|badge)[\s\S]{0,220}>([^<{]{2,60})</i)
-  if (labelMatch?.[1]) return labelMatch[1].trim()
+  if (labelMatch?.[1]) return cleanVisibleText(labelMatch[1])
 
   const quotedLabel = pageCode.match(/["'`]([^"'`]{2,40}(?:Preview|Ayesha|Brand|Label)[^"'`]*)["'`]/i)
-  if (quotedLabel?.[1]) return quotedLabel[1].trim()
+  if (quotedLabel?.[1]) return cleanVisibleText(quotedLabel[1])
 
   return "MujeebProAI Preview"
+}
+
+function getFallbackTitle(files: Record<string, string>, projectName = "") {
+  const pageCode = getPageCode(files)
+
+  const ayeshaTitle = pageCode.match(/Ayesha[\s\S]{0,80}?Calculator App/i)
+  if (ayeshaTitle?.[0]) return cleanVisibleText(ayeshaTitle[0])
+
+  const h1Match = pageCode.match(/<h1[^>]*>([\s\S]{2,120}?)<\/h1>/i)
+  if (h1Match?.[1]) {
+    const cleaned = cleanVisibleText(h1Match[1].replace(/<[^>]*>/g, ""))
+    if (cleaned) return cleaned
+  }
+
+  const quotedTitle = pageCode.match(/["'`]([^"'`]{2,80}Calculator App[^"'`]*)["'`]/i)
+  if (quotedTitle?.[1]) return cleanVisibleText(quotedTitle[1])
+
+  return projectName || "Calculator App"
 }
 
 function buildRuntimeWorkerHtml(projectId: string, projectName = "") {
@@ -94,7 +116,7 @@ setTimeout(function(){var el=document.querySelector('.loading');if(el)el.remove(
 }
 
 function buildCalculatorHtml(files: Record<string, string>, projectName = "Calculator App") {
-  const title = escapeHtml(projectName || "Calculator App")
+  const title = escapeHtml(getFallbackTitle(files, projectName || "Calculator App"))
   const label = escapeHtml(getFallbackLabel(files))
 
   return `<!doctype html>
