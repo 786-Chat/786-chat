@@ -75,21 +75,21 @@ const recentProjects = [
     status: "Design draft",
     age: "today",
     icon: LayoutDashboard,
-    glow: "from-cyan-400/30 to-blue-600/20",
+    glow: "from-cyan-300/50 to-blue-500/25",
   },
   {
     name: "MujeebProAI Safe Copy",
     status: "Protected",
     age: "old project safe",
     icon: LockKeyhole,
-    glow: "from-emerald-400/30 to-cyan-500/20",
+    glow: "from-emerald-300/50 to-cyan-500/25",
   },
   {
     name: "Customer Builder System",
     status: "Phase later",
     age: "planned",
     icon: FileCode2,
-    glow: "from-violet-400/30 to-fuchsia-600/20",
+    glow: "from-violet-300/50 to-fuchsia-500/25",
   },
 ]
 
@@ -100,19 +100,58 @@ export default function SevenEightSixAdminDashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [themeMenuOpen, setThemeMenuOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark")
+  const [systemPrefersDark, setSystemPrefersDark] = useState(true)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
     [user]
   )
 
-  const isLightTheme = themeMode === "light"
-
   useEffect(() => {
     if (!isLoading && !isAdmin) {
       router.replace("/786-admin/login")
     }
   }, [isAdmin, isLoading, router])
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+    const syncSystemTheme = () => setSystemPrefersDark(media.matches)
+
+    syncSystemTheme()
+    media.addEventListener("change", syncSystemTheme)
+
+    return () => media.removeEventListener("change", syncSystemTheme)
+  }, [])
+
+  const isDarkTheme = themeMode === "dark" || (themeMode === "system" && systemPrefersDark)
+  const activeThemeLabel = themeMode === "system" ? "System" : isDarkTheme ? "Dark" : "Light"
+
+  const pageClass = isDarkTheme
+    ? "bg-[#050713] text-white"
+    : "bg-[#f5f8ff] text-slate-950"
+
+  const glowClass = isDarkTheme
+    ? "bg-[radial-gradient(circle_at_30%_0%,rgba(0,255,255,0.17),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.18),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(0,160,255,0.08),transparent_34%)]"
+    : "bg-[radial-gradient(circle_at_28%_0%,rgba(14,165,233,0.18),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.12),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(34,197,94,0.08),transparent_34%)]"
+
+  const sidebarClass = isDarkTheme
+    ? "border-white/10 bg-[#0b1020]/82 text-white"
+    : "border-slate-200 bg-white/90 text-slate-950 shadow-[8px_0_40px_rgba(15,23,42,0.05)]"
+
+  const cardClass = isDarkTheme
+    ? "border-white/10 bg-white/[0.045] text-white shadow-[0_0_45px_rgba(0,0,0,0.20)]"
+    : "border-slate-200 bg-white text-slate-950 shadow-[0_14px_45px_rgba(15,23,42,0.08)]"
+
+  const softCardClass = isDarkTheme
+    ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-100"
+    : "border-cyan-200 bg-cyan-50 text-cyan-900"
+
+  const mutedTextClass = isDarkTheme ? "text-slate-400" : "text-slate-600"
+  const strongTextClass = isDarkTheme ? "text-white" : "text-slate-950"
+  const inputTextClass = isDarkTheme ? "text-white placeholder:text-slate-500" : "text-slate-950 placeholder:text-slate-400"
+  const menuClass = isDarkTheme
+    ? "border-white/10 bg-[#101421]/95 text-slate-200 shadow-[0_18px_50px_rgba(0,0,0,0.30)]"
+    : "border-slate-200 bg-white text-slate-800 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
 
   if (isLoading || !isAdmin) {
     return (
@@ -126,54 +165,32 @@ export default function SevenEightSixAdminDashboardPage() {
   }
 
   return (
-    <main
-      className={`min-h-screen overflow-hidden transition-colors duration-300 ${
-        isLightTheme ? "bg-slate-100 text-slate-950" : "bg-[#050713] text-white"
-      }`}
-    >
-      <div
-        className={`absolute inset-0 transition-opacity duration-300 ${
-          isLightTheme
-            ? "bg-[radial-gradient(circle_at_30%_0%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.12),transparent_30%)]"
-            : "bg-[radial-gradient(circle_at_30%_0%,rgba(0,255,255,0.15),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(125,92,255,0.16),transparent_30%)]"
-        }`}
-      />
+    <main className={`min-h-screen overflow-hidden transition-colors duration-300 ${pageClass}`}>
+      <div className={`absolute inset-0 transition-colors duration-300 ${glowClass}`} />
 
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
-        <aside
-          className={`hidden border-r p-4 backdrop-blur-2xl lg:block ${
-            isLightTheme
-              ? "border-slate-200 bg-white/75"
-              : "border-white/10 bg-white/[0.035]"
-          }`}
-        >
-          <div
-            className={`mb-5 flex items-center gap-3 rounded-2xl border px-3 py-3 shadow-[0_0_28px_rgba(0,255,255,0.08)] ${
-              isLightTheme
-                ? "border-cyan-200 bg-cyan-50 text-slate-950"
-                : "border-cyan-300/20 bg-cyan-300/10 text-white"
-            }`}
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-sm font-bold text-slate-950">
+        <aside className={`hidden border-r p-4 backdrop-blur-2xl transition-colors duration-300 lg:block ${sidebarClass}`}>
+          <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-3 py-3 ${softCardClass}`}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-sm font-bold text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.35)]">
               786
             </div>
             <div>
               <p className="text-sm font-semibold">Admin 786 Dashboard</p>
-              <p className={isLightTheme ? "text-xs text-slate-500" : "text-xs text-slate-400"}>mujeeb workspace</p>
+              <p className={`text-xs ${mutedTextClass}`}>mujeeb workspace</p>
             </div>
           </div>
 
           <div className="mb-4 grid gap-2">
-            <Button className="h-9 justify-start gap-2 border border-cyan-300/20 bg-cyan-300/15 text-cyan-100 hover:bg-cyan-300/20">
+            <Button className="h-9 justify-start gap-2 border border-cyan-300/30 bg-cyan-300/20 text-cyan-100 hover:bg-cyan-300/25">
               <Plus className="h-4 w-4" />
               Create something new
             </Button>
             <Button
               variant="outline"
               className={`h-9 justify-start gap-2 ${
-                isLightTheme
-                  ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  : "border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
+                isDarkTheme
+                  ? "border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
               }`}
             >
               <Import className="h-4 w-4" />
@@ -189,12 +206,12 @@ export default function SevenEightSixAdminDashboardPage() {
                   key={item.label}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
                     item.active
-                      ? isLightTheme
-                        ? "bg-cyan-50 text-cyan-800"
-                        : "bg-cyan-300/10 text-cyan-100 shadow-[inset_0_0_0_1px_rgba(103,232,249,0.12)]"
-                      : isLightTheme
-                        ? "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                        : "text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                      ? isDarkTheme
+                        ? "bg-cyan-300/10 text-cyan-100 shadow-[inset_0_0_0_1px_rgba(103,232,249,0.15)]"
+                        : "bg-cyan-50 text-cyan-800 shadow-[inset_0_0_0_1px_rgba(103,232,249,0.35)]"
+                      : isDarkTheme
+                        ? "text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -207,9 +224,9 @@ export default function SevenEightSixAdminDashboardPage() {
               <button
                 onClick={() => setSettingsOpen((current) => !current)}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition ${
-                  isLightTheme
-                    ? "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-                    : "text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                  isDarkTheme
+                    ? "text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                    : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
                 <span className="flex items-center gap-3">
@@ -220,13 +237,7 @@ export default function SevenEightSixAdminDashboardPage() {
               </button>
 
               {settingsOpen && (
-                <div
-                  className={`mt-2 rounded-2xl border p-2 shadow-[0_18px_50px_rgba(0,0,0,0.24)] ${
-                    isLightTheme
-                      ? "border-slate-200 bg-white text-slate-800"
-                      : "border-white/10 bg-[#101421]/95 text-slate-200"
-                  }`}
-                >
+                <div className={`mt-2 rounded-2xl border p-2 ${menuClass}`}>
                   <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-cyan-300/10">
                     <Bell className="h-4 w-4" />
                     Notifications
@@ -241,29 +252,27 @@ export default function SevenEightSixAdminDashboardPage() {
                         <Palette className="h-4 w-4" />
                         Theme
                       </span>
-                      <span className="flex items-center gap-2 capitalize">
-                        {themeMode}
+                      <span className="flex items-center gap-2">
+                        {activeThemeLabel}
                         <ChevronRight className={`h-4 w-4 transition ${themeMenuOpen ? "rotate-90" : ""}`} />
                       </span>
                     </button>
 
                     {themeMenuOpen && (
-                      <div
-                        className={`ml-5 mt-1 rounded-xl border p-1 ${
-                          isLightTheme
-                            ? "border-slate-200 bg-slate-50"
-                            : "border-white/10 bg-black/20"
-                        }`}
-                      >
+                      <div className={`ml-5 mt-1 rounded-xl border p-1 ${isDarkTheme ? "border-white/10 bg-black/20" : "border-slate-200 bg-slate-50"}`}>
                         {themeOptions.map((option) => {
                           const Icon = option.icon
+                          const active = themeMode === option.value
+
                           return (
                             <button
                               key={option.value}
                               onClick={() => setThemeMode(option.value)}
                               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
-                                themeMode === option.value
-                                  ? "bg-cyan-300/15 text-cyan-200"
+                                active
+                                  ? isDarkTheme
+                                    ? "bg-cyan-300/15 text-cyan-100"
+                                    : "bg-cyan-100 text-cyan-900"
                                   : "hover:bg-cyan-300/10"
                               }`}
                             >
@@ -289,15 +298,9 @@ export default function SevenEightSixAdminDashboardPage() {
             </div>
           </nav>
 
-          <div
-            className={`absolute bottom-4 left-4 right-4 rounded-2xl border p-4 text-xs ${
-              isLightTheme
-                ? "border-cyan-200 bg-cyan-50 text-slate-600"
-                : "border-cyan-300/15 bg-cyan-300/10 text-slate-300"
-            }`}
-          >
-            <p className={isLightTheme ? "font-medium text-cyan-800" : "font-medium text-cyan-100"}>Admin only</p>
-            <p className="mt-1">Full control will be added step by step safely.</p>
+          <div className={`absolute bottom-4 left-4 right-4 rounded-2xl border p-4 text-xs ${softCardClass}`}>
+            <p className="font-medium">Admin only</p>
+            <p className={`mt-1 ${mutedTextClass}`}>Full control will be added step by step safely.</p>
           </div>
         </aside>
 
@@ -307,19 +310,13 @@ export default function SevenEightSixAdminDashboardPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300 font-bold text-slate-950">786</div>
               <div>
                 <p className="font-semibold">Admin 786</p>
-                <p className={isLightTheme ? "text-xs text-slate-500" : "text-xs text-slate-500"}>Dashboard</p>
+                <p className={`text-xs ${mutedTextClass}`}>Dashboard</p>
               </div>
             </div>
 
-            <div
-              className={`hidden max-w-sm flex-1 items-center gap-2 rounded-2xl border px-3 py-2 lg:flex ${
-                isLightTheme
-                  ? "border-slate-200 bg-white text-slate-500"
-                  : "border-white/10 bg-white/[0.04] text-slate-500"
-              }`}
-            >
-              <Search className="h-4 w-4" />
-              <span className="text-sm">Search projects, files, APIs...</span>
+            <div className={`hidden max-w-sm flex-1 items-center gap-2 rounded-2xl border px-3 py-2 lg:flex ${cardClass}`}>
+              <Search className={`h-4 w-4 ${mutedTextClass}`} />
+              <span className={`text-sm ${mutedTextClass}`}>Search projects, files, APIs...</span>
             </div>
 
             <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
@@ -328,10 +325,10 @@ export default function SevenEightSixAdminDashboardPage() {
                 return (
                   <button
                     key={item.label}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium shadow-[0_0_20px_rgba(0,255,255,0.06)] transition ${
-                      isLightTheme
-                        ? "border-slate-200 bg-white text-slate-700 hover:border-cyan-300 hover:text-cyan-700"
-                        : "border-cyan-300/15 bg-white/[0.04] text-slate-200 hover:border-cyan-300/35 hover:bg-cyan-300/10 hover:text-cyan-100"
+                    className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition ${
+                      isDarkTheme
+                        ? "border-cyan-300/20 bg-white/[0.04] text-slate-200 hover:border-cyan-300/40 hover:bg-cyan-300/10 hover:text-cyan-100"
+                        : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -349,44 +346,28 @@ export default function SevenEightSixAdminDashboardPage() {
             className="mx-auto max-w-5xl"
           >
             <div className="text-center">
-              <div
-                className={`mb-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs shadow-[0_0_30px_rgba(0,255,255,0.08)] ${
-                  isLightTheme
-                    ? "border-cyan-200 bg-white text-cyan-800"
-                    : "border-cyan-300/20 bg-white/[0.04] text-cyan-100"
-                }`}
-              >
+              <div className={`mb-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs ${softCardClass}`}>
                 <ShieldCheck className="h-4 w-4" />
                 Owner logged in as {user.email}
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h1 className={`text-3xl font-semibold tracking-tight sm:text-4xl ${strongTextClass}`}>
                 Hi Mujeeb, what do you want to make?
               </h1>
-              <p className={isLightTheme ? "mt-3 text-sm text-slate-600" : "mt-3 text-sm text-slate-400"}>
+              <p className={`mt-3 text-sm ${mutedTextClass}`}>
                 Admin 786 Dashboard — build, edit, design, fix and deploy step by step.
               </p>
             </div>
 
-            <div
-              className={`mx-auto mt-8 max-w-3xl rounded-[24px] border p-2 shadow-[0_0_55px_rgba(0,255,255,0.13)] backdrop-blur-2xl ${
-                isLightTheme
-                  ? "border-cyan-200 bg-white/80"
-                  : "border-cyan-300/25 bg-white/[0.045]"
-              }`}
-            >
-              <div className={isLightTheme ? "rounded-[20px] border border-slate-200 bg-white p-4" : "rounded-[20px] border border-white/8 bg-black/25 p-4"}>
+            <div className={`mx-auto mt-8 max-w-3xl rounded-[24px] border p-2 backdrop-blur-2xl ${cardClass}`}>
+              <div className={`rounded-[20px] border p-4 ${isDarkTheme ? "border-white/10 bg-black/25" : "border-slate-200 bg-white"}`}>
                 <Input
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   placeholder="Build an admin login, dashboard, API, homepage, animation..."
-                  className={`h-14 border-0 bg-transparent text-base focus-visible:ring-0 ${
-                    isLightTheme
-                      ? "text-slate-950 placeholder:text-slate-400"
-                      : "text-white placeholder:text-slate-500"
-                  }`}
+                  className={`h-14 border-0 bg-transparent text-base focus-visible:ring-0 ${inputTextClass}`}
                 />
-                <div className={`mt-2 flex items-center justify-between border-t pt-3 ${isLightTheme ? "border-slate-200" : "border-white/10"}`}>
-                  <button className={isLightTheme ? "rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-white" : "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300 hover:bg-white/[0.07]"}>
+                <div className={`mt-2 flex items-center justify-between border-t pt-3 ${isDarkTheme ? "border-white/10" : "border-slate-200"}`}>
+                  <button className={`rounded-xl border px-3 py-2 text-sm transition ${isDarkTheme ? "border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]" : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-white"}`}>
                     + Add file
                   </button>
                   <Button className="h-9 gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200">
@@ -403,9 +384,9 @@ export default function SevenEightSixAdminDashboardPage() {
                 return (
                   <button
                     key={item.label}
-                    className={isLightTheme ? "group flex flex-col items-center gap-2 text-xs text-slate-500 transition hover:text-cyan-700" : "group flex flex-col items-center gap-2 text-xs text-slate-400 transition hover:text-cyan-100"}
+                    className={`group flex flex-col items-center gap-2 text-xs transition ${isDarkTheme ? "text-slate-400 hover:text-cyan-100" : "text-slate-500 hover:text-cyan-700"}`}
                   >
-                    <span className={isLightTheme ? "flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white transition group-hover:border-cyan-300 group-hover:bg-cyan-50" : "flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] transition group-hover:border-cyan-300/30 group-hover:bg-cyan-300/10 group-hover:shadow-[0_0_28px_rgba(0,255,255,0.12)]"}>
+                    <span className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${isDarkTheme ? "border-white/10 bg-white/[0.04] group-hover:border-cyan-300/30 group-hover:bg-cyan-300/10 group-hover:shadow-[0_0_28px_rgba(0,255,255,0.12)]" : "border-slate-200 bg-white shadow-sm group-hover:border-cyan-300 group-hover:bg-cyan-50"}`}>
                       <Icon className="h-5 w-5" />
                     </span>
                     {item.label}
@@ -416,8 +397,8 @@ export default function SevenEightSixAdminDashboardPage() {
 
             <section className="mt-20">
               <div className="mb-5 flex items-center justify-between">
-                <h2 className={isLightTheme ? "text-sm font-medium text-slate-700" : "text-sm font-medium text-slate-300"}>Your recent Projects</h2>
-                <button className={isLightTheme ? "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 hover:border-cyan-300 hover:text-cyan-700" : "inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300 hover:border-cyan-300/25 hover:text-cyan-100"}>
+                <h2 className={`text-sm font-medium ${isDarkTheme ? "text-slate-300" : "text-slate-700"}`}>Your recent Projects</h2>
+                <button className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${isDarkTheme ? "border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-300/25 hover:text-cyan-100" : "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-cyan-300 hover:text-cyan-700"}`}>
                   View All
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -429,16 +410,16 @@ export default function SevenEightSixAdminDashboardPage() {
                   return (
                     <div
                       key={project.name}
-                      className={isLightTheme ? "group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:border-cyan-300" : "group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-[0_0_45px_rgba(0,0,0,0.18)] transition hover:-translate-y-1 hover:border-cyan-300/25 hover:shadow-[0_0_45px_rgba(0,255,255,0.10)]"}
+                      className={`group overflow-hidden rounded-3xl border transition hover:-translate-y-1 ${cardClass} ${isDarkTheme ? "hover:border-cyan-300/30" : "hover:border-cyan-300"}`}
                     >
                       <div className={`flex h-32 items-center justify-center bg-gradient-to-br ${project.glow}`}>
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-black/25 backdrop-blur-xl">
-                          <Icon className="h-6 w-6 text-cyan-100" />
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/25 bg-black/25 backdrop-blur-xl">
+                          <Icon className="h-6 w-6 text-white" />
                         </div>
                       </div>
                       <div className="p-4">
-                        <h3 className={isLightTheme ? "font-medium text-slate-950" : "font-medium text-white"}>{project.name}</h3>
-                        <p className={isLightTheme ? "mt-2 text-xs text-slate-500" : "mt-2 text-xs text-slate-500"}>
+                        <h3 className={`font-medium ${strongTextClass}`}>{project.name}</h3>
+                        <p className={`mt-2 text-xs ${mutedTextClass}`}>
                           {project.status} • {project.age}
                         </p>
                       </div>
