@@ -1139,22 +1139,58 @@ function isNewProjectBuildRequest(prompt: string): boolean {
   return hasCreateIntent && hasProjectType && !isEditOnlyProjectRequest(prompt)
 }
 
-function extractRequestedTitle(prompt: string): string | null {
-  const clean = prompt
+function stripHiddenPromptRules(prompt: string): string {
+  return prompt
     .replace(/CURRENT_PREVIEW_HTML:[\s\S]*/gi, "")
     .replace(/SYSTEM_PREVIEW_ACTION:[\s\S]*/gi, "")
     .replace(/PROJECT_FILE_SYSTEM_RULE:[\s\S]*/gi, "")
+    .replace(/\s+/g, " ")
     .trim()
+}
+
+function cleanRequestedText(value: string): string {
+  return value
+    .replace(/^["“”'`]+|["“”'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!?]\s*$/, "")
+}
+
+function extractRequestedTitle(prompt: string): string | null {
+  const clean = stripHiddenPromptRules(prompt)
 
   const patterns = [
-    /(?:change|edit|update|replace|rename)\s+(?:the\s+)?(?:hero\s+)?(?:title|heading|h1)\s+(?:to|as)\s+["“”']?([^"“”'\n]+)["“”']?/i,
-    /(?:hero\s+)?(?:title|heading|h1)\s+(?:to|as)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /(?:change|edit|update|replace|rename)\s+(?:the\s+)?(?:hero\s+)?(?:title|heading|h1)\s+(?:calculator\s+app\s+)?(?:to|as|with)\s+["“”']?([^"“”'\n]+?)(?:\s+and\s+(?:change|edit|update|replace)\b|$)/i,
+    /(?:change|edit|update|replace|rename)\s+(?:the\s+)?(?:text\s+)?calculator\s+app\s+(?:to|as|with)\s+["“”']?([^"“”'\n]+?)(?:\s+and\s+(?:change|edit|update|replace)\b|$)/i,
+    /(?:hero\s+)?(?:title|heading|h1)\s+(?:to|as|with)\s+["“”']?([^"“”'\n]+?)(?:\s+and\s+(?:change|edit|update|replace)\b|$)/i,
+    /(Ayesha\s+Muj?e?eb\s+Calculator\s+App)/i,
+    /(Ayesha\s+Muj?eb\s+Calculator\s+App)/i,
   ]
 
   for (const pattern of patterns) {
     const match = clean.match(pattern)
     if (match?.[1]) {
-      return match[1].trim().replace(/[.!?]\s*$/, "")
+      const value = cleanRequestedText(match[1])
+      if (value) return value
+    }
+  }
+
+  return null
+}
+
+function extractRequestedLabel(prompt: string): string | null {
+  const clean = stripHiddenPromptRules(prompt)
+
+  const patterns = [
+    /(?:change|edit|update|replace)\s+(?:the\s+)?(?:small\s+)?(?:top\s+)?(?:text|label|badge|eyebrow)\s+(?:to|as|with)\s+["“”']?([^"“”'\n]+?)(?:\s+and\s+(?:change|edit|update|replace)\b|$)/i,
+    /(Mujeeb\s+Family)/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = clean.match(pattern)
+    if (match?.[1]) {
+      const value = cleanRequestedText(match[1])
+      if (value) return value
     }
   }
 
@@ -1166,45 +1202,75 @@ function applySimpleHeroTitleFallback(
   prompt: string
 ): Record<string, string> | null {
   const requestedTitle = extractRequestedTitle(prompt)
-  if (!requestedTitle) return null
+  const requestedLabel = extractRequestedLabel(prompt)
 
-  const heroPath =
-    Object.keys(files).find((path) => /^components\/Hero\.(tsx|jsx)$/i.test(path)) ||
-    Object.keys(files).find((path) => /hero/i.test(path) && /\.(tsx|jsx)$/.test(path)) ||
-    "components/Hero.tsx"
+  if (!requestedTitle && !requestedLabel) return null
 
-  const currentHero = files[heroPath]
-  if (!currentHero) return null
-
-  let nextHero = currentHero
   let changed = false
+  const nextFiles: Record<string, string> = { ...files }
+  const editablePaths = Object.keys(nextFiles).filter((path) => /\.(tsx|jsx|ts|js)$/i.test(path))
 
-  // Prefer changing a multi-line h1 block while preserving styling/background.
-  nextHero = nextHero.replace(
-    /<h1([^>]*)>[\s\S]*?<\/h1>/i,
-    (full, attrs) => {
-      changed = true
-      return `<h1${attrs}>\n            ${requestedTitle}\n          </h1>`
+  for (const path of editablePaths) {
+    const current = nextFiles[path]
+    if (!current || typeof current !== "string") continue
+
+    let next = current
+
+    if (requestedTitle) {
+      next = next
+        .replace(/Calculator\s+App/g, requestedTitle)
+        .replace(/Ayesha\s+Muj?e?eb\s+Calculator\s+App/gi, requestedTitle)
+        .replace(/Ayesha\s+Muj?eb\s+Calculator\s+App/gi, requestedTitle)
+
+      next = next.replace(/<h1([^>]*)>[\s\S]*?<\/h1>/i, (full, attrs) => {
+        if (/calculator|ayesha|mujeeb|mujeb/i.test(full)) {
+          return `<h1${attrs}>\n              ${requestedTitle}\n            </h1>`
+        }
+        return full
+      })
     }
-  )
 
-  // If there is no h1, change the first prominent paragraph/title text.
+    if (requestedLabel) {
+      next = next
+        .replace(/MujeebProAI\s+Preview/gi, requestedLabel)
+        .replace(/Premium\s+Calculator\s+Studio/gi, requestedLabel)
+        .replace(/Mujeeb\s+Family\s+Branding/gi, requestedLabel)
+        .replace(/Ayesha(?!\s+Muj?e?eb\s+Calculator\s+App)/gi, requestedLabel)
+    }
+
+    if (next !== current) {
+      nextFiles[path] = next
+      changed = true
+    }
+  }
+
   if (!changed) {
-    nextHero = nextHero.replace(
-      /(<p[^>]*>\s*)([^<]{3,})(\s*<\/p>)/i,
-      (_full, start, _oldText, end) => {
-        changed = true
-        return `${start}${requestedTitle}${end}`
+    const pagePath =
+      Object.keys(nextFiles).find((path) => path === "app/page.tsx" || path === "app/page.jsx") ||
+      "app/page.tsx"
+    const currentPage = nextFiles[pagePath]
+
+    if (currentPage && requestedTitle) {
+      let nextPage = currentPage.replace(
+        /<h1([^>]*)>[\s\S]*?<\/h1>/i,
+        (_full, attrs) => `<h1${attrs}>\n              ${requestedTitle}\n            </h1>`
+      )
+
+      if (requestedLabel) {
+        nextPage = nextPage.replace(
+          /(<p[^>]*>[\s\S]{0,180}?)(?:MujeebProAI\s+Preview|Premium\s+Calculator\s+Studio|Ayesha)([\s\S]{0,180}?<\/p>)/i,
+          `$1${requestedLabel}$2`
+        )
       }
-    )
+
+      if (nextPage !== currentPage) {
+        nextFiles[pagePath] = nextPage
+        changed = true
+      }
+    }
   }
 
-  if (!changed || nextHero === currentHero) return null
-
-  return {
-    ...files,
-    [heroPath]: nextHero,
-  }
+  return changed ? nextFiles : null
 }
 
 
@@ -1856,25 +1922,6 @@ if (!isAdminRequest) {
       const title = userText.slice(0, 50) + (userText.length > 50 ? "..." : "")
 
       if (effectiveProjectId) {
-        try {
-          const existingProjectChat = await sql`
-            SELECT id
-            FROM chats
-            WHERE user_id = ${session.id}
-              AND project_id = ${effectiveProjectId}::uuid
-            ORDER BY created_at ASC
-            LIMIT 1
-          `
-
-          if (existingProjectChat[0]?.id) {
-            currentChatId = existingProjectChat[0].id
-          }
-        } catch (error) {
-          console.warn("[Chat API] Could not reuse existing project chat before insert", error)
-        }
-      }
-
-      if (!currentChatId && effectiveProjectId) {
         try {
           const projectChat = await sql`
             INSERT INTO chats (user_id, project_id, title)
@@ -2811,7 +2858,7 @@ export async function GET(request: Request) {
           FROM chats
           WHERE user_id = ${session.id}
             AND project_id = ${projectId}::uuid
-          ORDER BY created_at ASC
+          ORDER BY updated_at DESC
           LIMIT 1
         `
 
