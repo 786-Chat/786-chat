@@ -302,7 +302,6 @@ function toUiMessages(dbMessages: DbMessage[]) {
   }))
 }
 
-
 function removeHiddenPromptRules(text: string): string {
   if (!text) return ""
 
@@ -352,7 +351,7 @@ function getDisplayTextForMessage(rawText: string, role: string): string {
       return cleanedText
     }
 
-    return "Project file changes were received. Refreshing the project preview now."
+    return "Project file changes were saved."
   }
 
   return visibleText
@@ -380,7 +379,6 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
   const [input, setInput] = useState("")
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [newChatResetKey, setNewChatResetKey] = useState(0)
-  const lastProjectRefreshRef = useRef<string | null>(null)
   const newChatResetRef = useRef(0)
 
   const hardClearComposer = useCallback(() => {
@@ -473,15 +471,12 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
             detail: { chatId: nextChatId || currentChatId, projectId: nextProjectId },
           })
         )
-        window.dispatchEvent(new Event("project-files-changed"))
-        window.dispatchEvent(new Event("chat-updated"))
       }
     },
     onError: (err) => {
       console.error("Chat error:", err)
     },
     onFinish: async () => {
-      window.dispatchEvent(new Event("project-files-changed"))
       window.dispatchEvent(new Event("chat-updated"))
 
       if (typeof window !== "undefined") {
@@ -506,17 +501,12 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
                   detail: { chatId: currentChatId, projectId: nextProjectId },
                 })
               )
-              window.dispatchEvent(new Event("project-files-changed"))
-              window.dispatchEvent(new Event("chat-updated"))
               onViewModeChange?.("preview")
             }
           } catch {
             // Keep chat usable. User can still open project from My Projects.
           }
         }
-
-        window.dispatchEvent(new Event("project-files-changed"))
-        window.dispatchEvent(new Event("chat-updated"))
       }
     },
   })
@@ -531,9 +521,8 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       setMessages([] as any)
       hardClearComposer()
       onPreviewUpdate?.("")
-      onViewModeChange?.(projectId ? "preview" : "preview")
+      onViewModeChange?.("preview")
       window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: null, projectId: null } }))
-      window.dispatchEvent(new Event("project-files-changed"))
     }
 
     const loadProjectChat = async () => {
@@ -575,7 +564,6 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         onPreviewUpdate?.("")
         onViewModeChange?.("preview")
         window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId: nextChatId, projectId } }))
-        window.dispatchEvent(new Event("project-files-changed"))
       } catch {
         if (!cancelled) resetPanel()
       }
@@ -621,7 +609,7 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         const data = await response.json()
         const dbMessages = Array.isArray(data.messages) ? data.messages : []
 
-               setCurrentChatId(chatId)
+        setCurrentChatId(chatId)
         setMessages(toUiMessages(dbMessages) as any)
         hardClearComposer()
 
@@ -641,10 +629,8 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
         }
 
         window.dispatchEvent(new CustomEvent("chat-selected", { detail: { chatId, projectId: projectId || null } }))
-        window.dispatchEvent(new Event("project-files-changed"))
 
         setTimeout(() => {
-          window.dispatchEvent(new Event("project-files-changed"))
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
         }, 50)
       } catch (error) {
@@ -703,28 +689,6 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
   }, [messages])
 
   useEffect(() => {
-    if (status === "streaming" || status === "submitted") return
-
-    const lastMsg = messages[messages.length - 1]
-    if (!lastMsg || lastMsg.role !== "assistant") return
-
-    const rawText = getMessageText(lastMsg)
-    const displayText = getDisplayTextForMessage(rawText, lastMsg.role)
-    const shouldRefreshProject =
-      containsFileOperations(rawText) ||
-      displayText.toLowerCase().includes("project files updated")
-
-    if (!shouldRefreshProject) return
-
-    const refreshKey = `${lastMsg.id}-${rawText.length}`
-    if (lastProjectRefreshRef.current === refreshKey) return
-    lastProjectRefreshRef.current = refreshKey
-
-    window.dispatchEvent(new Event("project-files-changed"))
-    onViewModeChange?.("preview")
-  }, [messages, status, onViewModeChange])
-
-  useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px"
@@ -759,10 +723,9 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     }
 
     const cleanInput = input.trim()
-    const requestedPreviewPath =
-  attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
+    const requestedPreviewPath = attachedFiles.length === 0 ? getRequestedPreviewPath(cleanInput) : null
 
-   if (requestedPreviewPath && !isOwnerAdmin) {
+    if (requestedPreviewPath && !isOwnerAdmin) {
       openPreviewPath(requestedPreviewPath)
       onViewModeChange?.("preview")
 
@@ -788,12 +751,13 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
       }, 50)
       return
     }
-const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
-let finalMessageText = cleanInput || "Please analyze the attached file."
+    const uploadedFiles = attachedFiles.filter((f) => f.url && !f.uploading)
 
-if (projectId && uploadedFiles.length === 0) {
-  finalMessageText += `
+    let finalMessageText = cleanInput || "Please analyze the attached file."
+
+    if (projectId && uploadedFiles.length === 0) {
+      finalMessageText += `
 
 PROJECT_FILE_SYSTEM_RULE:
 - This is a CUSTOMER PROJECT in project.files mode.
@@ -806,25 +770,25 @@ PROJECT_FILE_SYSTEM_RULE:
 - Preserve id, ul, ol, li, div, a href/url, image src/url, classes, animations, layout, colors, backgrounds, and components unless the user explicitly asks to change them.
 - If the user asks for center/mobile/tablet/text/color/font/border/table/logo/animation/position/spacing changes, update the real project React files so the visible preview changes.
 - Return only editFile/createFile/deleteFile operations with full file content.`
-}
+    }
 
-if (requestedPreviewPath && isOwnerAdmin) {
-  openPreviewPath(requestedPreviewPath)
-  onViewModeChange?.("preview")
-}
+    if (requestedPreviewPath && isOwnerAdmin) {
+      openPreviewPath(requestedPreviewPath)
+      onViewModeChange?.("preview")
+    }
 
-sendMessage({
-  parts: [
-    { type: "text", text: finalMessageText },
-    ...uploadedFiles.map((f) => ({
-      type: "file" as const,
-      url: f.url!,
-      mediaType: f.file.type,
-    })),
-  ],
-} as any)
+    sendMessage({
+      parts: [
+        { type: "text", text: finalMessageText },
+        ...uploadedFiles.map((f) => ({
+          type: "file" as const,
+          url: f.url!,
+          mediaType: f.file.type,
+        })),
+      ],
+    } as any)
 
-hardClearComposer()
+    hardClearComposer()
   }
 
   const handleCopy = async (text: string, id: string) => {
@@ -1024,23 +988,19 @@ hardClearComposer()
   }, [onPreviewUpdate, previewStorageKey, user?.email, isOwnerAdmin, projectId])
 
   return (
-   <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950">
       <div
         ref={chatContainerRef}
         onScroll={handleScroll}
-      className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+        className="min-h-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
       >
         <div className="max-w-3xl mx-auto px-4 pt-12 pb-6 space-y-6">
           {messages.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
               <div className="mb-8">
                 <MujeebProAILogo className="w-16 h-16 mx-auto mb-4" />
-                <h1 className="text-3xl font-bold text-white mb-2">
-                  Welcome to Mujeeb Pro AI
-                </h1>
-                <p className="text-gray-400 text-lg">
-                  How can I help you today?
-                </p>
+                <h1 className="text-3xl font-bold text-white mb-2">Welcome to Mujeeb Pro AI</h1>
+                <p className="text-gray-400 text-lg">How can I help you today?</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
@@ -1060,9 +1020,7 @@ hardClearComposer()
           {error && (
             <div className="flex items-center justify-center py-8">
               <div className="bg-red-900/20 border border-red-800/30 rounded-xl p-4 max-w-md text-center">
-                <p className="text-red-400 text-sm mb-3">
-                  Something went wrong. Please try again.
-                </p>
+                <p className="text-red-400 text-sm mb-3">Something went wrong. Please try again.</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1137,9 +1095,7 @@ hardClearComposer()
                         )}
                       >
                         <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {text}
-                          </ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
                         </div>
                       </div>
                     )}
@@ -1171,10 +1127,7 @@ hardClearComposer()
                         {onPreviewUpdate && canPreview && previewHtml && (
                           <button
                             onClick={() => {
-                              const safeHtml = isOwnerAdmin
-                                ? previewHtml
-                                : sanitizeCustomerPreview(previewHtml)
-
+                              const safeHtml = isOwnerAdmin ? previewHtml : sanitizeCustomerPreview(previewHtml)
                               if (safeHtml && hasVisibleHtmlContent(safeHtml)) {
                                 savePreviewWithBackup(safeHtml)
                                 onViewModeChange?.("preview")
@@ -1203,11 +1156,7 @@ hardClearComposer()
           </AnimatePresence>
 
           {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex gap-3"
-            >
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
               <div className="flex-shrink-0 mt-1">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-white" />
@@ -1240,32 +1189,24 @@ hardClearComposer()
         )}
       </AnimatePresence>
 
-   <div className="shrink-0 border-t border-gray-800/50 bg-gray-900/95 backdrop-blur-sm">
+      <div className="shrink-0 border-t border-gray-800/50 bg-gray-900/95 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
           {attachedFiles.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {attachedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center gap-2 bg-gray-800/80 rounded-lg px-3 py-2 border border-gray-700/50"
-                >
+                <div key={file.id} className="flex items-center gap-2 bg-gray-800/80 rounded-lg px-3 py-2 border border-gray-700/50">
                   {file.type === "image" && file.preview ? (
                     <img src={file.preview} alt="" className="w-8 h-8 rounded object-cover" />
                   ) : (
                     <FileText className="w-4 h-4 text-blue-400" />
                   )}
 
-                  <span className="text-xs text-gray-400 truncate max-w-[100px]">
-                    {file.file.name}
-                  </span>
+                  <span className="text-xs text-gray-400 truncate max-w-[100px]">{file.file.name}</span>
 
                   {file.uploading ? (
                     <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
                   ) : (
-                    <button
-                      onClick={() => removeFile(file.id)}
-                      className="text-gray-500 hover:text-gray-300"
-                    >
+                    <button onClick={() => removeFile(file.id)} className="text-gray-500 hover:text-gray-300">
                       <X className="w-3 h-3" />
                     </button>
                   )}
@@ -1289,45 +1230,20 @@ hardClearComposer()
               />
 
               <div className="absolute left-2 bottom-2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                  title="Attach image"
-                >
+                <button type="button" onClick={() => imageInputRef.current?.click()} className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors" title="Attach image">
                   <ImagePlus className="w-4 h-4" />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                  title="Attach file"
-                >
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors" title="Attach file">
                   <Paperclip className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "image")}
-            />
+            <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFileSelect(e, "image")} />
+            <input ref={fileInputRef} type="file" accept=".pdf" multiple className="hidden" onChange={(e) => handleFileSelect(e, "pdf")} />
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e, "pdf")}
-            />
-
-                        <Button
+            <Button
               type="submit"
               onClick={(event) => {
                 if (isLoading) {
@@ -1344,11 +1260,7 @@ hardClearComposer()
                 "transition-all duration-200"
               )}
             >
-              {isLoading ? (
-                <StopCircle className="w-5 h-5" />
-              ) : (
-                <Zap className="w-5 h-5" />
-              )}
+              {isLoading ? <StopCircle className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
             </Button>
           </form>
 
@@ -1360,17 +1272,13 @@ hardClearComposer()
                   {isOwnerAdmin || usage?.unlimited
                     ? "Unlimited"
                     : `Used: ${usage?.used ?? 0}/${usage?.limit ?? 10} • Remaining: ${
-                        usage?.freeMessagesRemaining ??
-                        Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
+                        usage?.freeMessagesRemaining ?? Math.max((usage?.limit ?? 10) - (usage?.used ?? 0), 0)
                       }`}
                 </span>
               </div>
 
               {!isOwnerAdmin && !usage?.unlimited && usage?.used >= usage?.limit && (
-                <button
-                  onClick={() => setShowUpgrade(true)}
-                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                >
+                <button onClick={() => setShowUpgrade(true)} className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
                   Upgrade
                 </button>
               )}
@@ -1379,10 +1287,7 @@ hardClearComposer()
         </div>
       </div>
 
-      <UpgradePopup
-        open={showUpgrade}
-        onOpenChange={(open) => setShowUpgrade(open)}
-      />
+      <UpgradePopup open={showUpgrade} onOpenChange={(open) => setShowUpgrade(open)} />
     </div>
   )
 }
