@@ -420,10 +420,6 @@ export default function DashboardLayout({
         setPreviewOpen(true)
         setViewMode("preview")
         loadLatestProject(id)
-
-        window.setTimeout(() => loadLatestProject(id), 450)
-        window.setTimeout(() => loadLatestProject(id), 1400)
-        window.setTimeout(() => loadLatestProject(id), 2600)
       }
 
       if (projectIdToRefresh) {
