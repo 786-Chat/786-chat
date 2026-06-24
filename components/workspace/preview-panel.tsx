@@ -686,6 +686,31 @@ useEffect(() => {
   }, [project?.id, setPreviewUrl])
 
   useEffect(() => {
+    const refreshProjectPreview = () => {
+      if (isFreshNewProject) return
+
+      setPreviewFrameReady(false)
+      setStablePreviewHtml("")
+      setLocalPreviewHtml("")
+      setLiveUrl("")
+      setPreviewUrl("")
+      setRefreshKey((prev) => prev + 1)
+
+      if (viewMode !== "preview") {
+        onViewModeChange?.("preview")
+      }
+    }
+
+    window.addEventListener("project-files-changed", refreshProjectPreview)
+    window.addEventListener("chat-updated", refreshProjectPreview)
+
+    return () => {
+      window.removeEventListener("project-files-changed", refreshProjectPreview)
+      window.removeEventListener("chat-updated", refreshProjectPreview)
+    }
+  }, [isFreshNewProject, onViewModeChange, setPreviewUrl, viewMode])
+
+  useEffect(() => {
     if (isFreshNewProject) {
       setLocalPreviewHtml("")
       return
