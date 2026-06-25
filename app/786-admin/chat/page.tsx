@@ -3,33 +3,38 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Code2,
-  ExternalLink,
-  FolderKanban,
   Globe2,
   Grid3X3,
+  Home,
   Loader2,
   Monitor,
   Paperclip,
   Rocket,
   Send,
-  ShoppingBag,
+  Settings,
   Smartphone,
   Sparkles,
   Tablet,
-  UploadCloud,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 
+const workspaceNav = [
+  { label: "Home", icon: Home, href: "/786-admin/dashboard" },
+  { label: "Chats", icon: Monitor, href: "/786-admin/chat", active: true },
+  { label: "Projects", icon: Grid3X3, href: "/786-admin/projects" },
+  { label: "Websites", icon: Globe2, href: "/786-admin/projects" },
+  { label: "Code", icon: Code2, href: "/786-admin/chat" },
+  { label: "Deploy", icon: Rocket, href: "/786-admin/chat" },
+  { label: "Settings", icon: Settings, href: "/786-admin/vip" },
+]
+
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [quickLinksOpen, setQuickLinksOpen] = useState(false)
+  const [chatWidth, setChatWidth] = useState(420)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -42,9 +47,25 @@ export default function SevenEightSixAdminChatPage() {
     }
   }, [isAdmin, isLoading, router])
 
-  const openAdminProjects = () => {
-    setQuickLinksOpen(false)
-    router.push("/786-admin/projects")
+  const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(Math.max(moveEvent.clientX - 88, 320), 720)
+      setChatWidth(nextWidth)
+    }
+
+    const stopMove = () => {
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", stopMove)
+    }
+
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", stopMove)
   }
 
   if (isLoading || !isAdmin) {
@@ -60,64 +81,56 @@ export default function SevenEightSixAdminChatPage() {
 
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
-      <div className="grid h-full grid-cols-1 lg:grid-cols-[1fr_1.42fr]">
-        <section className="relative flex h-full min-h-0 flex-col border-r border-cyan-400/35 bg-[#081322]">
-          <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#07101d] px-4">
-            <div className="flex gap-2">
-              <span className="h-3 w-3 rounded-full bg-red-400" />
-              <span className="h-3 w-3 rounded-full bg-yellow-300" />
-              <span className="h-3 w-3 rounded-full bg-emerald-400" />
-            </div>
+      <div className="flex h-full min-w-0">
+        <aside className="hidden h-full w-[88px] shrink-0 border-r border-white/10 bg-[#06101c] lg:flex lg:flex-col lg:items-center">
+          <button
+            onClick={() => router.push("/786-admin/dashboard")}
+            className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.30)]"
+          >
+            786
+          </button>
 
-            <div className="relative ml-2">
-              <button
-                onClick={() => setQuickLinksOpen((current) => !current)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300 shadow-[0_0_35px_rgba(34,211,238,0.08)] backdrop-blur-xl transition hover:border-cyan-300/30 hover:text-cyan-100"
-              >
-                Quick Links
-                <ChevronDown className={`h-3.5 w-3.5 transition ${quickLinksOpen ? "rotate-180" : ""}`} />
+          <div className="mt-10 flex flex-1 flex-col items-center gap-3">
+            {workspaceNav.map((item) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => router.push(item.href)}
+                  title={item.label}
+                  className={`group relative flex h-11 w-11 items-center justify-center rounded-2xl transition ${
+                    item.active
+                      ? "bg-cyan-300/14 text-cyan-200 shadow-[0_0_26px_rgba(34,211,238,0.16)]"
+                      : "text-slate-300 hover:bg-white/[0.06] hover:text-cyan-100"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="pointer-events-none absolute left-14 z-50 rounded-xl border border-white/10 bg-[#101827] px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-xl transition group-hover:opacity-100">
+                    {item.label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-950">
+            M
+          </div>
+        </aside>
+
+        <section
+          className="relative flex h-full min-h-0 shrink-0 flex-col bg-[#081322]"
+          style={{ width: `${chatWidth}px` }}
+        >
+          <header className="flex h-[70px] shrink-0 items-center justify-between border-b border-white/10 bg-[#07101d] px-5">
+            <div>
+              <button className="inline-flex items-center gap-2 text-base font-bold text-white">
+                New Chat
+                <span className="text-xs text-slate-400">⌄</span>
               </button>
-
-              {quickLinksOpen && (
-                <div className="absolute left-0 top-12 z-50 w-72 rounded-3xl border border-white/10 bg-[#160f2d]/88 p-3 shadow-[0_22px_65px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-                  <p className="mb-2 px-3 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Quick Links</p>
-                  <button
-                    onClick={openAdminProjects}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
-                  >
-                    <FolderKanban className="h-4 w-4 text-slate-400" />
-                    My Projects
-                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
-                  </button>
-                  <button
-                    onClick={() => setQuickLinksOpen(false)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
-                  >
-                    <ShoppingBag className="h-4 w-4 text-slate-400" />
-                    Marketplace
-                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
-                  </button>
-                  <button
-                    onClick={() => setQuickLinksOpen(false)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
-                  >
-                    <UploadCloud className="h-4 w-4 text-slate-400" />
-                    Import Website
-                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
-                  </button>
-                </div>
-              )}
             </div>
-
-            <button
-              onClick={() => router.push("/786-admin/dashboard")}
-              className="rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100"
-              aria-label="Back dashboard"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button className="rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100" aria-label="Forward">
-              <ChevronRight className="h-4 w-4" />
+            <button className="text-cyan-200 hover:text-cyan-100" aria-label="Open">
+              ↗
             </button>
           </header>
 
@@ -150,7 +163,14 @@ export default function SevenEightSixAdminChatPage() {
           </div>
         </section>
 
-        <section className="flex h-full min-h-0 flex-col bg-[#030408]">
+        <div
+          onMouseDown={startResize}
+          className="h-full w-[3px] shrink-0 cursor-col-resize bg-cyan-300/60 shadow-[0_0_16px_rgba(34,211,238,0.50)] transition hover:bg-cyan-200"
+          aria-label="Resize panels"
+          role="separator"
+        />
+
+        <section className="flex h-full min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#0c0c12] px-5">
             <div className="flex h-10 flex-1 max-w-[560px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 text-sm text-slate-400">
               <Globe2 className="h-4 w-4" />
