@@ -1,11 +1,14 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Code2,
+  ExternalLink,
+  FolderKanban,
   Globe2,
   Grid3X3,
   Loader2,
@@ -13,9 +16,11 @@ import {
   Paperclip,
   Rocket,
   Send,
+  ShoppingBag,
   Smartphone,
   Sparkles,
   Tablet,
+  UploadCloud,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -24,6 +29,7 @@ const ADMIN_EMAIL = "mujeeb@job4u.com"
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
+  const [quickLinksOpen, setQuickLinksOpen] = useState(false)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -35,6 +41,11 @@ export default function SevenEightSixAdminChatPage() {
       router.replace("/786-admin/login")
     }
   }, [isAdmin, isLoading, router])
+
+  const openAdminProjects = () => {
+    setQuickLinksOpen(false)
+    router.push("/786-admin/projects")
+  }
 
   if (isLoading || !isAdmin) {
     return (
@@ -57,9 +68,50 @@ export default function SevenEightSixAdminChatPage() {
               <span className="h-3 w-3 rounded-full bg-yellow-300" />
               <span className="h-3 w-3 rounded-full bg-emerald-400" />
             </div>
+
+            <div className="relative ml-2">
+              <button
+                onClick={() => setQuickLinksOpen((current) => !current)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.055] px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300 shadow-[0_0_35px_rgba(34,211,238,0.08)] backdrop-blur-xl transition hover:border-cyan-300/30 hover:text-cyan-100"
+              >
+                Quick Links
+                <ChevronDown className={`h-3.5 w-3.5 transition ${quickLinksOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {quickLinksOpen && (
+                <div className="absolute left-0 top-12 z-50 w-72 rounded-3xl border border-white/10 bg-[#160f2d]/88 p-3 shadow-[0_22px_65px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+                  <p className="mb-2 px-3 py-2 text-xs font-bold uppercase tracking-[0.22em] text-slate-500">Quick Links</p>
+                  <button
+                    onClick={openAdminProjects}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    <FolderKanban className="h-4 w-4 text-slate-400" />
+                    My Projects
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                  <button
+                    onClick={() => setQuickLinksOpen(false)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    <ShoppingBag className="h-4 w-4 text-slate-400" />
+                    Marketplace
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                  <button
+                    onClick={() => setQuickLinksOpen(false)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    <UploadCloud className="h-4 w-4 text-slate-400" />
+                    Import Website
+                    <ExternalLink className="ml-auto h-3.5 w-3.5 text-slate-500" />
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => router.push("/786-admin/dashboard")}
-              className="ml-2 rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100"
+              className="rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100"
               aria-label="Back dashboard"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -67,7 +119,7 @@ export default function SevenEightSixAdminChatPage() {
             <button className="rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100" aria-label="Forward">
               <ChevronRight className="h-4 w-4" />
             </button>
-            <div className="ml-3 flex h-9 flex-1 max-w-[520px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 text-sm text-slate-400">
+            <div className="ml-1 flex h-9 flex-1 max-w-[520px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 text-sm text-slate-400">
               <Globe2 className="h-4 w-4" />
               Enter URL to preview or ask AI...
             </div>
