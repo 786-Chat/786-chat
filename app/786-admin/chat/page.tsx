@@ -34,6 +34,7 @@ const workspaceNav = [
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
+  const [sidebarWidth, setSidebarWidth] = useState(88)
   const [chatWidth, setChatWidth] = useState(420)
 
   const isAdmin = useMemo(
@@ -47,11 +48,34 @@ export default function SevenEightSixAdminChatPage() {
     }
   }, [isAdmin, isLoading, router])
 
-  const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
+  const isSidebarExpanded = sidebarWidth > 120
+
+  const startSidebarResize = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
 
     const handleMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.min(Math.max(moveEvent.clientX - 88, 320), 720)
+      const nextWidth = Math.min(Math.max(moveEvent.clientX, 68), 210)
+      setSidebarWidth(nextWidth)
+    }
+
+    const stopMove = () => {
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", stopMove)
+    }
+
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", stopMove)
+  }
+
+  const startChatResize = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(Math.max(moveEvent.clientX - sidebarWidth, 320), 720)
       setChatWidth(nextWidth)
     }
 
@@ -82,15 +106,18 @@ export default function SevenEightSixAdminChatPage() {
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full min-w-0">
-        <aside className="hidden h-full w-[88px] shrink-0 border-r border-white/10 bg-[#06101c] lg:flex lg:flex-col lg:items-center">
+        <aside
+          className="hidden h-full shrink-0 bg-[#06101c] lg:flex lg:flex-col"
+          style={{ width: `${sidebarWidth}px` }}
+        >
           <button
             onClick={() => router.push("/786-admin/dashboard")}
-            className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.30)]"
+            className="mx-auto mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.30)]"
           >
             786
           </button>
 
-          <div className="mt-10 flex flex-1 flex-col items-center gap-3">
+          <div className="mt-10 flex flex-1 flex-col gap-3 px-3">
             {workspaceNav.map((item) => {
               const Icon = item.icon
               return (
@@ -98,25 +125,40 @@ export default function SevenEightSixAdminChatPage() {
                   key={item.label}
                   onClick={() => router.push(item.href)}
                   title={item.label}
-                  className={`group relative flex h-11 w-11 items-center justify-center rounded-2xl transition ${
+                  className={`group relative flex h-11 items-center rounded-2xl transition ${
+                    isSidebarExpanded ? "w-full justify-start gap-3 px-3" : "mx-auto w-11 justify-center"
+                  } ${
                     item.active
                       ? "bg-cyan-300/14 text-cyan-200 shadow-[0_0_26px_rgba(34,211,238,0.16)]"
                       : "text-slate-300 hover:bg-white/[0.06] hover:text-cyan-100"
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
-                  <span className="pointer-events-none absolute left-14 z-50 rounded-xl border border-white/10 bg-[#101827] px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-xl transition group-hover:opacity-100">
-                    {item.label}
-                  </span>
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {isSidebarExpanded ? (
+                    <span className="truncate text-sm font-semibold">{item.label}</span>
+                  ) : (
+                    <span className="pointer-events-none absolute left-14 z-50 rounded-xl border border-white/10 bg-[#101827] px-3 py-1.5 text-xs font-semibold text-white opacity-0 shadow-xl transition group-hover:opacity-100">
+                      {item.label}
+                    </span>
+                  )}
                 </button>
               )
             })}
           </div>
 
-          <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-950">
-            M
+          <div className="mb-5 flex justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-950">
+              M
+            </div>
           </div>
         </aside>
+
+        <div
+          onMouseDown={startSidebarResize}
+          className="hidden h-full w-[3px] shrink-0 cursor-col-resize bg-cyan-300/60 shadow-[0_0_16px_rgba(34,211,238,0.50)] transition hover:bg-cyan-200 lg:block"
+          aria-label="Resize sidebar"
+          role="separator"
+        />
 
         <section
           className="relative flex h-full min-h-0 shrink-0 flex-col bg-[#081322]"
@@ -164,7 +206,7 @@ export default function SevenEightSixAdminChatPage() {
         </section>
 
         <div
-          onMouseDown={startResize}
+          onMouseDown={startChatResize}
           className="h-full w-[3px] shrink-0 cursor-col-resize bg-cyan-300/60 shadow-[0_0_16px_rgba(34,211,238,0.50)] transition hover:bg-cyan-200"
           aria-label="Resize panels"
           role="separator"
