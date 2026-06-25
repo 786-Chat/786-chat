@@ -119,10 +119,6 @@ export default function SevenEightSixAdminChatPage() {
             <button className="rounded-full p-1.5 text-slate-500 hover:bg-white/5 hover:text-cyan-100" aria-label="Forward">
               <ChevronRight className="h-4 w-4" />
             </button>
-            <div className="ml-1 flex h-9 flex-1 max-w-[520px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 text-sm text-slate-400">
-              <Globe2 className="h-4 w-4" />
-              Enter URL to preview or ask AI...
-            </div>
           </header>
 
           <div className="flex flex-1 min-h-0 items-center justify-center px-6 pb-28 pt-10">
@@ -155,32 +151,33 @@ export default function SevenEightSixAdminChatPage() {
         </section>
 
         <section className="flex h-full min-h-0 flex-col bg-[#030408]">
-          <header className="flex h-[70px] shrink-0 items-center justify-end gap-3 border-b border-white/10 bg-[#0c0c12] px-5">
-            <button className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/12 px-4 py-2 text-sm font-semibold text-cyan-100">
-              <Monitor className="h-4 w-4" />
-              Preview
-            </button>
-            <button className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-400">
-              <Code2 className="h-4 w-4" />
-              Code
-            </button>
-            <button className="inline-flex items-center gap-2 rounded-full bg-cyan-300 px-5 py-2 text-sm font-bold text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.28)]">
-              <Rocket className="h-4 w-4" />
-              Publish
-            </button>
-            <button className="ml-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400">
-              <Grid3X3 className="h-4 w-4" />
-            </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-300 text-sm font-bold text-slate-950">
-              M
+          <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#0c0c12] px-5">
+            <div className="flex h-10 flex-1 max-w-[560px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-4 text-sm text-slate-400">
+              <Globe2 className="h-4 w-4" />
+              Enter URL to preview or ask AI...
+            </div>
+
+            <div className="ml-auto flex items-center gap-3">
+              <button className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/12 px-4 py-2 text-sm font-semibold text-cyan-100">
+                <Monitor className="h-4 w-4" />
+                Preview
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-400">
+                <Code2 className="h-4 w-4" />
+                Code
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-full bg-cyan-300 px-5 py-2 text-sm font-bold text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.28)]">
+                <Rocket className="h-4 w-4" />
+                Publish
+              </button>
+              <button className="ml-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400">
+                <Grid3X3 className="h-4 w-4" />
+              </button>
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-300 text-sm font-bold text-slate-950">
+                M
+              </div>
             </div>
           </header>
-
-          <div className="shrink-0 border-b border-cyan-400/25 bg-[#082725]/88 px-4 py-3">
-            <div className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-1.5 text-xs font-medium text-cyan-100">
-              ● Preview Ready - New Chat
-            </div>
-          </div>
 
           <div className="shrink-0 border-b border-cyan-400/15 bg-[#082120]/80 px-5 py-4">
             <div className="flex items-center gap-5 text-cyan-100/45">
