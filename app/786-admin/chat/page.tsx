@@ -22,13 +22,7 @@ import { useAuth } from "@/contexts/auth-context"
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 
 const workspaceNav = [
-  { label: "Home", icon: Home, href: "/786-admin/dashboard" },
-  { label: "Chats", icon: Monitor, href: "/786-admin/chat", active: true },
-  { label: "Projects", icon: Grid3X3, href: "/786-admin/projects" },
-  { label: "Websites", icon: Globe2, href: "/786-admin/projects" },
-  { label: "Code", icon: Code2, href: "/786-admin/chat" },
-  { label: "Deploy", icon: Rocket, href: "/786-admin/chat" },
-  { label: "Settings", icon: Settings, href: "/786-admin/vip" },
+  { label: "Projects", icon: Grid3X3, href: "/786-admin/projects", active: true },
 ]
 
 export default function SevenEightSixAdminChatPage() {
