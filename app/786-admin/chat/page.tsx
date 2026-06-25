@@ -3,33 +3,38 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
+  Bot,
+  Braces,
   ChevronLeft,
   ChevronRight,
   Code2,
+  FolderKanban,
   Globe2,
-  Grid3X3,
+  Layers3,
   Loader2,
   Monitor,
   Paperclip,
   Rocket,
   Send,
+  ShieldCheck,
   Smartphone,
   Sparkles,
   Tablet,
+  WandSparkles,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 
 const workspaceNav = [
-  { label: "Projects", icon: Grid3X3, href: "/786-admin/projects", active: true },
+  { label: "Projects", icon: FolderKanban, href: "/786-admin/projects", active: true },
 ]
 
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [sidebarWidth, setSidebarWidth] = useState(88)
-  const [savedSidebarWidth, setSavedSidebarWidth] = useState(88)
+  const [sidebarWidth, setSidebarWidth] = useState(118)
+  const [savedSidebarWidth, setSavedSidebarWidth] = useState(118)
   const [chatWidth, setChatWidth] = useState(420)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -62,7 +67,7 @@ export default function SevenEightSixAdminChatPage() {
     event.preventDefault()
 
     const handleMove = (moveEvent: MouseEvent) => {
-      const nextWidth = Math.min(Math.max(moveEvent.clientX, 68), 210)
+      const nextWidth = Math.min(Math.max(moveEvent.clientX, 82), 220)
       setSidebarCollapsed(false)
       setSidebarWidth(nextWidth)
       setSavedSidebarWidth(nextWidth)
@@ -118,17 +123,10 @@ export default function SevenEightSixAdminChatPage() {
       <div className="flex h-full min-w-0">
         {!sidebarCollapsed && (
           <aside
-            className="hidden h-full shrink-0 bg-[#06101c] lg:flex lg:flex-col"
+            className="hidden h-full shrink-0 bg-[#06101c] lg:flex lg:flex-col lg:justify-center"
             style={{ width: `${sidebarWidth}px` }}
           >
-            <button
-              onClick={() => router.push("/786-admin/dashboard")}
-              className="mx-auto mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-sm font-black text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.30)]"
-            >
-              786
-            </button>
-
-            <div className="mt-10 flex flex-1 flex-col gap-3 px-3">
+            <div className="flex flex-col gap-3 px-3">
               {workspaceNav.map((item) => {
                 const Icon = item.icon
                 return (
@@ -136,12 +134,12 @@ export default function SevenEightSixAdminChatPage() {
                     key={item.label}
                     onClick={() => router.push(item.href)}
                     title={item.label}
-                    className={`group relative flex h-11 items-center rounded-2xl transition ${
-                      isSidebarExpanded ? "w-full justify-start gap-3 px-3" : "mx-auto w-11 justify-center"
+                    className={`group relative flex h-12 items-center rounded-2xl border transition ${
+                      isSidebarExpanded ? "w-full justify-start gap-3 px-3" : "mx-auto w-12 justify-center"
                     } ${
                       item.active
-                        ? "bg-cyan-300/14 text-cyan-200 shadow-[0_0_26px_rgba(34,211,238,0.16)]"
-                        : "text-slate-300 hover:bg-white/[0.06] hover:text-cyan-100"
+                        ? "border-cyan-300/25 bg-cyan-300/14 text-cyan-100 shadow-[0_0_28px_rgba(34,211,238,0.16)]"
+                        : "border-white/5 text-slate-300 hover:border-cyan-300/20 hover:bg-white/[0.06] hover:text-cyan-100"
                     }`}
                   >
                     <Icon className="h-5 w-5 shrink-0" />
@@ -155,12 +153,6 @@ export default function SevenEightSixAdminChatPage() {
                   </button>
                 )
               })}
-            </div>
-
-            <div className="mb-5 flex justify-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-950">
-                M
-              </div>
             </div>
           </aside>
         )}
@@ -199,9 +191,33 @@ export default function SevenEightSixAdminChatPage() {
             </button>
           </header>
 
-          <div className="flex flex-1 min-h-0 items-center justify-center px-6 pb-28 pt-10">
+          <div className="flex flex-1 min-h-0 items-center justify-center px-6 pb-40 pt-10">
             <div className="w-full max-w-[560px] text-center">
-              <p className="text-xl text-cyan-100/70">How can I help you today?</p>
+              <div className="mx-auto mb-7 grid h-24 w-24 place-items-center rounded-[2rem] border border-cyan-300/25 bg-cyan-300/10 shadow-[0_0_60px_rgba(34,211,238,0.18)]">
+                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-cyan-300 text-slate-950 shadow-[0_0_36px_rgba(34,211,238,0.32)]">
+                  <WandSparkles className="h-8 w-8" />
+                </div>
+              </div>
+              <h1 className="text-3xl font-black tracking-tight text-white">
+                Build Anything with <span className="text-cyan-200">786.Chat</span>
+              </h1>
+              <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-cyan-100/70">
+                Create admin pages, dashboards, websites, apps, APIs and production-ready code from one premium AI workspace.
+              </p>
+              <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-3 text-xs text-slate-400">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                  <Braces className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
+                  Code
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                  <Layers3 className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
+                  Design
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                  <Rocket className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
+                  Deploy
+                </div>
+              </div>
             </div>
           </div>
 
@@ -210,14 +226,19 @@ export default function SevenEightSixAdminChatPage() {
               <button className="text-slate-500 hover:text-cyan-100" aria-label="Attachment">
                 <Paperclip className="h-5 w-5" />
               </button>
-              <div className="flex-1 text-sm">Ask me anything...</div>
+              <div className="flex-1 text-sm">Ask 786.Chat to build, edit, preview, or deploy...</div>
               <button className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white shadow-[0_0_25px_rgba(124,58,237,0.34)]" aria-label="Send">
                 <Send className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-3 flex items-center gap-2 text-xs text-purple-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              Unlimited
+            <div className="mt-3 rounded-2xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-xs text-purple-100">
+              <div className="flex items-center gap-2 font-bold text-purple-100">
+                <Sparkles className="h-4 w-4" />
+                Unlimited Professional Workspace
+              </div>
+              <p className="mt-1 leading-5 text-purple-100/70">
+                Unlimited AI chat, code generation, live preview, project editing, admin tools and deployment support for the owner account.
+              </p>
             </div>
           </div>
         </section>
@@ -261,15 +282,25 @@ export default function SevenEightSixAdminChatPage() {
           </div>
 
           <div className="flex flex-1 min-h-0 items-center justify-center bg-[#06060a] p-8">
-            <div className="text-center text-slate-500">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035]">
-                <Monitor className="h-8 w-8" />
+            <div className="max-w-md text-center text-slate-500">
+              <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-3xl border border-cyan-300/20 bg-cyan-300/10 shadow-[0_0_46px_rgba(34,211,238,0.12)]">
+                <Bot className="h-9 w-9 text-cyan-200" />
               </div>
-              <h2 className="text-lg font-bold text-slate-400">New chat ready</h2>
-              <p className="mt-2 max-w-xs text-sm leading-6">
-                Ask 786.Chat to create a new admin page or app. The preview will appear here.
+              <h2 className="text-xl font-black text-slate-300">Your Workspace is Ready</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-500">
+                Start a conversation to build a website, web app, API, dashboard, or full software project. Live preview and generated code will appear here instantly.
               </p>
-              <button className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-5 py-2 text-sm font-bold text-cyan-100">
+              <div className="mt-6 grid grid-cols-2 gap-3 text-left text-xs text-slate-400">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                  <ShieldCheck className="mb-2 h-4 w-4 text-cyan-200" />
+                  Owner-only admin workspace
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+                  <Sparkles className="mb-2 h-4 w-4 text-purple-200" />
+                  Unlimited AI build access
+                </div>
+              </div>
+              <button className="mt-6 inline-flex items-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-300/10 px-5 py-2 text-sm font-bold text-cyan-100 transition hover:bg-cyan-300/15">
                 <Globe2 className="h-4 w-4" />
                 Preview 786.Chat
               </button>
