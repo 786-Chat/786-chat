@@ -4,13 +4,11 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Bot,
-  Braces,
   ChevronLeft,
   ChevronRight,
   Code2,
   FolderKanban,
   Globe2,
-  Layers3,
   Loader2,
   Monitor,
   Paperclip,
@@ -20,7 +18,6 @@ import {
   Smartphone,
   Sparkles,
   Tablet,
-  WandSparkles,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -123,7 +120,7 @@ export default function SevenEightSixAdminChatPage() {
       <div className="flex h-full min-w-0">
         {!sidebarCollapsed && (
           <aside
-            className="hidden h-full shrink-0 bg-[#06101c] lg:flex lg:flex-col lg:justify-center"
+            className="hidden h-full shrink-0 bg-[#06101c] pt-24 lg:flex lg:flex-col"
             style={{ width: `${sidebarWidth}px` }}
           >
             <div className="flex flex-col gap-3 px-3">
@@ -191,33 +188,9 @@ export default function SevenEightSixAdminChatPage() {
             </button>
           </header>
 
-          <div className="flex flex-1 min-h-0 items-center justify-center px-6 pb-40 pt-10">
+          <div className="flex flex-1 min-h-0 items-center justify-center px-6 pb-28 pt-10">
             <div className="w-full max-w-[560px] text-center">
-              <div className="mx-auto mb-7 grid h-24 w-24 place-items-center rounded-[2rem] border border-cyan-300/25 bg-cyan-300/10 shadow-[0_0_60px_rgba(34,211,238,0.18)]">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-cyan-300 text-slate-950 shadow-[0_0_36px_rgba(34,211,238,0.32)]">
-                  <WandSparkles className="h-8 w-8" />
-                </div>
-              </div>
-              <h1 className="text-3xl font-black tracking-tight text-white">
-                Build Anything with <span className="text-cyan-200">786.Chat</span>
-              </h1>
-              <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-cyan-100/70">
-                Create admin pages, dashboards, websites, apps, APIs and production-ready code from one premium AI workspace.
-              </p>
-              <div className="mx-auto mt-6 grid max-w-md grid-cols-3 gap-3 text-xs text-slate-400">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-                  <Braces className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
-                  Code
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-                  <Layers3 className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
-                  Design
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-                  <Rocket className="mx-auto mb-2 h-4 w-4 text-cyan-200" />
-                  Deploy
-                </div>
-              </div>
+              <p className="text-xl text-cyan-100/70">How can I help you today?</p>
             </div>
           </div>
 
@@ -231,14 +204,9 @@ export default function SevenEightSixAdminChatPage() {
                 <Send className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-3 rounded-2xl border border-purple-400/20 bg-purple-500/10 px-4 py-3 text-xs text-purple-100">
-              <div className="flex items-center gap-2 font-bold text-purple-100">
-                <Sparkles className="h-4 w-4" />
-                Unlimited Professional Workspace
-              </div>
-              <p className="mt-1 leading-5 text-purple-100/70">
-                Unlimited AI chat, code generation, live preview, project editing, admin tools and deployment support for the owner account.
-              </p>
+            <div className="mt-3 flex items-center gap-2 truncate rounded-2xl border border-purple-400/20 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-100">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Unlimited Professional Workspace • Unlimited AI chat, code generation, live preview, project editing, admin tools and deployment support.</span>
             </div>
           </div>
         </section>
