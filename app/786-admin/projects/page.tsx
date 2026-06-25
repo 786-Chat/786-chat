@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Box, FolderKanban, Search, ShieldCheck } from "lucide-react"
+import { Box, FolderKanban, Search, ShieldCheck, Store } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
@@ -41,10 +41,19 @@ export default function SevenEightSixProjectsPage() {
             786
           </button>
 
-          <button className="flex w-full items-center gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-4 py-3 text-left text-sm font-bold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
-            <FolderKanban className="h-5 w-5" />
-            Projects
-          </button>
+          <nav className="space-y-2">
+            <button className="flex w-full items-center gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-4 py-3 text-left text-sm font-bold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
+              <FolderKanban className="h-5 w-5" />
+              Projects
+            </button>
+            <button
+              onClick={() => router.push("/786-admin/marketplace")}
+              className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-left text-sm font-bold text-slate-300 transition hover:border-cyan-300/25 hover:bg-cyan-300/10 hover:text-cyan-100"
+            >
+              <Store className="h-5 w-5" />
+              Marketplace
+            </button>
+          </nav>
         </aside>
 
         <section className="px-6 py-10 lg:px-16">
