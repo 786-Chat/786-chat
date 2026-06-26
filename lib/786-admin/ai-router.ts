@@ -26,7 +26,7 @@ function hasAny(text: string, words: string[]) {
 function chooseModel(prompt: string, mode: SevenEightSixModelMode) {
   if (mode === "deepseek-flash") return { provider: "deepseek" as const, model: "deepseek-v4-flash", reason: "Manual Flash mode." }
   if (mode === "deepseek-pro") return { provider: "deepseek" as const, model: "deepseek-v4-pro", reason: "Manual Pro mode." }
-  if (mode === "gemini-flash") return { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Manual Gemini Flash mode." }
+  if (mode === "gemini-flash") return { provider: "gemini" as const, model: "gemini-3.5-flash", reason: "Manual Gemini Flash mode." }
   if (mode === "gemini-pro") return { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Manual Gemini Pro mode." }
 
   const complexPlatform = hasAny(prompt, [
@@ -69,7 +69,7 @@ function chooseModel(prompt: string, mode: SevenEightSixModelMode) {
   }
 
   if (explicitVision) {
-    return { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Auto selected Gemini Flash for a direct visual, screenshot, OCR, or PDF task." }
+    return { provider: "gemini" as const, model: "gemini-3.5-flash", reason: "Auto selected Gemini 3.5 Flash for a direct visual, screenshot, OCR, or PDF task." }
   }
 
   return { provider: "deepseek" as const, model: "deepseek-v4-flash", reason: "Auto selected DeepSeek Flash for normal chat and coding." }
