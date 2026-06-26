@@ -1,183 +1,425 @@
-export type SevenEightSixLocalProject = {
+export type SevenEightSixModelMode =
+  | "auto"
+  | "deepseek-flash"
+  | "deepseek-pro"
+  | "gemini-flash"
+  | "gemini-pro"
+
+export type SevenEightSixProjectFileMap = Record<string, string>
+
+export type SevenEightSixProject = {
+  id: string
   title: string
   description: string
-  html: string
-  files: Record<string, string>
+  prompt: string
+  createdAt: string
+  updatedAt: string
+  files: SevenEightSixProjectFileMap
 }
 
-function escapeHtml(value: string) {
+function slugify(value: string) {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "")
+    .slice(0, 48)
 }
 
-function detectProject(prompt: string) {
+function titleFromPrompt(prompt: string) {
   const text = prompt.toLowerCase()
-  if (text.includes("restaurant") || text.includes("menu") || text.includes("booking")) {
-    return {
-      type: "restaurant",
-      title: "Premium Restaurant Website",
-      description: "Homepage, menu, booking, contact, modern colours and animation sections.",
-      accent: "#f59e0b",
-      accent2: "#ef4444",
-      dark: "#100b08",
-      sections: ["Signature Menu", "Online Booking", "Chef Story", "Contact & Location"],
-    }
-  }
 
-  if (text.includes("pizza")) {
-    return {
-      type: "pizza",
-      title: "Premium Pizza Shop",
-      description: "Animated pizza shop with offers, menu cards, ordering and contact sections.",
-      accent: "#ef4444",
-      accent2: "#22c55e",
-      dark: "#140704",
-      sections: ["Hot Deals", "Pizza Menu", "Order Online", "Delivery Zone"],
-    }
-  }
+  if (text.includes("restaurant")) return "Premium Restaurant Website"
+  if (text.includes("pizza")) return "Premium Pizza Shop"
+  if (text.includes("quiz")) return "Interactive Quiz Generator"
+  if (text.includes("login")) return "Premium Login Page"
+  if (text.includes("dashboard") || text.includes("saas")) return "Modern SaaS Dashboard"
+  if (text.includes("calculator")) return "Working Calculator App"
 
-  if (text.includes("dashboard") || text.includes("saas")) {
-    return {
-      type: "dashboard",
-      title: "Modern SaaS Dashboard",
-      description: "Sidebar, analytics cards, reports, charts and activity panels.",
-      accent: "#22d3ee",
-      accent2: "#8b5cf6",
-      dark: "#050816",
-      sections: ["Analytics", "Reports", "Customers", "Revenue"],
-    }
-  }
-
-  if (text.includes("quiz")) {
-    return {
-      type: "quiz",
-      title: "Interactive Quiz Generator",
-      description: "Topic input, generated questions, score tracking and interactive layout.",
-      accent: "#a855f7",
-      accent2: "#06b6d4",
-      dark: "#0c0820",
-      sections: ["Topic Input", "5-8 Questions", "Score Board", "Restart Flow"],
-    }
-  }
-
-  if (text.includes("login")) {
-    return {
-      type: "login",
-      title: "Premium Login Page",
-      description: "Modern sign-in form with social login, validation and responsive layout.",
-      accent: "#38bdf8",
-      accent2: "#6366f1",
-      dark: "#07111f",
-      sections: ["Email Login", "Social Login", "Validation", "Secure UI"],
-    }
-  }
-
-  return {
-    type: "app",
-    title: "786.Chat Generated App",
-    description: "A real temporary project generated from the current prompt.",
-    accent: "#22d3ee",
-    accent2: "#a855f7",
-    dark: "#050713",
-    sections: ["Homepage", "Components", "Backend Ready", "Deploy Ready"],
-  }
+  return "786.Chat Generated Project"
 }
 
-export function createSevenEightSixLocalProject(prompt: string): SevenEightSixLocalProject {
-  const project = detectProject(prompt)
-  const safePrompt = escapeHtml(prompt)
-  const sections = project.sections
+function projectKind(prompt: string) {
+  const text = prompt.toLowerCase()
 
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${project.title}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: ${project.dark}; color: white; }
-    .page { min-height: 100vh; overflow: hidden; background:
-      radial-gradient(circle at 10% 10%, ${project.accent}44, transparent 32%),
-      radial-gradient(circle at 90% 20%, ${project.accent2}33, transparent 35%),
-      linear-gradient(135deg, ${project.dark}, #020617 70%);
-    }
-    header { display: flex; justify-content: space-between; align-items: center; padding: 28px clamp(24px, 6vw, 80px); border-bottom: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(16px); }
-    .brand { font-weight: 950; letter-spacing: .28em; color: ${project.accent}; }
-    nav { display: flex; gap: 20px; color: rgba(255,255,255,.7); font-size: 14px; }
-    .hero { padding: 90px clamp(24px, 7vw, 100px) 60px; display: grid; grid-template-columns: 1.1fr .9fr; gap: 50px; align-items: center; }
-    .eyebrow { color: ${project.accent}; text-transform: uppercase; letter-spacing: .35em; font-weight: 900; font-size: 13px; }
-    h1 { font-size: clamp(42px, 7vw, 92px); line-height: .92; margin: 18px 0 24px; letter-spacing: -0.08em; }
-    .lead { color: rgba(255,255,255,.76); font-size: 20px; line-height: 1.8; max-width: 720px; }
-    .actions { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 14px; }
-    .primary, .secondary { border-radius: 999px; padding: 15px 24px; font-weight: 900; border: 1px solid rgba(255,255,255,.16); }
-    .primary { background: ${project.accent}; color: #020617; box-shadow: 0 0 40px ${project.accent}55; }
-    .secondary { background: rgba(255,255,255,.06); color: white; }
-    .visual { min-height: 440px; border-radius: 40px; border: 1px solid rgba(255,255,255,.12); background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03)); padding: 30px; box-shadow: 0 30px 90px rgba(0,0,0,.35); animation: float 5s ease-in-out infinite; }
-    .glass { height: 100%; border-radius: 30px; background: linear-gradient(150deg, ${project.accent}22, ${project.accent2}22); padding: 28px; display: grid; align-content: end; }
-    .metric { border-radius: 24px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.12); padding: 18px; margin-top: 14px; }
-    .grid { padding: 30px clamp(24px, 7vw, 100px) 90px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-    .card { border-radius: 28px; border: 1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.055); padding: 26px; min-height: 180px; transition: transform .25s ease, border .25s ease; }
-    .card:hover { transform: translateY(-8px); border-color: ${project.accent}; }
-    .icon { width: 42px; height: 42px; border-radius: 16px; display: grid; place-items: center; background: ${project.accent}; color: #020617; font-weight: 950; margin-bottom: 24px; }
-    .card h3 { margin: 0; font-size: 20px; }
-    .card p { color: rgba(255,255,255,.65); line-height: 1.7; }
-    .prompt { margin: 0 clamp(24px, 7vw, 100px) 60px; padding: 20px; border-radius: 24px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.08); color: rgba(255,255,255,.6); }
-    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
-    @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr 1fr; } nav { display:none; } }
-    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
-  </style>
-</head>
-<body>
-  <main class="page">
-    <header><div class="brand">786.CHAT</div><nav><span>Home</span><span>Features</span><span>Booking</span><span>Contact</span></nav></header>
-    <section class="hero">
-      <div>
-        <div class="eyebrow">AI Generated Project</div>
-        <h1>${project.title}</h1>
-        <p class="lead">${project.description}</p>
-        <div class="actions"><button class="primary">Launch Project</button><button class="secondary">View Code</button></div>
-      </div>
-      <div class="visual"><div class="glass"><h2>Live Preview</h2><div class="metric">Modern responsive design</div><div class="metric">Animations and premium sections</div><div class="metric">Ready for real project engine</div></div></div>
-    </section>
-    <section class="grid">
-      ${sections.map((section, index) => `<article class="card"><div class="icon">${index + 1}</div><h3>${section}</h3><p>Production-style section generated for this request with modern styling and clear structure.</p></article>`).join("\n      ")}
-    </section>
-    <div class="prompt"><strong>Prompt:</strong> ${safePrompt}</div>
-  </main>
-</body>
-</html>`
+  if (text.includes("restaurant")) return "restaurant"
+  if (text.includes("pizza")) return "pizza"
+  if (text.includes("quiz")) return "quiz"
+  if (text.includes("login")) return "login"
+  if (text.includes("dashboard") || text.includes("saas")) return "dashboard"
+  if (text.includes("calculator")) return "calculator"
 
-  const pageTsx = `export default function Page() {
+  return "webapp"
+}
+
+function palette(kind: string) {
+  if (kind === "restaurant") return { primary: "#f59e0b", secondary: "#ef4444", dark: "#100b08" }
+  if (kind === "pizza") return { primary: "#ef4444", secondary: "#22c55e", dark: "#140704" }
+  if (kind === "quiz") return { primary: "#a855f7", secondary: "#06b6d4", dark: "#0c0820" }
+  if (kind === "login") return { primary: "#38bdf8", secondary: "#6366f1", dark: "#07111f" }
+  if (kind === "dashboard") return { primary: "#22d3ee", secondary: "#8b5cf6", dark: "#050816" }
+  if (kind === "calculator") return { primary: "#22c55e", secondary: "#14b8a6", dark: "#04130d" }
+
+  return { primary: "#22d3ee", secondary: "#a855f7", dark: "#050713" }
+}
+
+function sections(kind: string) {
+  if (kind === "restaurant") return ["Hero", "Menu", "Booking", "Contact"]
+  if (kind === "pizza") return ["Deals", "Menu", "Order", "Delivery"]
+  if (kind === "quiz") return ["Topic Input", "Questions", "Score", "Restart"]
+  if (kind === "login") return ["Login Form", "Validation", "Social Login", "Security"]
+  if (kind === "dashboard") return ["Sidebar", "Stats", "Reports", "Activity"]
+  if (kind === "calculator") return ["Display", "Keypad", "Operations", "History"]
+
+  return ["Homepage", "Features", "Components", "Deploy"]
+}
+
+function createPageTsx(title: string, description: string, kind: string, primary: string, secondary: string) {
+  const sectionList = sections(kind)
+
+  if (kind === "calculator") {
+    return `"use client"
+
+import { useState } from "react"
+
+export default function Page() {
+  const [display, setDisplay] = useState("0")
+  const [stored, setStored] = useState<number | null>(null)
+  const [operator, setOperator] = useState<string | null>(null)
+  const [history, setHistory] = useState<string[]>([])
+
+  function press(value: string) {
+    setDisplay((current) => (current === "0" ? value : current + value))
+  }
+
+  function clear() {
+    setDisplay("0")
+    setStored(null)
+    setOperator(null)
+    setHistory([])
+  }
+
+  function choose(nextOperator: string) {
+    setStored(Number(display))
+    setOperator(nextOperator)
+    setDisplay("0")
+  }
+
+  function calculate() {
+    if (stored === null || !operator) return
+
+    const current = Number(display)
+    let result = stored
+
+    if (operator === "+") result = stored + current
+    if (operator === "-") result = stored - current
+    if (operator === "×") result = stored * current
+    if (operator === "÷") result = current === 0 ? 0 : stored / current
+
+    setHistory((old) => [\`\${stored} \${operator} \${current} = \${result}\`, ...old].slice(0, 5))
+    setDisplay(String(result))
+    setStored(null)
+    setOperator(null)
+  }
+
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <section className="mx-auto max-w-6xl px-6 py-24">
-        <p className="text-sm font-black uppercase tracking-[0.35em] text-cyan-300">786.Chat</p>
-        <h1 className="mt-6 text-6xl font-black tracking-tight">${project.title}</h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${project.description}</p>
-        <div className="mt-10 grid gap-4 md:grid-cols-4">
-          ${sections.map((section) => `<div className="rounded-3xl border border-white/10 bg-white/5 p-6">${section}</div>`).join("\n          ")}
+    <main className="min-h-screen bg-[#04130d] px-6 py-10 text-white">
+      <section className="mx-auto max-w-5xl">
+        <p className="text-sm font-black uppercase tracking-[0.35em] text-emerald-300">786.Chat App</p>
+        <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">${title}</h1>
+        <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p>
+
+        <div className="mt-10 grid gap-8 lg:grid-cols-[420px_1fr]">
+          <div className="rounded-[2rem] border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur">
+            <div className="mb-4 rounded-2xl bg-black/40 p-5 text-right text-4xl font-black">{display}</div>
+            <div className="grid grid-cols-4 gap-3">
+              {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "-", "0", ".", "=", "+"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => key === "=" ? calculate() : ["+", "-", "×", "÷"].includes(key) ? choose(key) : press(key)}
+                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-5 text-xl font-black transition hover:bg-emerald-300 hover:text-slate-950"
+                >
+                  {key}
+                </button>
+              ))}
+              <button onClick={clear} className="col-span-4 rounded-2xl bg-emerald-300 px-4 py-4 font-black text-slate-950">Clear</button>
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+            <h2 className="text-2xl font-black">History</h2>
+            <div className="mt-5 space-y-3">
+              {history.length === 0 ? <p className="text-slate-400">No calculations yet.</p> : history.map((item) => (
+                <div key={item} className="rounded-2xl bg-black/30 p-4 font-bold">{item}</div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
     </main>
   )
 }
 `
+  }
+
+  if (kind === "quiz") {
+    return `"use client"
+
+import { useMemo, useState } from "react"
+
+const baseQuestions = [
+  { q: "What is the main goal of this topic?", a: ["Learn core ideas", "Ignore basics", "Avoid practice"], correct: 0 },
+  { q: "What helps users improve fastest?", a: ["Interactive practice", "Random guessing", "No feedback"], correct: 0 },
+  { q: "How should a quiz app show progress?", a: ["Score and question count", "Blank screen", "Hidden result"], correct: 0 },
+  { q: "What makes learning easier?", a: ["Clear layout", "Confusing buttons", "No explanation"], correct: 0 },
+  { q: "What should happen at the end?", a: ["Show score", "Delete answers", "Freeze app"], correct: 0 },
+]
+
+export default function Page() {
+  const [topic, setTopic] = useState("AI Learning")
+  const [started, setStarted] = useState(false)
+  const [answers, setAnswers] = useState<Record<number, number>>({})
+
+  const score = useMemo(() => {
+    return baseQuestions.reduce((total, question, index) => total + (answers[index] === question.correct ? 1 : 0), 0)
+  }, [answers])
+
+  return (
+    <main className="min-h-screen bg-[#0c0820] px-6 py-10 text-white">
+      <section className="mx-auto max-w-6xl">
+        <p className="text-sm font-black uppercase tracking-[0.35em] text-fuchsia-300">786.Chat App</p>
+        <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">${title}</h1>
+        <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p>
+
+        <div className="mt-10 rounded-[2rem] border border-white/10 bg-white/10 p-6 backdrop-blur">
+          <label className="text-sm font-black uppercase tracking-[0.25em] text-cyan-200">Quiz Topic</label>
+          <div className="mt-4 flex flex-col gap-3 md:flex-row">
+            <input value={topic} onChange={(event) => setTopic(event.target.value)} className="flex-1 rounded-2xl border border-white/10 bg-black/30 px-5 py-4 outline-none" />
+            <button onClick={() => setStarted(true)} className="rounded-2xl bg-fuchsia-400 px-6 py-4 font-black text-slate-950">Generate Quiz</button>
+          </div>
+        </div>
+
+        {started && (
+          <div className="mt-8 grid gap-5">
+            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5 text-xl font-black">
+              Topic: {topic} • Score: {score}/{baseQuestions.length}
+            </div>
+            {baseQuestions.map((question, index) => (
+              <article key={question.q} className="rounded-[2rem] border border-white/10 bg-white/5 p-6">
+                <h2 className="text-2xl font-black">{index + 1}. {question.q}</h2>
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  {question.a.map((answer, answerIndex) => (
+                    <button
+                      key={answer}
+                      onClick={() => setAnswers((old) => ({ ...old, [index]: answerIndex }))}
+                      className={\`rounded-2xl border px-5 py-4 text-left font-bold transition \${
+                        answers[index] === answerIndex ? "border-fuchsia-300 bg-fuchsia-300 text-slate-950" : "border-white/10 bg-white/10 hover:bg-white/20"
+                      }\`}
+                    >
+                      {answer}
+                    </button>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  )
+}
+`
+  }
+
+  return `import { FeatureCard } from "@/components/feature-card"
+import { projectFeatures } from "@/lib/project-data"
+
+export default function Page() {
+  return (
+    <main className="min-h-screen overflow-hidden bg-[${primary}] text-white">
+      <section className="relative min-h-screen bg-[radial-gradient(circle_at_top_left,${primary}55,transparent_32%),radial-gradient(circle_at_top_right,${secondary}44,transparent_34%),linear-gradient(135deg,#020617,#0f172a_70%)] px-6 py-10">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-white/10 px-6 py-4 backdrop-blur-xl">
+          <div className="text-xl font-black tracking-[0.28em] text-cyan-200">786.CHAT</div>
+          <div className="hidden gap-6 text-sm font-bold text-slate-300 md:flex">
+            <span>Home</span>
+            <span>Features</span>
+            <span>Preview</span>
+            <span>Contact</span>
+          </div>
+        </nav>
+
+        <div className="mx-auto grid max-w-7xl items-center gap-12 py-20 lg:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.35em] text-cyan-200">AI Generated Project</p>
+            <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl lg:text-8xl">${title}</h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p>
+            <div className="mt-10 flex flex-wrap gap-4">
+              <button className="rounded-full bg-cyan-300 px-7 py-4 font-black text-slate-950 shadow-[0_0_40px_rgba(34,211,238,0.35)]">Launch Project</button>
+              <button className="rounded-full border border-white/15 bg-white/10 px-7 py-4 font-black text-white">View Code</button>
+            </div>
+          </div>
+
+          <div className="rounded-[2.5rem] border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
+            <div className="rounded-[2rem] bg-black/30 p-6">
+              <div className="mb-6 h-3 w-24 rounded-full bg-cyan-300" />
+              <h2 className="text-3xl font-black">Live Preview</h2>
+              <p className="mt-4 leading-7 text-slate-300">This preview is rendered from real project files, starting with app/page.tsx.</p>
+              <div className="mt-8 grid gap-4">
+                {projectFeatures.slice(0, 3).map((feature) => (
+                  <div key={feature.title} className="rounded-2xl border border-white/10 bg-white/10 p-4">
+                    <p className="font-black">{feature.title}</p>
+                    <p className="mt-1 text-sm text-slate-400">{feature.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section className="mx-auto grid max-w-7xl gap-5 pb-16 md:grid-cols-2 lg:grid-cols-4">
+          {projectFeatures.map((feature) => (
+            <FeatureCard key={feature.title} title={feature.title} description={feature.description} />
+          ))}
+        </section>
+      </section>
+    </main>
+  )
+}
+`
+}
+
+export function createSevenEightSixProjectFromPrompt(prompt: string): SevenEightSixProject {
+  const kind = projectKind(prompt)
+  const title = titleFromPrompt(prompt)
+  const colors = palette(kind)
+  const createdAt = new Date().toISOString()
+  const id = `${slugify(title)}-${Date.now()}`
+
+  const description =
+    kind === "webapp"
+      ? "A production-style generated web app with real Next.js project files."
+      : `A production-style ${title.toLowerCase()} generated from your build prompt.`
+
+  const files: SevenEightSixProjectFileMap = {
+    "package.json": JSON.stringify(
+      {
+        scripts: {
+          dev: "next dev",
+          build: "next build",
+          start: "next start",
+          lint: "next lint",
+        },
+        dependencies: {
+          "@types/node": "latest",
+          "@types/react": "latest",
+          "@types/react-dom": "latest",
+          next: "latest",
+          react: "latest",
+          "react-dom": "latest",
+          typescript: "latest",
+        },
+        devDependencies: {
+          autoprefixer: "latest",
+          postcss: "latest",
+          tailwindcss: "latest",
+        },
+      },
+      null,
+      2
+    ),
+    "app/layout.tsx": `import type { Metadata } from "next"
+import type { ReactNode } from "react"
+import "./globals.css"
+
+export const metadata: Metadata = {
+  title: "${title}",
+  description: "${description}",
+}
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  )
+}
+`,
+    "app/page.tsx": createPageTsx(title, description, kind, colors.primary, colors.secondary),
+    "app/globals.css": `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: ${colors.primary};
+  --secondary: ${colors.secondary};
+  --dark: ${colors.dark};
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--dark);
+  color: white;
+}
+`,
+    "components/feature-card.tsx": `type FeatureCardProps = {
+  title: string
+  description: string
+}
+
+export function FeatureCard({ title, description }: FeatureCardProps) {
+  return (
+    <article className="rounded-[2rem] border border-white/10 bg-white/10 p-6 backdrop-blur transition hover:-translate-y-2 hover:border-cyan-300/40">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-lg font-black text-slate-950">
+        {title.slice(0, 1)}
+      </div>
+      <h3 className="text-xl font-black text-white">{title}</h3>
+      <p className="mt-3 leading-7 text-slate-300">{description}</p>
+    </article>
+  )
+}
+`,
+    "lib/project-data.ts": `export const projectFeatures = ${JSON.stringify(
+      sections(kind).map((section) => ({
+        title: section,
+        description: `Production-ready ${section.toLowerCase()} section generated by 786.Chat.`,
+      })),
+      null,
+      2
+    )}
+`,
+    "README.md": `# ${title}
+
+${description}
+
+## Prompt
+
+${prompt}
+
+## Real files
+
+- app/page.tsx
+- app/layout.tsx
+- app/globals.css
+- components/feature-card.tsx
+- lib/project-data.ts
+- package.json
+`,
+  }
 
   return {
-    title: project.title,
-    description: project.description,
-    html,
-    files: {
-      "package.json": JSON.stringify({ scripts: { dev: "next dev", build: "next build", start: "next start" }, dependencies: { next: "latest", react: "latest", "react-dom": "latest" }, devDependencies: { typescript: "latest", tailwindcss: "latest" } }, null, 2),
-      "app/layout.tsx": `import type { ReactNode } from "react"\nimport "./globals.css"\n\nexport default function RootLayout({ children }: { children: ReactNode }) {\n  return <html lang="en"><body>{children}</body></html>\n}\n`,
-      "app/page.tsx": pageTsx,
-      "app/globals.css": `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\nbody { margin: 0; background: ${project.dark}; }\n`,
-      "README.md": `# ${project.title}\n\nGenerated by 786.Chat from this prompt:\n\n${prompt}\n`,
-    },
+    id,
+    title,
+    description,
+    prompt,
+    createdAt,
+    updatedAt: createdAt,
+    files,
   }
 }
