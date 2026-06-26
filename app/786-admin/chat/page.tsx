@@ -12,7 +12,6 @@ import {
   Plus,
   Rocket,
   Send,
-  Sparkles,
   Wand2,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
@@ -28,8 +27,87 @@ type Panel = "preview" | "code"
 type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
 
 function filesToCode(project: SevenEightSixLocalProject | null) {
-  if (!project) return "No project yet. Ask 786.Chat to create a project first."
-  return Object.entries(project.files).map(([path, content]) => `// FILE: ${path}\n${content}`).join("\n\n/* ---------------------------------------- */\n\n")
+  if (!project) return "No project yet. Click New Chat and ask 786.Chat to create a project."
+  return Object.entries(project.files)
+    .map(([path, content]) => `// FILE: ${path}\n${content}`)
+    .join("\n\n/* ---------------------------------------- */\n\n")
+}
+
+function stripImportsAndTypes(code: string) {
+  return code
+    .replace(/^import[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
+    .replace(/^import\s+["'][^"']+["'];?\s*$/gm, "")
+    .replace(/^export\s+default\s+/gm, "")
+    .replace(/^type\s+[A-Za-z0-9_]+\s*=\s*\{[\s\S]*?\}\s*$/gm, "")
+    .replace(/^interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*$/gm, "")
+}
+
+function extractReturnJsx(code: string) {
+  const cleanCode = stripImportsAndTypes(code)
+  const returnIndex = cleanCode.indexOf("return")
+  if (returnIndex === -1) return ""
+
+  const firstParen = cleanCode.indexOf("(", returnIndex)
+  if (firstParen === -1) return ""
+
+  let depth = 0
+  for (let i = firstParen; i < cleanCode.length; i++) {
+    const char = cleanCode[i]
+    if (char === "(") depth++
+    if (char === ")") depth--
+    if (depth === 0) return cleanCode.slice(firstParen + 1, i).trim()
+  }
+
+  return ""
+}
+
+function convertJsxToSafeHtml(jsx: string) {
+  return jsx
+    .replace(/<>/g, "")
+    .replace(/<\/>/g, "")
+    .replace(/className=/g, "class=")
+    .replace(/htmlFor=/g, "for=")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\s+key=\{[^}]*\}/g, "")
+    .replace(/\s+on[A-Z][A-Za-z0-9_]*=\{[\s\S]*?\}/g, "")
+    .replace(/\{`([\s\S]*?)`\}/g, "$1")
+    .replace(/\{\"([^\"]*)\"\}/g, "$1")
+    .replace(/\{'([^']*)'\}/g, "$1")
+    .replace(/\{([^{}]*)\}/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?\s*\/>/g, "")
+    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
+}
+
+function buildProjectPreviewHtml(project: SevenEightSixLocalProject | null) {
+  if (!project) return ""
+
+  const pageCode = project.files["app/page.tsx"] || project.files["app/page.jsx"] || ""
+  if (!pageCode.trim()) return ""
+
+  const jsx = extractReturnJsx(pageCode)
+  const body = convertJsxToSafeHtml(jsx)
+  const css = project.files["app/globals.css"] || project.files["styles/globals.css"] || ""
+
+  if (!body.trim()) return ""
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${project.title}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{margin:0;min-height:100%;background:#020617;color:white;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+    *{box-sizing:border-box;}
+    button,input,textarea,select{font:inherit;}
+    ${css}
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`
 }
 
 export default function SevenEightSixAdminChatPage() {
@@ -47,6 +125,7 @@ export default function SevenEightSixAdminChatPage() {
   const endRef = useRef<HTMLDivElement | null>(null)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
+  const previewHtml = useMemo(() => buildProjectPreviewHtml(project), [project])
 
   useEffect(() => {
     if (!isLoading && !isAdmin) router.replace("/786-admin/login")
@@ -161,7 +240,7 @@ export default function SevenEightSixAdminChatPage() {
           id: `a-${Date.now()}`,
           role: "assistant",
           content: json.success
-            ? `Project created and saved in this browser. Preview, Code and Projects are updated.\n\n${json.response || ""}`
+            ? `Project files updated. Preview and Code are ready for this project.\n\n${json.response || ""}`
             : json.error || "AI request failed.",
           model: json.model,
           reason: json.reason,
@@ -237,7 +316,7 @@ export default function SevenEightSixAdminChatPage() {
               <div className="flex h-full items-center justify-center text-center text-slate-500">
                 <div className="mx-auto max-w-[300px]">
                   <p className="text-xl font-semibold text-cyan-100/90">Welcome back to 786.Chat</p>
-                  <p className="mt-3 text-sm leading-6">No conversation yet. Ask for a project and it will appear on the right.</p>
+                  <p className="mt-3 text-sm leading-6">New chat is empty. Your old projects stay on the Projects page.</p>
                 </div>
               </div>
             ) : (
@@ -295,8 +374,8 @@ export default function SevenEightSixAdminChatPage() {
                 <Send className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-3 truncate rounded-2xl border border-purple-400/20 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-100">
-              <Sparkles className="mr-2 inline h-3.5 w-3.5" />Temporary Project Engine Active
+            <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
+              Project preview renders from app/page.tsx. Full Neon runtime is the next backend step.
             </div>
           </div>
         </section>
@@ -342,29 +421,15 @@ export default function SevenEightSixAdminChatPage() {
           </header>
 
           {panel === "preview" ? (
-            project ? (
-              <div className="flex-1 overflow-auto p-6">
-                <div className="mx-auto flex min-h-full max-w-7xl items-stretch">
-                  <div className="w-full overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-slate-950 shadow-[0_0_70px_rgba(0,0,0,0.24)]">
-                    <div className="rounded-t-[2rem] bg-gradient-to-br from-slate-950 via-cyan-950 to-purple-950 p-10">
-                      <p className="text-sm font-bold uppercase tracking-[0.35em] text-cyan-200">786.Chat Live Preview</p>
-                      <h1 className="mt-5 text-5xl font-black leading-tight">{project.title}</h1>
-                      <p className="mt-5 max-w-3xl text-lg leading-8 text-cyan-50/75">{project.description}</p>
-                      <p className="mt-6 inline-block rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
-                        {Object.keys(project.files).length} files generated
-                      </p>
-                    </div>
-                    <div className="grid gap-4 p-8 md:grid-cols-2 xl:grid-cols-3">
-                      {Object.keys(project.files).map((path) => (
-                        <div key={path} className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 transition hover:border-cyan-300/25 hover:bg-cyan-300/[0.06]">
-                          <Sparkles className="mb-4 h-6 w-6 text-cyan-200" />
-                          <h3 className="break-words font-black">{path}</h3>
-                          <p className="mt-2 text-sm text-slate-400">Generated file ready for Neon save.</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+            project && previewHtml ? (
+              <div className="flex min-h-0 flex-1 p-6">
+                <iframe
+                  key={`${project.title}-${Object.keys(project.files).length}`}
+                  srcDoc={previewHtml}
+                  title={`${project.title} preview`}
+                  sandbox="allow-scripts allow-forms allow-popups"
+                  className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white shadow-[0_0_70px_rgba(0,0,0,0.24)]"
+                />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
@@ -372,13 +437,13 @@ export default function SevenEightSixAdminChatPage() {
                   <div>
                     <Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" />
                     <h2 className="text-xl font-black text-slate-300">No Preview Yet</h2>
-                    <p className="mt-2">Ask 786.Chat to create a project first.</p>
+                    <p className="mt-2">New chat starts with empty preview and empty code.</p>
                   </div>
                 </div>
               </div>
             )
           ) : (
-            <div className="flex flex-1 min-h-0 p-6">
+            <div className="flex min-h-0 flex-1 p-6">
               <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50 shadow-[0_0_55px_rgba(0,0,0,0.22)]">
                 <code>{filesToCode(project)}</code>
               </pre>
