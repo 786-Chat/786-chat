@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     }
 
     let aiResponse = ""
-    let model = mode
+    let model: string = mode
     let reason = "Generated real project files from app/page.tsx, app/layout.tsx, app/globals.css, components, lib and README."
 
     try {
