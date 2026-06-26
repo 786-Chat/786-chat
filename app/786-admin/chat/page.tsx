@@ -15,97 +15,42 @@ import {
   Wand2,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { createSevenEightSixLocalProject, type SevenEightSixLocalProject } from "@/lib/786-admin/local-project-generator"
+import type {
+  SevenEightSixProject,
+  SevenEightSixProjectFileMap,
+} from "@/lib/786-admin/local-project-generator"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
-const CHAT_KEY = "786chat_admin_messages_v5"
-const PROJECT_KEY = "786chat_admin_project_v5"
 const CHAT_WIDTH_KEY = "786chat_admin_chat_width_v1"
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
 
-function filesToCode(project: SevenEightSixLocalProject | null) {
-  if (!project) return "No project yet. Click New Chat and ask 786.Chat to create a project."
-  return Object.entries(project.files)
-    .map(([path, content]) => `// FILE: ${path}\n${content}`)
-    .join("\n\n/* ---------------------------------------- */\n\n")
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
 }
 
-function stripImportsAndTypes(code: string) {
-  return code
-    .replace(/^import[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "")
-    .replace(/^import\s+["'][^"']+["'];?\s*$/gm, "")
-    .replace(/^export\s+default\s+/gm, "")
-    .replace(/^type\s+[A-Za-z0-9_]+\s*=\s*\{[\s\S]*?\}\s*$/gm, "")
-    .replace(/^interface\s+[A-Za-z0-9_]+\s*\{[\s\S]*?\}\s*$/gm, "")
-}
-
-function extractReturnJsx(code: string) {
-  const cleanCode = stripImportsAndTypes(code)
-  const returnIndex = cleanCode.indexOf("return")
-  if (returnIndex === -1) return ""
-
-  const firstParen = cleanCode.indexOf("(", returnIndex)
-  if (firstParen === -1) return ""
-
-  let depth = 0
-  for (let i = firstParen; i < cleanCode.length; i++) {
-    const char = cleanCode[i]
-    if (char === "(") depth++
-    if (char === ")") depth--
-    if (depth === 0) return cleanCode.slice(firstParen + 1, i).trim()
-  }
-
-  return ""
-}
-
-function convertJsxToSafeHtml(jsx: string) {
-  return jsx
-    .replace(/<>/g, "")
-    .replace(/<\/>/g, "")
-    .replace(/className=/g, "class=")
-    .replace(/htmlFor=/g, "for=")
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-    .replace(/\s+key=\{[^}]*\}/g, "")
-    .replace(/\s+on[A-Z][A-Za-z0-9_]*=\{[\s\S]*?\}/g, "")
-    .replace(/\{`([\s\S]*?)`\}/g, "$1")
-    .replace(/\{\"([^\"]*)\"\}/g, "$1")
-    .replace(/\{'([^']*)'\}/g, "$1")
-    .replace(/\{([^{}]*)\}/g, "")
-    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?\s*\/>/g, "")
-    .replace(/<([A-Z][A-Za-z0-9_]*)(\s[^>]*)?>[\s\S]*?<\/\1>/g, "")
-}
-
-function buildProjectPreviewHtml(project: SevenEightSixLocalProject | null) {
-  if (!project) return ""
-
-  const pageCode = project.files["app/page.tsx"] || project.files["app/page.jsx"] || ""
-  if (!pageCode.trim()) return ""
-
-  const jsx = extractReturnJsx(pageCode)
-  const body = convertJsxToSafeHtml(jsx)
-  const css = project.files["app/globals.css"] || project.files["styles/globals.css"] || ""
-
-  if (!body.trim()) return ""
+function filesToHtml(files: SevenEightSixProjectFileMap) {
+  const css = files["app/globals.css"] || ""
+  const page = files["app/page.tsx"] || ""
 
   return `<!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${project.title}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    html,body{margin:0;min-height:100%;background:#020617;color:white;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
-    *{box-sizing:border-box;}
-    button,input,textarea,select{font:inherit;}
-    ${css}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>${css}</style>
 </head>
 <body>
-${body}
+<pre style="display:none">${escapeHtml(page)}</pre>
+<div id="root">
+${escapeHtml(page)}
+</div>
 </body>
 </html>`
 }
@@ -114,7 +59,8 @@ export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
-  const [project, setProject] = useState<SevenEightSixLocalProject | null>(null)
+  const [project, setProject] = useState<SevenEightSixProject | null>(null)
+  const [selectedFile, setSelectedFile] = useState("app/page.tsx")
   const [input, setInput] = useState("")
   const [mode, setMode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
@@ -125,34 +71,19 @@ export default function SevenEightSixAdminChatPage() {
   const endRef = useRef<HTMLDivElement | null>(null)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
-  const previewHtml = useMemo(() => buildProjectPreviewHtml(project), [project])
+  const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
+  const previewHtml = useMemo(() => (project ? filesToHtml(project.files) : ""), [project])
 
   useEffect(() => {
     if (!isLoading && !isAdmin) router.replace("/786-admin/login")
   }, [isLoading, isAdmin, router])
 
   useEffect(() => {
-    try {
-      const savedMessages = localStorage.getItem(CHAT_KEY)
-      const savedProject = localStorage.getItem(PROJECT_KEY)
-      const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
-
-      if (savedMessages) setMessages(JSON.parse(savedMessages))
-      if (savedProject) setProject(JSON.parse(savedProject))
-      if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) setChatWidth(savedWidth)
-    } catch {
-      localStorage.removeItem(CHAT_KEY)
-      localStorage.removeItem(PROJECT_KEY)
+    const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
+    if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) {
+      setChatWidth(savedWidth)
     }
   }, [])
-
-  useEffect(() => {
-    localStorage.setItem(CHAT_KEY, JSON.stringify(messages.slice(-40)))
-  }, [messages])
-
-  useEffect(() => {
-    if (project) localStorage.setItem(PROJECT_KEY, JSON.stringify(project))
-  }, [project])
 
   useEffect(() => {
     localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatWidth)))
@@ -208,10 +139,9 @@ export default function SevenEightSixAdminChatPage() {
   function newChat() {
     setMessages([])
     setProject(null)
+    setSelectedFile("app/page.tsx")
     setInput("")
     setPanel("preview")
-    localStorage.removeItem(CHAT_KEY)
-    localStorage.removeItem(PROJECT_KEY)
     tone(true)
   }
 
@@ -219,8 +149,6 @@ export default function SevenEightSixAdminChatPage() {
     const text = input.trim()
     if (!text || sending) return
 
-    const localProject = createSevenEightSixLocalProject(text)
-    setProject(localProject)
     setMessages((old) => [...old, { id: `u-${Date.now()}`, role: "user", content: text }])
     setInput("")
     setSending(true)
@@ -233,22 +161,37 @@ export default function SevenEightSixAdminChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, mode }),
       })
+
       const json = await res.json()
+
+      if (!res.ok || !json.success || !json.project) {
+        throw new Error(json.error || "Project generation failed.")
+      }
+
+      setProject(json.project)
+      setSelectedFile(json.project.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(json.project.files)[0])
+
       setMessages((old) => [
         ...old,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          content: json.success
-            ? `Project files updated. Preview and Code are ready for this project.\n\n${json.response || ""}`
-            : json.error || "AI request failed.",
+          content: `Created real project: ${json.project.title}\nFiles: ${Object.keys(json.project.files).length}\nPreview and Code are ready.`,
           model: json.model,
           reason: json.reason,
         },
       ])
+
       tone(true)
     } catch (error) {
-      setMessages((old) => [...old, { id: `e-${Date.now()}`, role: "assistant", content: error instanceof Error ? error.message : "Request failed." }])
+      setMessages((old) => [
+        ...old,
+        {
+          id: `e-${Date.now()}`,
+          role: "assistant",
+          content: error instanceof Error ? error.message : "Request failed.",
+        },
+      ])
       tone(false)
     } finally {
       setSending(false)
@@ -283,9 +226,8 @@ export default function SevenEightSixAdminChatPage() {
           <header className="flex h-[70px] shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
             <button
               onClick={newChat}
-              className="group relative inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50 shadow-[0_0_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:border-emerald-200/60 hover:bg-emerald-400/25 hover:shadow-[0_0_38px_rgba(16,185,129,0.34)]"
+              className="group relative inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50 shadow-[0_0_28px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:border-emerald-200/60 hover:bg-emerald-400/25"
             >
-              <span className="absolute inset-0 rounded-2xl bg-emerald-300/10 opacity-0 blur-xl transition group-hover:opacity-100" />
               <Plus className="relative h-4 w-4 animate-pulse" />
               <span className="relative">New Chat</span>
             </button>
@@ -316,7 +258,7 @@ export default function SevenEightSixAdminChatPage() {
               <div className="flex h-full items-center justify-center text-center text-slate-500">
                 <div className="mx-auto max-w-[300px]">
                   <p className="text-xl font-semibold text-cyan-100/90">Welcome back to 786.Chat</p>
-                  <p className="mt-3 text-sm leading-6">New chat is empty. Your old projects stay on the Projects page.</p>
+                  <p className="mt-3 text-sm leading-6">New chat is empty. Send a build prompt to create real project files.</p>
                 </div>
               </div>
             ) : (
@@ -340,10 +282,10 @@ export default function SevenEightSixAdminChatPage() {
             )}
 
             {sending && (
-              <div className="mr-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4 shadow-[0_0_32px_rgba(34,211,238,0.12)]">
+              <div className="mr-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
                 <div className="flex items-center gap-3">
                   <Wand2 className="h-5 w-5 animate-pulse text-cyan-200" />
-                  <span>786.Chat is creating your project...</span>
+                  <span>786.Chat is creating real project files...</span>
                 </div>
               </div>
             )}
@@ -364,7 +306,7 @@ export default function SevenEightSixAdminChatPage() {
                 }}
                 rows={1}
                 className="min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-white outline-none placeholder:text-slate-500"
-                placeholder="Ask 786.Chat to build, edit, preview, or deploy..."
+                placeholder="Ask 786.Chat to build a real project..."
               />
               <button
                 onClick={send}
@@ -375,7 +317,7 @@ export default function SevenEightSixAdminChatPage() {
               </button>
             </div>
             <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
-              Project preview renders from app/page.tsx. Full Neon runtime is the next backend step.
+              New Chat is empty. Build prompt creates real files returned by the API.
             </div>
           </div>
         </section>
@@ -424,7 +366,7 @@ export default function SevenEightSixAdminChatPage() {
             project && previewHtml ? (
               <div className="flex min-h-0 flex-1 p-6">
                 <iframe
-                  key={`${project.title}-${Object.keys(project.files).length}`}
+                  key={project.id}
                   srcDoc={previewHtml}
                   title={`${project.title} preview`}
                   sandbox="allow-scripts allow-forms allow-popups"
@@ -443,9 +385,27 @@ export default function SevenEightSixAdminChatPage() {
               </div>
             )
           ) : (
-            <div className="flex min-h-0 flex-1 p-6">
-              <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50 shadow-[0_0_55px_rgba(0,0,0,0.22)]">
-                <code>{filesToCode(project)}</code>
+            <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6">
+              <div className="min-h-0 overflow-auto rounded-3xl border border-white/10 bg-[#0d1320] p-3">
+                {fileNames.length === 0 ? (
+                  <p className="p-3 text-sm text-slate-500">No files yet.</p>
+                ) : (
+                  fileNames.map((file) => (
+                    <button
+                      key={file}
+                      onClick={() => setSelectedFile(file)}
+                      className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-bold transition ${
+                        selectedFile === file ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                      }`}
+                    >
+                      {file}
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50 shadow-[0_0_55px_rgba(0,0,0,0.22)]">
+                <code>{project?.files?.[selectedFile] || "Select a file."}</code>
               </pre>
             </div>
           )}
