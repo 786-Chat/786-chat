@@ -74,7 +74,7 @@ function sections(kind: string) {
 }
 
 function createPageTsx(title: string, description: string, kind: string, primary: string, secondary: string) {
-  const sectionList = sections(kind)
+
 
   if (kind === "calculator") {
     return `"use client"
