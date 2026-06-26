@@ -27,12 +27,7 @@ type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemin
 type Panel = "preview" | "code"
 type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-}
+
 
 function filesToHtml(files: SevenEightSixProjectFileMap) {
   const page = files["app/page.tsx"] || ""
