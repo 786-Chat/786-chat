@@ -29,19 +29,8 @@ function chooseModel(prompt: string, mode: SevenEightSixModelMode) {
   if (mode === "gemini-flash") return { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Manual Gemini Flash mode." }
   if (mode === "gemini-pro") return { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Manual Gemini Pro mode." }
 
-  const explicitVision = hasAny(prompt, [
-    "analyze image",
-    "analyze screenshot",
-    "read pdf",
-    "scan pdf",
-    "ocr",
-    "uploaded image",
-    "uploaded screenshot",
-    "attached image",
-    "attached screenshot",
-  ])
-
-  const complex = hasAny(prompt, [
+  const complexPlatform = hasAny(prompt, [
+    "786.chat",
     "architecture",
     "full platform",
     "complete platform",
@@ -55,17 +44,35 @@ function chooseModel(prompt: string, mode: SevenEightSixModelMode) {
     "real project saving",
     "github sync",
     "vercel deploy",
+    "build the full",
+    "project engine",
+    "file engine",
+    "preview engine",
   ])
 
-  if (explicitVision) {
-    return complex
-      ? { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Auto selected Gemini Pro for a complex visual or PDF task." }
-      : { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Auto selected Gemini Flash for a visual or PDF task." }
+  const explicitVision = hasAny(prompt, [
+    "analyze image",
+    "analyze screenshot",
+    "read pdf",
+    "scan pdf",
+    "ocr",
+    "uploaded image",
+    "uploaded screenshot",
+    "attached image",
+    "attached screenshot",
+    "look at this image",
+    "look at this screenshot",
+  ])
+
+  if (complexPlatform) {
+    return { provider: "deepseek" as const, model: "deepseek-v4-pro", reason: "Auto selected DeepSeek Pro for complex 786.Chat platform, architecture, database, GitHub, Vercel, or deployment work." }
   }
 
-  return complex
-    ? { provider: "deepseek" as const, model: "deepseek-v4-pro", reason: "Auto selected DeepSeek Pro for complex platform, architecture, database, security, or deployment work." }
-    : { provider: "deepseek" as const, model: "deepseek-v4-flash", reason: "Auto selected DeepSeek Flash for normal chat and coding." }
+  if (explicitVision) {
+    return { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Auto selected Gemini Flash for a direct visual, screenshot, OCR, or PDF task." }
+  }
+
+  return { provider: "deepseek" as const, model: "deepseek-v4-flash", reason: "Auto selected DeepSeek Flash for normal chat and coding." }
 }
 
 const system = `You are 786.Chat, an owner-only AI software architect and coding assistant.
