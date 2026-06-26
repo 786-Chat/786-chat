@@ -29,13 +29,38 @@ function chooseModel(prompt: string, mode: SevenEightSixModelMode) {
   if (mode === "gemini-flash") return { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Manual Gemini Flash mode." }
   if (mode === "gemini-pro") return { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Manual Gemini Pro mode." }
 
-  const vision = hasAny(prompt, ["image", "screenshot", "photo", "picture", "pdf", "document", "scan", "logo"])
-  const complex = hasAny(prompt, ["architecture", "full platform", "complete platform", "multi tenant", "database schema", "deployment pipeline", "security", "billing system", "marketplace system", "production ready", "entire system"])
+  const explicitVision = hasAny(prompt, [
+    "analyze image",
+    "analyze screenshot",
+    "read pdf",
+    "scan pdf",
+    "ocr",
+    "uploaded image",
+    "uploaded screenshot",
+    "attached image",
+    "attached screenshot",
+  ])
 
-  if (vision) {
+  const complex = hasAny(prompt, [
+    "architecture",
+    "full platform",
+    "complete platform",
+    "database schema",
+    "deployment pipeline",
+    "security",
+    "billing system",
+    "marketplace system",
+    "production ready",
+    "entire system",
+    "real project saving",
+    "github sync",
+    "vercel deploy",
+  ])
+
+  if (explicitVision) {
     return complex
-      ? { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Auto selected Gemini Pro for complex image, PDF, screenshot, or document work." }
-      : { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Auto selected Gemini Flash for image, PDF, screenshot, or document work." }
+      ? { provider: "gemini" as const, model: "gemini-2.5-pro", reason: "Auto selected Gemini Pro for a complex visual or PDF task." }
+      : { provider: "gemini" as const, model: "gemini-2.5-flash", reason: "Auto selected Gemini Flash for a visual or PDF task." }
   }
 
   return complex
