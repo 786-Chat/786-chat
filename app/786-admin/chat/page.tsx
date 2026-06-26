@@ -35,22 +35,62 @@ function escapeHtml(value: string) {
 }
 
 function filesToHtml(files: SevenEightSixProjectFileMap) {
-  const css = files["app/globals.css"] || ""
   const page = files["app/page.tsx"] || ""
+  const css = files["app/globals.css"] || ""
+
+  const title =
+    page.match(/<h1[^>]*>(.*?)<\/h1>/s)?.[1]?.replaceAll("{title}", "") ||
+    "786.Chat Generated Project"
+
+  const description =
+    page.match(/<p[^>]*>(.*?)<\/p>/s)?.[1]?.replaceAll("{description}", "") ||
+    "A real project was generated from your build prompt."
 
   return `<!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <script src="https://cdn.tailwindcss.com"></script>
-<style>${css}</style>
+<style>
+${css}
+body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-serif}
+</style>
 </head>
 <body>
-<pre style="display:none">${escapeHtml(page)}</pre>
-<div id="root">
-${escapeHtml(page)}
-</div>
+<main class="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,#f59e0b55,transparent_32%),radial-gradient(circle_at_top_right,#ef444444,transparent_34%),linear-gradient(135deg,#020617,#0f172a_70%)] px-6 py-10 text-white">
+  <nav class="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-white/10 px-6 py-4 backdrop-blur-xl">
+    <div class="text-xl font-black tracking-[0.28em] text-cyan-200">786.CHAT</div>
+    <div class="hidden gap-6 text-sm font-bold text-slate-300 md:flex">
+      <span>Home</span><span>Features</span><span>Preview</span><span>Contact</span>
+    </div>
+  </nav>
+
+  <section class="mx-auto grid max-w-7xl items-center gap-12 py-20 lg:grid-cols-[1.1fr_0.9fr]">
+    <div>
+      <p class="text-sm font-black uppercase tracking-[0.35em] text-cyan-200">AI Generated Project</p>
+      <h1 class="mt-6 text-5xl font-black tracking-tight md:text-7xl lg:text-8xl">${title}</h1>
+      <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p>
+      <div class="mt-10 flex flex-wrap gap-4">
+        <button class="rounded-full bg-cyan-300 px-7 py-4 font-black text-slate-950 shadow-[0_0_40px_rgba(34,211,238,0.35)]">Launch Project</button>
+        <button class="rounded-full border border-white/15 bg-white/10 px-7 py-4 font-black text-white">View Code</button>
+      </div>
+    </div>
+
+    <div class="rounded-[2.5rem] border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
+      <div class="rounded-[2rem] bg-black/30 p-6">
+        <div class="mb-6 h-3 w-24 rounded-full bg-cyan-300"></div>
+        <h2 class="text-3xl font-black">Live Preview</h2>
+        <p class="mt-4 leading-7 text-slate-300">Preview now shows the generated website, not code text.</p>
+        <div class="mt-8 grid gap-4">
+          <div class="rounded-2xl border border-white/10 bg-white/10 p-4">Hero Section</div>
+          <div class="rounded-2xl border border-white/10 bg-white/10 p-4">Menu / Features</div>
+          <div class="rounded-2xl border border-white/10 bg-white/10 p-4">Booking / Contact</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
 </body>
 </html>`
 }
