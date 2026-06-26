@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Bot,
@@ -57,6 +57,7 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [modelMode, setModelMode] = useState<ModelMode>("auto")
   const [isSending, setIsSending] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -68,6 +69,10 @@ export default function SevenEightSixAdminChatPage() {
       router.replace("/786-admin/login")
     }
   }, [isAdmin, isLoading, router])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [messages.length, isSending])
 
   const visibleSidebarWidth = sidebarCollapsed ? 0 : sidebarWidth
   const isSidebarExpanded = !sidebarCollapsed && sidebarWidth > 120
@@ -278,7 +283,7 @@ export default function SevenEightSixAdminChatPage() {
                 <div>
                   <p className="text-xl text-cyan-100/70">How can I help you today?</p>
                   <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Auto mode uses DeepSeek Flash, DeepSeek Pro, Gemini Flash, or Gemini Pro depending on the task.
+                    Auto mode uses DeepSeek for chat/code/platform work and Gemini only for direct image/PDF/screenshot analysis.
                   </p>
                 </div>
               </div>
@@ -307,6 +312,7 @@ export default function SevenEightSixAdminChatPage() {
                 786.Chat is thinking...
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#101827]/96 p-4 backdrop-blur-2xl">
@@ -338,7 +344,7 @@ export default function SevenEightSixAdminChatPage() {
             </div>
             <div className="mt-3 flex items-center gap-2 truncate rounded-2xl border border-purple-400/20 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-100">
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">AI Router Active • Auto, Flash, Pro, Gemini Flash and Gemini Pro are available for 786.Chat admin.</span>
+              <span className="truncate">AI Router Active • Auto uses DeepSeek for platform/code and Gemini only for direct visual/PDF work.</span>
             </div>
           </div>
         </section>
