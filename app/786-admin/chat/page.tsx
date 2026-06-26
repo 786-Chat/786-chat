@@ -22,12 +22,36 @@ import type {
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const CHAT_WIDTH_KEY = "786chat_admin_chat_width_v1"
+const PROJECTS_KEY = "786chat_admin_projects_v1"
+const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
+const OLD_PROJECT_KEY = "786chat_admin_project_v5"
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
+type StoredProject = SevenEightSixProject & { messages?: Message[] }
 
+function loadProjects(): StoredProject[] {
+  try {
+    const saved = localStorage.getItem(PROJECTS_KEY)
+    if (!saved) return []
+    const parsed = JSON.parse(saved)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    localStorage.removeItem(PROJECTS_KEY)
+    return []
+  }
+}
 
+function saveProject(project: StoredProject) {
+  const projects = loadProjects()
+  const withoutCurrent = projects.filter((item) => item.id !== project.id)
+  const nextProjects = [project, ...withoutCurrent].slice(0, 50)
+
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(nextProjects))
+  localStorage.setItem(ACTIVE_PROJECT_ID_KEY, project.id)
+  localStorage.removeItem(OLD_PROJECT_KEY)
+}
 
 function filesToHtml(files: SevenEightSixProjectFileMap) {
   const page = files["app/page.tsx"] || ""
@@ -95,7 +119,7 @@ export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
-  const [project, setProject] = useState<SevenEightSixProject | null>(null)
+  const [project, setProject] = useState<StoredProject | null>(null)
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
   const [input, setInput] = useState("")
   const [mode, setMode] = useState<Mode>("auto")
@@ -115,9 +139,21 @@ export default function SevenEightSixAdminChatPage() {
   }, [isLoading, isAdmin, router])
 
   useEffect(() => {
+    localStorage.removeItem(OLD_PROJECT_KEY)
+
     const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
     if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) {
       setChatWidth(savedWidth)
+    }
+
+    const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
+    if (activeProjectId) {
+      const activeProject = loadProjects().find((item) => item.id === activeProjectId)
+      if (activeProject) {
+        setProject(activeProject)
+        setMessages(activeProject.messages || [])
+        setSelectedFile(activeProject.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(activeProject.files)[0] || "app/page.tsx")
+      }
     }
   }, [])
 
@@ -128,6 +164,11 @@ export default function SevenEightSixAdminChatPage() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages.length, sending])
+
+  useEffect(() => {
+    if (!project) return
+    saveProject({ ...project, messages })
+  }, [messages, project])
 
   useEffect(() => {
     if (!isResizing) return
@@ -154,13 +195,16 @@ export default function SevenEightSixAdminChatPage() {
 
   function tone(done = false) {
     if (!sound) return
+
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctx) return
+
       const ctx = new Ctx()
       const gain = ctx.createGain()
       gain.connect(ctx.destination)
       gain.gain.value = 0.05
+
       ;(done ? [523, 659, 784] : [392, 523]).forEach((freq, i) => {
         const osc = ctx.createOscillator()
         osc.frequency.value = freq
@@ -168,6 +212,7 @@ export default function SevenEightSixAdminChatPage() {
         osc.start(ctx.currentTime + i * 0.08)
         osc.stop(ctx.currentTime + i * 0.08 + 0.12)
       })
+
       setTimeout(() => ctx.close().catch(() => undefined), 600)
     } catch {}
   }
@@ -178,6 +223,7 @@ export default function SevenEightSixAdminChatPage() {
     setSelectedFile("app/page.tsx")
     setInput("")
     setPanel("preview")
+    localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
     tone(true)
   }
 
@@ -185,7 +231,13 @@ export default function SevenEightSixAdminChatPage() {
     const text = input.trim()
     if (!text || sending) return
 
-    setMessages((old) => [...old, { id: `u-${Date.now()}`, role: "user", content: text }])
+    const userMessage: Message = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      content: text,
+    }
+
+    setMessages((old) => [...old, userMessage])
     setInput("")
     setSending(true)
     setPanel("preview")
@@ -204,30 +256,34 @@ export default function SevenEightSixAdminChatPage() {
         throw new Error(json.error || "Project generation failed.")
       }
 
-      setProject(json.project)
-      setSelectedFile(json.project.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(json.project.files)[0])
+      const assistantMessage: Message = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: `Created real project: ${json.project.title}\nFiles: ${Object.keys(json.project.files).length}\nPreview and Code are ready.`,
+        model: json.model,
+        reason: json.reason,
+      }
 
-      setMessages((old) => [
-        ...old,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: `Created real project: ${json.project.title}\nFiles: ${Object.keys(json.project.files).length}\nPreview and Code are ready.`,
-          model: json.model,
-          reason: json.reason,
-        },
-      ])
+      const nextMessages = [...messages, userMessage, assistantMessage]
+      const nextProject: StoredProject = {
+        ...json.project,
+        messages: nextMessages,
+      }
+
+      setProject(nextProject)
+      setMessages(nextMessages)
+      setSelectedFile(nextProject.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(nextProject.files)[0] || "app/page.tsx")
+      saveProject(nextProject)
 
       tone(true)
     } catch (error) {
-      setMessages((old) => [
-        ...old,
-        {
-          id: `e-${Date.now()}`,
-          role: "assistant",
-          content: error instanceof Error ? error.message : "Request failed.",
-        },
-      ])
+      const errorMessage: Message = {
+        id: `e-${Date.now()}`,
+        role: "assistant",
+        content: error instanceof Error ? error.message : "Request failed.",
+      }
+
+      setMessages((old) => [...old, errorMessage])
       tone(false)
     } finally {
       setSending(false)
@@ -275,6 +331,7 @@ export default function SevenEightSixAdminChatPage() {
               >
                 Sound {sound ? "On" : "Off"}
               </button>
+
               <select
                 value={mode}
                 onChange={(e) => setMode(e.target.value as Mode)}
@@ -311,6 +368,7 @@ export default function SevenEightSixAdminChatPage() {
                     <span>{m.role === "user" ? "You" : "786.Chat"}</span>
                     {m.model && <span className="text-cyan-200">{m.model}</span>}
                   </div>
+
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
                 </div>
@@ -325,12 +383,14 @@ export default function SevenEightSixAdminChatPage() {
                 </div>
               </div>
             )}
+
             <div ref={endRef} />
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#101827]/95 p-4 backdrop-blur-xl">
             <div className="flex gap-3 rounded-3xl border border-white/10 bg-[#162033] px-4 py-3 shadow-[0_0_30px_rgba(0,0,0,0.24)]">
               <Paperclip className="mt-2 h-5 w-5 shrink-0 text-slate-500" />
+
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -344,6 +404,7 @@ export default function SevenEightSixAdminChatPage() {
                 className="min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-white outline-none placeholder:text-slate-500"
                 placeholder="Ask 786.Chat to build a real project..."
               />
+
               <button
                 onClick={send}
                 disabled={sending || !input.trim()}
@@ -352,6 +413,7 @@ export default function SevenEightSixAdminChatPage() {
                 <Send className="h-4 w-4" />
               </button>
             </div>
+
             <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
               New Chat is empty. Build prompt creates real files returned by the API.
             </div>
@@ -377,24 +439,30 @@ export default function SevenEightSixAdminChatPage() {
             <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
               <span className="block truncate">{project ? project.title : "No project yet"}</span>
             </div>
+
             <button
               onClick={() => setPanel("preview")}
               className={`rounded-full border px-4 py-2 text-sm transition ${
                 panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400 hover:border-cyan-300/25 hover:text-cyan-100"
               }`}
             >
-              <Monitor className="mr-2 inline h-4 w-4" />Preview
+              <Monitor className="mr-2 inline h-4 w-4" />
+              Preview
             </button>
+
             <button
               onClick={() => setPanel("code")}
               className={`rounded-full border px-4 py-2 text-sm transition ${
                 panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400 hover:border-cyan-300/25 hover:text-cyan-100"
               }`}
             >
-              <Code2 className="mr-2 inline h-4 w-4" />Code
+              <Code2 className="mr-2 inline h-4 w-4" />
+              Code
             </button>
+
             <button className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.22)] transition hover:scale-105">
-              <Rocket className="mr-2 inline h-4 w-4" />Publish
+              <Rocket className="mr-2 inline h-4 w-4" />
+              Publish
             </button>
           </header>
 
