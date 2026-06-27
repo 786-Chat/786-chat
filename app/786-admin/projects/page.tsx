@@ -4,56 +4,87 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { FolderKanban, Plus, ShieldCheck, Store } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import type { SevenEightSixProject } from "@/lib/786-admin/local-project-generator"
+import type { AdminProjectListItem } from "@/lib/786-admin/types"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
-const PROJECTS_KEY = "786chat_admin_projects_v1"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const OLD_PROJECT_KEY = "786chat_admin_project_v5"
-
-type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
-type StoredProject = SevenEightSixProject & { messages?: Message[] }
-
-function loadProjects(): StoredProject[] {
-  try {
-    const saved = localStorage.getItem(PROJECTS_KEY)
-    if (!saved) return []
-    const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    localStorage.removeItem(PROJECTS_KEY)
-    return []
-  }
-}
+const LEGACY_PROJECTS_KEY = "786chat_admin_projects_v1"
 
 export default function SevenEightSixProjectsPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [projects, setProjects] = useState<StoredProject[]>([])
+  const [projects, setProjects] = useState<AdminProjectListItem[]>([])
+  const [loadingProjects, setLoadingProjects] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
+  const isAdmin = useMemo(
+    () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
+    [user]
+  )
 
   useEffect(() => {
     if (!isLoading && !isAdmin) router.replace("/786-admin/login")
   }, [isAdmin, isLoading, router])
 
   useEffect(() => {
-    localStorage.removeItem(OLD_PROJECT_KEY)
-    setProjects(loadProjects())
-  }, [])
+    if (!isAdmin) return
+    try {
+      localStorage.removeItem(OLD_PROJECT_KEY)
+      localStorage.removeItem(LEGACY_PROJECTS_KEY)
+    } catch {}
+
+    let cancelled = false
+    async function fetchProjects() {
+      setLoadingProjects(true)
+      setError(null)
+      try {
+        const res = await fetch("/api/786-admin/projects", { cache: "no-store" })
+        if (!res.ok) throw new Error(`Failed to load projects (${res.status})`)
+        const json = await res.json()
+        if (!cancelled) {
+          const list = Array.isArray(json.projects)
+            ? (json.projects as AdminProjectListItem[])
+            : []
+          setProjects(list)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load projects")
+        }
+      } finally {
+        if (!cancelled) setLoadingProjects(false)
+      }
+    }
+    fetchProjects()
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
 
   function openProject(projectId: string) {
-    localStorage.setItem(ACTIVE_PROJECT_ID_KEY, projectId)
+    try {
+      localStorage.setItem(ACTIVE_PROJECT_ID_KEY, projectId)
+    } catch {}
     router.push("/786-admin/chat")
   }
 
-  function deleteProject(projectId: string) {
-    const nextProjects = projects.filter((project) => project.id !== projectId)
-    setProjects(nextProjects)
-    localStorage.setItem(PROJECTS_KEY, JSON.stringify(nextProjects))
-
-    if (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) === projectId) {
-      localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+  async function deleteProject(projectId: string) {
+    const previous = projects
+    setProjects((current) => current.filter((p) => p.id !== projectId))
+    try {
+      const res = await fetch(`/api/786-admin/projects/${projectId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`)
+      try {
+        if (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) === projectId) {
+          localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+        }
+      } catch {}
+    } catch (err) {
+      setProjects(previous)
+      setError(err instanceof Error ? err.message : "Failed to delete project")
     }
   }
 
@@ -75,13 +106,11 @@ export default function SevenEightSixProjectsPage() {
           >
             786
           </button>
-
           <nav className="space-y-2">
             <button className="flex w-full items-center gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-4 py-3 text-left text-sm font-bold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
               <FolderKanban className="h-5 w-5" />
               Projects
             </button>
-
             <button
               onClick={() => router.push("/786-admin/marketplace")}
               className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-left text-sm font-bold text-slate-300 transition hover:border-cyan-300/25 hover:bg-cyan-300/10 hover:text-cyan-100"
@@ -96,12 +125,15 @@ export default function SevenEightSixProjectsPage() {
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-4xl font-black tracking-tight text-white">Projects</h1>
-              <p className="mt-2 text-sm text-slate-400">Saved 786.Chat projects appear here.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Saved 786.Chat projects appear here. Stored in Neon, not in your browser.
+              </p>
             </div>
-
             <button
               onClick={() => {
-                localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+                try {
+                  localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+                } catch {}
                 router.push("/786-admin/chat")
               }}
               className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-5 py-3 text-sm font-bold text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)]"
@@ -111,7 +143,17 @@ export default function SevenEightSixProjectsPage() {
             </button>
           </div>
 
-          {projects.length > 0 ? (
+          {error && (
+            <div className="mb-6 rounded-2xl border border-red-300/25 bg-red-500/10 p-4 text-sm font-bold text-red-100">
+              {error}
+            </div>
+          )}
+
+          {loadingProjects ? (
+            <div className="flex min-h-[280px] items-center justify-center text-sm text-slate-400">
+              Loading projects from Neon…
+            </div>
+          ) : projects.length > 0 ? (
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {projects.map((project) => (
                 <article
@@ -121,15 +163,14 @@ export default function SevenEightSixProjectsPage() {
                   <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950">
                     <FolderKanban className="h-7 w-7" />
                   </div>
-
                   <h2 className="text-2xl font-black text-white">{project.title}</h2>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">{project.description}</p>
-
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {project.description || "No description."}
+                  </p>
                   <div className="mt-5 space-y-1 text-xs font-bold text-cyan-200">
-                    <p>{Object.keys(project.files || {}).length} real files saved</p>
-                    <p>{project.messages?.length || 0} chat messages saved</p>
+                    <p>{project.file_count} real files saved</p>
+                    <p>{project.message_count} chat messages saved</p>
                   </div>
-
                   <div className="mt-6 flex flex-wrap gap-3">
                     <button
                       onClick={() => openProject(project.id)}
@@ -137,7 +178,6 @@ export default function SevenEightSixProjectsPage() {
                     >
                       Open in chat
                     </button>
-
                     <button
                       onClick={() => deleteProject(project.id)}
                       className="rounded-xl border border-red-300/25 bg-red-500/10 px-5 py-2.5 text-sm font-black text-red-100"
@@ -154,15 +194,15 @@ export default function SevenEightSixProjectsPage() {
                 <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
                   <ShieldCheck className="h-9 w-9" />
                 </div>
-
                 <h2 className="text-2xl font-black text-white">No projects yet</h2>
                 <p className="mt-3 text-sm leading-6 text-slate-400">
-                  Create a project in chat first. It will be saved here and can be reopened with preview, code and chat history.
+                  Create a project in chat first. It will be saved to Neon and can be reopened with preview, code and chat history.
                 </p>
-
                 <button
                   onClick={() => {
-                    localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+                    try {
+                      localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+                    } catch {}
                     router.push("/786-admin/chat")
                   }}
                   className="mt-6 inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950"
