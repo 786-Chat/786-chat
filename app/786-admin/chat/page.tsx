@@ -19,38 +19,46 @@ import type {
   SevenEightSixProject,
   SevenEightSixProjectFileMap,
 } from "@/lib/786-admin/local-project-generator"
+import type {
+  AdminMessage,
+  AdminProjectPreviewState,
+  AdminProjectWithData,
+} from "@/lib/786-admin/types"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const CHAT_WIDTH_KEY = "786chat_admin_chat_width_v1"
-const PROJECTS_KEY = "786chat_admin_projects_v1"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const OLD_PROJECT_KEY = "786chat_admin_project_v5"
+const LEGACY_PROJECTS_KEY = "786chat_admin_projects_v1"
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
-type Message = { id: string; role: "user" | "assistant"; content: string; model?: string; reason?: string }
-type StoredProject = SevenEightSixProject & { messages?: Message[] }
 
-function loadProjects(): StoredProject[] {
-  try {
-    const saved = localStorage.getItem(PROJECTS_KEY)
-    if (!saved) return []
-    const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    localStorage.removeItem(PROJECTS_KEY)
-    return []
-  }
+type UiMessage = {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  model?: string | null
+  reason?: string | null
 }
 
-function saveProject(project: StoredProject) {
-  const projects = loadProjects()
-  const withoutCurrent = projects.filter((item) => item.id !== project.id)
-  const nextProjects = [project, ...withoutCurrent].slice(0, 50)
+type ActiveProject = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+  files: SevenEightSixProjectFileMap
+  preview_state: AdminProjectPreviewState
+}
 
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(nextProjects))
-  localStorage.setItem(ACTIVE_PROJECT_ID_KEY, project.id)
-  localStorage.removeItem(OLD_PROJECT_KEY)
+function uiFromAdminMessage(message: AdminMessage): UiMessage {
+  return {
+    id: message.id,
+    role: message.role === "system" ? "assistant" : message.role,
+    content: message.content,
+    model: message.model,
+    reason: message.reason,
+  }
 }
 
 function filesToHtml(files: SevenEightSixProjectFileMap) {
@@ -118,8 +126,8 @@ body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-se
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [project, setProject] = useState<StoredProject | null>(null)
+  const [messages, setMessages] = useState<UiMessage[]>([])
+  const [project, setProject] = useState<ActiveProject | null>(null)
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
   const [input, setInput] = useState("")
   const [mode, setMode] = useState<Mode>("auto")
@@ -130,7 +138,10 @@ export default function SevenEightSixAdminChatPage() {
   const [isResizing, setIsResizing] = useState(false)
   const endRef = useRef<HTMLDivElement | null>(null)
 
-  const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
+  const isAdmin = useMemo(
+    () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
+    [user]
+  )
   const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
   const previewHtml = useMemo(() => (project ? filesToHtml(project.files) : ""), [project])
 
@@ -139,36 +150,80 @@ export default function SevenEightSixAdminChatPage() {
   }, [isLoading, isAdmin, router])
 
   useEffect(() => {
-    localStorage.removeItem(OLD_PROJECT_KEY)
+    if (!isAdmin) return
 
-    const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
-    if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) {
-      setChatWidth(savedWidth)
-    }
+    try {
+      localStorage.removeItem(OLD_PROJECT_KEY)
+      localStorage.removeItem(LEGACY_PROJECTS_KEY)
+    } catch {}
 
-    const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
-    if (activeProjectId) {
-      const activeProject = loadProjects().find((item) => item.id === activeProjectId)
-      if (activeProject) {
-        setProject(activeProject)
-        setMessages(activeProject.messages || [])
-        setSelectedFile(activeProject.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(activeProject.files)[0] || "app/page.tsx")
+    try {
+      const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
+      if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) {
+        setChatWidth(savedWidth)
+      }
+    } catch {}
+
+    let cancelled = false
+
+    async function hydrate() {
+      let activeId: string | null = null
+      try {
+        activeId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
+      } catch {}
+
+      if (!activeId) return
+
+      try {
+        const res = await fetch(`/api/786-admin/projects/${activeId}`, { cache: "no-store" })
+        if (!res.ok) {
+          if (res.status === 404) {
+            try {
+              localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+            } catch {}
+          }
+          return
+        }
+
+        const json = (await res.json()) as { project: AdminProjectWithData }
+        if (cancelled || !json.project) return
+
+        const saved = json.project
+        setProject({
+          id: saved.id,
+          title: saved.title,
+          description: saved.description,
+          prompt: saved.prompt,
+          files: saved.files || {},
+          preview_state: saved.preview_state || {},
+        })
+        setMessages((saved.messages || []).map(uiFromAdminMessage))
+
+        const initialFile =
+          (saved.preview_state?.active_file as string | undefined) ||
+          (saved.files?.["app/page.tsx"] ? "app/page.tsx" : Object.keys(saved.files || {})[0]) ||
+          "app/page.tsx"
+        setSelectedFile(initialFile)
+      } catch {
+        // Leave workspace empty if Neon is not reachable.
       }
     }
-  }, [])
+
+    hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
 
   useEffect(() => {
-    localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatWidth)))
+    try {
+      localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatWidth)))
+    } catch {}
   }, [chatWidth])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages.length, sending])
-
-  useEffect(() => {
-    if (!project) return
-    saveProject({ ...project, messages })
-  }, [messages, project])
 
   useEffect(() => {
     if (!isResizing) return
@@ -197,7 +252,9 @@ export default function SevenEightSixAdminChatPage() {
     if (!sound) return
 
     try {
-      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctx) return
 
       const ctx = new Ctx()
@@ -223,21 +280,97 @@ export default function SevenEightSixAdminChatPage() {
     setSelectedFile("app/page.tsx")
     setInput("")
     setPanel("preview")
-    localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+    try {
+      localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+    } catch {}
     tone(true)
+  }
+
+  async function persistAfterGeneration(
+    generated: SevenEightSixProject,
+    userText: string,
+    assistantText: string,
+    assistantModel: string | null,
+    assistantReason: string | null
+  ): Promise<ActiveProject | null> {
+    const activeFile =
+      (generated.files?.["app/page.tsx"] ? "app/page.tsx" : Object.keys(generated.files || {})[0]) ||
+      "app/page.tsx"
+
+    const previewStatePatch: AdminProjectPreviewState = {
+      active_file: activeFile,
+      entry_path: "app/page.tsx",
+    }
+
+    const metadataPatch = assistantModel ? { model: assistantModel } : undefined
+    const messagesPayload = [
+      { role: "user" as const, content: userText },
+      {
+        role: "assistant" as const,
+        content: assistantText,
+        model: assistantModel,
+        reason: assistantReason,
+      },
+    ]
+
+    const projectId = project?.id || null
+    const url = projectId ? `/api/786-admin/projects/${projectId}` : "/api/786-admin/projects"
+    const method = projectId ? "PATCH" : "POST"
+
+    const body: Record<string, unknown> = {
+      prompt: userText,
+      preview_state: previewStatePatch,
+      files: generated.files,
+      messages: messagesPayload,
+    }
+
+    if (metadataPatch) body.metadata = metadataPatch
+    if (!projectId) {
+      body.title = generated.title
+      body.description = generated.description
+    }
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) throw new Error(`${method} ${url} failed (${res.status})`)
+
+      const json = (await res.json()) as { project: AdminProjectWithData }
+      const saved = json.project
+
+      try {
+        localStorage.setItem(ACTIVE_PROJECT_ID_KEY, saved.id)
+      } catch {}
+
+      return {
+        id: saved.id,
+        title: saved.title,
+        description: saved.description,
+        prompt: saved.prompt,
+        files: saved.files || {},
+        preview_state: saved.preview_state || {},
+      }
+    } catch (error) {
+      console.error("[786.Chat] persistence failed", error)
+      return null
+    }
   }
 
   async function send() {
     const text = input.trim()
     if (!text || sending) return
 
-    const userMessage: Message = {
+    const optimisticUser: UiMessage = {
       id: `u-${Date.now()}`,
       role: "user",
       content: text,
     }
 
-    setMessages((old) => [...old, userMessage])
+    setMessages((old) => [...old, optimisticUser])
     setInput("")
     setSending(true)
     setPanel("preview")
@@ -256,28 +389,53 @@ export default function SevenEightSixAdminChatPage() {
         throw new Error(json.error || "Project generation failed.")
       }
 
-      const assistantMessage: Message = {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        content: `Created real project: ${json.project.title}\nFiles: ${Object.keys(json.project.files).length}\nPreview and Code are ready.`,
-        model: json.model,
-        reason: json.reason,
+      const generated: SevenEightSixProject = json.project
+      const assistantText =
+        json.response ||
+        `Created real project: ${generated.title}\nFiles: ${Object.keys(generated.files).length}\nPreview and Code are ready.`
+      const assistantModel: string | null = json.model ?? null
+      const assistantReason: string | null = json.reason ?? null
+
+      const persisted = await persistAfterGeneration(
+        generated,
+        text,
+        assistantText,
+        assistantModel,
+        assistantReason
+      )
+
+      if (persisted) {
+        setProject(persisted)
+        setMessages((current) => [
+          ...current,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: assistantText,
+            model: assistantModel,
+            reason: assistantReason,
+          },
+        ])
+        const initialFile =
+          (persisted.preview_state.active_file as string | undefined) ||
+          (persisted.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(persisted.files)[0]) ||
+          "app/page.tsx"
+        setSelectedFile(initialFile)
+        tone(true)
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            id: `e-${Date.now()}`,
+            role: "assistant",
+            content:
+              "Project was generated but could not be saved to Neon. Check DATABASE_URL and the admin persistence schema.",
+          },
+        ])
+        tone(false)
       }
-
-      const nextMessages = [...messages, userMessage, assistantMessage]
-      const nextProject: StoredProject = {
-        ...json.project,
-        messages: nextMessages,
-      }
-
-      setProject(nextProject)
-      setMessages(nextMessages)
-      setSelectedFile(nextProject.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(nextProject.files)[0] || "app/page.tsx")
-      saveProject(nextProject)
-
-      tone(true)
     } catch (error) {
-      const errorMessage: Message = {
+      const errorMessage: UiMessage = {
         id: `e-${Date.now()}`,
         role: "assistant",
         content: error instanceof Error ? error.message : "Request failed.",
@@ -415,7 +573,9 @@ export default function SevenEightSixAdminChatPage() {
             </div>
 
             <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
-              New Chat is empty. Build prompt creates real files returned by the API.
+              {project
+                ? `Editing project "${project.title}" - changes save to Neon.`
+                : "New Chat is empty. Build prompt creates real files saved to Neon."}
             </div>
           </div>
         </section>
