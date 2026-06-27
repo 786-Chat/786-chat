@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import {
   createSevenEightSixProjectFromPrompt,
   type SevenEightSixModelMode,
+  type SevenEightSixProject,
 } from "@/lib/786-admin/local-project-generator"
 import { routeSevenEightSixPrompt } from "@/lib/786-admin/ai-router"
 
@@ -10,6 +11,10 @@ export async function POST(request: Request) {
     const body = await request.json()
     const message = String(body.message || "").trim()
     const mode = String(body.mode || "auto") as SevenEightSixModelMode
+    const currentProject =
+      body.currentProject && typeof body.currentProject === "object"
+        ? (body.currentProject as Partial<SevenEightSixProject>)
+        : undefined
 
     if (!message) {
       return NextResponse.json(
@@ -20,7 +25,9 @@ export async function POST(request: Request) {
 
     let aiResponse = ""
     let model: string = mode
-    let reason = "Generated real project files from app/page.tsx, app/layout.tsx, app/globals.css, components, lib and README."
+    let reason = currentProject?.id
+      ? "Edited the existing 786.Chat project files instead of creating a duplicate project."
+      : "Generated real project files from app/page.tsx, app/layout.tsx, app/globals.css, components, lib and preview/index.html."
 
     try {
       const routed = await routeSevenEightSixPrompt(message, mode)
@@ -31,13 +38,13 @@ export async function POST(request: Request) {
       aiResponse = ""
     }
 
-    const project = createSevenEightSixProjectFromPrompt(message)
+    const project = createSevenEightSixProjectFromPrompt(message, currentProject)
 
     return NextResponse.json({
       success: true,
       response:
         aiResponse ||
-        `Created ${project.title} with ${Object.keys(project.files).length} real project files.`,
+        `${currentProject?.id ? "Updated" : "Created"} ${project.title} with ${Object.keys(project.files).length} real project files.`,
       model,
       reason,
       project,
