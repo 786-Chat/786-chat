@@ -43,9 +43,6 @@ function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
 }
 
-// Subsystem #5 / B-03 — Real preview renderer.
-// Replaces the old regex renderer that extracted a title/paragraph and wrapped
-// every project inside the same hardcoded 786.Chat shell.
 function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
   if (!files || Object.keys(files).length === 0) {
     return buildEmptyPreview("", "Preview will appear here once a project is generated.")
@@ -88,15 +85,40 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>${escapePreviewStyle(css)}</style>
-<style>html,body{margin:0;padding:0;background:white;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_error{padding:24px;margin:24px;font-family:system-ui;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.5}</style>
+<style>html,body{margin:0;padding:0;background:white;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_loading{padding:32px;margin:24px;font-family:system-ui;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;font-size:13px;line-height:1.5}#__preview_error{padding:24px;margin:24px;font-family:system-ui;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;white-space:pre-wrap;font-size:13px;line-height:1.5}</style>
 </head>
 <body>
-<div id="root"></div>
-<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<div id="root"><div id="__preview_loading">Loading generated preview...</div></div>
+<script>
+(function(){
+  function escapeHtml(value){return String(value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch})}
+  window.__showPreviewError = function(message){
+    var root = document.getElementById('root')
+    if (root) root.innerHTML = '<div id="__preview_error">Preview error: ' + escapeHtml(message) + '</div>'
+  }
+  window.addEventListener('error', function(event){
+    var msg = event && event.message ? event.message : 'Unknown preview runtime error'
+    window.__showPreviewError(msg)
+  })
+  window.addEventListener('unhandledrejection', function(event){
+    var reason = event && event.reason ? event.reason : 'Unknown preview promise rejection'
+    window.__showPreviewError(reason && reason.message ? reason.message : String(reason))
+  })
+  window.__previewStarted = false
+  setTimeout(function(){
+    var loading = document.getElementById('__preview_loading')
+    if (loading && !window.__previewStarted) {
+      window.__showPreviewError('Preview runtime did not start. A CDN script may be blocked or the generated file may contain syntax Babel cannot compile yet.')
+    }
+  }, 4500)
+})();
+</script>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin onerror="window.__showPreviewError('React CDN failed to load')"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin onerror="window.__showPreviewError('ReactDOM CDN failed to load')"></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" onerror="window.__showPreviewError('Babel CDN failed to load')"></script>
 <script type="text/babel" data-presets="env,react,typescript">
 try {
+  window.__previewStarted = true
   const { useState, useEffect, useMemo, useCallback, useRef, useReducer, useContext, createContext, Fragment, forwardRef, memo, Children, cloneElement, isValidElement } = React
   const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
@@ -105,22 +127,18 @@ try {
   const clsx = cn
   const twMerge = cn
   const cva = (base, _config) => (...inputs) => cn(base, ...inputs)
-  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch))
 
   ${userScript}
 
   const __Root__ = (typeof ${rootName} !== 'undefined') ? ${rootName} : null
   const __mount__ = document.getElementById('root')
   if (!__Root__) {
-    __mount__.innerHTML = '<div id="__preview_error">Preview error: could not find the default export in app/page.tsx</div>'
+    window.__showPreviewError('Could not find the default export in app/page.tsx')
   } else {
     ReactDOM.createRoot(__mount__).render(React.createElement(__Root__))
   }
 } catch (err) {
-  const el = document.getElementById('root')
-  if (el) {
-    el.innerHTML = '<div id="__preview_error">Preview error: ' + escapeHtml(err && err.message ? String(err.message) : String(err)) + '</div>'
-  }
+  window.__showPreviewError(err && err.message ? String(err.message) : String(err))
   console.error('[786.Chat preview]', err)
 }
 </script>
