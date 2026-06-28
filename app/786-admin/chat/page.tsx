@@ -13,9 +13,31 @@ const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const OLD_PROJECT_KEY = "786chat_admin_project_v5"
 const LEGACY_PROJECTS_KEY = "786chat_admin_projects_v1"
 
+const EDIT_CONTEXT_PRIMARY_FILES = [
+  "app/page.tsx",
+  "app/layout.tsx",
+  "app/globals.css",
+  "components/footer.tsx",
+  "components/header.tsx",
+  "components/hero.tsx",
+  "components/navbar.tsx",
+  "components/nav.tsx",
+  "lib/utils.ts",
+  "README.md",
+]
+
+const EDIT_CONTEXT_MAX_EXTRA_FILES = 8
+
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
+
+type ExistingProjectContext = {
+  title: string
+  description: string
+  fileTree: string[]
+  keyFiles: Record<string, string>
+}
 
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
@@ -34,6 +56,36 @@ function filesToHtml(files: SevenEightSixProjectFileMap) {
 }
 
 type ActiveProject = { id: string; title: string; description: string; prompt: string; files: SevenEightSixProjectFileMap; preview_state: AdminProjectPreviewState }
+
+function buildExistingProjectContext(activeProject: ActiveProject | null, selectedFile: string): ExistingProjectContext | undefined {
+  if (!activeProject) return undefined
+
+  const fileTree = Object.keys(activeProject.files || {}).sort()
+  if (fileTree.length === 0) return undefined
+
+  const orderedCandidates = [
+    selectedFile,
+    ...EDIT_CONTEXT_PRIMARY_FILES,
+    ...fileTree.filter((path) => path.startsWith("app/") || path.startsWith("components/")),
+    ...fileTree,
+  ]
+
+  const keyFiles: Record<string, string> = {}
+  for (const path of orderedCandidates) {
+    if (Object.keys(keyFiles).length >= EDIT_CONTEXT_MAX_EXTRA_FILES) break
+    if (!path || keyFiles[path] !== undefined) continue
+    const content = activeProject.files[path]
+    if (typeof content !== "string") continue
+    keyFiles[path] = content
+  }
+
+  return {
+    title: activeProject.title,
+    description: activeProject.description,
+    fileTree,
+    keyFiles,
+  }
+}
 
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
@@ -166,7 +218,12 @@ export default function SevenEightSixAdminChatPage() {
     setMessages((old) => [...old, optimisticUser])
     setInput(""); setSending(true); setPanel("preview"); tone(false)
     try {
-      const res = await fetch("/api/786-admin/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, mode }) })
+      const existing = buildExistingProjectContext(project, selectedFile)
+      const requestBody: Record<string, unknown> = { message: text, mode }
+      if (project?.id) requestBody.projectId = project.id
+      if (existing) requestBody.existing = existing
+
+      const res = await fetch("/api/786-admin/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) })
       const json = await res.json()
       if (!res.ok || !json.success || !json.project) throw new Error(json.error || "Project generation failed.")
       const generated: SevenEightSixProject = json.project
