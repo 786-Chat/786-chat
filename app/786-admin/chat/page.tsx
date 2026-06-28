@@ -78,14 +78,29 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
   const pageTransform = transformPreviewSource(files[pagePath])
   const rootName = pageTransform.defaultName || "Page"
 
-  const componentEntries = Object.entries(files).filter(([path]) => {
-    if (path === pagePath) return false
-    if (path === "app/layout.tsx" || path === "app/layout.jsx") return false
-    if (path === "src/app/layout.tsx" || path === "src/app/layout.jsx") return false
-    return /\.(tsx|jsx)$/.test(path)
-  })
+  // Subsystem #5 / B-03 v2 — generic dependency resolver.
+  // Inline ALL source files (.ts/.tsx/.js/.jsx, excluding .d.ts and layout)
+  // ordered lib → utils/data/constants/helpers/types → hooks → components
+  // → page, so module-scope references resolve before the page evaluates.
+  const isSourceFile = (path: string) => /\.(tsx?|jsx?)$/.test(path) && !/\.d\.ts$/.test(path)
+  const isLayoutFile = (path: string) => /^(src\/)?app\/layout\.(tsx?|jsx?)$/.test(path)
+  const dependencyOrder = (path: string): number => {
+    if (/^(src\/)?lib\//.test(path)) return 0
+    if (/^(src\/)?(utils|util|helpers|data|constants|types)\//.test(path)) return 1
+    if (/^(src\/)?hooks\//.test(path)) return 2
+    if (/^(src\/)?components\//.test(path)) return 3
+    return 4
+  }
 
-  const componentBodies = componentEntries
+  const sourceEntries = Object.entries(files)
+    .filter(([path]) => {
+      if (path === pagePath) return false
+      if (isLayoutFile(path)) return false
+      return isSourceFile(path)
+    })
+    .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
+
+  const componentBodies = sourceEntries
     .map(([, src]) => transformPreviewSource(src).body)
     .filter((body) => body.length > 0)
     .join("\n\n")
@@ -195,6 +210,10 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
   source = source.replace(/^["']use (client|server)["']\s*;?\s*\n?/m, "")
   source = source.replace(/^\s*import\s+[\s\S]*?from\s+["'][^"']+["']\s*;?\s*$/gm, "")
   source = source.replace(/^\s*import\s+["'][^"']+["']\s*;?\s*$/gm, "")
+  // Strip re-export lines (the underlying source is already inlined separately).
+  source = source.replace(/^\s*export\s+\*\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
+  source = source.replace(/^\s*export\s+\*\s+as\s+[\w$]+\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
+  source = source.replace(/^\s*export\s*\{[^}]*\}\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
 
   let defaultName: string | null = null
   const namedDefaultFunction = source.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
@@ -215,7 +234,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
     }
   }
 
-  source = source.replace(/\bexport\s+(const|let|var|function|class|type|interface)\b/g, "$1")
+  source = source.replace(/\bexport\s+(const|let|var|function|class|type|interface|enum)\b/g, "$1")
   source = source.replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
   source = source.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
 
