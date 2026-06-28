@@ -39,8 +39,24 @@ type ExistingProjectContext = {
   keyFiles: Record<string, string>
 }
 
+type PreviewPayload = { html: string; key: string }
+
+type ActiveProject = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+  files: SevenEightSixProjectFileMap
+  preview_state: AdminProjectPreviewState
+}
+
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
+}
+
+function filesToPreviewPayload(files: SevenEightSixProjectFileMap | undefined): PreviewPayload {
+  const html = filesToHtml(files)
+  return { html, key: stablePreviewKey(files, html) }
 }
 
 function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
@@ -74,9 +90,9 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
     .filter((body) => body.length > 0)
     .join("\n\n")
 
-  const userScript = escapePreviewScript(
-    [componentBodies, pageTransform.body].filter(Boolean).join("\n\n")
-  )
+  const userScript = [componentBodies, pageTransform.body].filter(Boolean).join("\n\n")
+  const runtimeSource = buildPreviewRuntimeSource(userScript, rootName)
+  const runtimeSourceJson = safeScriptJson(runtimeSource)
 
   return `<!doctype html>
 <html>
@@ -108,7 +124,7 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
   setTimeout(function(){
     var loading = document.getElementById('__preview_loading')
     if (loading && !window.__previewStarted) {
-      window.__showPreviewError('Preview runtime did not start. A CDN script may be blocked or the generated file may contain syntax Babel cannot compile yet.')
+      window.__showPreviewError('Preview runtime did not start. A CDN script may be blocked or Babel could not compile the generated files.')
     }
   }, 4500)
 })();
@@ -116,9 +132,29 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin onerror="window.__showPreviewError('React CDN failed to load')"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin onerror="window.__showPreviewError('ReactDOM CDN failed to load')"></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js" onerror="window.__showPreviewError('Babel CDN failed to load')"></script>
-<script type="text/babel" data-presets="env,react,typescript">
+<script>
+(function(){
+  try {
+    window.__previewStarted = true
+    if (!window.React) throw new Error('React runtime is unavailable')
+    if (!window.ReactDOM) throw new Error('ReactDOM runtime is unavailable')
+    if (!window.Babel) throw new Error('Babel runtime is unavailable')
+    var source = ${runtimeSourceJson}
+    var compiled = window.Babel.transform(source, { presets: ['env', 'react', 'typescript'], filename: 'preview.tsx' }).code
+    new Function(compiled)()
+  } catch (err) {
+    window.__showPreviewError(err && err.message ? String(err.message) : String(err))
+    console.error('[786.Chat preview]', err)
+  }
+})();
+</script>
+</body>
+</html>`
+}
+
+function buildPreviewRuntimeSource(userScript: string, rootName: string): string {
+  return `
 try {
-  window.__previewStarted = true
   const { useState, useEffect, useMemo, useCallback, useRef, useReducer, useContext, createContext, Fragment, forwardRef, memo, Children, cloneElement, isValidElement } = React
   const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
@@ -128,7 +164,7 @@ try {
   const twMerge = cn
   const cva = (base, _config) => (...inputs) => cn(base, ...inputs)
 
-  ${userScript}
+  ${escapePreviewScript(userScript)}
 
   const __Root__ = (typeof ${rootName} !== 'undefined') ? ${rootName} : null
   const __mount__ = document.getElementById('root')
@@ -141,9 +177,7 @@ try {
   window.__showPreviewError(err && err.message ? String(err.message) : String(err))
   console.error('[786.Chat preview]', err)
 }
-</script>
-</body>
-</html>`
+`
 }
 
 function transformPreviewSource(src: string): { defaultName: string | null; body: string } {
@@ -200,11 +234,29 @@ function escapePreviewStyle(value: string): string {
   return value.replace(/<\/style>/gi, "<\\/style>")
 }
 
+function safeScriptJson(value: string): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
+}
+
+function stablePreviewKey(files: SevenEightSixProjectFileMap | undefined, html: string): string {
+  const source = files
+    ? Object.keys(files)
+        .sort()
+        .map((path) => `${path}:${files[path]}`)
+        .join("\n---786-file---\n")
+    : html
+
+  let hash = 2166136261
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return Math.abs(hash >>> 0).toString(36)
+}
+
 function buildEmptyPreview(css: string, message: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}</style><style>html,body{margin:0;padding:0;font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a}</style></head><body><div style="padding:32px;max-width:720px;margin:64px auto;border:1px solid #cbd5e1;background:white;border-radius:12px;color:#475569">${message}</div></body></html>`
 }
-
-type ActiveProject = { id: string; title: string; description: string; prompt: string; files: SevenEightSixProjectFileMap; preview_state: AdminProjectPreviewState }
 
 function buildExistingProjectContext(activeProject: ActiveProject | null, selectedFile: string): ExistingProjectContext | undefined {
   if (!activeProject) return undefined
@@ -253,7 +305,7 @@ export default function SevenEightSixAdminChatPage() {
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
-  const previewHtml = useMemo(() => (project ? filesToHtml(project.files) : ""), [project])
+  const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files) : { html: "", key: "empty" }), [project])
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
 
@@ -491,9 +543,9 @@ export default function SevenEightSixAdminChatPage() {
           </header>
 
           {panel === "preview" ? (
-            project && previewHtml ? (
+            project && previewPayload.html ? (
               <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={`${project.id}-${project.preview_state?.active_file || "preview"}-${Object.keys(project.files || {}).length}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
+                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
