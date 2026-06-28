@@ -283,7 +283,7 @@ export default function SevenEightSixAdminChatPage() {
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
           </header>
-          {panel === "preview" ? (
+                    {panel === "preview" ? (
             sending ? (
               <div className="flex min-h-0 flex-1 p-6">
                 <div className="flex min-h-0 flex-1 items-start rounded-[2rem] border border-cyan-300/20 bg-white p-6">
@@ -325,3 +325,8 @@ export default function SevenEightSixAdminChatPage() {
               </pre>
             </div>
           )}
+        </section>
+      </div>
+    </main>
+  )
+}
