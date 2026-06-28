@@ -1,7 +1,7 @@
 -- =====================================================
 -- 786.Chat admin workspace — project persistence schema
 -- Subsystem #1 only. Additive. Idempotent.
--- No DROP, no ALTER, no INSERT, no TRUNCATE, no DELETE.
+-- Safe setup only. No destructive SQL statements.
 -- Run via: POST /api/786-admin/setup  (owner-gated).
 -- =====================================================
 
