@@ -43,16 +43,146 @@ function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
 }
 
-// NOTE: filesToHtml is intentionally untouched. Subsystem #5 (Sandpack) will
-// replace it. Subsystem #1 only changes WHERE the files come from (Neon).
-function filesToHtml(files: SevenEightSixProjectFileMap) {
-  const page = files["app/page.tsx"] || ""
-  const css = files["app/globals.css"] || ""
-  const titleMatch = page.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)
-  const paragraphMatch = page.match(/<p[^>]*>([\s\S]*?)<\/p>/)
-  const title = titleMatch?.[1]?.replace(/<[^>]+>/g, "").trim() || "786.Chat Generated Website"
-  const description = paragraphMatch?.[1]?.replace(/<[^>]+>/g, "").trim() || "A premium generated website preview."
-  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><script src="https://cdn.tailwindcss.com"></script><style>${css}body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-serif}</style></head><body><main class="min-h-screen bg-slate-950 text-white"><section class="min-h-screen px-8 py-10 bg-[radial-gradient(circle_at_top_left,#f59e0b55,transparent_35%),radial-gradient(circle_at_top_right,#ef444455,transparent_35%),linear-gradient(135deg,#020617,#0f172a_75%)]"><nav class="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-white/10 px-6 py-4"><div class="text-xl font-black tracking-[0.28em] text-cyan-200">786.CHAT</div></nav><div class="mx-auto grid max-w-7xl items-center gap-12 py-20 lg:grid-cols-2"><div><p class="text-sm font-black uppercase tracking-[0.35em] text-cyan-200">Project Preview</p><h1 class="mt-6 text-5xl font-black tracking-tight md:text-7xl">${title}</h1><p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p></div></div></section></main></body></html>`
+// Subsystem #5 / B-03 — Real preview renderer.
+// Replaces the old regex renderer that extracted a title/paragraph and wrapped
+// every project inside the same hardcoded 786.Chat shell.
+function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
+  if (!files || Object.keys(files).length === 0) {
+    return buildEmptyPreview("", "Preview will appear here once a project is generated.")
+  }
+
+  const pagePath = ["app/page.tsx", "app/page.jsx", "src/app/page.tsx", "src/app/page.jsx"].find(
+    (p) => typeof files[p] === "string" && files[p].trim().length > 0
+  )
+
+  const rawCss = files["app/globals.css"] || files["src/app/globals.css"] || ""
+  const css = rawCss.replace(/@tailwind\s+[a-z]+\s*;?/gi, "").trim()
+
+  if (!pagePath) {
+    return buildEmptyPreview(css, "No app/page.tsx file was found in this project, so preview is unavailable.")
+  }
+
+  const pageTransform = transformPreviewSource(files[pagePath])
+  const rootName = pageTransform.defaultName || "Page"
+
+  const componentEntries = Object.entries(files).filter(([path]) => {
+    if (path === pagePath) return false
+    if (path === "app/layout.tsx" || path === "app/layout.jsx") return false
+    if (path === "src/app/layout.tsx" || path === "src/app/layout.jsx") return false
+    return /\.(tsx|jsx)$/.test(path)
+  })
+
+  const componentBodies = componentEntries
+    .map(([, src]) => transformPreviewSource(src).body)
+    .filter((body) => body.length > 0)
+    .join("\n\n")
+
+  const userScript = escapePreviewScript(
+    [componentBodies, pageTransform.body].filter(Boolean).join("\n\n")
+  )
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>${escapePreviewStyle(css)}</style>
+<style>html,body{margin:0;padding:0;background:white;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_error{padding:24px;margin:24px;font-family:system-ui;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.5}</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<script type="text/babel" data-presets="env,react,typescript">
+try {
+  const { useState, useEffect, useMemo, useCallback, useRef, useReducer, useContext, createContext, Fragment, forwardRef, memo, Children, cloneElement, isValidElement } = React
+  const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
+  const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
+  const __makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
+  const cn = (...args) => args.flat(Infinity).filter(Boolean).map((a) => typeof a === 'string' ? a : Object.entries(a || {}).filter(([, v]) => v).map(([k]) => k).join(' ')).join(' ')
+  const clsx = cn
+  const twMerge = cn
+  const cva = (base, _config) => (...inputs) => cn(base, ...inputs)
+
+  ${userScript}
+
+  const __Root__ = (typeof ${rootName} !== 'undefined') ? ${rootName} : null
+  const __mount__ = document.getElementById('root')
+  if (!__Root__) {
+    __mount__.innerHTML = '<div id="__preview_error">Preview error: could not find the default export in app/page.tsx</div>'
+  } else {
+    ReactDOM.createRoot(__mount__).render(React.createElement(__Root__))
+  }
+} catch (err) {
+  const el = document.getElementById('root')
+  if (el) {
+    el.innerHTML = '<div id="__preview_error">Preview error: ' + escapeHtml(err && err.message ? String(err.message) : String(err)) + '</div>'
+  }
+  console.error('[786.Chat preview]', err)
+}
+</script>
+</body>
+</html>`
+}
+
+function transformPreviewSource(src: string): { defaultName: string | null; body: string } {
+  const lucideNames = new Set<string>()
+  const lucideRe = /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/g
+  let match: RegExpExecArray | null
+  while ((match = lucideRe.exec(src)) !== null) {
+    for (const raw of match[1].split(",")) {
+      const cleaned = raw.trim().split(/\s+as\s+/i)[0].trim()
+      if (/^[A-Z][\w$]*$/.test(cleaned)) lucideNames.add(cleaned)
+    }
+  }
+
+  let source = src
+  source = source.replace(/^["']use (client|server)["']\s*;?\s*\n?/m, "")
+  source = source.replace(/^\s*import\s+[\s\S]*?from\s+["'][^"']+["']\s*;?\s*$/gm, "")
+  source = source.replace(/^\s*import\s+["'][^"']+["']\s*;?\s*$/gm, "")
+
+  let defaultName: string | null = null
+  const namedDefaultFunction = source.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
+  if (namedDefaultFunction) {
+    defaultName = namedDefaultFunction[1]
+    source = source.replace(/export\s+default\s+function\s+/, "function ")
+  } else if (/export\s+default\s+function\s*\(/.test(source)) {
+    defaultName = "__DefaultExport__"
+    source = source.replace(/export\s+default\s+function\s*\(/, "function __DefaultExport__(")
+  } else {
+    const namedDefault = source.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/)
+    if (namedDefault) {
+      defaultName = namedDefault[1]
+      source = source.replace(/export\s+default\s+[A-Za-z_$][\w$]*\s*;?/, "")
+    } else if (/export\s+default\s+/.test(source)) {
+      defaultName = "__DefaultExport__"
+      source = source.replace(/export\s+default\s+/, "const __DefaultExport__ = ")
+    }
+  }
+
+  source = source.replace(/\bexport\s+(const|let|var|function|class|type|interface)\b/g, "$1")
+  source = source.replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
+  source = source.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
+
+  const lucideShim = Array.from(lucideNames)
+    .map((name) => `const ${name} = __makeIcon('${name}');`)
+    .join("\n")
+  const body = (lucideShim ? `${lucideShim}\n` : "") + source.trim()
+  return { defaultName, body }
+}
+
+function escapePreviewScript(value: string): string {
+  return value.replace(/<\/script>/gi, "<\\/script>")
+}
+
+function escapePreviewStyle(value: string): string {
+  return value.replace(/<\/style>/gi, "<\\/style>")
+}
+
+function buildEmptyPreview(css: string, message: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}</style><style>html,body{margin:0;padding:0;font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a}</style></head><body><div style="padding:32px;max-width:720px;margin:64px auto;border:1px solid #cbd5e1;background:white;border-radius:12px;color:#475569">${message}</div></body></html>`
 }
 
 type ActiveProject = { id: string; title: string; description: string; prompt: string; files: SevenEightSixProjectFileMap; preview_state: AdminProjectPreviewState }
@@ -344,7 +474,7 @@ export default function SevenEightSixAdminChatPage() {
           {panel === "preview" ? (
             project && previewHtml ? (
               <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={project.id} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
+                <iframe key={`${project.id}-${project.preview_state?.active_file || "preview"}-${Object.keys(project.files || {}).length}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
