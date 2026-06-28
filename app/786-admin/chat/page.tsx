@@ -105,6 +105,7 @@ try {
   const clsx = cn
   const twMerge = cn
   const cva = (base, _config) => (...inputs) => cn(base, ...inputs)
+  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] || ch))
 
   ${userScript}
 
