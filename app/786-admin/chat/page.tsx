@@ -174,7 +174,27 @@ try {
   const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
   const __makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
-  fix(786-admin): avoid runtime helper redeclaration
+
+  if (typeof globalThis.cn === 'undefined') {
+    globalThis.cn = function () {
+      var args = Array.prototype.slice.call(arguments)
+      return args.flat(Infinity).filter(Boolean).map(function (a) {
+        return typeof a === 'string'
+          ? a
+          : Object.entries(a || {}).filter(function (e) { return e[1] }).map(function (e) { return e[0] }).join(' ')
+      }).join(' ')
+    }
+  }
+  if (typeof globalThis.clsx === 'undefined') { globalThis.clsx = globalThis.cn }
+  if (typeof globalThis.twMerge === 'undefined') { globalThis.twMerge = globalThis.cn }
+  if (typeof globalThis.cva === 'undefined') {
+    globalThis.cva = function (base, _config) {
+      return function () {
+        var inputs = Array.prototype.slice.call(arguments)
+        return globalThis.cn.apply(null, [base].concat(inputs))
+      }
+    }
+  }
 
   ${escapePreviewScript(userScript)}
 
@@ -545,7 +565,7 @@ export default function SevenEightSixAdminChatPage() {
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
             <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
-              <span className="block truncate">{project ? project.title : "No project yet"}</span>
+              <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
             </div>
             <button onClick={() => setPanel("preview")} className={`rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Monitor className="mr-2 inline h-4 w-4" />Preview
@@ -559,7 +579,15 @@ export default function SevenEightSixAdminChatPage() {
           </header>
 
           {panel === "preview" ? (
-            project && previewPayload.html ? (
+            sending ? (
+              <div className="flex min-h-0 flex-1 p-6">
+                <div className="flex min-h-0 flex-1 items-start rounded-[2rem] border border-cyan-300/20 bg-white p-6">
+                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-6 py-5 text-sm font-medium text-slate-500">
+                    Loading generated preview...
+                  </div>
+                </div>
+              </div>
+            ) : project && previewPayload.html ? (
               <div className="flex min-h-0 flex-1 p-6">
                 <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
               </div>
