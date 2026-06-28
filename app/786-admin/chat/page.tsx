@@ -256,7 +256,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
   source = source.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
 
   const lucideShim = Array.from(lucideNames)
-    .map((name) => `const ${name} = __makeIcon('${name}');`)
+  .map((name) => `if (typeof globalThis.${name} === 'undefined') { globalThis.${name} = __makeIcon('${name}'); }`)
     .join("\n")
   const body = (lucideShim ? `${lucideShim}\n` : "") + source.trim()
   return { defaultName, body }
