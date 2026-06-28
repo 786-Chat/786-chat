@@ -1,4 +1,4 @@
-"use client"
+ "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -116,10 +116,10 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>${escapePreviewStyle(css)}</style>
-<style>html,body{margin:0;padding:0;background:white;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_loading{padding:32px;margin:24px;font-family:system-ui;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;font-size:13px;line-height:1.5}#__preview_error{padding:24px;margin:24px;font-family:system-ui;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:14px;white-space:pre-wrap;font-size:13px;line-height:1.5}</style>
+<style>html,body{margin:0;padding:0;background:#0b111d;color:#e2e8f0;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_loading{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:32px;font-family:system-ui;color:#94a3b8;background:#0b111d;font-size:13px;line-height:1.6;letter-spacing:0.01em}#__preview_loading_dot{display:inline-block;width:8px;height:8px;border-radius:9999px;background:#67e8f9;margin-right:10px;box-shadow:0 0 12px rgba(103,232,249,0.6);animation:__pulse 1s ease-in-out infinite}@keyframes __pulse{0%,100%{opacity:0.4;transform:scale(0.9)}50%{opacity:1;transform:scale(1.15)}}#__preview_error{padding:24px;margin:24px;font-family:system-ui;color:#fecaca;background:#1a0f0f;border:1px solid #7f1d1d;border-radius:14px;white-space:pre-wrap;font-size:13px;line-height:1.5}</style>
 </head>
 <body>
-<div id="root"><div id="__preview_loading">Loading generated preview...</div></div>
+<div id="root"><div id="__preview_loading"><span><span id="__preview_loading_dot"></span>Loading generated preview...</span></div></div>
 <script>
 (function(){
   function escapeHtml(value){return String(value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch})}
@@ -291,7 +291,7 @@ function stablePreviewKey(files: SevenEightSixProjectFileMap | undefined, html: 
 }
 
 function buildEmptyPreview(css: string, message: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}</style><style>html,body{margin:0;padding:0;font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a}</style></head><body><div style="padding:32px;max-width:720px;margin:64px auto;border:1px solid #cbd5e1;background:white;border-radius:12px;color:#475569">${message}</div></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}</style><style>html,body{margin:0;padding:0;font-family:system-ui,sans-serif;background:#0b111d;color:#94a3b8}</style></head><body><div style="padding:32px;max-width:720px;margin:64px auto;border:1px solid rgba(148,163,184,0.18);background:rgba(255,255,255,0.03);border-radius:14px;color:#cbd5e1;font-size:13px;line-height:1.6">${message}</div></body></html>`
 }
 
 function buildExistingProjectContext(activeProject: ActiveProject | null, selectedFile: string): ExistingProjectContext | undefined {
@@ -581,15 +581,16 @@ export default function SevenEightSixAdminChatPage() {
           {panel === "preview" ? (
             sending ? (
               <div className="flex min-h-0 flex-1 p-6">
-                <div className="flex min-h-0 flex-1 items-start rounded-[2rem] border border-cyan-300/20 bg-white p-6">
-                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-6 py-5 text-sm font-medium text-slate-500">
+                <div className="flex min-h-0 flex-1 items-center justify-center rounded-[2rem] border border-cyan-300/20 bg-[#0b111d] p-6">
+                  <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-medium text-slate-300">
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />
                     Loading generated preview...
                   </div>
                 </div>
               </div>
             ) : project && previewPayload.html ? (
               <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
+                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
