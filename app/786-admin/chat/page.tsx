@@ -1,17 +1,3 @@
-What's in this file:
-
-Concern	Implementation
-Persistence	Unchanged — /api/786-admin/projects POST/PATCH with projectId round-trip (Subsystem #1 + #3)
-AI codegen	Unchanged — /api/786-admin/chat with existing payload for edits
-Preview runtime	Subsystem #5 v2 — Babel-standalone, dependency-ordered (lib → utils → hooks → components → page), inlines .ts data files, strips import/re-export lines, globalThis shims for cn/clsx/twMerge/cva/Lucide icons
-Loading state	Dark iframe srcDoc with animated dots, removed on first paint — no white flash
-Header	Clean: only "New Chat" + "Settings" popover (model + sound moved inside)
-Preview controls	Desktop / Tablet / Mobile device frames with smooth transitions
-Code panel	Real 2-level file tree with collapsible folders, file-kind color dots, line-numbered code viewer with monospace gutter
-Chat bubbles	Avatars (You/786), model badge, timestamps, refined spacing, dedicated error styling
-Persisted prefs	Width, sound, mode, device, and active file all survive reload
-data-testid	Added on every interactive control for future testing-agent runs
-📄 Full file: app/786-admin/chat/page.tsx
 "use client"
 
 // app/786-admin/chat/page.tsx
