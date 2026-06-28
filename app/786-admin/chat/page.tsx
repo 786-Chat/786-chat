@@ -283,9 +283,16 @@ export default function SevenEightSixAdminChatPage() {
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
           </header>
-
           {panel === "preview" ? (
-            project && previewHtml ? (
+            sending ? (
+              <div className="flex min-h-0 flex-1 p-6">
+                <div className="flex min-h-0 flex-1 items-start rounded-[2rem] border border-cyan-300/20 bg-white p-6">
+                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-6 py-5 text-sm font-medium text-slate-500">
+                    Loading generated preview...
+                  </div>
+                </div>
+              </div>
+            ) : project && previewHtml ? (
               <div className="flex min-h-0 flex-1 p-6">
                 <iframe key={project.id} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
               </div>
@@ -318,8 +325,3 @@ export default function SevenEightSixAdminChatPage() {
               </pre>
             </div>
           )}
-        </section>
-      </div>
-    </main>
-  )
-}
