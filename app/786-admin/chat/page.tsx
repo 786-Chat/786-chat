@@ -271,7 +271,7 @@ export default function SevenEightSixAdminChatPage() {
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
             <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
-              <span className="block truncate">{project ? project.title : "No project yet"}</span>
+              <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title
             </div>
             <button onClick={() => setPanel("preview")} className={`rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Monitor className="mr-2 inline h-4 w-4" />Preview
@@ -325,7 +325,7 @@ export default function SevenEightSixAdminChatPage() {
               </pre>
             </div>
           )}
-        </section>
+               </section>
       </div>
     </main>
   )
