@@ -174,10 +174,7 @@ try {
   const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
   const __makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
-  const cn = (...args) => args.flat(Infinity).filter(Boolean).map((a) => typeof a === 'string' ? a : Object.entries(a || {}).filter(([, v]) => v).map(([k]) => k).join(' ')).join(' ')
-  const clsx = cn
-  const twMerge = cn
-  const cva = (base, _config) => (...inputs) => cn(base, ...inputs)
+  fix(786-admin): avoid runtime helper redeclaration
 
   ${escapePreviewScript(userScript)}
 
