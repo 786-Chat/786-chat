@@ -21,12 +21,165 @@ function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
 }
 
-function filesToHtml(files: SevenEightSixProjectFileMap) {
-  const page = files["app/page.tsx"] || ""
-  const css = files["app/globals.css"] || ""
-  const title = page.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1]?.replace(/<[^>]+>/g, "").trim() || "786.Chat Generated Website"
-  const description = page.match(/<p[^>]*>([\s\S]*?)<\/p>/)?.[1]?.replace(/<[^>]+>/g, "").trim() || "A premium generated website preview."
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script><style>${css}body{margin:0;background:#020617;color:white;font-family:Inter,system-ui,sans-serif}</style></head><body><main class="min-h-screen bg-slate-950 text-white"><section class="min-h-screen px-8 py-10 bg-[radial-gradient(circle_at_top_left,#f59e0b55,transparent_35%),radial-gradient(circle_at_top_right,#ef444455,transparent_35%),linear-gradient(135deg,#020617,#0f172a_75%)]"><nav class="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/10 bg-white/10 px-6 py-4"><div class="text-xl font-black tracking-[0.28em] text-cyan-200">786.CHAT</div></nav><div class="mx-auto grid max-w-7xl items-center gap-12 py-20 lg:grid-cols-2"><div><p class="text-sm font-black uppercase tracking-[0.35em] text-cyan-200">Project Preview</p><h1 class="mt-6 text-5xl font-black tracking-tight md:text-7xl">${title}</h1><p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">${description}</p></div></div></section></main></body></html>`
+function escapePreview(value: string): string {
+  return String(value || "").replace(/<\/script>/gi, "<\\/script>")
+}
+
+function transformPreviewSource(src: string): { defaultName: string | null; body: string } {
+  const lucideNames = new Set<string>()
+  const lucideRe = /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/g
+  let match: RegExpExecArray | null
+  while ((match = lucideRe.exec(src)) !== null) {
+    for (const raw of match[1].split(",")) {
+      const name = raw.trim().split(/\s+as\s+/i)[0].trim()
+      if (/^[A-Z][\w$]*$/.test(name)) lucideNames.add(name)
+    }
+  }
+
+  let code = src
+    .replace(/^['"]use (client|server)['"]\s*;?\s*\n?/m, "")
+    .replace(/^\s*import\s+[\s\S]*?from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+    .replace(/^\s*import\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+    .replace(/^\s*export\s+\*\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+    .replace(/^\s*export\s+\*\s+as\s+[\w$]+\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+    .replace(/^\s*export\s*\{[^}]*\}\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+
+  let defaultName: string | null = null
+  const namedDefault = code.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
+  if (namedDefault) {
+    defaultName = namedDefault[1]
+    code = code.replace(/export\s+default\s+function\s+/, "function ")
+  } else if (/export\s+default\s+function\s*\(/.test(code)) {
+    defaultName = "__DefaultExport__"
+    code = code.replace(/export\s+default\s+function\s*\(/, "function __DefaultExport__(")
+  } else {
+    const identifierDefault = code.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/)
+    if (identifierDefault) {
+      defaultName = identifierDefault[1]
+      code = code.replace(/export\s+default\s+[A-Za-z_$][\w$]*\s*;?/, "")
+    } else if (/export\s+default\s+/.test(code)) {
+      defaultName = "__DefaultExport__"
+      code = code.replace(/export\s+default\s+/, "const __DefaultExport__ = ")
+    }
+  }
+
+  code = code
+    .replace(/\bexport\s+(const|let|var|function|class|type|interface|enum)\b/g, "$1")
+    .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
+    .replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
+
+  const iconShim = Array.from(lucideNames)
+    .map((name) => `if (typeof globalThis.${name} === 'undefined') { globalThis.${name} = __makeIcon('${name}'); } var ${name} = globalThis.${name};`)
+    .join("\n")
+
+  return { defaultName, body: [iconShim, code.trim()].filter(Boolean).join("\n") }
+}
+
+function buildEmptyPreview(css: string, message: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script><style>${escapePreview(css)}</style><style>html,body{margin:0;background:#050713;color:#e2e8f0;font-family:system-ui,sans-serif}</style></head><body><div style="margin:64px auto;padding:32px;max-width:720px;border:1px solid #1e293b;border-radius:16px;background:#0b111d;color:#94a3b8">${message}</div><script>try{parent.postMessage({type:'786-preview-ready'},'*')}catch(e){}</script></body></html>`
+}
+
+function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
+  if (!files || Object.keys(files).length === 0) {
+    return buildEmptyPreview("", "Preview will appear here once a project is generated.")
+  }
+
+  const pagePath = ["app/page.tsx", "app/page.jsx", "src/app/page.tsx", "src/app/page.jsx"].find(
+    (path) => typeof files[path] === "string" && String(files[path]).trim().length > 0
+  )
+  const rawCss = String(files["app/globals.css"] || files["src/app/globals.css"] || "")
+  const css = rawCss.replace(/@tailwind\s+[a-z]+\s*;?/gi, "").trim()
+
+  if (!pagePath) {
+    return buildEmptyPreview(css, "No app/page.tsx found in this project, so preview cannot start.")
+  }
+
+  const isSourceFile = (path: string) => /\.(tsx?|jsx?)$/.test(path) && !/\.d\.ts$/.test(path)
+  const isLayoutFile = (path: string) => /^(src\/)?app\/layout\.(tsx?|jsx?)$/.test(path)
+  const dependencyOrder = (path: string) => {
+    if (/^(src\/)?lib\//.test(path)) return 0
+    if (/^(src\/)?(utils|util|helpers|data|constants|types)\//.test(path)) return 1
+    if (/^(src\/)?hooks\//.test(path)) return 2
+    if (/^(src\/)?components\//.test(path)) return 3
+    return 4
+  }
+
+  const pageTransform = transformPreviewSource(String(files[pagePath]))
+  const rootName = pageTransform.defaultName || "Page"
+  const sourceBodies = Object.entries(files)
+    .filter(([path]) => path !== pagePath && !isLayoutFile(path) && isSourceFile(path))
+    .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
+    .map(([, source]) => transformPreviewSource(String(source)).body)
+    .filter(Boolean)
+    .join("\n\n")
+  const userScript = escapePreview([sourceBodies, pageTransform.body].filter(Boolean).join("\n\n"))
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>${escapePreview(css)}</style>
+<style>
+html,body{margin:0;padding:0;background:#fff;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}
+#__preview_loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#050713;color:#67e8f9;font-size:13px;letter-spacing:.18em;text-transform:uppercase;z-index:9999}
+#__preview_loading span{display:inline-block;width:8px;height:8px;margin:0 3px;background:#22d3ee;border-radius:99px;animation:__pl 1s infinite ease-in-out both}
+#__preview_loading span:nth-child(2){animation-delay:.12s}#__preview_loading span:nth-child(3){animation-delay:.24s}
+@keyframes __pl{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
+#__preview_error{padding:24px;margin:24px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#fca5a5;background:#1f0a0a;border:1px solid #7f1d1d;border-radius:12px;white-space:pre-wrap;font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="__preview_loading"><span></span><span></span><span></span></div>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<script type="text/babel" data-presets="env,react,typescript">
+function __786_signal_ready(){try{parent.postMessage({type:'786-preview-ready'},'*')}catch(e){}}
+function __786_signal_error(msg){try{parent.postMessage({type:'786-preview-error',error:String(msg)},'*')}catch(e){}}
+try {
+  const { useState, useEffect, useMemo, useCallback, useRef, useReducer, useContext, createContext, Fragment, forwardRef, memo, Children, cloneElement, isValidElement } = React
+  const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
+  const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
+  if (typeof globalThis.__makeIcon === 'undefined') {
+    globalThis.__makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
+  }
+  const __makeIcon = globalThis.__makeIcon
+  if (typeof globalThis.cn === 'undefined') globalThis.cn = (...args) => args.flat(Infinity).filter(Boolean).map((a) => typeof a === 'string' ? a : Object.entries(a || {}).filter(([,v]) => v).map(([k]) => k).join(' ')).join(' ')
+  var cn = globalThis.cn
+  if (typeof globalThis.clsx === 'undefined') globalThis.clsx = globalThis.cn
+  var clsx = globalThis.clsx
+  if (typeof globalThis.twMerge === 'undefined') globalThis.twMerge = globalThis.cn
+  var twMerge = globalThis.twMerge
+  if (typeof globalThis.cva === 'undefined') globalThis.cva = (base) => (...inputs) => globalThis.cn(base, ...inputs)
+  var cva = globalThis.cva
+
+  ${userScript}
+
+  const __Root__ = (typeof ${rootName} !== 'undefined') ? ${rootName} : null
+  const __mount__ = document.getElementById('root')
+  const __loader__ = document.getElementById('__preview_loading')
+  if (!__Root__) {
+    if (__loader__) __loader__.remove()
+    __mount__.innerHTML = '<div id="__preview_error">Preview error: could not find default export in app/page.tsx</div>'
+    __786_signal_error('No default export found in app/page.tsx')
+  } else {
+    ReactDOM.createRoot(__mount__).render(React.createElement(__Root__))
+    requestAnimationFrame(() => { if (__loader__) __loader__.remove(); __786_signal_ready() })
+  }
+} catch (err) {
+  const __loader__ = document.getElementById('__preview_loading')
+  if (__loader__) __loader__.remove()
+  const el = document.getElementById('root')
+  if (el) el.innerHTML = '<div id="__preview_error">Preview error: ' + (err && err.message ? String(err.message) : String(err)) + '</div>'
+  __786_signal_error(err && err.message ? err.message : String(err))
+  console.error('[786.Chat preview]', err)
+}
+</script>
+</body>
+</html>`
 }
 
 export default function SevenEightSixAdminChatPage() {
