@@ -2,22 +2,19 @@ import { NextResponse } from "next/server"
 import {
   generateProjectCode,
   type CodegenMode,
-  type CodegenResult,
 } from "@/lib/786-admin/codegen"
-import {
-  createSevenEightSixProjectFromPrompt,
-  type SevenEightSixProject,
-} from "@/lib/786-admin/local-project-generator"
+import type { SevenEightSixProject } from "@/lib/786-admin/local-project-generator"
 
 // Subsystem #3 — real prompt-driven file generation.
-// Routes the prompt through DeepSeek v4 Pro (via generateProjectCode) and
-// returns a real SevenEightSixProject payload to the client. The client
-// then persists via /api/786-admin/projects (POST or PATCH), so the
-// existing Subsystem #1 ON CONFLICT upsert handles edits with no
-// duplicate rows.
+// Routes the prompt through structured AI codegen and returns a real
+// SevenEightSixProject payload to the client. The client then persists via
+// /api/786-admin/projects (POST or PATCH), so Subsystem #1 ON CONFLICT upsert
+// handles edits with no duplicate rows.
 //
-// The hardcoded local template generator is ONLY used as an emergency
-// fallback when generateProjectCode throws.
+// IMPORTANT: Do not return local fallback templates from this route. A fallback
+// template looks like a successful generated project and can overwrite/save old
+// placeholder UI into Neon. If AI codegen fails, fail loudly so no fake preview
+// is persisted.
 
 type ExistingInput = {
   title?: string
@@ -74,78 +71,42 @@ export async function POST(request: Request) {
           }
         : undefined
 
-    let codegen: CodegenResult | null = null
-    let codegenError: string | null = null
+    const codegen = await generateProjectCode({ prompt: message, mode, existing })
 
-    try {
-      codegen = await generateProjectCode({ prompt: message, mode, existing })
-    } catch (error) {
-      codegenError =
-        error instanceof Error ? error.message : "AI codegen failed"
-      console.error(
-        "[786.Chat] codegen failed, falling back to local generator",
-        error
-      )
-    }
-
-    let project: SevenEightSixProject
-    let response: string
-    let model: string
-    let reason: string
-    let fellBackToLocal = false
-
-    // Determine the id we return to the client:
-    //   - If projectId was provided → this is an EDIT, reuse the same id so
-    //     persistAfterGeneration on the client PATCHes the same Neon row.
-    //   - Otherwise → this is a NEW project, mint a fresh id placeholder.
-    //     The DB still assigns its own UUID on INSERT; this id is only a
-    //     pre-persist placeholder shown in the chat response.
     const now = new Date().toISOString()
+    const id = projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
 
-    if (codegen) {
-      const id =
-        projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
-      project = {
-        id,
-        title: codegen.title,
-        description: codegen.description,
-        prompt: message,
-        createdAt: now,
-        updatedAt: now,
-        files: codegen.files,
-      }
-      response = codegen.reply
-      model = codegen.model
-      reason = codegen.reason
-    } else {
-      fellBackToLocal = true
-      const fallback = createSevenEightSixProjectFromPrompt(message)
-      // Preserve the existing projectId on edit even when falling back.
-      project = projectId ? { ...fallback, id: projectId } : fallback
-      response = `AI codegen unavailable, returned a fallback template (${
-        codegenError || "unknown error"
-      }). Please retry the prompt.`
-      model = "local-fallback"
-      reason = "Emergency fallback: AI codegen failed."
+    const project: SevenEightSixProject = {
+      id,
+      title: codegen.title,
+      description: codegen.description,
+      prompt: message,
+      createdAt: now,
+      updatedAt: now,
+      files: codegen.files,
     }
 
     return NextResponse.json({
       success: true,
-      response,
-      model,
-      reason,
+      response: codegen.reply,
+      model: codegen.model,
+      reason: codegen.reason,
       project,
-      fellBackToLocal,
-      codegenError: fellBackToLocal ? codegenError : undefined,
+      fellBackToLocal: false,
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message : "AI codegen failed."
+
+    console.error("[786.Chat] codegen failed; no fallback preview was saved", error)
+
     return NextResponse.json(
       {
         success: false,
         error:
-          error instanceof Error ? error.message : "786.Chat request failed.",
+          "786.Chat could not generate real project files. No fallback template was saved. Please retry after checking the AI provider/API key.",
+        debug: message,
       },
-      { status: 500 }
+      { status: 503 }
     )
   }
 }
