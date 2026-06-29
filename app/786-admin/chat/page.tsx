@@ -15,6 +15,7 @@ const LEGACY_PROJECTS_KEY = "786chat_admin_projects_v1"
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
+type PreviewDevice = "desktop" | "tablet" | "mobile"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
@@ -44,15 +45,23 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [mode, setMode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop")
+  const [previewLoaded, setPreviewLoaded] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [sound, setSound] = useState(true)
   const [chatWidth, setChatWidth] = useState(430)
   const [isResizing, setIsResizing] = useState(false)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
   const previewHtml = useMemo(() => (project ? filesToHtml(project.files) : ""), [project])
+  const previewKey = useMemo(() => {
+    if (!project) return "empty-preview"
+    return `${project.id}-${project.preview_state?.active_file || "preview"}-${Object.keys(project.files || {}).length}-${previewHtml.length}`
+  }, [previewHtml, project])
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
 
@@ -106,6 +115,25 @@ export default function SevenEightSixAdminChatPage() {
     }
   }, [isResizing])
 
+  useEffect(() => {
+    if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current)
+    setPreviewLoaded(false)
+    setPreviewError(null)
+    if (!project || !previewHtml || panel !== "preview") return
+    previewTimeoutRef.current = setTimeout(() => {
+      setPreviewError("Preview initialization is taking longer than expected. The project is saved; switch to Code to inspect files, then reopen Preview.")
+    }, 12000)
+    return () => {
+      if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current)
+    }
+  }, [panel, previewHtml, previewKey, project])
+
+  function handlePreviewLoad() {
+    if (previewTimeoutRef.current) clearTimeout(previewTimeoutRef.current)
+    setPreviewLoaded(true)
+    setPreviewError(null)
+  }
+
   function tone(done = false) {
     if (!sound) return
     try {
@@ -127,7 +155,7 @@ export default function SevenEightSixAdminChatPage() {
   }
 
   function newChat() {
-    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview")
+    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview"); setPreviewError(null); setPreviewLoaded(false)
     try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
     tone(true)
   }
@@ -271,8 +299,17 @@ export default function SevenEightSixAdminChatPage() {
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
             <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
-              <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
+              <span className="block truncate">{sending && !project ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
             </div>
+            {panel === "preview" && (
+              <div className="hidden items-center rounded-full border border-white/10 bg-white/[0.045] p-1 lg:flex">
+                {(["desktop", "tablet", "mobile"] as const).map((device) => (
+                  <button key={device} type="button" onClick={() => setPreviewDevice(device)} className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${previewDevice === device ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-100"}`}>
+                    {device}
+                  </button>
+                ))}
+              </div>
+            )}
             <button onClick={() => setPanel("preview")} className={`rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Monitor className="mr-2 inline h-4 w-4" />Preview
             </button>
@@ -283,18 +320,35 @@ export default function SevenEightSixAdminChatPage() {
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
           </header>
-                    {panel === "preview" ? (
-            sending ? (
-              <div className="flex min-h-0 flex-1 p-6">
-                <div className="flex min-h-0 flex-1 items-start rounded-[2rem] border border-cyan-300/20 bg-white p-6">
-                  <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-6 py-5 text-sm font-medium text-slate-500">
-                    Loading generated preview...
+
+          {panel === "preview" ? (
+            project && previewHtml ? (
+              <div className={`relative min-h-0 flex-1 overflow-auto bg-[#030408] ${previewDevice === "desktop" ? "p-0" : "flex items-center justify-center p-6"}`}>
+                {!previewLoaded && !previewError && (
+                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[#030408]/70 text-sm font-semibold text-cyan-100 backdrop-blur-sm">
+                    Initializing preview...
                   </div>
-                </div>
+                )}
+                {previewError && (
+                  <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl border border-amber-300/35 bg-amber-300/15 px-4 py-3 text-sm font-semibold text-amber-100">
+                    {previewError}
+                  </div>
+                )}
+                <iframe
+                  key={previewKey}
+                  srcDoc={previewHtml}
+                  title={`${project.title} preview`}
+                  sandbox="allow-scripts allow-forms allow-popups"
+                  onLoad={handlePreviewLoad}
+                  onError={() => setPreviewError("Preview failed to initialize. The project files are still saved and available in Code.")}
+                  className={previewDevice === "desktop" ? "h-full w-full border-0 bg-white" : previewDevice === "tablet" ? "h-[900px] w-[820px] max-h-full max-w-full rounded-[2rem] border border-cyan-300/25 bg-white shadow-2xl shadow-cyan-950/40" : "h-[844px] w-[390px] max-h-full max-w-full rounded-[2.5rem] border-[10px] border-slate-900 bg-white shadow-2xl shadow-cyan-950/40"}
+                />
               </div>
-            ) : project && previewHtml ? (
-              <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={project.id} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-white" />
+            ) : sending ? (
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
+                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-6 py-5 text-sm font-semibold text-cyan-100">
+                  786.Chat is generating project files. Preview will render as soon as the project is saved.
+                </div>
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
@@ -325,7 +379,7 @@ export default function SevenEightSixAdminChatPage() {
               </pre>
             </div>
           )}
-               </section>
+        </section>
       </div>
     </main>
   )
