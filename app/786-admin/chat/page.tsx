@@ -1,53 +1,39 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Code2,
-  FolderKanban,
-  GripVertical,
-  Loader2,
-  Monitor,
-  Paperclip,
-  Plus,
-  Rocket,
-  Send,
-  Wand2,
+  AlertTriangle, Code2, FolderKanban, GripVertical, Loader2, Monitor, Paperclip,
+  Plus, Rocket, Send, Settings, Smartphone, Sparkles, Tablet, Volume2, VolumeX,
+  X, FileText, ChevronRight, ChevronDown, RefreshCw,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import type {
-  SevenEightSixProject,
-  SevenEightSixProjectFileMap,
-} from "@/lib/786-admin/local-project-generator"
-import type {
-  AdminMessage,
-  AdminProjectPreviewState,
-  AdminProjectWithData,
-} from "@/lib/786-admin/types"
+import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
+import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const CHAT_WIDTH_KEY = "786chat_admin_chat_width_v1"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
+const ACTIVE_FILE_KEY = "786chat_admin_active_file_v1"
+const SOUND_KEY = "786chat_admin_sound_v1"
+const MODE_KEY = "786chat_admin_mode_v1"
+const DEVICE_KEY = "786chat_admin_device_v1"
+const OLD_PROJECT_KEY = "786chat_admin_project_v5"
+const LEGACY_PROJECTS_KEY = "786chat_admin_projects_v1"
 
-const PREVIEW_READY_TIMEOUT_MS = 4500
+const PREVIEW_TIMEOUT_MS = 10000
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type Device = "desktop" | "tablet" | "mobile"
+type PreviewLifecycle = "idle" | "loading" | "ready" | "failed"
 type UiMessage = {
   id: string
   role: "user" | "assistant"
   content: string
   model?: string | null
   reason?: string | null
-}
-type ActiveProject = {
-  id: string
-  title: string
-  description: string
-  prompt: string
-  files: SevenEightSixProjectFileMap
-  preview_state: AdminProjectPreviewState
+  ts?: number
 }
 
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
@@ -57,154 +43,96 @@ function uiFromAdminMessage(m: AdminMessage): UiMessage {
     content: m.content,
     model: m.model,
     reason: m.reason,
+    ts: m.created_at ? new Date(m.created_at).getTime() : undefined,
   }
-}
-
-function escapeHtml(value: string): string {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
 }
 
 function escapePreviewScript(value: string): string {
-  return String(value || "").replace(/<\/script>/gi, "<\\/script>")
+  return value.replace(/<\/script>/gi, "<\\/script>")
 }
 
-function stripImportsAndExports(src: string): string {
-  let code = src
-    .replace(/^["']use (client|server)["']\s*;?\s*\n?/m, "")
-    .replace(/^\s*import\s+[\s\S]*?from\s+["'][^"']+["']\s*;?\s*$/gm, "")
-    .replace(/^\s*import\s+["'][^"']+["']\s*;?\s*$/gm, "")
-    .replace(/^\s*export\s+\*\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
-    .replace(/^\s*export\s+\*\s+as\s+[\w$]+\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
-    .replace(/^\s*export\s*\{[^}]*\}\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "")
-
-  const namedDefault = code.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
-  if (namedDefault) {
-    code = code.replace(/export\s+default\s+function\s+/, "function ")
-  } else if (/export\s+default\s+function\s*\(/.test(code)) {
-    code = code.replace(/export\s+default\s+function\s*\(/, "function Page(")
-  } else if (/export\s+default\s+/.test(code)) {
-    code = code.replace(/export\s+default\s+/, "const Page = ")
-  }
-
-  return code
-    .replace(/\bexport\s+(const|let|var|function|class|type|interface|enum)\b/g, "$1")
-    .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
-    .replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
-}
-
-function getDefaultComponentName(src: string): string {
-  const namedDefault = src.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
-  if (namedDefault?.[1]) return namedDefault[1]
-
-  const identifierDefault = src.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/)
-  if (identifierDefault?.[1]) return identifierDefault[1]
-
-  return "Page"
-}
-
-function collectLucideShim(src: string): string {
-  const names = new Set<string>()
-  const re = /import\s*\{([^}]+)\}\s*from\s*["']lucide-react["']/g
-  let match: RegExpExecArray | null
-
-  while ((match = re.exec(src)) !== null) {
-    for (const raw of match[1].split(",")) {
-      const name = raw.trim().split(/\s+as\s+/i)[0].trim()
-      if (/^[A-Z][\w$]*$/.test(name)) names.add(name)
+function transformPreviewSource(src: string): { defaultName: string | null; body: string } {
+  const lucideNames = new Set<string>()
+  const lucideRe = /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/g
+  let m: RegExpExecArray | null
+  while ((m = lucideRe.exec(src)) !== null) {
+    for (const raw of m[1].split(",")) {
+      const cleaned = raw.trim().split(/\s+as\s+/i)[0].trim()
+      if (/^[A-Z][\w$]*$/.test(cleaned)) lucideNames.add(cleaned)
     }
   }
 
-  return Array.from(names)
-    .map(
-      (name) =>
-        `if (typeof globalThis.${name} === 'undefined') { globalThis.${name} = __makeIcon('${name}'); } var ${name} = globalThis.${name};`
-    )
+  let s = src
+  s = s.replace(/^['"]use (client|server)['"]\s*;?\s*\n?/m, "")
+  s = s.replace(/^\s*import\s+[\s\S]*?from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+  s = s.replace(/^\s*import\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+  s = s.replace(/^\s*export\s+\*\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+  s = s.replace(/^\s*export\s+\*\s+as\s+[\w$]+\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+  s = s.replace(/^\s*export\s*\{[^}]*\}\s+from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+
+  let defaultName: string | null = null
+  const m1 = s.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/)
+  if (m1) {
+    defaultName = m1[1]
+    s = s.replace(/export\s+default\s+function\s+/, "function ")
+  } else {
+    const m2 = s.match(/export\s+default\s+function\s*\(/)
+    if (m2) {
+      defaultName = "__DefaultExport__"
+      s = s.replace(/export\s+default\s+function\s*\(/, "function __DefaultExport__(")
+    } else {
+      const m3 = s.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/)
+      if (m3) {
+        defaultName = m3[1]
+        s = s.replace(/export\s+default\s+[A-Za-z_$][\w$]*\s*;?/, "")
+      } else {
+        const m4 = s.match(/export\s+default\s+/)
+        if (m4) {
+          defaultName = "__DefaultExport__"
+          s = s.replace(/export\s+default\s+/, "const __DefaultExport__ = ")
+        }
+      }
+    }
+  }
+
+  s = s.replace(/\bexport\s+(const|let|var|function|class|type|interface|enum)\b/g, "$1")
+  s = s.replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
+  s = s.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
+
+  const lucideShim = Array.from(lucideNames)
+    .map((n) => `if (typeof globalThis.${n} === 'undefined') { globalThis.${n} = __makeIcon('${n}'); } var ${n} = globalThis.${n};`)
     .join("\n")
+  const body = (lucideShim ? lucideShim + "\n" : "") + s.trim()
+  return { defaultName, body }
 }
 
-function extractUsefulText(src: string, projectTitle = "Project Preview") {
-  const texts = Array.from(src.matchAll(/>([^<>{}\n]{3,140})</g))
-    .map((m) => m[1].replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .filter((text) => !/^(home|about|contact|menu|features)$/i.test(text))
-
-  const title =
-    texts.find((t) => /restaurant|dashboard|quiz|login|calculator|website|app|fork|golden/i.test(t)) ||
-    projectTitle ||
-    "Project Preview"
-
-  const subtitle =
-    texts.find((t) => t !== title && t.length > 24) ||
-    "Your saved project files are loaded from Neon and ready to preview."
-
-  const cards = texts.filter((t) => t !== title && t !== subtitle).slice(0, 6)
-
-  return { title, subtitle, cards }
+function buildEmptyPreview(css: string, message: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewScript(css)}</style><style>html,body{margin:0;padding:0;font-family:system-ui,sans-serif;background:#050713;color:#e2e8f0}</style></head><body><div style="padding:32px;max-width:720px;margin:64px auto;border:1px solid #1e293b;background:#0b111d;border-radius:16px;color:#94a3b8">${message}</div><script>try{parent.postMessage({type:'786-preview-ready'},'*')}catch(e){}</script></body></html>`
 }
 
-function buildStaticFallbackHtml(files: SevenEightSixProjectFileMap, projectTitle: string): string {
-  const page = String(files["app/page.tsx"] || files["app/page.jsx"] || files["src/app/page.tsx"] || files["src/app/page.jsx"] || "")
-  const { title, subtitle, cards } = extractUsefulText(page, projectTitle)
-
-  return `
-<main class="min-h-screen bg-slate-950 text-white">
-  <section class="relative min-h-screen overflow-hidden px-6 py-12">
-    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,.24),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,.22),transparent_36%),linear-gradient(135deg,#020617,#0f172a_70%)]"></div>
-    <div class="relative mx-auto flex min-h-[calc(100vh-6rem)] max-w-7xl flex-col justify-center">
-      <p class="mb-5 inline-flex w-fit rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-black uppercase tracking-[.28em] text-cyan-200">786.Chat Live Preview</p>
-      <h1 class="max-w-5xl text-5xl font-black leading-tight tracking-tight md:text-7xl">${escapeHtml(title)}</h1>
-      <p class="mt-6 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl">${escapeHtml(subtitle)}</p>
-      <div class="mt-10 flex flex-wrap gap-4">
-        <a class="rounded-full bg-cyan-300 px-7 py-4 font-black text-slate-950 shadow-[0_0_40px_rgba(34,211,238,.28)]" href="#sections">Explore Project</a>
-        <a class="rounded-full border border-white/15 bg-white/10 px-7 py-4 font-black text-white" href="#files">View Details</a>
-      </div>
-    </div>
-  </section>
-  <section id="sections" class="px-6 py-20">
-    <div class="mx-auto max-w-7xl">
-      <h2 class="text-4xl font-black">Generated Sections</h2>
-      <div class="mt-8 grid gap-5 md:grid-cols-3">
-        ${(cards.length ? cards : ["Hero Section", "Features", "Contact"])
-          .map(
-            (card) =>
-              `<article class="rounded-[2rem] border border-white/10 bg-white/[.06] p-6"><h3 class="text-xl font-black">${escapeHtml(card)}</h3><p class="mt-3 leading-7 text-slate-300">Generated from the saved project source files.</p></article>`
-          )
-          .join("")}
-      </div>
-    </div>
-  </section>
-  <section id="files" class="border-t border-white/10 px-6 py-10 text-sm text-slate-400">
-    <div class="mx-auto max-w-7xl">Preview fallback rendered safely from saved Neon files. Open Code mode to inspect all source files.</div>
-  </section>
-</main>`
-}
-
-function buildEmptyPreview(css: string, message: string) {
-  return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewScript(css)}</style><style>html,body{margin:0;background:#050713;color:#e2e8f0;font-family:system-ui,sans-serif}</style></head><body><div style="margin:64px auto;padding:32px;max-width:720px;border:1px solid #1e293b;border-radius:16px;background:#0b111d;color:#94a3b8">${escapeHtml(message)}</div><script>try{parent.postMessage({type:'786-preview-ready'},'*')}catch(e){}</script></body></html>`
-}
-
-function filesToHtml(files: SevenEightSixProjectFileMap | undefined, projectTitle = "Project Preview") {
+function filesToHtml(files: SevenEightSixProjectFileMap | undefined): string {
   if (!files || Object.keys(files).length === 0) {
     return buildEmptyPreview("", "Preview will appear here once a project is generated.")
   }
 
   const pagePath = ["app/page.tsx", "app/page.jsx", "src/app/page.tsx", "src/app/page.jsx"].find(
-    (path) => typeof files[path] === "string" && String(files[path]).trim().length > 0
+    (p) => typeof files[p] === "string" && (files[p] as string).trim().length > 0
   )
-  const rawCss = String(files["app/globals.css"] || files["src/app/globals.css"] || "")
+
+  const rawCss = files["app/globals.css"] || files["src/app/globals.css"] || ""
   const css = rawCss.replace(/@tailwind\s+[a-z]+\s*;?/gi, "").trim()
 
   if (!pagePath) {
-    return buildEmptyPreview(css, "No app/page.tsx found in this project, so preview cannot start.")
+    return buildEmptyPreview(css, "No app/page.tsx in this project — preview unavailable.")
   }
+
+  const pageTransform = transformPreviewSource(files[pagePath] as string)
+  const rootName = pageTransform.defaultName || "Page"
 
   const isSourceFile = (path: string) => /\.(tsx?|jsx?)$/.test(path) && !/\.d\.ts$/.test(path)
   const isLayoutFile = (path: string) => /^(src\/)?app\/layout\.(tsx?|jsx?)$/.test(path)
-  const dependencyOrder = (path: string) => {
+
+  const dependencyOrder = (path: string): number => {
     if (/^(src\/)?lib\//.test(path)) return 0
     if (/^(src\/)?(utils|util|helpers|data|constants|types)\//.test(path)) return 1
     if (/^(src\/)?hooks\//.test(path)) return 2
@@ -212,47 +140,43 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined, projectTitl
     return 4
   }
 
-  const pageSource = String(files[pagePath])
-  const rootName = getDefaultComponentName(pageSource)
-  const sourceText = Object.entries(files)
-    .filter(([path]) => path !== pagePath && !isLayoutFile(path) && isSourceFile(path))
+  const sourceEntries = Object.entries(files)
+    .filter(([path]) => {
+      if (path === pagePath) return false
+      if (isLayoutFile(path)) return false
+      return isSourceFile(path)
+    })
     .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
-    .map(([, source]) => String(source))
+
+  const sourceBodies = sourceEntries
+    .map(([, src]) => transformPreviewSource(src as string).body)
+    .filter((b) => b.length > 0)
     .join("\n\n")
-  const lucideShim = collectLucideShim(`${sourceText}\n\n${pageSource}`)
-  const userScript = escapePreviewScript([lucideShim, stripImportsAndExports(sourceText), stripImportsAndExports(pageSource)].filter(Boolean).join("\n\n"))
-  const staticFallbackHtml = escapePreviewScript(buildStaticFallbackHtml(files, projectTitle))
+
+  const userScript = escapePreviewScript(
+    [sourceBodies, pageTransform.body].filter(Boolean).join("\n\n")
+  )
 
   return `<!doctype html>
 <html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>${escapePreviewScript(css)}</style>
 <style>
-html,body{margin:0;padding:0;background:#050713;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}
-#__preview_loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#050713;color:#67e8f9;font-size:13px;letter-spacing:.18em;text-transform:uppercase;z-index:9999}
+html,body{margin:0;padding:0;background:#ffffff;color:#0f172a;font-family:Inter,system-ui,-apple-system,sans-serif}
+#__preview_loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#050713;color:#67e8f9;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;z-index:9999}
 #__preview_loading span{display:inline-block;width:8px;height:8px;margin:0 3px;background:#22d3ee;border-radius:99px;animation:__pl 1s infinite ease-in-out both}
-#__preview_loading span:nth-child(2){animation-delay:.12s}#__preview_loading span:nth-child(3){animation-delay:.24s}
-@keyframes __pl{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
+#__preview_loading span:nth-child(2){animation-delay:0.12s}
+#__preview_loading span:nth-child(3){animation-delay:0.24s}
+@keyframes __pl{0%,80%,100%{opacity:0.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
 #__preview_error{padding:24px;margin:24px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#fca5a5;background:#1f0a0a;border:1px solid #7f1d1d;border-radius:12px;white-space:pre-wrap;font-size:12px;line-height:1.6}
 </style>
 </head>
 <body>
 <div id="__preview_loading"><span></span><span></span><span></span></div>
 <div id="root"></div>
-<script>
-var __786_STATIC_FALLBACK__ = `${staticFallbackHtml}`;
-function __786_mount_static(){
-  var loader=document.getElementById('__preview_loading');
-  var root=document.getElementById('root');
-  if(loader) loader.remove();
-  if(root && !root.childElementCount) root.innerHTML=__786_STATIC_FALLBACK__;
-  try{parent.postMessage({type:'786-preview-ready'},'*')}catch(e){}
-}
-setTimeout(__786_mount_static, ${PREVIEW_READY_TIMEOUT_MS});
-</script>
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
@@ -267,7 +191,9 @@ try {
     globalThis.__makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
   }
   const __makeIcon = globalThis.__makeIcon
-  if (typeof globalThis.cn === 'undefined') globalThis.cn = (...args) => args.flat(Infinity).filter(Boolean).map((a) => typeof a === 'string' ? a : Object.entries(a || {}).filter(([,v]) => v).map(([k]) => k).join(' ')).join(' ')
+  if (typeof globalThis.cn === 'undefined') {
+    globalThis.cn = (...args) => args.flat(Infinity).filter(Boolean).map(a => typeof a === 'string' ? a : Object.entries(a || {}).filter(([,v]) => v).map(([k]) => k).join(' ')).join(' ')
+  }
   var cn = globalThis.cn
   if (typeof globalThis.clsx === 'undefined') globalThis.clsx = globalThis.cn
   var clsx = globalThis.clsx
@@ -282,23 +208,83 @@ try {
   const __mount__ = document.getElementById('root')
   const __loader__ = document.getElementById('__preview_loading')
   if (!__Root__) {
-    __786_mount_static()
+    if (__loader__) __loader__.remove()
+    __mount__.innerHTML = '<div id="__preview_error">Preview error: could not find default export in app/page.tsx</div>'
+    __786_signal_error('No default export found in app/page.tsx')
   } else {
     ReactDOM.createRoot(__mount__).render(React.createElement(__Root__))
-    requestAnimationFrame(() => { if (__loader__) __loader__.remove(); __786_signal_ready() })
+    requestAnimationFrame(() => {
+      if (__loader__) __loader__.remove()
+      __786_signal_ready()
+    })
   }
 } catch (err) {
+  const __loader__ = document.getElementById('__preview_loading')
+  if (__loader__) __loader__.remove()
+  const el = document.getElementById('root')
+  if (el) {
+    el.innerHTML = '<div id="__preview_error">Preview error: ' + (err && err.message ? String(err.message) : String(err)) + '</div>'
+  }
+  __786_signal_error(err && err.message ? err.message : String(err))
   console.error('[786.Chat preview]', err)
-  __786_mount_static()
 }
 </script>
 </body>
 </html>`
 }
 
+type ActiveProject = {
+  id: string
+  title: string
+  description: string
+  prompt: string
+  files: SevenEightSixProjectFileMap
+  preview_state: AdminProjectPreviewState
+}
+
+const MODE_LABEL: Record<Mode, string> = {
+  "auto": "Auto",
+  "deepseek-flash": "DeepSeek Flash",
+  "deepseek-pro": "DeepSeek Pro",
+  "gemini-flash": "Gemini Flash",
+  "gemini-pro": "Gemini Pro",
+}
+
+function formatTime(ts?: number): string {
+  if (!ts) return ""
+  const d = new Date(ts)
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+}
+
+function slugifyTitle(t: string): string {
+  return (t || "untitled").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "untitled"
+}
+
+function classifyFile(path: string): "page" | "layout" | "component" | "lib" | "style" | "config" | "other" {
+  if (/^(src\/)?app\/page\.(tsx?|jsx?)$/.test(path)) return "page"
+  if (/^(src\/)?app\/layout\.(tsx?|jsx?)$/.test(path)) return "layout"
+  if (/^(src\/)?components\//.test(path)) return "component"
+  if (/^(src\/)?(lib|utils|helpers|hooks|data|constants|types)\//.test(path)) return "lib"
+  if (/\.css$/.test(path)) return "style"
+  if (/\.(json|md|env)$/i.test(path) || /^(package|tsconfig|next\.config)/.test(path)) return "config"
+  return "other"
+}
+
+function groupFiles(paths: string[]): { folder: string; files: string[] }[] {
+  const groups = new Map<string, string[]>()
+  for (const p of paths.sort()) {
+    const parts = p.split("/")
+    const folder = parts.length > 1 ? parts[0] : "/"
+    if (!groups.has(folder)) groups.set(folder, [])
+    groups.get(folder)!.push(p)
+  }
+  return Array.from(groups.entries()).map(([folder, files]) => ({ folder, files }))
+}
+
 export default function SevenEightSixAdminChatPage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
+
   const [messages, setMessages] = useState<UiMessage[]>([])
   const [project, setProject] = useState<ActiveProject | null>(null)
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
@@ -310,122 +296,140 @@ export default function SevenEightSixAdminChatPage() {
   const [sound, setSound] = useState(true)
   const [chatWidth, setChatWidth] = useState(430)
   const [isResizing, setIsResizing] = useState(false)
-  const [previewLoaded, setPreviewLoaded] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({})
+  const [previewState, setPreviewState] = useState<PreviewLifecycle>("idle")
   const [previewError, setPreviewError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
-  const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
-  const previewHtml = useMemo(() => (project ? filesToHtml(project.files, project.title) : ""), [project])
-  const previewKey = useMemo(
-    () =>
-      project
-        ? `${project.id}-${project.preview_state?.active_file || "preview"}-${fileNames.length}-${previewHtml.length}`
-        : "empty",
-    [fileNames.length, previewHtml.length, project]
+  const isAdmin = useMemo(
+    () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
+    [user]
   )
+  const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
+  const fileGroups = useMemo(() => groupFiles(fileNames), [fileNames])
+  const previewHtml = useMemo(() => (project ? filesToHtml(project.files) : ""), [project])
 
   useEffect(() => {
     if (!isLoading && !isAdmin) router.replace("/786-admin/login")
   }, [isLoading, isAdmin, router])
 
   useEffect(() => {
-    try {
-      const saved = Number(localStorage.getItem(CHAT_WIDTH_KEY))
-      if (saved >= 360 && saved <= 620) setChatWidth(saved)
-    } catch {}
+    function onMsg(e: MessageEvent) {
+      const data = e.data as { type?: string; error?: string } | null
+      if (!data || typeof data !== "object") return
+      if (data.type === "786-preview-ready") {
+        setPreviewState("ready")
+        setPreviewError(null)
+      } else if (data.type === "786-preview-error") {
+        setPreviewState("failed")
+        setPreviewError(data.error || "Preview reported an error.")
+      }
+    }
+    window.addEventListener("message", onMsg)
+    return () => window.removeEventListener("message", onMsg)
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatWidth)))
-    } catch {}
-  }, [chatWidth])
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages.length, sending])
+    if (!project || !previewHtml) {
+      setPreviewState("idle")
+      setPreviewError(null)
+      return
+    }
+    setPreviewState("loading")
+    setPreviewError(null)
+    const t = window.setTimeout(() => {
+      setPreviewState((cur) => (cur === "loading" ? "failed" : cur))
+      setPreviewError((cur) => cur || "Preview did not initialize within 10 seconds. The project source may have a runtime error.")
+    }, PREVIEW_TIMEOUT_MS)
+    return () => window.clearTimeout(t)
+  }, [project?.id, previewHtml])
 
   useEffect(() => {
     if (!isAdmin) return
-    let cancelled = false
+    try {
+      localStorage.removeItem(OLD_PROJECT_KEY)
+      localStorage.removeItem(LEGACY_PROJECTS_KEY)
+    } catch {}
+    try {
+      const savedWidth = Number(localStorage.getItem(CHAT_WIDTH_KEY))
+      if (Number.isFinite(savedWidth) && savedWidth >= 360 && savedWidth <= 620) setChatWidth(savedWidth)
+      const savedSound = localStorage.getItem(SOUND_KEY)
+      if (savedSound === "off") setSound(false)
+      const savedMode = localStorage.getItem(MODE_KEY) as Mode | null
+      if (savedMode && savedMode in MODE_LABEL) setMode(savedMode)
+      const savedDevice = localStorage.getItem(DEVICE_KEY) as Device | null
+      if (savedDevice && (savedDevice === "desktop" || savedDevice === "tablet" || savedDevice === "mobile")) setDevice(savedDevice)
+    } catch {}
 
+    let cancelled = false
     async function hydrate() {
       let activeId: string | null = null
-      try {
-        activeId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
-      } catch {}
+      try { activeId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY) } catch {}
       if (!activeId) return
-
       try {
-        setPreviewLoaded(false)
-        setPreviewError(null)
         const res = await fetch(`/api/786-admin/projects/${activeId}`, { cache: "no-store" })
-        if (!res.ok) return
+        if (!res.ok) {
+          if (res.status === 404) { try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {} }
+          return
+        }
         const json = (await res.json()) as { project: AdminProjectWithData }
         if (cancelled || !json.project) return
         const p = json.project
-        const files = p.files || {}
-        setProject({
-          id: p.id,
-          title: p.title,
-          description: p.description,
-          prompt: p.prompt,
-          files,
-          preview_state: p.preview_state || {},
-        })
-        setMessages((p.messages || []).map(uiFromAdminMessage))
-        setSelectedFile(
-          (p.preview_state?.active_file as string | undefined) ||
-            (files["app/page.tsx"] ? "app/page.tsx" : Object.keys(files)[0]) ||
+        let initialFile: string | null = null
+        try { initialFile = localStorage.getItem(ACTIVE_FILE_KEY) } catch {}
+        if (!initialFile || !(p.files && p.files[initialFile])) {
+          initialFile =
+            (p.preview_state?.active_file as string | undefined) ||
+            (p.files && p.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(p.files || {})[0]) ||
             "app/page.tsx"
-        )
+        }
+        startTransition(() => {
+          setProject({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            prompt: p.prompt,
+            files: p.files || {},
+            preview_state: p.preview_state || {},
+          })
+          setMessages((p.messages || []).map(uiFromAdminMessage))
+          setSelectedFile(initialFile!)
+        })
       } catch {}
     }
-
     hydrate()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [isAdmin])
+
+  useEffect(() => { try { localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(chatWidth))) } catch {} }, [chatWidth])
+  useEffect(() => { try { localStorage.setItem(SOUND_KEY, sound ? "on" : "off") } catch {} }, [sound])
+  useEffect(() => { try { localStorage.setItem(MODE_KEY, mode) } catch {} }, [mode])
+  useEffect(() => { try { localStorage.setItem(DEVICE_KEY, device) } catch {} }, [device])
+  useEffect(() => { try { localStorage.setItem(ACTIVE_FILE_KEY, selectedFile) } catch {} }, [selectedFile])
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])
 
   useEffect(() => {
     if (!isResizing) return
-    const move = (e: MouseEvent) => setChatWidth(Math.min(Math.max(e.clientX - 92, 360), 620))
-    const up = () => setIsResizing(false)
+    const handleMove = (e: MouseEvent) => setChatWidth(Math.min(Math.max(e.clientX - 92, 360), 620))
+    const handleUp = () => setIsResizing(false)
     document.body.style.cursor = "col-resize"
     document.body.style.userSelect = "none"
-    window.addEventListener("mousemove", move)
-    window.addEventListener("mouseup", up)
+    window.addEventListener("mousemove", handleMove)
+    window.addEventListener("mouseup", handleUp)
     return () => {
       document.body.style.cursor = ""
       document.body.style.userSelect = ""
-      window.removeEventListener("mousemove", move)
-      window.removeEventListener("mouseup", up)
+      window.removeEventListener("mousemove", handleMove)
+      window.removeEventListener("mouseup", handleUp)
     }
   }, [isResizing])
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    setPreviewLoaded(false)
-    setPreviewError(null)
-    if (!project || !previewHtml || panel !== "preview") return
-    timerRef.current = setTimeout(() => {
-      setPreviewLoaded(true)
-      setPreviewError(null)
-    }, PREVIEW_READY_TIMEOUT_MS + 1000)
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
-  }, [panel, previewHtml, previewKey, project])
 
   function tone(done = false) {
     if (!sound) return
     try {
-      const Ctx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctx) return
       const ctx = new Ctx()
       const gain = ctx.createGain()
@@ -448,10 +452,9 @@ export default function SevenEightSixAdminChatPage() {
     setSelectedFile("app/page.tsx")
     setInput("")
     setPanel("preview")
-    setPreviewLoaded(false)
-    setPreviewError(null)
     try {
       localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+      localStorage.removeItem(ACTIVE_FILE_KEY)
     } catch {}
     tone(true)
   }
@@ -462,52 +465,62 @@ export default function SevenEightSixAdminChatPage() {
     assistantText: string,
     assistantModel: string | null,
     assistantReason: string | null
-  ) {
+  ): Promise<ActiveProject | null> {
     const activeFile =
-      (generated.files?.["app/page.tsx"] ? "app/page.tsx" : Object.keys(generated.files || {})[0]) ||
+      (generated.files && generated.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(generated.files || {})[0]) ||
       "app/page.tsx"
+    const previewStatePatch: AdminProjectPreviewState = { active_file: activeFile, entry_path: "app/page.tsx" }
+    const metadataPatch = assistantModel ? { model: assistantModel } : undefined
+    const messagesPayload = [
+      { role: "user" as const, content: userText },
+      { role: "assistant" as const, content: assistantText, model: assistantModel, reason: assistantReason },
+    ]
     const projectId = project?.id || null
-    const url = projectId ? `/api/786-admin/projects/${projectId}` : "/api/786-admin/projects"
-    const method = projectId ? "PATCH" : "POST"
-    const body: Record<string, unknown> = {
-      prompt: userText,
-      preview_state: { active_file: activeFile, entry_path: "app/page.tsx" },
-      files: generated.files,
-      messages: [
-        { role: "user", content: userText },
-        { role: "assistant", content: assistantText, model: assistantModel, reason: assistantReason },
-      ],
-    }
-    if (!projectId) {
-      body.title = generated.title
-      body.description = generated.description
-    }
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) return null
-    const json = (await res.json()) as { project: AdminProjectWithData }
-    const saved = json.project
     try {
-      localStorage.setItem(ACTIVE_PROJECT_ID_KEY, saved.id)
-    } catch {}
-    return {
-      id: saved.id,
-      title: saved.title,
-      description: saved.description,
-      prompt: saved.prompt,
-      files: saved.files || {},
-      preview_state: saved.preview_state || {},
+      const url = projectId ? `/api/786-admin/projects/${projectId}` : "/api/786-admin/projects"
+      const method = projectId ? "PATCH" : "POST"
+      const body: Record<string, unknown> = {
+        prompt: userText,
+        preview_state: previewStatePatch,
+        files: generated.files,
+        messages: messagesPayload,
+      }
+      if (metadataPatch) body.metadata = metadataPatch
+      if (!projectId) { body.title = generated.title; body.description = generated.description }
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error(`${method} ${url} failed (${res.status})`)
+      const json = (await res.json()) as { project: AdminProjectWithData }
+      const saved = json.project
+      try { localStorage.setItem(ACTIVE_PROJECT_ID_KEY, saved.id) } catch {}
+      return {
+        id: saved.id,
+        title: saved.title,
+        description: saved.description,
+        prompt: saved.prompt,
+        files: saved.files || {},
+        preview_state: saved.preview_state || {},
+      }
+    } catch (error) {
+      console.error("[786.Chat] persistence failed", error)
+      return null
     }
   }
 
-  async function send() {
-    const text = input.trim()
+  const send = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim()
     if (!text || sending) return
-    setMessages((old) => [...old, { id: `u-${Date.now()}`, role: "user", content: text }])
-    setInput("")
+    const optimisticUser: UiMessage = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      content: text,
+      ts: Date.now(),
+    }
+    setMessages((old) => [...old, optimisticUser])
+    if (overrideText == null) setInput("")
     setSending(true)
     setPanel("preview")
     tone(false)
@@ -531,34 +544,45 @@ export default function SevenEightSixAdminChatPage() {
       })
       const json = await res.json()
       if (!res.ok || !json.success || !json.project) throw new Error(json.error || "Project generation failed.")
-      const generated = json.project as SevenEightSixProject
+      const generated: SevenEightSixProject = json.project
       const assistantText =
         json.response || `Created project: ${generated.title}\nFiles: ${Object.keys(generated.files).length}`
-      const persisted = await persistAfterGeneration(
-        generated,
-        text,
-        assistantText,
-        json.model ?? null,
-        json.reason ?? null
-      )
-      if (!persisted) throw new Error("Project was generated but could not be saved to Neon.")
-      setProject(persisted)
-      setMessages((old) => [
-        ...old,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: assistantText,
-          model: json.model ?? null,
-          reason: json.reason ?? null,
-        },
-      ])
-      setSelectedFile(
-        (persisted.preview_state.active_file as string | undefined) ||
-          (persisted.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(persisted.files)[0]) ||
-          "app/page.tsx"
-      )
-      tone(true)
+      const assistantModel: string | null = json.model ?? null
+      const assistantReason: string | null = json.reason ?? null
+      const persisted = await persistAfterGeneration(generated, text, assistantText, assistantModel, assistantReason)
+      if (persisted) {
+        startTransition(() => {
+          setProject(persisted)
+          setMessages((current) => [
+            ...current,
+            {
+              id: `a-${Date.now()}`,
+              role: "assistant",
+              content: assistantText,
+              model: assistantModel,
+              reason: assistantReason,
+              ts: Date.now(),
+            },
+          ])
+          const initialFile =
+            (persisted.preview_state.active_file as string | undefined) ||
+            (persisted.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(persisted.files)[0]) ||
+            "app/page.tsx"
+          setSelectedFile(initialFile)
+        })
+        tone(true)
+      } else {
+        setMessages((current) => [
+          ...current,
+          {
+            id: `e-${Date.now()}`,
+            role: "assistant",
+            content: "Project was generated but could not be saved to Neon. Run POST /api/786-admin/setup once, then retry.",
+            ts: Date.now(),
+          },
+        ])
+        tone(false)
+      }
     } catch (error) {
       setMessages((old) => [
         ...old,
@@ -566,13 +590,22 @@ export default function SevenEightSixAdminChatPage() {
           id: `e-${Date.now()}`,
           role: "assistant",
           content: error instanceof Error ? error.message : "Request failed.",
+          ts: Date.now(),
         },
       ])
       tone(false)
     } finally {
       setSending(false)
     }
-  }
+  }, [input, sending, project, mode])
+
+  const regeneratePreview = useCallback(() => {
+    if (!project || sending) return
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")
+    const text = lastUser?.content || project.prompt || project.title
+    if (!text) return
+    send(text)
+  }, [project, messages, sending, send])
 
   if (isLoading || !isAdmin) {
     return (
@@ -583,94 +616,162 @@ export default function SevenEightSixAdminChatPage() {
   }
 
   const selectedSource = project?.files?.[selectedFile] || ""
+  const selectedLines = selectedSource.length ? selectedSource.split("\n") : []
+  const projectSlug = project ? slugifyTitle(project.title) : ""
 
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full">
-        <aside className="hidden w-[92px] shrink-0 border-r border-cyan-300/20 bg-[#06101c] pt-24 lg:block">
+        <aside className="hidden w-[92px] shrink-0 flex-col items-center gap-3 border-r border-cyan-300/15 bg-[#06101c] pt-24 lg:flex">
           <button
+            data-testid="rail-projects-btn"
             onClick={() => router.push("/786-admin/projects")}
-            className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/15 text-cyan-100"
+            className="grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-100 transition hover:bg-cyan-300/20"
+            title="Projects"
           >
             <FolderKanban className="h-5 w-5" />
           </button>
         </aside>
 
         <section
-          className="relative flex h-full min-w-[360px] shrink-0 flex-col border-r border-cyan-300/30 bg-[#081322]"
+          className="relative flex h-full min-w-[360px] shrink-0 flex-col border-r border-cyan-300/20 bg-[#081322]"
           style={{ width: chatWidth }}
         >
           <header className="flex h-[70px] shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
             <button
+              data-testid="new-chat-btn"
               onClick={newChat}
-              className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50"
+              className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50 transition hover:bg-emerald-400/25"
             >
               <Plus className="h-4 w-4" />
               <span>New Chat</span>
             </button>
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="relative">
               <button
-                onClick={() => setSound((v) => !v)}
-                className="shrink-0 rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100"
+                data-testid="settings-toggle-btn"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-white/10"
+                title="Settings"
               >
-                Sound {sound ? "On" : "Off"}
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Settings</span>
               </button>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value as Mode)}
-                className="w-[108px] rounded-xl border border-cyan-300/20 bg-[#101827] px-3 py-2 text-xs font-bold text-cyan-100"
-              >
-                <option value="auto">Auto</option>
-                <option value="deepseek-flash">Flash</option>
-                <option value="deepseek-pro">Pro</option>
-                <option value="gemini-flash">Gemini Flash</option>
-                <option value="gemini-pro">Gemini Pro</option>
-              </select>
+              {settingsOpen && (
+                <div
+                  data-testid="settings-popover"
+                  className="absolute right-0 top-12 z-50 w-64 rounded-2xl border border-white/10 bg-[#0b111d] p-3 shadow-2xl backdrop-blur-xl"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Workspace</p>
+                    <button
+                      onClick={() => setSettingsOpen(false)}
+                      className="rounded-md p-1 text-slate-400 hover:bg-white/5"
+                      data-testid="settings-close-btn"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Model</label>
+                  <select
+                    data-testid="settings-mode-select"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value as Mode)}
+                    className="mb-3 w-full rounded-xl border border-cyan-300/15 bg-[#101827] px-3 py-2 text-xs font-bold text-cyan-100"
+                  >
+                    {(Object.keys(MODE_LABEL) as Mode[]).map((k) => (
+                      <option key={k} value={k}>{MODE_LABEL[k]}</option>
+                    ))}
+                  </select>
+                  <button
+                    data-testid="settings-sound-toggle"
+                    onClick={() => setSound((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2 text-xs font-bold text-slate-200 transition hover:bg-white/10"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      {sound ? <Volume2 className="h-3.5 w-3.5 text-emerald-300" /> : <VolumeX className="h-3.5 w-3.5 text-slate-500" />}
+                      Sound
+                    </span>
+                    <span className={sound ? "text-emerald-300" : "text-slate-500"}>{sound ? "On" : "Off"}</span>
+                  </button>
+                </div>
+              )}
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-5 pb-40">
+          <div className="flex-1 overflow-y-auto px-4 py-5 pb-44" data-testid="chat-messages">
             {messages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-center text-slate-500">
                 <div className="mx-auto max-w-[300px]">
+                  <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-200">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
                   <p className="text-xl font-semibold text-cyan-100/90">Welcome back to 786.Chat</p>
-                  <p className="mt-3 text-sm leading-6">New chat is empty. Send a build prompt to create real project files.</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    Start a new chat. Send a build prompt and 786.Chat will generate a real Next.js project — files saved to Neon, preview rendered live.
+                  </p>
                 </div>
               </div>
             ) : (
-              messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${
-                    m.role === "user"
-                      ? "ml-8 border-cyan-300/20 bg-cyan-300/10 text-cyan-50"
-                      : "mr-8 border-white/10 bg-white/[0.045] text-slate-200"
-                  }`}
-                >
-                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-                    <span>{m.role === "user" ? "You" : "786.Chat"}</span>
-                    {m.model && <span className="text-cyan-200">{m.model}</span>}
+              messages.map((m) => {
+                const isUser = m.role === "user"
+                return (
+                  <div
+                    key={m.id}
+                    data-testid={isUser ? "chat-message-user" : "chat-message-assistant"}
+                    className={`mb-4 flex gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+                  >
+                    <div
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[11px] font-black ${
+                        isUser
+                          ? "border border-cyan-300/30 bg-cyan-300/15 text-cyan-100"
+                          : "border border-violet-300/25 bg-violet-400/15 text-violet-100"
+                      }`}
+                    >
+                      {isUser ? "You" : "786"}
+                    </div>
+                    <div
+                      className={`max-w-[88%] rounded-3xl border p-4 text-sm leading-6 ${
+                        isUser
+                          ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-50"
+                          : "border-white/10 bg-white/[0.045] text-slate-200"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>{isUser ? "You" : "786.Chat"}</span>
+                        <div className="flex items-center gap-2">
+                          {m.model && (
+                            <span className="rounded-md border border-violet-300/20 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-200">
+                              {m.model}
+                            </span>
+                          )}
+                          {m.ts && <span className="text-slate-500">{formatTime(m.ts)}</span>}
+                        </div>
+                      </div>
+                      <p className="whitespace-pre-wrap">{m.content}</p>
+                      {m.reason && (
+                        <p className="mt-3 rounded-xl border border-purple-300/15 bg-purple-400/5 p-3 text-xs leading-6 text-purple-200/80">
+                          {m.reason}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="whitespace-pre-wrap">{m.content}</p>
-                  {m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
-                </div>
-              ))
+                )
+              })
             )}
             {sending && (
-              <div className="mr-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-                <div className="flex items-center gap-3">
-                  <Wand2 className="h-5 w-5 animate-pulse text-cyan-200" />
-                  <span>786.Chat is creating real project files...</span>
-                </div>
+              <div className="mr-8 flex items-center gap-3 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4" data-testid="chat-sending">
+                <Loader2 className="h-5 w-5 animate-spin text-cyan-200" />
+                <span className="text-sm text-cyan-100">786.Chat is creating real project files…</span>
               </div>
             )}
             <div ref={endRef} />
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#101827]/95 p-4 backdrop-blur-xl">
-            <div className="flex gap-3 rounded-3xl border border-white/10 bg-[#162033] px-4 py-3">
+          <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#0a1322]/95 p-4 backdrop-blur-xl">
+            <div className="flex gap-3 rounded-3xl border border-white/10 bg-[#162033] px-4 py-3 transition focus-within:border-cyan-300/40">
               <Paperclip className="mt-2 h-5 w-5 shrink-0 text-slate-500" />
               <textarea
+                data-testid="chat-input"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -681,29 +782,31 @@ export default function SevenEightSixAdminChatPage() {
                 }}
                 rows={1}
                 className="min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-white outline-none placeholder:text-slate-500"
-                placeholder="Ask 786.Chat to build a real project..."
+                placeholder={project ? `Update "${project.title}"…` : "Ask 786.Chat to build a real project…"}
               />
               <button
-                onClick={send}
+                data-testid="chat-send-btn"
+                onClick={() => send()}
                 disabled={sending || !input.trim()}
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-600 disabled:opacity-50"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-600 transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
               </button>
             </div>
             <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
-              {project ? `Editing project "${project.title}" — changes save to Neon.` : "New Chat is empty. Build prompt creates real files saved to Neon."}
+              {project
+                ? `Editing project "${project.title}" — changes save to Neon.`
+                : "New chat is empty. Your first prompt creates real files in Neon."}
             </div>
           </div>
         </section>
 
         <button
           type="button"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          className="hidden h-full w-4 shrink-0 cursor-col-resize items-center justify-center border-r border-cyan-300/20 bg-[#050713] lg:flex"
+          onMouseDown={(e) => { e.preventDefault(); setIsResizing(true) }}
+          className="hidden h-full w-4 shrink-0 cursor-col-resize items-center justify-center border-r border-cyan-300/15 bg-[#050713] lg:flex"
+          title="Drag to resize chat and preview"
+          data-testid="resize-handle"
         >
           <span className="flex h-24 w-2 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-300/10 text-cyan-100">
             <GripVertical className="h-5 w-5" />
@@ -712,125 +815,339 @@ export default function SevenEightSixAdminChatPage() {
 
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
-            <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
-              <span className="block truncate">{sending && !project ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
+            <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-300">
+              <span className="block truncate font-semibold" data-testid="workspace-title">
+                {project ? project.title : "New Chat"}
+              </span>
             </div>
+
+            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1">
+              <button
+                data-testid="panel-preview-btn"
+                onClick={() => setPanel("preview")}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  panel === "preview" ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-200"
+                }`}
+              >
+                <Monitor className="h-3.5 w-3.5" />
+                Preview
+              </button>
+              <button
+                data-testid="panel-code-btn"
+                onClick={() => setPanel("code")}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  panel === "code" ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-200"
+                }`}
+              >
+                <Code2 className="h-3.5 w-3.5" />
+                Code
+              </button>
+            </div>
+
             {panel === "preview" && (
-              <div className="hidden items-center rounded-full border border-white/10 bg-white/[0.045] p-1 lg:flex">
-                {(["desktop", "tablet", "mobile"] as const).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setDevice(d)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${
-                      device === d ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-100"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                ))}
+              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1" data-testid="device-toggle">
+                <button
+                  data-testid="device-desktop-btn"
+                  onClick={() => setDevice("desktop")}
+                  title="Desktop"
+                  className={`grid h-7 w-7 place-items-center rounded-full transition ${
+                    device === "desktop" ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-200"
+                  }`}
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  data-testid="device-tablet-btn"
+                  onClick={() => setDevice("tablet")}
+                  title="Tablet"
+                  className={`grid h-7 w-7 place-items-center rounded-full transition ${
+                    device === "tablet" ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-200"
+                  }`}
+                >
+                  <Tablet className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  data-testid="device-mobile-btn"
+                  onClick={() => setDevice("mobile")}
+                  title="Mobile"
+                  className={`grid h-7 w-7 place-items-center rounded-full transition ${
+                    device === "mobile" ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-200"
+                  }`}
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
+
             <button
-              onClick={() => setPanel("preview")}
-              className={`rounded-full border px-4 py-2 text-sm ${
-                panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"
-              }`}
+              data-testid="publish-btn"
+              className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
             >
-              <Monitor className="mr-2 inline h-4 w-4" />Preview
-            </button>
-            <button
-              onClick={() => setPanel("code")}
-              className={`rounded-full border px-4 py-2 text-sm ${
-                panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"
-              }`}
-            >
-              <Code2 className="mr-2 inline h-4 w-4" />Code
-            </button>
-            <button className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
-              <Rocket className="mr-2 inline h-4 w-4" />Publish
+              <Rocket className="mr-2 inline h-4 w-4" />
+              Publish
             </button>
           </header>
 
           {panel === "preview" ? (
             project && previewHtml ? (
-              <div className={`relative min-h-0 flex-1 overflow-auto bg-[#030408] ${device === "desktop" ? "p-0" : "flex items-center justify-center p-6"}`}>
-                {!previewLoaded && !previewError && (
-                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[#030408]/70 text-sm font-semibold text-cyan-100 backdrop-blur-sm">
-                    Preparing preview...
-                  </div>
-                )}
-                {previewError && (
-                  <div className="absolute left-4 right-4 top-4 z-20 rounded-2xl border border-amber-300/35 bg-amber-300/15 px-4 py-3 text-sm font-semibold text-amber-100">
-                    {previewError}
-                  </div>
-                )}
-                <iframe
-                  key={previewKey}
-                  srcDoc={previewHtml}
-                  title={`${project.title} preview`}
-                  sandbox="allow-scripts allow-forms allow-popups"
-                  onLoad={() => {
-                    if (timerRef.current) clearTimeout(timerRef.current)
-                    setPreviewLoaded(true)
-                    setPreviewError(null)
-                  }}
-                  onError={() => {
-                    setPreviewLoaded(true)
-                    setPreviewError(null)
-                  }}
-                  className={
-                    device === "desktop"
-                      ? "h-full w-full border-0 bg-white"
-                      : device === "tablet"
-                        ? "h-[900px] w-[820px] max-h-full max-w-full rounded-[2rem] border border-cyan-300/25 bg-white shadow-2xl shadow-cyan-950/40"
-                        : "h-[844px] w-[390px] max-h-full max-w-full rounded-[2.5rem] border-[10px] border-slate-900 bg-white shadow-2xl shadow-cyan-950/40"
-                  }
-                />
-              </div>
-            ) : sending ? (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-400">
-                <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-6 py-5 text-sm font-semibold text-cyan-100">
-                  786.Chat is generating project files. Preview will render as soon as the project is saved.
-                </div>
-              </div>
+              <PreviewStage
+                projectId={project.id}
+                projectTitle={project.title}
+                projectSlug={projectSlug}
+                previewHtml={previewHtml}
+                device={device}
+                previewState={previewState}
+                previewError={previewError}
+                onRetry={regeneratePreview}
+                onLoad={() => {}}
+              />
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500" data-testid="preview-empty">
                 <div className="flex min-h-full w-full items-center justify-center rounded-[2rem] border border-white/10 bg-[#0b111d]">
                   <div>
                     <Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" />
                     <h2 className="text-xl font-black text-slate-300">No Preview Yet</h2>
-                    <p className="mt-2">Open a saved project or create a new one.</p>
+                    <p className="mt-2 text-sm">New chat starts with an empty preview. Send a prompt to generate one.</p>
                   </div>
                 </div>
               </div>
             )
           ) : (
-            <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6">
-              <div className="min-h-0 overflow-auto rounded-3xl border border-white/10 bg-[#0d1320] p-3">
-                {fileNames.length === 0 ? (
-                  <p className="p-3 text-sm text-slate-500">No files yet.</p>
-                ) : (
-                  fileNames.map((file) => (
-                    <button
-                      key={file}
-                      onClick={() => setSelectedFile(file)}
-                      className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-bold ${
-                        selectedFile === file ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-300"
-                      }`}
-                    >
-                      {file}
-                    </button>
-                  ))
-                )}
-              </div>
-              <pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50">
-                <code>{selectedSource || "Select a file."}</code>
-              </pre>
-            </div>
+            <CodeView
+              fileNames={fileNames}
+              fileGroups={fileGroups}
+              selectedFile={selectedFile}
+              setSelectedFile={setSelectedFile}
+              collapsedFolders={collapsedFolders}
+              setCollapsedFolders={setCollapsedFolders}
+              selectedSource={selectedSource}
+              selectedLines={selectedLines}
+            />
           )}
         </section>
       </div>
     </main>
+  )
+}
+
+type PreviewStageProps = {
+  projectId: string
+  projectTitle: string
+  projectSlug: string
+  previewHtml: string
+  device: Device
+  previewState: PreviewLifecycle
+  previewError: string | null
+  onRetry: () => void
+  onLoad: () => void
+}
+
+function PreviewStage(props: PreviewStageProps) {
+  const { projectId, projectTitle, projectSlug, previewHtml, device, previewState, previewError, onRetry, onLoad } = props
+  const failed = previewState === "failed"
+
+  if (device === "desktop") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-[#0a0f1a]" data-testid="preview-stage">
+        <BrowserChrome slug={projectSlug} title={projectTitle} state={previewState} />
+        <div className="relative flex min-h-0 flex-1 bg-white">
+          <iframe
+            key={`iframe-${projectId}`}
+            srcDoc={previewHtml}
+            onLoad={onLoad}
+            title={`${projectTitle} preview`}
+            sandbox="allow-scripts allow-forms allow-popups"
+            className="absolute inset-0 h-full w-full border-0 bg-white"
+            data-testid="preview-iframe"
+          />
+          {failed && <PreviewErrorOverlay error={previewError} onRetry={onRetry} />}
+        </div>
+      </div>
+    )
+  }
+
+  const frame =
+    device === "tablet"
+      ? { width: 820, height: 1100, radius: "rounded-[2.25rem]", border: "border-[14px] border-[#1a1f2e]" }
+      : { width: 390, height: 844, radius: "rounded-[2.75rem]", border: "border-[10px] border-[#0d1320]" }
+
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-[#030408] p-6" data-testid="preview-stage">
+      <div
+        className={`relative overflow-hidden bg-black shadow-[0_30px_60px_-20px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.04)] transition-all duration-300 ${frame.radius} ${frame.border}`}
+        style={{ width: frame.width, maxWidth: "100%", height: frame.height, maxHeight: "92%" }}
+      >
+        {device === "mobile" && (
+          <div className="pointer-events-none absolute left-1/2 top-0 z-10 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-black" />
+        )}
+        <iframe
+          key={`iframe-${projectId}`}
+          srcDoc={previewHtml}
+          onLoad={onLoad}
+          title={`${projectTitle} preview`}
+          sandbox="allow-scripts allow-forms allow-popups"
+          className="h-full w-full border-0 bg-white"
+          data-testid="preview-iframe"
+        />
+        {failed && <PreviewErrorOverlay error={previewError} onRetry={onRetry} />}
+      </div>
+    </div>
+  )
+}
+
+function BrowserChrome({ slug, title, state }: { slug: string; title: string; state: PreviewLifecycle }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-white/5 bg-[#0d1320] px-4 py-2.5" data-testid="browser-chrome">
+      <div className="flex gap-1.5">
+        <span className="block h-3 w-3 rounded-full bg-red-500/80" />
+        <span className="block h-3 w-3 rounded-full bg-yellow-500/80" />
+        <span className="block h-3 w-3 rounded-full bg-emerald-500/80" />
+      </div>
+      <div className="flex flex-1 items-center gap-2 rounded-md border border-white/5 bg-[#050713] px-3 py-1 font-mono text-[11px] text-slate-400">
+        <span className="text-emerald-400">●</span>
+        <span className="truncate">https://786chat.app/{slug || "preview"}</span>
+      </div>
+      <span
+        data-testid="preview-state"
+        className={`hidden rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider md:inline ${
+          state === "ready"
+            ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200"
+            : state === "failed"
+            ? "border-red-300/30 bg-red-400/10 text-red-200"
+            : "border-cyan-300/30 bg-cyan-400/10 text-cyan-200"
+        }`}
+      >
+        {state === "ready" ? "Live" : state === "failed" ? "Error" : "Loading"}
+      </span>
+      <span className="hidden truncate text-[11px] text-slate-500 lg:inline">{title}</span>
+    </div>
+  )
+}
+
+function PreviewErrorOverlay({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center bg-[#050713]/95 backdrop-blur-sm"
+      data-testid="preview-error-overlay"
+    >
+      <div className="mx-6 max-w-md rounded-2xl border border-red-300/30 bg-[#1a0a0a] p-6 text-center shadow-2xl">
+        <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-red-300/30 bg-red-400/10 text-red-300">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+        <h3 className="text-base font-black text-red-100">Preview failed to start</h3>
+        <p className="mt-2 text-sm leading-6 text-red-200/80">
+          {error || "The preview did not initialize. Files are saved in Neon — you can regenerate or open the Code tab to inspect."}
+        </p>
+        <button
+          data-testid="preview-regenerate-btn"
+          onClick={onRetry}
+          className="mt-5 inline-flex items-center gap-2 rounded-full bg-cyan-300 px-5 py-2 text-xs font-black text-slate-950 transition hover:bg-cyan-200"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Regenerate preview
+        </button>
+      </div>
+    </div>
+  )
+}
+
+type CodeViewProps = {
+  fileNames: string[]
+  fileGroups: { folder: string; files: string[] }[]
+  selectedFile: string
+  setSelectedFile: (s: string) => void
+  collapsedFolders: Record<string, boolean>
+  setCollapsedFolders: (m: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void
+  selectedSource: string
+  selectedLines: string[]
+}
+
+function CodeView(props: CodeViewProps) {
+  const { fileNames, fileGroups, selectedFile, setSelectedFile, collapsedFolders, setCollapsedFolders, selectedSource, selectedLines } = props
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] bg-[#1e1e1e]" data-testid="code-panel">
+      <div className="min-h-0 overflow-auto border-r border-black/40 bg-[#181818] p-2" data-testid="file-tree">
+        <div className="mb-2 px-3 pt-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Explorer</div>
+        {fileNames.length === 0 ? (
+          <p className="p-3 text-sm text-slate-500">No files yet.</p>
+        ) : (
+          fileGroups.map(({ folder, files }) => {
+            const collapsed = !!collapsedFolders[folder]
+            return (
+              <div key={folder} className="mb-1">
+                <button
+                  data-testid={`file-folder-${folder}`}
+                  onClick={() => setCollapsedFolders((m) => ({ ...m, [folder]: !m[folder] }))}
+                  className="mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/[0.04]"
+                >
+                  {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  <span className="truncate">{folder}</span>
+                  <span className="ml-auto text-[9px] text-slate-600">{files.length}</span>
+                </button>
+                {!collapsed &&
+                  files.map((file) => {
+                    const kind = classifyFile(file)
+                    const isActive = selectedFile === file
+                    const dotColor =
+                      kind === "page"
+                        ? "bg-cyan-400"
+                        : kind === "component"
+                        ? "bg-violet-400"
+                        : kind === "lib"
+                        ? "bg-emerald-400"
+                        : kind === "style"
+                        ? "bg-pink-400"
+                        : kind === "layout"
+                        ? "bg-amber-400"
+                        : "bg-slate-500"
+                    return (
+                      <button
+                        key={file}
+                        data-testid={`file-item-${file}`}
+                        onClick={() => setSelectedFile(file)}
+                        className={`group ml-2 mb-0.5 flex w-[calc(100%-0.5rem)] items-center gap-2 rounded px-2 py-1 text-left text-[12px] transition ${
+                          isActive ? "bg-[#37373d] text-white" : "text-slate-300 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                        <span className={`block h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`} />
+                        <span className="truncate font-mono">{file.split("/").pop()}</span>
+                      </button>
+                    )
+                  })}
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <div className="min-h-0 overflow-hidden bg-[#1e1e1e]" data-testid="code-viewer">
+        <div className="flex h-9 items-center justify-between border-b border-black/40 bg-[#252526] px-4">
+          <div className="flex items-center gap-2 text-[11px] font-medium text-slate-300">
+            <FileText className="h-3 w-3 text-slate-500" />
+            <span className="font-mono">{selectedFile}</span>
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+            {selectedLines.length} lines
+          </span>
+        </div>
+        <div className="flex h-[calc(100%-2.25rem)] min-h-0 overflow-auto font-mono text-[12.5px] leading-[1.55]">
+          {selectedLines.length === 0 ? (
+            <div className="p-5 text-slate-500">Select a file.</div>
+          ) : (
+            <>
+              <div className="select-none border-r border-black/30 bg-[#1e1e1e] px-3 py-3 text-right text-slate-600">
+                {selectedLines.map((_, i) => (
+                  <div key={i}>{i + 1}</div>
+                ))}
+              </div>
+              <pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre px-4 py-3 text-[#d4d4d4]">
+                <code>{selectedSource}</code>
+              </pre>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
