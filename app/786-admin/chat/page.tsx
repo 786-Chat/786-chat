@@ -549,9 +549,15 @@ export default function SevenEightSixAdminChatPage() {
           </div>
         </section>
 
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); setIsResizing(true) }} className="hidden h-full w-4 shrink-0 cursor-col-resize items-center justify-center border-r border-cyan-300/20 bg-[#050713] lg:flex" title="Drag to resize chat and preview">
-          <span className="flex h-24 w-2 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-300/10 text-cyan-100"><GripVertical className="h-5 w-5" /></span>
-        </button>
+       <button
+  type="button"
+  onMouseDown={(e) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }}
+  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 border-r border-cyan-300/20 bg-transparent hover:bg-cyan-300/30 lg:block"
+  title="Drag to resize chat and preview"
+/>
 
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
