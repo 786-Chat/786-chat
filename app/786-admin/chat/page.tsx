@@ -504,16 +504,7 @@ export default function SevenEightSixAdminChatPage() {
             <button onClick={newChat} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50">
               <Plus className="h-4 w-4" /><span>New Chat</span>
             </button>
-            <div className="flex min-w-0 items-center gap-2">
-              <button onClick={() => setSound((v) => !v)} className="shrink-0 rounded-xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-2 text-xs font-bold text-emerald-100">Sound {sound ? "On" : "Off"}</button>
-              <select value={mode} onChange={(e) => setMode(e.target.value as Mode)} className="w-[108px] rounded-xl border border-cyan-300/20 bg-[#101827] px-3 py-2 text-xs font-bold text-cyan-100">
-                <option value="auto">Auto</option>
-                <option value="deepseek-flash">Flash</option>
-                <option value="deepseek-pro">Pro</option>
-                <option value="gemini-flash">Gemini Flash</option>
-                <option value="gemini-pro">Gemini Pro</option>
-              </select>
-            </div>
+            <div className="hidden" aria-hidden="true" />
           </header>
 
           <div className="flex-1 overflow-y-auto px-4 py-5 pb-40">
