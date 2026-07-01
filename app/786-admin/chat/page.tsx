@@ -521,9 +521,8 @@ export default function SevenEightSixAdminChatPage() {
               messages.map((m) => (
                 <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === "user" ? "ml-8 border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "mr-8 border-white/10 bg-white/[0.045] text-slate-200"}`}>
                   <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-                    <span>{m.role === "user" ? "You" : "786.Chat"}</span>
-                    {m.model && <span className="text-cyan-200">{m.model}</span>}
-                  </div>
+  <span>{m.role === "user" ? "You" : "786.Chat"}</span>
+</div>
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {false && m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
                 </div>
