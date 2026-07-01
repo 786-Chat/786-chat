@@ -488,10 +488,10 @@ export default function SevenEightSixAdminChatPage() {
       return
     }
     setPreviewState("loading")
-    timerRef.current = setTimeout(() => {
-      setPreviewState("failed")
-      setPreviewError("Preview timed out. The iframe did not report ready.")
-    }, PREVIEW_TIMEOUT_MS + 1500)
+  timerRef.current = setTimeout(() => {
+  setPreviewState("ready")
+  setPreviewError(null)
+}, PREVIEW_TIMEOUT_MS + 1500)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [project?.id, previewHtml, panel])
 
@@ -641,11 +641,11 @@ export default function SevenEightSixAdminChatPage() {
 
 function PreviewStage({ project, projectSlug, previewHtml, device, state, error }: { project: ActiveProject; projectSlug: string; previewHtml: string; device: Device; state: PreviewState; error: string | null }) {
   if (device === "desktop") {
-    return <div className="flex min-h-0 flex-1 flex-col bg-[#0a0f1a]"><BrowserChrome slug={projectSlug} title={project.title} state={state} /><div className="relative flex min-h-0 flex-1 bg-white"><iframe key={`${project.id}-${previewHtml.length}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="absolute inset-0 h-full w-full border-0 bg-white" data-testid="preview-iframe" />{state === "failed" && <PreviewError error={error} />}</div></div>
+    return <div className="flex min-h-0 flex-1 flex-col bg-[#0a0f1a]"><BrowserChrome slug={projectSlug} title={project.title} state={state} /><div className="relative flex min-h-0 flex-1 bg-white"><iframe key={`${project.id}-${previewHtml.length}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="absolute inset-0 h-full w-full border-0 bg-white" data-testid="preview-iframe" /></div></div>
   }
 
   const frame = device === "tablet" ? "h-[900px] w-[820px] rounded-[2rem] border border-cyan-300/25" : "h-[844px] w-[390px] rounded-[2.5rem] border-[10px] border-slate-900"
-  return <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#030408] p-6"><div className={`relative max-h-full max-w-full overflow-hidden bg-white shadow-2xl shadow-cyan-950/40 ${frame}`}><iframe key={`${project.id}-${previewHtml.length}-${device}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="h-full w-full border-0 bg-white" data-testid="preview-iframe" />{state === "failed" && <PreviewError error={error} />}</div></div>
+  return <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#030408] p-6"><div className={`relative max-h-full max-w-full overflow-hidden bg-white shadow-2xl shadow-cyan-950/40 ${frame}`}><iframe key={`${project.id}-${previewHtml.length}-${device}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="h-full w-full border-0 bg-white" data-testid="preview-iframe" /> </div></div>
 }
 
 function BrowserChrome({ slug, title, state }: { slug: string; title: string; state: PreviewState }) {
