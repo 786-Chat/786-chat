@@ -547,19 +547,17 @@ export default function SevenEightSixAdminChatPage() {
               {project ? `Editing project "${project.title}" — changes save to Neon.` : "New Chat is empty. Build prompt creates real files saved to Neon."}
             </div>
           </div>
-                </section>
+        </section>
 
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          className="hidden h-full w-[6px] shrink-0 cursor-col-resize bg-transparent hover:bg-cyan-300/10 lg:block"
-          title="Drag to resize chat"
-        />
-
-        <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
+       <button
+  type="button"
+  onMouseDown={(e) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }}
+  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 border-r border-cyan-300/20 bg-transparent hover:bg-cyan-300/30 lg:block"
+  title="Drag to resize chat and preview"
+/>
 
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
