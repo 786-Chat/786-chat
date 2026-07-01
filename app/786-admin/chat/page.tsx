@@ -601,7 +601,13 @@ export default function SevenEightSixAdminChatPage() {
             ) : project && previewPayload.html ? (
               <div className="flex min-h-0 flex-1 justify-center overflow-auto p-6">
                 <div className={device === "desktop" ? "flex min-h-0 w-full" : device === "tablet" ? "h-[900px] w-[820px] max-w-full overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" : "h-[844px] w-[390px] max-w-full overflow-hidden rounded-[2.5rem] border-[10px] border-slate-900 bg-[#0b111d]"}>
-                  <iframe key={`${project.id}-${previewPayload.key}-${device}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
+                  <iframe
+  key={`${project.id}-${previewPayload.key}-${device}`}
+  srcDoc={previewPayload.html}
+  title={`${project.title} preview`}
+  sandbox="allow-scripts allow-forms allow-popups"
+  className="h-full w-full border-0 bg-[#0b111d]"
+/>
                 </div>
               </div>
             ) : (
