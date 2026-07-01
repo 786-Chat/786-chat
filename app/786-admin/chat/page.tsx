@@ -644,18 +644,9 @@ function PreviewStage({ project, projectSlug, previewHtml, device, state, error 
     return <div className="flex min-h-0 flex-1 flex-col bg-[#0a0f1a]"><BrowserChrome slug={projectSlug} title={project.title} state={state} /><div className="relative flex min-h-0 flex-1 bg-white"><iframe key={`${project.id}-${previewHtml.length}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="absolute inset-0 h-full w-full border-0 bg-white" data-testid="preview-iframe" /></div></div>
   }
 
-  return (
-  <div className="flex min-h-0 flex-1 bg-[#030408]">
-    <iframe
-      key={`${project.id}-${previewHtml.length}-${device}`}
-      srcDoc={previewHtml}
-      title={`${project.title} preview`}
-      sandbox="allow-scripts allow-forms allow-popups"
-      className="h-full w-full border-0 bg-white"
-      data-testid="preview-iframe"
-    />
-  </div>
-)
+  const frame = device === "tablet" ? "h-[900px] w-[820px] rounded-[2rem] border border-cyan-300/25" : "h-[844px] w-[390px] rounded-[2.5rem] border-[10px] border-slate-900"
+  return <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#030408] p-6"><div className={`relative max-h-full max-w-full overflow-hidden bg-white shadow-2xl shadow-cyan-950/40 ${frame}`}><iframe key={`${project.id}-${previewHtml.length}-${device}`} srcDoc={previewHtml} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="h-full w-full border-0 bg-white" data-testid="preview-iframe" /> </div></div>
+}
 
 function BrowserChrome({ slug, title, state }: { slug: string; title: string; state: PreviewState }) {
   return <div className="flex items-center gap-3 border-b border-white/5 bg-[#0d1320] px-4 py-2.5"><div className="flex gap-1.5"><span className="block h-3 w-3 rounded-full bg-red-500/80" /><span className="block h-3 w-3 rounded-full bg-yellow-500/80" /><span className="block h-3 w-3 rounded-full bg-emerald-500/80" /></div><div className="flex flex-1 items-center gap-2 rounded-md border border-white/5 bg-[#050713] px-3 py-1 font-mono text-[11px] text-slate-400"><span className="text-emerald-400">●</span><span className="truncate">https://786chat.app/{slug || "preview"}</span></div><span className={`hidden rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider md:inline ${state === "ready" ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200" : state === "failed" ? "border-red-300/30 bg-red-400/10 text-red-200" : "border-cyan-300/30 bg-cyan-400/10 text-cyan-200"}`}>{state === "ready" ? "Live" : state === "failed" ? "Error" : "Loading"}</span><span className="hidden truncate text-[11px] text-slate-500 lg:inline">{title}</span></div>
