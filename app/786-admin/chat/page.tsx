@@ -93,7 +93,17 @@ function escapePreview(value: string): string {
 function safeJsString(value: string): string {
   return JSON.stringify(String(value || ""))
 }
-
+function formatTime(ts?: number): string {
+  if (!ts) return ""
+  try {
+    return new Date(ts).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  } catch {
+    return ""
+  }
+}
 function toIdentifier(value: string): string {
   const base = value
     .split("/")
