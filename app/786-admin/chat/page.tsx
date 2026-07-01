@@ -525,7 +525,7 @@ export default function SevenEightSixAdminChatPage() {
                     {m.model && <span className="text-cyan-200">{m.model}</span>}
                   </div>
                   <p className="whitespace-pre-wrap">{m.content}</p>
-                  {m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
+                  {false && m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
                 </div>
               ))
             )}
