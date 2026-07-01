@@ -559,17 +559,32 @@ export default function SevenEightSixAdminChatPage() {
   title="Drag to resize chat and preview"
 />
 
-        <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
+         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
             <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
               <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
             </div>
+
             <button onClick={() => setPanel("preview")} className={`rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Monitor className="mr-2 inline h-4 w-4" />Preview
             </button>
+
             <button onClick={() => setPanel("code")} className={`rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Code2 className="mr-2 inline h-4 w-4" />Code
             </button>
+
+            <div className="flex items-center rounded-full border border-white/10 bg-white/[0.035] p-1">
+              {(["desktop", "tablet", "mobile"] as Device[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDevice(d)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${device === d ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-100"}`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+
             <button className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
@@ -586,8 +601,10 @@ export default function SevenEightSixAdminChatPage() {
                 </div>
               </div>
             ) : project && previewPayload.html ? (
-              <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
+              <div className="flex min-h-0 flex-1 justify-center overflow-auto p-6">
+                <div className={device === "desktop" ? "flex min-h-0 w-full" : device === "tablet" ? "h-[900px] w-[820px] max-w-full overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" : "h-[844px] w-[390px] max-w-full overflow-hidden rounded-[2.5rem] border-[10px] border-slate-900 bg-[#0b111d]"}>
+                  <iframe key={`${project.id}-${previewPayload.key}-${device}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
+                </div>
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
