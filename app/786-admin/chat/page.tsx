@@ -1,4 +1,4 @@
-"use client"
+ "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -495,13 +495,13 @@ export default function SevenEightSixAdminChatPage() {
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full">
-        <aside className="hidden w-[92px] shrink-0 border-r border-cyan-300/20 bg-[#06101c] pt-24 lg:block">
+        <aside className="hidden w-[92px] shrink-0 bg-[#06101c] pt-24 lg:block">
           <button onClick={() => router.push("/786-admin/projects")} className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/15 text-cyan-100" title="Projects">
             <FolderKanban className="h-5 w-5" />
           </button>
         </aside>
 
-        <section className="relative flex h-full min-w-[360px] shrink-0 flex-col border-r border-cyan-300/30 bg-[#081322]" style={{ width: chatWidth }}>
+        <section className="relative flex h-full min-w-[360px] shrink-0 flex-col bg-[#081322]" style={{ width: chatWidth }}>
           <header className="flex h-[70px] shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
             <button onClick={newChat} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50">
               <Plus className="h-4 w-4" /><span>New Chat</span>
@@ -557,7 +557,7 @@ export default function SevenEightSixAdminChatPage() {
     e.preventDefault()
     setIsResizing(true)
   }}
-  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 border-r border-cyan-300/20 bg-transparent hover:bg-cyan-300/30 lg:block"
+  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 bg-white/5 hover:bg-cyan-300/30 lg:block"
   title="Drag to resize chat and preview"
 />
 
@@ -576,7 +576,6 @@ export default function SevenEightSixAdminChatPage() {
               {(["desktop", "tablet", "mobile"] as Device[]).map((d) => (
                 <button
                   key={d}
-                  type="button"
                   onClick={() => setDevice(d)}
                   className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${device === d ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-100"}`}
                 >
@@ -602,7 +601,7 @@ export default function SevenEightSixAdminChatPage() {
             ) : project && previewPayload.html ? (
               <div className="flex min-h-0 flex-1 justify-center overflow-auto p-6">
                 <div className={device === "desktop" ? "flex min-h-0 w-full" : device === "tablet" ? "h-[900px] w-[820px] max-w-full overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" : "h-[844px] w-[390px] max-w-full overflow-hidden rounded-[2.5rem] border-[10px] border-slate-900 bg-[#0b111d]"}>
-                  <iframe key={`${project.id}-${previewPayload.key}-${device}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="h-full min-h-0 w-full flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
+                  <iframe key={`${project.id}-${previewPayload.key}-${device}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
                 </div>
               </div>
             ) : (
