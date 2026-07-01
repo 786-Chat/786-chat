@@ -1,4 +1,4 @@
- "use client"
+"use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -493,13 +493,13 @@ export default function SevenEightSixAdminChatPage() {
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full">
-        <aside className="hidden w-[92px] shrink-0 bg-[#06101c] pt-24 lg:block">
+        <aside className="hidden w-[92px] shrink-0 border-r border-cyan-300/20 bg-[#06101c] pt-24 lg:block">
           <button onClick={() => router.push("/786-admin/projects")} className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/15 text-cyan-100" title="Projects">
             <FolderKanban className="h-5 w-5" />
           </button>
         </aside>
 
-        <section className="relative flex h-full min-w-[360px] shrink-0 flex-col bg-[#081322]" style={{ width: chatWidth }}>
+        <section className="relative flex h-full min-w-[360px] shrink-0 flex-col border-r border-cyan-300/30 bg-[#081322]" style={{ width: chatWidth }}>
           <header className="flex h-[70px] shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
             <button onClick={newChat} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50">
               <Plus className="h-4 w-4" /><span>New Chat</span>
@@ -555,7 +555,7 @@ export default function SevenEightSixAdminChatPage() {
     e.preventDefault()
     setIsResizing(true)
   }}
-  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 bg-white/5 hover:bg-cyan-300/30 lg:block"
+  className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 border-r border-cyan-300/20 bg-transparent hover:bg-cyan-300/30 lg:block"
   title="Drag to resize chat and preview"
 />
 
