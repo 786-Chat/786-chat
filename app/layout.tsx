@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
+import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import './globals.css'
 
 const geist = Geist({ 
@@ -64,6 +65,7 @@ export default function RootLayout({
           <I18nProvider>
             {children}
             <AdminChatAttachmentBridge />
+            <AdminChatPreviewSourceGuard />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
