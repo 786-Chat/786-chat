@@ -3,6 +3,40 @@
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 
+const PREVIEW_SAFETY_SCRIPT = `<script data-786-preview-safety="true">
+(function(){
+  try {
+    if (typeof EventTarget !== 'undefined' && !EventTarget.prototype.closest) {
+      EventTarget.prototype.closest = function(selector){
+        return this && this.nodeType === 1 && Element.prototype.closest
+          ? Element.prototype.closest.call(this, selector)
+          : null
+      }
+    }
+    if (typeof Node !== 'undefined' && !Node.prototype.closest) {
+      Node.prototype.closest = function(selector){
+        return this && this.nodeType === 1 && Element.prototype.closest
+          ? Element.prototype.closest.call(this, selector)
+          : null
+      }
+    }
+    if (typeof SVGElement !== 'undefined' && !SVGElement.prototype.closest && typeof Element !== 'undefined' && Element.prototype.closest) {
+      SVGElement.prototype.closest = Element.prototype.closest
+    }
+    if (typeof Element !== 'undefined' && !Element.prototype.matches) {
+      Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector || function(){ return false }
+    }
+  } catch (_) {}
+})();
+</script>`
+
+function injectPreviewSafety(srcDoc: string): string {
+  if (srcDoc.includes('data-786-preview-safety="true"')) return srcDoc
+  if (srcDoc.includes("</head>")) return srcDoc.replace("</head>", `${PREVIEW_SAFETY_SCRIPT}\n</head>`)
+  if (srcDoc.includes("<body>")) return srcDoc.replace("<body>", `<body>\n${PREVIEW_SAFETY_SCRIPT}`)
+  return `${PREVIEW_SAFETY_SCRIPT}\n${srcDoc}`
+}
+
 function stripGeneratedModuleLines(srcDoc: string): string {
   let next = srcDoc
 
@@ -35,7 +69,7 @@ function stripGeneratedModuleLines(srcDoc: string): string {
     ""
   )
 
-  return next
+  return injectPreviewSafety(next)
 }
 
 function shouldPatchIframe(iframe: HTMLIFrameElement): boolean {
