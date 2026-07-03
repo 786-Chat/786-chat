@@ -30,6 +30,27 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
+function normalizeClipboardFile(file: File): File {
+  if (file.name && file.name !== "image.png") return file
+
+  const extension = file.type === "image/jpeg"
+    ? "jpg"
+    : file.type === "image/webp"
+      ? "webp"
+      : file.type === "image/gif"
+        ? "gif"
+        : "png"
+
+  return new File(
+    [file],
+    `pasted-screenshot-${Date.now()}.${extension}`,
+    {
+      type: file.type || `image/${extension === "jpg" ? "jpeg" : extension}`,
+      lastModified: Date.now(),
+    }
+  )
+}
+
 export function AdminChatAttachmentBridge() {
   const pathname = usePathname()
   const active = pathname === "/786-admin/chat"
@@ -197,12 +218,29 @@ export function AdminChatAttachmentBridge() {
       if (!(target instanceof HTMLTextAreaElement)) return
       if (target.placeholder !== "Ask 786.Chat to build a real project...") return
 
-      const files = Array.from(event.clipboardData?.files || [])
-      const image = files.find((file) => file.type.startsWith("image/"))
+      const clipboard = event.clipboardData
+      if (!clipboard) return
+
+      let image: File | null = null
+
+      for (const item of Array.from(clipboard.items || [])) {
+        if (item.kind !== "file" || !item.type.startsWith("image/")) continue
+        const pastedFile = item.getAsFile()
+        if (pastedFile) {
+          image = pastedFile
+          break
+        }
+      }
+
+      if (!image) {
+        image = Array.from(clipboard.files || []).find((file) => file.type.startsWith("image/")) || null
+      }
+
       if (!image) return
 
       event.preventDefault()
-      acceptFile(image)
+      event.stopPropagation()
+      acceptFile(normalizeClipboardFile(image))
     }
 
     document.addEventListener("click", handleClick, true)
