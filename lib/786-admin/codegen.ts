@@ -4,18 +4,6 @@ import { createDeepSeek } from "@ai-sdk/deepseek"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 
-// Subsystem #3 — Structured project codegen.
-// Replaces the keyword-switch template in local-project-generator.ts.
-// The local generator is now ONLY used as an emergency fallback by the
-// chat route when this function throws.
-//
-// Strategy:
-//   - generateObject (Vercel AI SDK) + Zod schema forces the model to emit
-//     a real list of files, not prose.
-//   - "Auto" and "deepseek-pro" both route to DeepSeek v4 Pro.
-//   - When `existing` is provided we tell the model it is EDITING and feed
-//     it the entry files (app/page.tsx, app/layout.tsx, README.md) plus a file-tree listing.
-
 export type CodegenMode =
   | "auto"
   | "deepseek-flash"
@@ -23,9 +11,16 @@ export type CodegenMode =
   | "gemini-flash"
   | "gemini-pro"
 
+export type CodegenAttachment = {
+  url: string
+  mediaType: string
+  name?: string
+}
+
 export type CodegenInput = {
   prompt: string
   mode?: CodegenMode
+  attachment?: CodegenAttachment
   existing?: {
     title: string
     description: string
@@ -44,46 +39,16 @@ export type CodegenResult = {
 }
 
 const FileSchema = z.object({
-  path: z
-    .string()
-    .min(1)
-    .describe(
-      "Relative file path from the project root, e.g. 'app/page.tsx', 'components/footer.tsx'."
-    ),
-  content: z
-    .string()
-    .describe(
-      "FULL file content. Always emit the complete file body, never diffs, never placeholders."
-    ),
-  language: z
-    .string()
-    .optional()
-    .describe("Language hint such as 'tsx', 'ts', 'css', 'json', or 'md'."),
+  path: z.string().min(1).describe("Relative file path from the project root."),
+  content: z.string().describe("FULL file content. Never diffs or placeholders."),
+  language: z.string().optional(),
 })
 
 const ProjectSchema = z.object({
-  title: z
-    .string()
-    .min(1)
-    .describe(
-      "Short, human-readable project title derived from the user's prompt. When editing, keep the existing title unchanged unless the user explicitly asks to rename."
-    ),
-  description: z
-    .string()
-    .min(1)
-    .describe("A single sentence describing what the project does."),
-  reply: z
-    .string()
-    .min(1)
-    .describe(
-      "A 1–3 sentence chat-style reply that explains what you produced or changed. NOT file content."
-    ),
-  files: z
-    .array(FileSchema)
-    .min(1)
-    .describe(
-      "Files to create or update. For a NEW project, emit a complete Next.js App Router scaffold (app/page.tsx, app/layout.tsx, app/globals.css, plus any components and lib files). For an EDIT, emit ONLY the files you are creating or changing."
-    ),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  reply: z.string().min(1),
+  files: z.array(FileSchema).min(1),
 })
 
 const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY || "" })
@@ -94,14 +59,21 @@ const google = createGoogleGenerativeAI({
     "",
 })
 
-function pickModel(mode: CodegenMode): {
+function pickModel(mode: CodegenMode, hasAttachment: boolean): {
   provider: "deepseek" | "gemini"
   model: string
   reason: string
 } {
+  if (hasAttachment) {
+    if (mode === "gemini-flash") {
+      return { provider: "gemini", model: "gemini-2.5-flash", reason: "Gemini Flash selected for image/file analysis." }
+    }
+    return { provider: "gemini", model: "gemini-2.5-pro", reason: "Gemini Pro selected because an image or file was attached." }
+  }
+
   if (mode === "deepseek-flash") return { provider: "deepseek", model: "deepseek-v4-flash", reason: "Manual DeepSeek Flash." }
   if (mode === "deepseek-pro") return { provider: "deepseek", model: "deepseek-v4-pro", reason: "Manual DeepSeek Pro." }
-  if (mode === "gemini-flash") return { provider: "gemini", model: "gemini-3.5-flash", reason: "Manual Gemini Flash." }
+  if (mode === "gemini-flash") return { provider: "gemini", model: "gemini-2.5-flash", reason: "Manual Gemini Flash." }
   if (mode === "gemini-pro") return { provider: "gemini", model: "gemini-2.5-pro", reason: "Manual Gemini Pro." }
 
   return {
@@ -113,37 +85,25 @@ function pickModel(mode: CodegenMode): {
 
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator.
 
-Your ONLY job is to emit a real Next.js (App Router) project as a list of files.
+Your ONLY job is to emit a real Next.js App Router project as a list of files.
 
 ABSOLUTE RULES:
-1. ALWAYS emit FULL file content for every file you return. Never use diffs, never use placeholders like "// ...same as before".
-2. Use modern Next.js 16+ App Router conventions: app/page.tsx, app/layout.tsx, app/globals.css.
-3. Use TypeScript and Tailwind CSS utility classes. Mark client components with "use client".
-4. Keep files self-contained. Only import from: react, next/*, lucide-react, clsx, tailwind-merge.
-5. Do NOT emit package.json, tsconfig.json, next.config.js, postcss.config.js, tailwind.config.* — those are pre-provisioned.
-6. Match the user's intent precisely. Do NOT return a generic landing page when the user asked for a specific feature.
-7. If editing an existing project (you will be given the entry files and a full file tree), emit ONLY the files you need to create or modify. Do NOT re-emit unchanged files. Keep the existing project title unless the user explicitly asks to rename it.
-8. The "reply" field must be a short chat message (1–3 sentences) describing what you produced or changed. It is NOT the file content.
-9. NEVER output the literal string "786.Chat Generated Project" as a title. Always derive a real title from the user's prompt or keep the existing one when editing.
-
-RUNTIME-SAFE CODE RULES:
-10. Every identifier used in JSX or render logic MUST be declared in the same emitted file or imported from another emitted file. Never reference undeclared variables such as categoryData, productData, products, stats, slides, testimonials, pricingPlans, navItems, features, or categories.
-11. For arrays used with .map(), ALWAYS define the array before the component returns JSX. Example: const categories = [...] before categories.map(...).
-12. For NEW projects, prefer a self-contained app/page.tsx with local arrays and helper functions unless splitting into components is necessary. If you split into components, every imported component and data file MUST be included in the emitted files array.
-13. Do not use browser APIs that commonly fail in a sandbox on first render. Avoid direct constructors on load for AudioContext, WebGL, MediaRecorder, SpeechRecognition, WebSocket, Worker, SharedWorker, Notification, PaymentRequest, Bluetooth, USB, Serial, or EyeDropper. If interaction sound is requested, implement it behind a user click handler with try/catch.
-14. Before finalizing, mentally TypeScript-check the emitted files: no missing imports, no missing variables, no undeclared arrays, no duplicate default exports, no syntax errors.
-15. The preview must be able to run immediately inside an iframe using only the emitted files. If a feature needs data, define sample data in the emitted code.
-
-CONTEXT / PROVIDER RULES:
-16. For generated preview projects, DO NOT create custom React Context providers or hooks such as FilterProvider, useFilter, CartProvider, useCart, WishlistProvider, useWishlist, ThemeProvider, or useTheme.
-17. Do NOT throw errors like "useX must be used within XProvider". Generated preview apps must not depend on provider wrapper order.
-18. Use simple local useState, useMemo, and plain props inside app/page.tsx for filters, cart, wishlist, search, sliders, tabs, modals, and UI state.
-19. If a provider is absolutely necessary, the default export Page component MUST wrap every consumer inside the provider in the same file. But prefer not to use providers at all.
-20. Ecommerce projects must keep product, category, cart, wishlist, search, and filter state self-contained in app/page.tsx. No custom context hooks.`
+1. ALWAYS emit FULL file content for every file you return. Never diffs or placeholders.
+2. Use Next.js App Router with TypeScript and Tailwind CSS.
+3. Only import from react, next/*, lucide-react, clsx, and tailwind-merge.
+4. For edits, emit ONLY files being created or modified and preserve unrelated design and functionality.
+5. Match the user's request precisely.
+6. Every identifier used in JSX or render logic must be declared or imported.
+7. Define every dataset before it is used.
+8. Avoid custom React context providers and custom useX hooks. Prefer local state.
+9. The preview must run immediately in an iframe.
+10. When an image or screenshot is attached, inspect it carefully and use it as visual context for the user's requested edit. Do not merely describe the image.
+11. If the image shows mobile UI, reproduce the requested mobile behavior while preserving desktop behavior unless the user asks otherwise.
+12. Never claim an image-driven change was made unless the returned files actually implement it.`
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
   const mode: CodegenMode = input.mode ?? "auto"
-  const picked = pickModel(mode)
+  const picked = pickModel(mode, Boolean(input.attachment))
   const model = picked.provider === "deepseek" ? deepseek(picked.model) : google(picked.model)
 
   const promptParts: string[] = []
@@ -162,15 +122,15 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "ALL EXISTING FILE PATHS:",
       tree,
       "",
-      "KEY FILE CONTENTS (for context):",
+      "KEY FILE CONTENTS:",
       keyFilesText,
       "",
       "USER REQUEST:",
       input.prompt.trim(),
       "",
-      "Emit ONLY the files you are creating or modifying. Keep the existing title unless the user explicitly requests a rename.",
-      "Do not introduce undeclared variables. If you add JSX that maps over data, define that data in the same modified file or include the imported data file.",
-      "Do not introduce custom React Context providers/hooks. If the existing project has a provider bug, remove the provider/hook and replace it with local state in app/page.tsx."
+      "Emit ONLY files you are creating or modifying.",
+      "Preserve all unrelated design, layout, data, and functionality.",
+      "If an attached screenshot is supplied, use it to understand the exact requested placement and responsive behavior."
     )
   } else {
     promptParts.push(
@@ -179,21 +139,40 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "USER REQUEST:",
       input.prompt.trim(),
       "",
-      "Emit a complete Next.js App Router project: app/page.tsx, app/layout.tsx, app/globals.css, plus any components and lib files the project needs. Derive a real title from the user's request — do NOT use a generic name.",
-      "The project must run in preview immediately with no ReferenceError. Every dataset used by the UI must be declared: products, categories, categoryData, productData, testimonials, slides, features, stats, pricingPlans, navItems, etc.",
-      "Do not use React Context providers or custom useX hooks. For ecommerce, implement cart, wishlist, categories, search and filters with local useState/useMemo in app/page.tsx."
+      "Emit a complete Next.js App Router project with app/page.tsx, app/layout.tsx, app/globals.css, and any required components.",
+      "The project must run immediately without missing variables or providers."
     )
   }
 
   const userPrompt = promptParts.join("\n")
 
-  const result = await generateObject({
+  const request: Parameters<typeof generateObject>[0] = {
     model,
     schema: ProjectSchema,
     system: SYSTEM_PROMPT,
-    prompt: userPrompt,
     temperature: 0.15,
-  })
+    prompt: userPrompt,
+  }
+
+  if (input.attachment) {
+    const attachment = input.attachment
+    const content = attachment.mediaType.startsWith("image/")
+      ? [
+          { type: "text", text: userPrompt },
+          { type: "image", image: attachment.url, mediaType: attachment.mediaType },
+        ]
+      : [
+          { type: "text", text: userPrompt },
+          { type: "file", data: attachment.url, mediaType: attachment.mediaType, filename: attachment.name || "attachment" },
+        ]
+
+    delete (request as { prompt?: string }).prompt
+    ;(request as unknown as { messages: unknown[] }).messages = [
+      { role: "user", content },
+    ]
+  }
+
+  const result = await generateObject(request)
 
   const filesMap: Record<string, string> = {}
   for (const f of result.object.files) {
