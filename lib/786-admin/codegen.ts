@@ -83,6 +83,32 @@ function pickModel(mode: CodegenMode, hasAttachments: boolean): {
   }
 }
 
+const PREMIUM_DESIGN_ENGINE_PROMPT = `
+PREMIUM DESIGN / ANIMATION ENGINE PERMISSIONS:
+You are allowed and encouraged to create polished, premium, Canva-like visual systems when the user asks for design, effects, animation, 3D, luxury, VVIP, modern, stylish, or premium UI.
+
+Allowed without extra dependencies:
+- Advanced Tailwind/CSS animations: fade, slide, zoom, blur, reveal, float, pulse, shimmer, marquee, wave, bounce, glow, spin, morph, and scroll-feel section animation.
+- 3D-style UI using CSS transforms: perspective, rotateX, rotateY, translateZ, preserve-3d, hover tilt, 3D cards, 3D buttons, 3D text shadows, layered depth, neon depth, and product-card depth.
+- Premium text design: gradient text, stroke text, glowing text, shadow text, large editorial typography, split-word styling, typewriter-like effects, letter-spacing effects, animated underline, and luxury heading composition.
+- Premium surfaces: glassmorphism, neumorphism, claymorphism, bento grids, floating cards, frosted panels, blur overlays, soft shadows, light beams, radial highlights, metallic/gold accents, and luxury dark UI.
+- Background systems: animated gradients, blobs, mesh gradients, particles made with CSS spans/divs, waves, grid overlays, aurora, smoke/fog-like CSS layers, starfields, confetti-like CSS particles, and video/image overlays when requested.
+- Interaction effects: magnetic-feel buttons, hover lifts, hover glow, ripple-style buttons, active states, open/close panels, tabs, modals, drawers, dropdowns, accordions, carousels, sliders, filters, carts, dashboards, and forms.
+- Responsive design: desktop, tablet, iPad, and mobile must each look intentional, not squeezed.
+- Font/design variety: use CSS font-family stacks and Tailwind typography classes to create premium font feels. Do not import remote fonts unless the existing project already does.
+
+Safety / performance rules:
+- Keep animations lightweight and CSS-first.
+- Do not add new npm packages such as framer-motion, three.js, gsap, spline, lottie, or canvas libraries unless they already exist in the project files. Simulate premium effects using CSS/Tailwind/React state instead.
+- Do not create infinite heavy loops, uncontrolled timers, or expensive canvas animations.
+- Keep all buttons, forms, carts, filters, search, booking, checkout, and project functionality working.
+- For edits, never redesign unrelated sections unless the user explicitly asks for a full redesign.
+- If the user asks for 3D/4D/5D/6D, interpret this as stronger depth, perspective, lighting, motion, layered parallax, immersive typography, and premium interaction effects. Implement practical CSS/React effects that run in the preview.
+- If the user asks for Canva-like editing, change the exact target area: text, color, font feel, logo, background, section, card, button, layout, or image. Preserve the rest.
+- Every generated icon/component/function/state variable must be declared. No missing variables. No invalid imports.
+- All import statements must remain at the top of each returned file. Never place import or export statements after executable code.
+`
+
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator.
 
 Your ONLY job is to emit a real Next.js App Router project as a list of files.
@@ -100,7 +126,11 @@ ABSOLUTE RULES:
 10. Inspect every attached image or file carefully and use all of them as visual context.
 11. When multiple screenshots are attached, compare them and infer the requested before/after placement, layout, and responsive behavior.
 12. If an image shows mobile UI, reproduce the requested mobile behavior while preserving desktop behavior unless the user asks otherwise.
-13. Never claim an image-driven change was made unless the returned files actually implement it.`
+13. Never claim an image-driven change was made unless the returned files actually implement it.
+14. Never add fake success text; only say what the returned files actually changed.
+15. Never leave duplicate imports, mid-file imports, or imports with comments after executable code.
+
+${PREMIUM_DESIGN_ENGINE_PROMPT}`
 
 function isQuotaError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
@@ -136,7 +166,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "",
       "Emit ONLY files you are creating or modifying.",
       "Preserve all unrelated design, layout, data, and functionality.",
-      "Use every attached screenshot/file to understand exact placement and responsive behavior."
+      "Use every attached screenshot/file to understand exact placement and responsive behavior.",
+      "When adding premium animation/design, use the Premium Design Engine permissions from the system prompt but keep the edit targeted."
     )
   } else {
     promptParts.push(
@@ -147,7 +178,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "",
       "Emit a complete Next.js App Router project with app/page.tsx, app/layout.tsx, app/globals.css, and any required components.",
       "The project must run immediately without missing variables or providers.",
-      "Use every attached screenshot/file as visual reference."
+      "Use every attached screenshot/file as visual reference.",
+      "When the request asks for premium animation/design, use the Premium Design Engine permissions from the system prompt."
     )
   }
 
@@ -173,7 +205,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       model,
       schema: ProjectSchema,
       system: SYSTEM_PROMPT,
-      temperature: 0.15,
+      temperature: 0.18,
       prompt: userPrompt,
     }
 
