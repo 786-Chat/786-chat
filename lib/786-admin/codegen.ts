@@ -20,7 +20,7 @@ export type CodegenAttachment = {
 export type CodegenInput = {
   prompt: string
   mode?: CodegenMode
-  attachment?: CodegenAttachment
+  attachments?: CodegenAttachment[]
   existing?: {
     title: string
     description: string
@@ -59,16 +59,16 @@ const google = createGoogleGenerativeAI({
     "",
 })
 
-function pickModel(mode: CodegenMode, hasAttachment: boolean): {
+function pickModel(mode: CodegenMode, hasAttachments: boolean): {
   provider: "deepseek" | "gemini"
   model: string
   reason: string
 } {
-  if (hasAttachment) {
+  if (hasAttachments) {
     if (mode === "gemini-flash") {
       return { provider: "gemini", model: "gemini-2.5-flash", reason: "Gemini Flash selected for image/file analysis." }
     }
-    return { provider: "gemini", model: "gemini-2.5-pro", reason: "Gemini Pro selected because an image or file was attached." }
+    return { provider: "gemini", model: "gemini-2.5-pro", reason: "Gemini Pro selected because one or more images/files were attached." }
   }
 
   if (mode === "deepseek-flash") return { provider: "deepseek", model: "deepseek-v4-flash", reason: "Manual DeepSeek Flash." }
@@ -97,14 +97,20 @@ ABSOLUTE RULES:
 7. Define every dataset before it is used.
 8. Avoid custom React context providers and custom useX hooks. Prefer local state.
 9. The preview must run immediately in an iframe.
-10. When an image or screenshot is attached, inspect it carefully and use it as visual context for the user's requested edit. Do not merely describe the image.
-11. If the image shows mobile UI, reproduce the requested mobile behavior while preserving desktop behavior unless the user asks otherwise.
-12. Never claim an image-driven change was made unless the returned files actually implement it.`
+10. Inspect every attached image or file carefully and use all of them as visual context.
+11. When multiple screenshots are attached, compare them and infer the requested before/after placement, layout, and responsive behavior.
+12. If an image shows mobile UI, reproduce the requested mobile behavior while preserving desktop behavior unless the user asks otherwise.
+13. Never claim an image-driven change was made unless the returned files actually implement it.`
+
+function isQuotaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /quota|rate.?limit|resource exhausted|429|exceeded your current quota/i.test(message)
+}
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
   const mode: CodegenMode = input.mode ?? "auto"
-  const picked = pickModel(mode, Boolean(input.attachment))
-  const model = picked.provider === "deepseek" ? deepseek(picked.model) : google(picked.model)
+  const attachments = input.attachments || []
+  const picked = pickModel(mode, attachments.length > 0)
 
   const promptParts: string[] = []
 
@@ -130,7 +136,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "",
       "Emit ONLY files you are creating or modifying.",
       "Preserve all unrelated design, layout, data, and functionality.",
-      "If an attached screenshot is supplied, use it to understand the exact requested placement and responsive behavior."
+      "Use every attached screenshot/file to understand exact placement and responsive behavior."
     )
   } else {
     promptParts.push(
@@ -140,39 +146,66 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       input.prompt.trim(),
       "",
       "Emit a complete Next.js App Router project with app/page.tsx, app/layout.tsx, app/globals.css, and any required components.",
-      "The project must run immediately without missing variables or providers."
+      "The project must run immediately without missing variables or providers.",
+      "Use every attached screenshot/file as visual reference."
     )
   }
 
   const userPrompt = promptParts.join("\n")
 
-  const request: Parameters<typeof generateObject>[0] = {
-    model,
-    schema: ProjectSchema,
-    system: SYSTEM_PROMPT,
-    temperature: 0.15,
-    prompt: userPrompt,
+  const content: unknown[] = [{ type: "text", text: userPrompt }]
+  for (const attachment of attachments) {
+    if (attachment.mediaType.startsWith("image/")) {
+      content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
+    } else {
+      content.push({
+        type: "file",
+        data: attachment.url,
+        mediaType: attachment.mediaType,
+        filename: attachment.name || "attachment",
+      })
+    }
   }
 
-  if (input.attachment) {
-    const attachment = input.attachment
-    const content = attachment.mediaType.startsWith("image/")
-      ? [
-          { type: "text", text: userPrompt },
-          { type: "image", image: attachment.url, mediaType: attachment.mediaType },
-        ]
-      : [
-          { type: "text", text: userPrompt },
-          { type: "file", data: attachment.url, mediaType: attachment.mediaType, filename: attachment.name || "attachment" },
-        ]
+  async function run(modelName: string) {
+    const model = picked.provider === "deepseek" ? deepseek(modelName) : google(modelName)
+    const request: Parameters<typeof generateObject>[0] = {
+      model,
+      schema: ProjectSchema,
+      system: SYSTEM_PROMPT,
+      temperature: 0.15,
+      prompt: userPrompt,
+    }
 
-    delete (request as { prompt?: string }).prompt
-    ;(request as unknown as { messages: unknown[] }).messages = [
-      { role: "user", content },
-    ]
+    if (attachments.length > 0) {
+      delete (request as { prompt?: string }).prompt
+      ;(request as unknown as { messages: unknown[] }).messages = [
+        { role: "user", content },
+      ]
+    }
+
+    return generateObject(request)
   }
 
-  const result = await generateObject(request)
+  let usedModel = picked.model
+  let usedReason = picked.reason
+  let result
+
+  try {
+    result = await run(picked.model)
+  } catch (error) {
+    const canRetryWithFlash =
+      attachments.length > 0 &&
+      picked.provider === "gemini" &&
+      picked.model !== "gemini-2.5-flash" &&
+      isQuotaError(error)
+
+    if (!canRetryWithFlash) throw error
+
+    usedModel = "gemini-2.5-flash"
+    usedReason = `${picked.reason} Gemini Pro quota was unavailable, so the request retried with Gemini Flash.`
+    result = await run(usedModel)
+  }
 
   const filesMap: Record<string, string> = {}
   for (const f of result.object.files) {
@@ -189,7 +222,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     description: result.object.description,
     reply: result.object.reply,
     files: filesMap,
-    model: picked.model,
-    reason: picked.reason,
+    model: usedModel,
+    reason: usedReason,
   }
 }
