@@ -103,7 +103,8 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
     .join("\n\n")
 
   const userScript = [componentBodies, pageTransform.body].filter(Boolean).join("\n\n")
-  const runtimeSource = buildPreviewRuntimeSource(userScript, rootName)
+  const safeUserScript = addMissingPreviewDataShims(userScript)
+  const runtimeSource = buildPreviewRuntimeSource(safeUserScript, rootName)
   const runtimeSourceJson = safeScriptJson(runtimeSource)
 
   return `<!doctype html>
@@ -162,6 +163,87 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
 </script>
 </body>
 </html>`
+}
+
+function addMissingPreviewDataShims(source: string): string {
+  const used = new Set<string>()
+  const referenceRe = /\binitial[A-Z][A-Za-z0-9_$]*\b/g
+  let match: RegExpExecArray | null
+
+  while ((match = referenceRe.exec(source)) !== null) {
+    const previous = match.index > 0 ? source[match.index - 1] : ""
+    if (previous === "." || previous === "'" || previous === '"' || previous === "`") continue
+    used.add(match[0])
+  }
+
+  const shims: string[] = []
+  for (const name of used) {
+    const declarationRe = new RegExp(`\\b(?:const|let|var|function|class)\\s+${name}\\b`)
+    if (declarationRe.test(source)) continue
+
+    let value = "[]"
+    if (/customers?/i.test(name)) {
+      value = `[
+  { id: 'customer-1', name: 'Acme Industries', company: 'Acme Industries', email: 'hello@acme.test', status: 'Active', value: 24000, stage: 'Qualified' },
+  { id: 'customer-2', name: 'Northstar Labs', company: 'Northstar Labs', email: 'team@northstar.test', status: 'New', value: 18000, stage: 'Proposal' },
+  { id: 'customer-3', name: 'Summit Retail', company: 'Summit Retail', email: 'sales@summit.test', status: 'Active', value: 32000, stage: 'Won' }
+]`
+    } else if (/leads?/i.test(name)) {
+      value = `[
+  { id: 'lead-1', name: 'Acme Expansion', company: 'Acme Industries', status: 'New', stage: 'New', value: 12000, owner: 'Alex Morgan' },
+  { id: 'lead-2', name: 'Northstar Upgrade', company: 'Northstar Labs', status: 'Qualified', stage: 'Qualified', value: 18000, owner: 'Jamie Lee' },
+  { id: 'lead-3', name: 'Summit Renewal', company: 'Summit Retail', status: 'Proposal', stage: 'Proposal', value: 25000, owner: 'Taylor Reed' }
+]`
+    } else if (/deals?|pipeline/i.test(name)) {
+      value = `[
+  { id: 'deal-1', title: 'Enterprise Platform', name: 'Enterprise Platform', company: 'Acme Industries', stage: 'Qualified', value: 24000, probability: 65 },
+  { id: 'deal-2', title: 'Analytics Upgrade', name: 'Analytics Upgrade', company: 'Northstar Labs', stage: 'Proposal', value: 18000, probability: 80 },
+  { id: 'deal-3', title: 'Retail Automation', name: 'Retail Automation', company: 'Summit Retail', stage: 'Won', value: 32000, probability: 100 }
+]`
+    } else if (/activities?|events?/i.test(name)) {
+      value = `[
+  { id: 'activity-1', title: 'Follow-up call', description: 'Call with Acme Industries', time: '10:30 AM', type: 'call' },
+  { id: 'activity-2', title: 'Proposal sent', description: 'Northstar analytics proposal', time: 'Yesterday', type: 'email' },
+  { id: 'activity-3', title: 'Deal won', description: 'Summit Retail automation', time: '2 days ago', type: 'success' }
+]`
+    } else if (/products?|inventory|items?/i.test(name)) {
+      value = `[
+  { id: 'item-1', name: 'Premium Product', title: 'Premium Product', category: 'Featured', price: 49, stock: 24, quantity: 1, status: 'In Stock' },
+  { id: 'item-2', name: 'Modern Collection', title: 'Modern Collection', category: 'New', price: 79, stock: 12, quantity: 1, status: 'In Stock' },
+  { id: 'item-3', name: 'Signature Item', title: 'Signature Item', category: 'Popular', price: 99, stock: 6, quantity: 1, status: 'Low Stock' }
+]`
+    } else if (/students?/i.test(name)) {
+      value = `[
+  { id: 'student-1', name: 'Aisha Khan', className: 'Year 8', class: 'Year 8', attendance: 96, status: 'Active' },
+  { id: 'student-2', name: 'Daniel Smith', className: 'Year 9', class: 'Year 9', attendance: 92, status: 'Active' },
+  { id: 'student-3', name: 'Sara Ahmed', className: 'Year 10', class: 'Year 10', attendance: 98, status: 'Active' }
+]`
+    } else if (/teachers?/i.test(name)) {
+      value = `[
+  { id: 'teacher-1', name: 'Ms. Taylor', subject: 'Mathematics', status: 'Available' },
+  { id: 'teacher-2', name: 'Mr. Wilson', subject: 'Science', status: 'Teaching' },
+  { id: 'teacher-3', name: 'Mrs. Ahmed', subject: 'English', status: 'Available' }
+]`
+    } else if (/bookings?|appointments?/i.test(name)) {
+      value = `[
+  { id: 'booking-1', customer: 'Alex Morgan', service: 'Consultation', date: '2026-07-05', time: '10:00', status: 'Confirmed' },
+  { id: 'booking-2', customer: 'Jamie Lee', service: 'Premium Session', date: '2026-07-05', time: '13:30', status: 'Pending' },
+  { id: 'booking-3', customer: 'Taylor Reed', service: 'Follow-up', date: '2026-07-06', time: '09:30', status: 'Confirmed' }
+]`
+    } else if (/orders?|sales?/i.test(name)) {
+      value = `[
+  { id: 'order-1', customer: 'Acme Industries', total: 249, amount: 249, status: 'Completed', date: 'Today' },
+  { id: 'order-2', customer: 'Northstar Labs', total: 179, amount: 179, status: 'Processing', date: 'Today' },
+  { id: 'order-3', customer: 'Summit Retail', total: 329, amount: 329, status: 'Completed', date: 'Yesterday' }
+]`
+    } else if (/categories?/i.test(name)) {
+      value = `['All', 'Featured', 'New', 'Popular']`
+    }
+
+    shims.push(`const ${name} = ${value}`)
+  }
+
+  return shims.length > 0 ? `${shims.join("\n")}\n\n${source}` : source
 }
 
 function buildPreviewRuntimeSource(userScript: string, rootName: string): string {
