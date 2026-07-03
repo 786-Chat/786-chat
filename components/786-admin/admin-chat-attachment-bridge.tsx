@@ -273,6 +273,7 @@ export function AdminChatAttachmentBridge() {
       if (!isAdminChatRequest) return originalFetch(input, init)
 
       let nextInit = init
+      let sentAttachments = false
 
       try {
         const bodyText = typeof init?.body === "string" ? init.body : ""
@@ -291,6 +292,7 @@ export function AdminChatAttachmentBridge() {
         if (readyAttachments.length > 0) {
           body.attachments = readyAttachments
           nextInit = { ...init, body: JSON.stringify(body) }
+          sentAttachments = true
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Attachments could not be prepared."
@@ -300,9 +302,11 @@ export function AdminChatAttachmentBridge() {
         })
       }
 
-      const response = await originalFetch(input, nextInit)
-      if (response.ok && attachments.length > 0) queueMicrotask(clearAllAttachments)
-      return response
+      if (sentAttachments) {
+        clearAllAttachments()
+      }
+
+      return originalFetch(input, nextInit)
     }
 
     return () => {
