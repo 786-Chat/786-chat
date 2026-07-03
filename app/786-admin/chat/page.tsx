@@ -240,6 +240,7 @@ try {
   const Link = ({ children, href, ...rest }) => React.createElement('a', Object.assign({ href }, rest), children)
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
   const __makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
+  ;['FilterIcon','SearchIcon','CartIcon','ShoppingCartIcon','HeartIcon','WishlistIcon','UserIcon','MenuIcon','XIcon','PlusIcon','MinusIcon','StarIcon','ChevronLeftIcon','ChevronRightIcon','SlidersIcon','SlidersHorizontalIcon','GridIcon','ListIcon','PackageIcon','TagIcon','BellIcon','SettingsIcon','TrashIcon','EditIcon','EyeIcon'].forEach(function (name) { try { if (typeof globalThis[name] === 'undefined') globalThis[name] = __makeIcon(name) } catch (_) {} })
 
   const __audioNode = function () {
     return {
@@ -365,6 +366,15 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
       const cleaned = raw.trim().split(/\s+as\s+/i)[0].trim()
       if (/^[A-Z][\w$]*$/.test(cleaned)) lucideNames.add(cleaned)
     }
+  }
+
+  const jsxIconRe = /<\s*([A-Z][\w$]*Icon)\b/g
+  while ((match = jsxIconRe.exec(src)) !== null) {
+    lucideNames.add(match[1])
+  }
+  const createElementIconRe = /React\.createElement\(\s*([A-Z][\w$]*Icon)\b/g
+  while ((match = createElementIconRe.exec(src)) !== null) {
+    lucideNames.add(match[1])
   }
 
   let source = src
