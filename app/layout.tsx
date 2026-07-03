@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { I18nProvider } from '@/contexts/i18n-context'
+import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
 import './globals.css'
 
 const geist = Geist({ 
@@ -62,6 +63,7 @@ export default function RootLayout({
         <AuthProvider>
           <I18nProvider>
             {children}
+            <AdminChatAttachmentBridge />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
