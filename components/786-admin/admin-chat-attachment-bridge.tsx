@@ -22,6 +22,8 @@ type AttachmentItem = {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const MAX_ATTACHMENTS = 8
+const ATTACHMENT_MARKER_START = "[[786_ATTACHMENTS:"
+const ATTACHMENT_MARKER_END = "]]"
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -53,6 +55,106 @@ function normalizeClipboardFile(file: File): File {
   )
 }
 
+function encodeAttachments(attachments: ReadyAttachment[]): string {
+  const json = JSON.stringify(attachments)
+  const bytes = new TextEncoder().encode(json)
+  let binary = ""
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function decodeAttachments(value: string): ReadyAttachment[] {
+  try {
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    const parsed = JSON.parse(new TextDecoder().decode(bytes))
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item) =>
+      item &&
+      typeof item.url === "string" &&
+      typeof item.mediaType === "string"
+    )
+  } catch {
+    return []
+  }
+}
+
+function attachmentMarker(attachments: ReadyAttachment[]): string {
+  return `${ATTACHMENT_MARKER_START}${encodeAttachments(attachments)}${ATTACHMENT_MARKER_END}`
+}
+
+function extractAttachmentMarker(content: string): {
+  cleanContent: string
+  attachments: ReadyAttachment[]
+} {
+  const start = content.indexOf(ATTACHMENT_MARKER_START)
+  if (start < 0) return { cleanContent: content, attachments: [] }
+
+  const payloadStart = start + ATTACHMENT_MARKER_START.length
+  const end = content.indexOf(ATTACHMENT_MARKER_END, payloadStart)
+  if (end < 0) return { cleanContent: content, attachments: [] }
+
+  const encoded = content.slice(payloadStart, end)
+  const cleanContent = `${content.slice(0, start)}${content.slice(end + ATTACHMENT_MARKER_END.length)}`.trimEnd()
+  return { cleanContent, attachments: decodeAttachments(encoded) }
+}
+
+function renderAttachmentsIntoMessage(messageText: HTMLElement, attachments: ReadyAttachment[]) {
+  const parent = messageText.parentElement
+  if (!parent || attachments.length === 0) return
+
+  const existing = parent.querySelector<HTMLElement>(":scope > [data-786-sent-attachments]")
+  if (existing) existing.remove()
+
+  const grid = document.createElement("div")
+  grid.dataset["786SentAttachments"] = "true"
+  grid.style.display = "flex"
+  grid.style.flexWrap = "wrap"
+  grid.style.gap = "8px"
+  grid.style.marginTop = "12px"
+
+  for (const attachment of attachments) {
+    if (attachment.mediaType.startsWith("image/")) {
+      const link = document.createElement("a")
+      link.href = attachment.url
+      link.target = "_blank"
+      link.rel = "noreferrer"
+      link.style.display = "block"
+
+      const image = document.createElement("img")
+      image.src = attachment.url
+      image.alt = attachment.name || "Sent image"
+      image.loading = "lazy"
+      image.style.width = "112px"
+      image.style.height = "88px"
+      image.style.objectFit = "cover"
+      image.style.borderRadius = "12px"
+      image.style.border = "1px solid rgba(103,232,249,0.25)"
+      image.style.background = "#0f172a"
+      link.appendChild(image)
+      grid.appendChild(link)
+      continue
+    }
+
+    const link = document.createElement("a")
+    link.href = attachment.url
+    link.target = "_blank"
+    link.rel = "noreferrer"
+    link.textContent = attachment.name || "View PDF"
+    link.style.display = "inline-flex"
+    link.style.alignItems = "center"
+    link.style.padding = "8px 10px"
+    link.style.borderRadius = "10px"
+    link.style.border = "1px solid rgba(248,113,113,0.3)"
+    link.style.background = "rgba(248,113,113,0.1)"
+    link.style.color = "#fecaca"
+    link.style.fontSize = "11px"
+    grid.appendChild(link)
+  }
+
+  messageText.insertAdjacentElement("afterend", grid)
+}
+
 export function AdminChatAttachmentBridge() {
   const pathname = usePathname()
   const active = pathname === "/786-admin/chat"
@@ -60,6 +162,7 @@ export function AdminChatAttachmentBridge() {
   const readyRef = useRef(new Map<string, ReadyAttachment>())
   const uploadPromisesRef = useRef(new Map<string, Promise<ReadyAttachment>>())
   const objectUrlsRef = useRef(new Map<string, string>())
+  const pendingPersistenceRef = useRef<ReadyAttachment[]>([])
   const [composer, setComposer] = useState<HTMLElement | null>(null)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([])
 
@@ -86,6 +189,26 @@ export function AdminChatAttachmentBridge() {
     uploadPromisesRef.current.clear()
     setAttachments([])
     if (inputRef.current) inputRef.current.value = ""
+  }
+
+  function scanSavedMessages() {
+    const messageTexts = document.querySelectorAll<HTMLElement>("p.whitespace-pre-wrap")
+    for (const messageText of Array.from(messageTexts)) {
+      const raw = messageText.textContent || ""
+      if (!raw.includes(ATTACHMENT_MARKER_START)) continue
+
+      const extracted = extractAttachmentMarker(raw)
+      messageText.textContent = extracted.cleanContent
+      renderAttachmentsIntoMessage(messageText, extracted.attachments)
+    }
+  }
+
+  function renderSentAttachments(message: string, sent: ReadyAttachment[]) {
+    requestAnimationFrame(() => {
+      const messageTexts = Array.from(document.querySelectorAll<HTMLElement>("p.whitespace-pre-wrap"))
+      const target = [...messageTexts].reverse().find((node) => (node.textContent || "").trim() === message.trim())
+      if (target) renderAttachmentsIntoMessage(target, sent)
+    })
   }
 
   async function uploadFile(file: File): Promise<ReadyAttachment> {
@@ -126,15 +249,7 @@ export function AdminChatAttachmentBridge() {
 
   function acceptFile(file: File) {
     const supported = file.type.startsWith("image/") || file.type === "application/pdf"
-    if (!supported) return
-    if (file.size > MAX_FILE_SIZE) return
-
-    setAttachments((current) => {
-      if (current.length >= MAX_ATTACHMENTS) return current
-      return current
-    })
-
-    if (attachments.length >= MAX_ATTACHMENTS) return
+    if (!supported || file.size > MAX_FILE_SIZE || attachments.length >= MAX_ATTACHMENTS) return
 
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null
@@ -156,18 +271,14 @@ export function AdminChatAttachmentBridge() {
       .then((ready) => {
         readyRef.current.set(id, ready)
         setAttachments((current) =>
-          current.map((item) =>
-            item.id === id ? { ...item, uploading: false, error: null } : item
-          )
+          current.map((item) => item.id === id ? { ...item, uploading: false, error: null } : item)
         )
         return ready
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "Attachment upload failed."
         setAttachments((current) =>
-          current.map((item) =>
-            item.id === id ? { ...item, uploading: false, error: message } : item
-          )
+          current.map((item) => item.id === id ? { ...item, uploading: false, error: message } : item)
         )
         throw error
       })
@@ -203,7 +314,11 @@ export function AdminChatAttachmentBridge() {
     }
 
     locateComposer()
-    const observer = new MutationObserver(locateComposer)
+    scanSavedMessages()
+    const observer = new MutationObserver(() => {
+      locateComposer()
+      scanSavedMessages()
+    })
     observer.observe(document.body, { childList: true, subtree: true })
 
     return () => {
@@ -246,7 +361,6 @@ export function AdminChatAttachmentBridge() {
       }
 
       if (images.length === 0) return
-
       event.preventDefault()
       event.stopPropagation()
       acceptFiles(images)
@@ -268,45 +382,65 @@ export function AdminChatAttachmentBridge() {
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
-      const isAdminChatRequest = url.includes("/api/786-admin/chat") && String(init?.method || "GET").toUpperCase() === "POST"
+      const method = String(init?.method || "GET").toUpperCase()
+      const isAdminChatRequest = url.includes("/api/786-admin/chat") && method === "POST"
+      const isProjectPersistRequest =
+        method === "POST" || method === "PATCH"
+          ? /\/api\/786-admin\/projects(?:\/[^/?]+)?(?:\?|$)/.test(url)
+          : false
 
-      if (!isAdminChatRequest) return originalFetch(input, init)
+      if (isAdminChatRequest) {
+        let nextInit = init
 
-      let nextInit = init
-      let sentAttachments = false
+        try {
+          const bodyText = typeof init?.body === "string" ? init.body : ""
+          const body = bodyText ? JSON.parse(bodyText) as Record<string, unknown> : {}
+          const orderedIds = attachments.map((item) => item.id)
+          const readyAttachments = await Promise.all(
+            orderedIds.map(async (id) => {
+              const pending = uploadPromisesRef.current.get(id)
+              if (pending) return pending
+              const ready = readyRef.current.get(id)
+              if (!ready) throw new Error("An attachment is not ready yet.")
+              return ready
+            })
+          )
 
-      try {
-        const bodyText = typeof init?.body === "string" ? init.body : ""
-        const body = bodyText ? JSON.parse(bodyText) as Record<string, unknown> : {}
-        const orderedIds = attachments.map((item) => item.id)
-        const readyAttachments = await Promise.all(
-          orderedIds.map(async (id) => {
-            const pending = uploadPromisesRef.current.get(id)
-            if (pending) return pending
-            const ready = readyRef.current.get(id)
-            if (!ready) throw new Error("An attachment is not ready yet.")
-            return ready
+          if (readyAttachments.length > 0) {
+            body.attachments = readyAttachments
+            nextInit = { ...init, body: JSON.stringify(body) }
+            pendingPersistenceRef.current = readyAttachments
+            renderSentAttachments(String(body.message || ""), readyAttachments)
+            clearAllAttachments()
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Attachments could not be prepared."
+          return new Response(JSON.stringify({ success: false, error: message }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
           })
-        )
-
-        if (readyAttachments.length > 0) {
-          body.attachments = readyAttachments
-          nextInit = { ...init, body: JSON.stringify(body) }
-          sentAttachments = true
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Attachments could not be prepared."
-        return new Response(JSON.stringify({ success: false, error: message }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        })
+
+        return originalFetch(input, nextInit)
       }
 
-      if (sentAttachments) {
-        clearAllAttachments()
+      if (isProjectPersistRequest && pendingPersistenceRef.current.length > 0 && typeof init?.body === "string") {
+        try {
+          const body = JSON.parse(init.body) as Record<string, unknown>
+          const messages = Array.isArray(body.messages) ? body.messages as Array<Record<string, unknown>> : []
+          const userMessage = messages.find((message) => message.role === "user" && typeof message.content === "string")
+
+          if (userMessage) {
+            userMessage.content = `${String(userMessage.content)}\n${attachmentMarker(pendingPersistenceRef.current)}`
+            pendingPersistenceRef.current = []
+            return originalFetch(input, { ...init, body: JSON.stringify(body) })
+          }
+        } catch {
+          // Preserve the original persistence request if the body cannot be parsed.
+        }
       }
 
-      return originalFetch(input, nextInit)
+      return originalFetch(input, init)
     }
 
     return () => {
@@ -353,7 +487,7 @@ export function AdminChatAttachmentBridge() {
                   className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/75 text-white"
                   aria-label={`Remove ${item.name}`}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3" />
                 </button>
 
                 <p className="mt-1 truncate text-[10px] text-slate-300">{item.name}</p>
