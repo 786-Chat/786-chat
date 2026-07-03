@@ -32,48 +32,64 @@ function parseAttachment(value: unknown): CodegenAttachment | undefined {
   return { url, mediaType, name }
 }
 
+function parseAttachments(body: Record<string, unknown>): CodegenAttachment[] {
+  const values = Array.isArray(body.attachments)
+    ? body.attachments
+    : body.attachment
+      ? [body.attachment]
+      : []
+
+  if (values.length > 8) {
+    throw new Error("A maximum of 8 attachments is supported per message.")
+  }
+
+  return values
+    .map(parseAttachment)
+    .filter((value): value is CodegenAttachment => Boolean(value))
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => ({}))
-    const message = String(body?.message || "").trim()
-    const attachment = parseAttachment(body?.attachment)
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const message = String(body.message || "").trim()
+    const attachments = parseAttachments(body)
 
-    if (!message && !attachment) {
+    if (!message && attachments.length === 0) {
       return NextResponse.json(
         { success: false, error: "Message or attachment is required." },
         { status: 400 }
       )
     }
 
-    const mode = String(body?.mode || "auto") as CodegenMode
+    const mode = String(body.mode || "auto") as CodegenMode
     const projectId =
-      typeof body?.projectId === "string" && body.projectId.trim()
+      typeof body.projectId === "string" && body.projectId.trim()
         ? body.projectId.trim()
         : null
 
-    const raw = body?.existing
+    const raw = body.existing
     const existing =
       raw &&
       typeof raw === "object" &&
-      Array.isArray(raw.fileTree) &&
-      raw.keyFiles &&
-      typeof raw.keyFiles === "object"
+      Array.isArray((raw as Record<string, unknown>).fileTree) &&
+      (raw as Record<string, unknown>).keyFiles &&
+      typeof (raw as Record<string, unknown>).keyFiles === "object"
         ? {
-            title: String(raw.title || ""),
-            description: String(raw.description || ""),
-            fileTree: raw.fileTree.map((p: unknown) => String(p)),
+            title: String((raw as Record<string, unknown>).title || ""),
+            description: String((raw as Record<string, unknown>).description || ""),
+            fileTree: ((raw as Record<string, unknown>).fileTree as unknown[]).map((p) => String(p)),
             keyFiles: Object.fromEntries(
-              Object.entries(raw.keyFiles).map(([k, v]) => [String(k), String(v)])
+              Object.entries((raw as Record<string, unknown>).keyFiles as Record<string, unknown>).map(([k, v]) => [String(k), String(v)])
             ),
           }
         : undefined
 
-    const prompt = message || "Inspect the attached file and update the existing project to match it."
+    const prompt = message || "Inspect the attached files and update the existing project to match them."
     const codegen = await generateProjectCode({
       prompt,
       mode,
       existing,
-      attachment,
+      attachments,
     })
     const now = new Date().toISOString()
     const id = projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
