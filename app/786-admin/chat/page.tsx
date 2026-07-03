@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Code2, FolderKanban, Loader2, Monitor, Paperclip, Plus, Rocket, Send, Wand2 } from "lucide-react"
+import { Code2, FolderKanban, Loader2, Monitor, Paperclip, Plus, Rocket, Send, Smartphone, Tablet, Wand2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
@@ -30,6 +30,7 @@ const EDIT_CONTEXT_MAX_EXTRA_FILES = 8
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
+type Device = "desktop" | "tablet" | "ipad" | "mobile"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 
 type ExistingProjectContext = {
@@ -486,6 +487,7 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [mode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
+  const [device, setDevice] = useState<Device>("desktop")
   const [sending, setSending] = useState(false)
   const [sound] = useState(true)
   const [chatWidth, setChatWidth] = useState(430)
@@ -495,6 +497,13 @@ export default function SevenEightSixAdminChatPage() {
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}), [project])
   const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files) : { html: "", key: "empty" }), [project])
+
+  const previewFrameStyle = useMemo(() => {
+    if (device === "mobile") return { width: "390px", height: "min(780px, calc(100vh - 118px))" }
+    if (device === "tablet") return { width: "768px", height: "min(900px, calc(100vh - 118px))" }
+    if (device === "ipad") return { width: "1024px", height: "min(820px, calc(100vh - 118px))" }
+    return { width: "100%", height: "100%" }
+  }, [device])
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
 
@@ -569,7 +578,7 @@ export default function SevenEightSixAdminChatPage() {
   }
 
   function newChat() {
-    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview")
+    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview"); setDevice("desktop")
     try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
     tone(true)
   }
@@ -643,6 +652,12 @@ export default function SevenEightSixAdminChatPage() {
     return <main className="flex min-h-screen items-center justify-center bg-[#050713] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-200" /></main>
   }
 
+  const deviceButtonClass = (value: Device) => `inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${device === value ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white"}`
+  const deviceFrameClass = device === "desktop"
+    ? "h-full w-full overflow-hidden bg-white"
+    : `relative shrink-0 overflow-hidden bg-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] ${device === "mobile" ? "rounded-[34px] border-[9px] border-[#111827]" : "rounded-[26px] border-[8px] border-[#111827]"}`
+  const iframeClass = `h-full w-full bg-white ${device === "desktop" ? "rounded-none" : device === "mobile" ? "rounded-[24px]" : "rounded-[17px]"}`
+
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full">
@@ -712,43 +727,68 @@ export default function SevenEightSixAdminChatPage() {
         />
 
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
-          <header className="flex h-[70px] shrink-0 items-center gap-3 border-b border-white/10 px-5">
-            <div className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
+          <header className="flex h-[70px] shrink-0 items-center gap-3 overflow-x-auto border-b border-white/10 px-5">
+            <div className="min-w-[180px] flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
               <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
             </div>
-            <button onClick={() => setPanel("preview")} className={`rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
+
+            {panel === "preview" && (
+              <div className="flex shrink-0 items-center rounded-full border border-white/10 bg-white/[0.035] p-1">
+                <button type="button" onClick={() => setDevice("desktop")} className={deviceButtonClass("desktop")} title="Desktop preview">
+                  <Monitor className="h-4 w-4" /><span>Desktop</span>
+                </button>
+                <button type="button" onClick={() => setDevice("tablet")} className={deviceButtonClass("tablet")} title="Tablet preview">
+                  <Tablet className="h-4 w-4" /><span>Tablet</span>
+                </button>
+                <button type="button" onClick={() => setDevice("ipad")} className={deviceButtonClass("ipad")} title="iPad preview">
+                  <Tablet className="h-4 w-4" /><span>iPad</span>
+                </button>
+                <button type="button" onClick={() => setDevice("mobile")} className={deviceButtonClass("mobile")} title="Mobile preview">
+                  <Smartphone className="h-4 w-4" /><span>Mobile</span>
+                </button>
+              </div>
+            )}
+
+            <button onClick={() => setPanel("preview")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Monitor className="mr-2 inline h-4 w-4" />Preview
             </button>
-            <button onClick={() => setPanel("code")} className={`rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
+            <button onClick={() => setPanel("code")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Code2 className="mr-2 inline h-4 w-4" />Code
             </button>
-            <button className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
+            <button className="shrink-0 rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
           </header>
 
           {panel === "preview" ? (
             sending ? (
-              <div className="flex min-h-0 flex-1 p-6">
-                <div className="flex min-h-0 flex-1 items-center justify-center rounded-[2rem] border border-cyan-300/20 bg-[#0b111d] p-6">
-                  <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-medium text-slate-300">
-                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />
-                    Loading generated preview...
-                  </div>
+              <div className="flex min-h-0 flex-1 items-center justify-center bg-[#070b12] p-6">
+                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-medium text-slate-300">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />
+                  Loading generated preview...
                 </div>
               </div>
             ) : project && previewPayload.html ? (
-              <div className="flex min-h-0 flex-1 p-6">
-                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
+              <div className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#070b12] ${device === "desktop" ? "p-0" : "p-6"}`}>
+                <div className={deviceFrameClass} style={previewFrameStyle}>
+                  {device !== "desktop" && (
+                    <div className={`pointer-events-none absolute left-1/2 top-1.5 z-10 -translate-x-1/2 bg-[#111827] ${device === "mobile" ? "h-5 w-24 rounded-full" : "h-2 w-16 rounded-full"}`} />
+                  )}
+                  <iframe
+                    key={`${project.id}-${previewPayload.key}-${device}`}
+                    srcDoc={previewPayload.html}
+                    title={`${project.title} ${device} preview`}
+                    sandbox="allow-scripts allow-forms allow-popups"
+                    className={iframeClass}
+                  />
+                </div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
-                <div className="flex min-h-full w-full items-center justify-center rounded-[2rem] border border-white/10 bg-[#0b111d]">
-                  <div>
-                    <Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" />
-                    <h2 className="text-xl font-black text-slate-300">No Preview Yet</h2>
-                    <p className="mt-2">New chat starts with empty preview and empty code.</p>
-                  </div>
+              <div className="flex flex-1 items-center justify-center bg-[#070b12] p-6 text-center text-slate-500">
+                <div>
+                  <Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" />
+                  <h2 className="text-xl font-black text-slate-300">No Preview Yet</h2>
+                  <p className="mt-2">New chat starts with empty preview and empty code.</p>
                 </div>
               </div>
             )
