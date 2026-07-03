@@ -14,8 +14,7 @@ import { z } from "zod"
 //     a real list of files, not prose.
 //   - "Auto" and "deepseek-pro" both route to DeepSeek v4 Pro.
 //   - When `existing` is provided we tell the model it is EDITING and feed
-//     it the entry files (app/page.tsx, app/layout.tsx, app/globals.css,
-//     README.md) plus a file-tree listing.
+//     it the entry files (app/page.tsx, app/layout.tsx, README.md) plus a file-tree listing.
 
 export type CodegenMode =
   | "auto"
@@ -145,7 +144,15 @@ ABSOLUTE RULES:
 6. Match the user's intent precisely. Do NOT return a generic landing page when the user asked for a specific feature.
 7. If editing an existing project (you will be given the entry files and a full file tree), emit ONLY the files you need to create or modify. Do NOT re-emit unchanged files. Keep the existing project title unless the user explicitly asks to rename it.
 8. The "reply" field must be a short chat message (1–3 sentences) describing what you produced or changed. It is NOT the file content.
-9. NEVER output the literal string "786.Chat Generated Project" as a title. Always derive a real title from the user's prompt or keep the existing one when editing.`
+9. NEVER output the literal string "786.Chat Generated Project" as a title. Always derive a real title from the user's prompt or keep the existing one when editing.
+
+RUNTIME-SAFE CODE RULES:
+10. Every identifier used in JSX or render logic MUST be declared in the same emitted file or imported from another emitted file. Never reference undeclared variables such as categoryData, productData, products, stats, slides, testimonials, pricingPlans, navItems, features, or categories.
+11. For arrays used with .map(), ALWAYS define the array before the component returns JSX. Example: const categories = [...] before categories.map(...).
+12. For NEW projects, prefer a self-contained app/page.tsx with local arrays and helper functions unless splitting into components is necessary. If you split into components, every imported component and data file MUST be included in the emitted files array.
+13. Do not use browser APIs that commonly fail in a sandbox on first render. Avoid direct constructors on load for AudioContext, WebGL, MediaRecorder, SpeechRecognition, WebSocket, Worker, SharedWorker, Notification, PaymentRequest, Bluetooth, USB, Serial, or EyeDropper. If interaction sound is requested, implement it behind a user click handler with try/catch.
+14. Before finalizing, mentally TypeScript-check the emitted files: no missing imports, no missing variables, no undeclared arrays, no duplicate default exports, no syntax errors.
+15. The preview must be able to run immediately inside an iframe using only the emitted files. If a feature needs data, define sample data in the emitted code.`
 
 export async function generateProjectCode(
   input: CodegenInput
@@ -179,7 +186,8 @@ export async function generateProjectCode(
       "USER REQUEST:",
       input.prompt.trim(),
       "",
-      "Emit ONLY the files you are creating or modifying. Keep the existing title unless the user explicitly requests a rename."
+      "Emit ONLY the files you are creating or modifying. Keep the existing title unless the user explicitly requests a rename.",
+      "Do not introduce undeclared variables. If you add JSX that maps over data, define that data in the same modified file or include the imported data file."
     )
   } else {
     promptParts.push(
@@ -188,7 +196,8 @@ export async function generateProjectCode(
       "USER REQUEST:",
       input.prompt.trim(),
       "",
-      "Emit a complete Next.js App Router project: app/page.tsx, app/layout.tsx, app/globals.css, plus any components and lib files the project needs. Derive a real title from the user's request — do NOT use a generic name."
+      "Emit a complete Next.js App Router project: app/page.tsx, app/layout.tsx, app/globals.css, plus any components and lib files the project needs. Derive a real title from the user's request — do NOT use a generic name.",
+      "The project must run in preview immediately with no ReferenceError. Every dataset used by the UI must be declared: products, categories, categoryData, productData, testimonials, slides, features, stats, pricingPlans, navItems, etc."
     )
   }
 
@@ -199,7 +208,7 @@ export async function generateProjectCode(
     schema: ProjectSchema,
     system: SYSTEM_PROMPT,
     prompt: userPrompt,
-    temperature: 0.3,
+    temperature: 0.2,
   })
 
   const filesMap: Record<string, string> = {}
