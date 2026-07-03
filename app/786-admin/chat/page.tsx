@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Code2, FolderKanban, GripVertical, Loader2, Monitor, Paperclip, Plus, Rocket, Send, Wand2 } from "lucide-react"
+import { Code2, FolderKanban, Loader2, Monitor, Paperclip, Plus, Rocket, Send, Wand2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
@@ -181,7 +181,7 @@ try {
       allProducts: __sampleProducts,
       filteredProducts: __sampleProducts,
       categories: __sampleCategories,
-      filters: { search: '', category: 'All', sortBy: 'featured', minPrice: 0, maxPrice: 9999, priceRange: [0, 9999] },
+      filters: { search: '', searchTerm: '', query: '', category: 'All', selectedCategory: 'All', sortBy: 'featured', sortOrder: 'asc', minPrice: 0, maxPrice: 9999, priceRange: [0, 9999] },
       cart: [],
       cartItems: [],
       wishlist: [],
@@ -196,18 +196,34 @@ try {
       isOpen: false,
       loading: false,
       error: null,
+      search: '',
+      query: '',
+      keyword: '',
+      searchTerm: '',
       searchQuery: '',
-      selectedCategory: 'All'
+      category: 'All',
+      selectedCategory: 'All',
+      sortBy: 'featured',
+      sortOrder: 'asc',
+      minPrice: 0,
+      maxPrice: 9999,
+      priceRange: [0, 9999]
     }
     return new Proxy(target, {
       get: function (obj, prop) {
         if (prop in obj) return obj[prop]
         var key = String(prop)
+        if (/products|items|categories|list|results|collection|rows/i.test(key)) return []
+        if (/filters|settings|options|state|form|data|meta/i.test(key)) return {}
+        if (/term|query|search|keyword|category|sort|theme|view|mode|tab|status|email|name|title|label|description|slug|id/i.test(key)) {
+          if (/category/i.test(key)) return 'All'
+          if (/theme/i.test(key)) return 'dark'
+          if (/sort/i.test(key)) return 'featured'
+          return ''
+        }
+        if (/count|total|price|amount|quantity|index|page|limit|offset|size|min|max/i.test(key)) return 0
+        if (/is|has|can|should|open|active|selected|loading|disabled|visible|checked|ready/i.test(key)) return false
         if (/^(set|add|remove|toggle|update|clear|handle|on|open|close|apply|reset|select|filter|sort|show|hide)/i.test(key)) return __noop
-        if (/products|items|categories|list|results/i.test(key)) return []
-        if (/filters|settings|options|state|form|data/i.test(key)) return {}
-        if (/count|total|price|amount|quantity|index|page/i.test(key)) return 0
-        if (/is|has|can|should|open|active|selected|loading/i.test(key)) return false
         return __noop
       }
     })
