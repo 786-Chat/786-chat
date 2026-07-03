@@ -30,7 +30,6 @@ const EDIT_CONTEXT_MAX_EXTRA_FILES = 8
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
-type Device = "desktop" | "tablet" | "mobile"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 
 type ExistingProjectContext = {
@@ -176,6 +175,53 @@ try {
   const Image = ({ src, alt, width, height, fill, priority, ...rest }) => React.createElement('img', Object.assign({ src, alt, width, height }, rest))
   const __makeIcon = (name) => (props = {}) => React.createElement('span', Object.assign({}, props, { 'data-icon': name, 'aria-hidden': true, className: 'inline-block align-middle w-4 h-4 ' + (props.className || '') }))
 
+  // Safe preview-only browser API shims.
+  // AI-generated demos sometimes create audio/mouse APIs during initial render.
+  // In the iframe sandbox, those constructors can throw "Illegal constructor" and kill preview.
+  // These no-op shims keep the visual preview alive without changing saved project files.
+  const __noop = function () {}
+  const __resolved = function () { return Promise.resolve() }
+  const __audioNode = function () {
+    return {
+      connect: function () { return this },
+      disconnect: __noop,
+      start: __noop,
+      stop: __noop,
+      frequency: { value: 0, setValueAtTime: __noop, linearRampToValueAtTime: __noop, exponentialRampToValueAtTime: __noop },
+      gain: { value: 1, setValueAtTime: __noop, linearRampToValueAtTime: __noop, exponentialRampToValueAtTime: __noop },
+    }
+  }
+  function __SafeAudioContext() {
+    this.currentTime = 0
+    this.destination = __audioNode()
+    this.createOscillator = __audioNode
+    this.createGain = __audioNode
+    this.createAnalyser = __audioNode
+    this.createBufferSource = __audioNode
+    this.resume = __resolved
+    this.close = __resolved
+    this.suspend = __resolved
+  }
+  function __SafeAudio(src) {
+    return {
+      src: src || '',
+      currentTime: 0,
+      volume: 1,
+      muted: false,
+      loop: false,
+      preload: 'auto',
+      play: __resolved,
+      pause: __noop,
+      load: __noop,
+      addEventListener: __noop,
+      removeEventListener: __noop,
+      dispatchEvent: function () { return true },
+    }
+  }
+  try { globalThis.AudioContext = __SafeAudioContext; window.AudioContext = __SafeAudioContext } catch (_) {}
+  try { globalThis.webkitAudioContext = __SafeAudioContext; window.webkitAudioContext = __SafeAudioContext } catch (_) {}
+  try { globalThis.Audio = __SafeAudio; window.Audio = __SafeAudio } catch (_) {}
+
   if (typeof globalThis.cn === 'undefined') {
     globalThis.cn = function () {
       var args = Array.prototype.slice.call(arguments)
@@ -257,7 +303,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
   source = source.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
 
   const lucideShim = Array.from(lucideNames)
-  .map((name) => `if (typeof globalThis.${name} === 'undefined') { globalThis.${name} = __makeIcon('${name}'); }`)
+  .map((name) => `globalThis.${name} = __makeIcon('${name}');`)
     .join("\n")
   const body = (lucideShim ? `${lucideShim}\n` : "") + source.trim()
   return { defaultName, body }
@@ -334,7 +380,6 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [mode, setMode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
-  const [device, setDevice] = useState<Device>("desktop")
   const [sending, setSending] = useState(false)
   const [sound, setSound] = useState(true)
   const [chatWidth, setChatWidth] = useState(430)
@@ -520,9 +565,10 @@ export default function SevenEightSixAdminChatPage() {
             ) : (
               messages.map((m) => (
                 <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === "user" ? "ml-8 border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "mr-8 border-white/10 bg-white/[0.045] text-slate-200"}`}>
-           <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-  <span>{m.role === "user" ? "You" : "786.Chat"}</span>
-</div>
+                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
+                    <span>{m.role === "user" ? "You" : "786.Chat"}</span>
+                    
+                  </div>
                   <p className="whitespace-pre-wrap">{m.content}</p>
                   {false && m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
                 </div>
@@ -571,17 +617,6 @@ export default function SevenEightSixAdminChatPage() {
             <button onClick={() => setPanel("code")} className={`rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
               <Code2 className="mr-2 inline h-4 w-4" />Code
             </button>
-            <div className="flex items-center rounded-full border border-white/10 bg-white/[0.035] p-1">
-              {(["desktop", "tablet", "mobile"] as Device[]).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDevice(d)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize ${device === d ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:text-cyan-100"}`}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
             <button className="rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
               <Rocket className="mr-2 inline h-4 w-4" />Publish
             </button>
@@ -598,16 +633,8 @@ export default function SevenEightSixAdminChatPage() {
                 </div>
               </div>
             ) : project && previewPayload.html ? (
-              <div className="flex min-h-0 flex-1 justify-center overflow-auto p-6">
-                <div className={device === "desktop" ? "flex min-h-0 w-full" : device === "tablet" ? "h-[900px] w-[820px] max-w-full overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" : "h-[844px] w-[390px] max-w-full overflow-hidden rounded-[2.5rem] border-[10px] border-slate-900 bg-[#0b111d]"}>
-                  <iframe
-  key={`${project.id}-${previewPayload.key}-${device}`}
-  srcDoc={previewPayload.html}
-  title={`${project.title} preview`}
-  sandbox="allow-scripts allow-forms allow-popups"
-  className="h-full w-full border-0 bg-[#0b111d]"
-/>
-                </div>
+              <div className="flex min-h-0 flex-1 p-6">
+                <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="min-h-0 flex-1 rounded-[2rem] border border-cyan-300/20 bg-[#0b111d]" />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center p-6 text-center text-slate-500">
