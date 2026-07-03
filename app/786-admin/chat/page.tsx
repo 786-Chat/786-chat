@@ -213,6 +213,8 @@ try {
       get: function (obj, prop) {
         if (prop in obj) return obj[prop]
         var key = String(prop)
+        if (/^filtered(products|items|results|list|collection|rows)$/i.test(key)) return []
+        if (/^(set|add|remove|toggle|update|clear|handle|on|open|close|apply|reset|select|filter|sort|show|hide)([A-Z_]|$)/.test(key)) return __noop
         if (/products|items|categories|list|results|collection|rows/i.test(key)) return []
         if (/filters|settings|options|state|form|data|meta/i.test(key)) return {}
         if (/term|query|search|keyword|category|sort|theme|view|mode|tab|status|email|name|title|label|description|slug|id/i.test(key)) {
@@ -223,7 +225,6 @@ try {
         }
         if (/count|total|price|amount|quantity|index|page|limit|offset|size|min|max/i.test(key)) return 0
         if (/is|has|can|should|open|active|selected|loading|disabled|visible|checked|ready/i.test(key)) return false
-        if (/^(set|add|remove|toggle|update|clear|handle|on|open|close|apply|reset|select|filter|sort|show|hide)/i.test(key)) return __noop
         return __noop
       }
     })
