@@ -11,7 +11,8 @@ type ReadyAttachment = {
   name: string
 }
 
-type AttachmentState = {
+type AttachmentItem = {
+  id: string
   name: string
   mediaType: string
   previewUrl: string | null
@@ -20,6 +21,7 @@ type AttachmentState = {
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
+const MAX_ATTACHMENTS = 8
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -55,21 +57,35 @@ export function AdminChatAttachmentBridge() {
   const pathname = usePathname()
   const active = pathname === "/786-admin/chat"
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const attachmentRef = useRef<ReadyAttachment | null>(null)
-  const uploadPromiseRef = useRef<Promise<ReadyAttachment> | null>(null)
-  const objectUrlRef = useRef<string | null>(null)
+  const readyRef = useRef(new Map<string, ReadyAttachment>())
+  const uploadPromisesRef = useRef(new Map<string, Promise<ReadyAttachment>>())
+  const objectUrlsRef = useRef(new Map<string, string>())
   const [composer, setComposer] = useState<HTMLElement | null>(null)
-  const [attachment, setAttachment] = useState<AttachmentState | null>(null)
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([])
 
-  function clearAttachment() {
-    attachmentRef.current = null
-    uploadPromiseRef.current = null
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current)
-      objectUrlRef.current = null
+  function removeAttachment(id: string) {
+    readyRef.current.delete(id)
+    uploadPromisesRef.current.delete(id)
+
+    const objectUrl = objectUrlsRef.current.get(id)
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl)
+      objectUrlsRef.current.delete(id)
     }
+
+    setAttachments((current) => current.filter((item) => item.id !== id))
     if (inputRef.current) inputRef.current.value = ""
-    setAttachment(null)
+  }
+
+  function clearAllAttachments() {
+    for (const objectUrl of objectUrlsRef.current.values()) {
+      URL.revokeObjectURL(objectUrl)
+    }
+    objectUrlsRef.current.clear()
+    readyRef.current.clear()
+    uploadPromisesRef.current.clear()
+    setAttachments([])
+    if (inputRef.current) inputRef.current.value = ""
   }
 
   async function uploadFile(file: File): Promise<ReadyAttachment> {
@@ -88,6 +104,7 @@ export function AdminChatAttachmentBridge() {
           contentType?: string
           name?: string
         }
+
         if (payload.url) {
           return {
             url: payload.url,
@@ -97,12 +114,11 @@ export function AdminChatAttachmentBridge() {
         }
       }
     } catch {
-      // Fall through to a data URL so image/file input still works without Blob storage.
+      // Fall through to a data URL when Blob upload is unavailable.
     }
 
-    const dataUrl = await fileToDataUrl(file)
     return {
-      url: dataUrl,
+      url: await fileToDataUrl(file),
       mediaType: file.type,
       name: file.name,
     }
@@ -110,61 +126,58 @@ export function AdminChatAttachmentBridge() {
 
   function acceptFile(file: File) {
     const supported = file.type.startsWith("image/") || file.type === "application/pdf"
-    if (!supported) {
-      setAttachment({
-        name: file.name,
-        mediaType: file.type,
-        previewUrl: null,
-        uploading: false,
-        error: "Only images and PDF files are supported.",
-      })
-      return
-    }
+    if (!supported) return
+    if (file.size > MAX_FILE_SIZE) return
 
-    if (file.size > MAX_FILE_SIZE) {
-      setAttachment({
-        name: file.name,
-        mediaType: file.type,
-        previewUrl: null,
-        uploading: false,
-        error: "File is too large. Maximum size is 10 MB.",
-      })
-      return
-    }
-
-    clearAttachment()
-
-    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null
-    objectUrlRef.current = previewUrl
-    setAttachment({
-      name: file.name,
-      mediaType: file.type,
-      previewUrl,
-      uploading: true,
-      error: null,
+    setAttachments((current) => {
+      if (current.length >= MAX_ATTACHMENTS) return current
+      return current
     })
+
+    if (attachments.length >= MAX_ATTACHMENTS) return
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null
+    if (previewUrl) objectUrlsRef.current.set(id, previewUrl)
+
+    setAttachments((current) => [
+      ...current,
+      {
+        id,
+        name: file.name,
+        mediaType: file.type,
+        previewUrl,
+        uploading: true,
+        error: null,
+      },
+    ])
 
     const uploadPromise = uploadFile(file)
       .then((ready) => {
-        attachmentRef.current = ready
-        setAttachment((current) =>
-          current
-            ? { ...current, uploading: false, error: null }
-            : current
+        readyRef.current.set(id, ready)
+        setAttachments((current) =>
+          current.map((item) =>
+            item.id === id ? { ...item, uploading: false, error: null } : item
+          )
         )
         return ready
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "Attachment upload failed."
-        setAttachment((current) =>
-          current
-            ? { ...current, uploading: false, error: message }
-            : current
+        setAttachments((current) =>
+          current.map((item) =>
+            item.id === id ? { ...item, uploading: false, error: message } : item
+          )
         )
         throw error
       })
 
-    uploadPromiseRef.current = uploadPromise
+    uploadPromisesRef.current.set(id, uploadPromise)
+  }
+
+  function acceptFiles(files: File[]) {
+    const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length)
+    files.slice(0, remaining).forEach(acceptFile)
   }
 
   useEffect(() => {
@@ -192,11 +205,9 @@ export function AdminChatAttachmentBridge() {
     locateComposer()
     const observer = new MutationObserver(locateComposer)
     observer.observe(document.body, { childList: true, subtree: true })
-    window.addEventListener("resize", locateComposer)
 
     return () => {
       observer.disconnect()
-      window.removeEventListener("resize", locateComposer)
       setComposer(null)
     }
   }, [active])
@@ -221,26 +232,24 @@ export function AdminChatAttachmentBridge() {
       const clipboard = event.clipboardData
       if (!clipboard) return
 
-      let image: File | null = null
-
+      const images: File[] = []
       for (const item of Array.from(clipboard.items || [])) {
         if (item.kind !== "file" || !item.type.startsWith("image/")) continue
         const pastedFile = item.getAsFile()
-        if (pastedFile) {
-          image = pastedFile
-          break
+        if (pastedFile) images.push(normalizeClipboardFile(pastedFile))
+      }
+
+      if (images.length === 0) {
+        for (const file of Array.from(clipboard.files || [])) {
+          if (file.type.startsWith("image/")) images.push(normalizeClipboardFile(file))
         }
       }
 
-      if (!image) {
-        image = Array.from(clipboard.files || []).find((file) => file.type.startsWith("image/")) || null
-      }
-
-      if (!image) return
+      if (images.length === 0) return
 
       event.preventDefault()
       event.stopPropagation()
-      acceptFile(normalizeClipboardFile(image))
+      acceptFiles(images)
     }
 
     document.addEventListener("click", handleClick, true)
@@ -250,7 +259,7 @@ export function AdminChatAttachmentBridge() {
       document.removeEventListener("click", handleClick, true)
       document.removeEventListener("paste", handlePaste, true)
     }
-  }, [active])
+  }, [active, attachments.length])
 
   useEffect(() => {
     if (!active) return
@@ -261,29 +270,30 @@ export function AdminChatAttachmentBridge() {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
       const isAdminChatRequest = url.includes("/api/786-admin/chat") && String(init?.method || "GET").toUpperCase() === "POST"
 
-      if (!isAdminChatRequest) {
-        return originalFetch(input, init)
-      }
+      if (!isAdminChatRequest) return originalFetch(input, init)
 
       let nextInit = init
 
       try {
         const bodyText = typeof init?.body === "string" ? init.body : ""
         const body = bodyText ? JSON.parse(bodyText) as Record<string, unknown> : {}
-        const ready = uploadPromiseRef.current
-          ? await uploadPromiseRef.current
-          : attachmentRef.current
+        const orderedIds = attachments.map((item) => item.id)
+        const readyAttachments = await Promise.all(
+          orderedIds.map(async (id) => {
+            const pending = uploadPromisesRef.current.get(id)
+            if (pending) return pending
+            const ready = readyRef.current.get(id)
+            if (!ready) throw new Error("An attachment is not ready yet.")
+            return ready
+          })
+        )
 
-        if (ready) {
-          body.attachment = ready
-          nextInit = {
-            ...init,
-            body: JSON.stringify(body),
-          }
+        if (readyAttachments.length > 0) {
+          body.attachments = readyAttachments
+          nextInit = { ...init, body: JSON.stringify(body) }
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Attachment could not be prepared."
-        setAttachment((current) => current ? { ...current, uploading: false, error: message } : current)
+        const message = error instanceof Error ? error.message : "Attachments could not be prepared."
         return new Response(JSON.stringify({ success: false, error: message }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
@@ -291,62 +301,64 @@ export function AdminChatAttachmentBridge() {
       }
 
       const response = await originalFetch(input, nextInit)
-      if (response.ok && attachmentRef.current) {
-        queueMicrotask(clearAttachment)
-      }
+      if (response.ok && attachments.length > 0) queueMicrotask(clearAllAttachments)
       return response
     }
 
     return () => {
       window.fetch = originalFetch
     }
-  }, [active])
+  }, [active, attachments])
 
   useEffect(() => () => {
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+    for (const objectUrl of objectUrlsRef.current.values()) URL.revokeObjectURL(objectUrl)
   }, [])
 
   if (!active) return null
 
-  const preview = attachment && composer
+  const preview = attachments.length > 0 && composer
     ? createPortal(
         <div className="absolute bottom-full left-0 right-0 z-[120] mb-3 rounded-2xl border border-cyan-300/25 bg-[#101827] p-3 shadow-2xl">
-          <div className="flex items-center gap-3">
-            {attachment.previewUrl ? (
-              <img
-                src={attachment.previewUrl}
-                alt={attachment.name}
-                className="h-16 w-20 rounded-xl object-cover"
-              />
-            ) : attachment.mediaType === "application/pdf" ? (
-              <div className="grid h-16 w-20 place-items-center rounded-xl bg-red-500/15 text-red-200">
-                <FileText className="h-7 w-7" />
-              </div>
-            ) : (
-              <div className="grid h-16 w-20 place-items-center rounded-xl bg-cyan-500/15 text-cyan-200">
-                <ImageIcon className="h-7 w-7" />
-              </div>
-            )}
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-cyan-100">
+              {attachments.length} attachment{attachments.length === 1 ? "" : "s"}
+            </span>
+            <button type="button" onClick={clearAllAttachments} className="text-[11px] text-slate-400 hover:text-white">
+              Remove all
+            </button>
+          </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-white">{attachment.name}</p>
-              <p className={`mt-1 text-[11px] ${attachment.error ? "text-red-300" : "text-slate-400"}`}>
-                {attachment.error || (attachment.uploading ? "Preparing attachment for Gemini…" : "Ready — add your instruction and send")}
-              </p>
-            </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {attachments.map((item) => (
+              <div key={item.id} className="relative w-24 shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-2">
+                {item.previewUrl ? (
+                  <img src={item.previewUrl} alt={item.name} className="h-16 w-full rounded-lg object-cover" />
+                ) : item.mediaType === "application/pdf" ? (
+                  <div className="grid h-16 place-items-center rounded-lg bg-red-500/15 text-red-200">
+                    <FileText className="h-6 w-6" />
+                  </div>
+                ) : (
+                  <div className="grid h-16 place-items-center rounded-lg bg-cyan-500/15 text-cyan-200">
+                    <ImageIcon className="h-6 w-6" />
+                  </div>
+                )}
 
-            {attachment.uploading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-cyan-200" />
-            ) : (
-              <button
-                type="button"
-                onClick={clearAttachment}
-                className="grid h-8 w-8 place-items-center rounded-full border border-white/10 text-slate-300 hover:bg-white/10"
-                aria-label="Remove attachment"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(item.id)}
+                  className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/75 text-white"
+                  aria-label={`Remove ${item.name}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+
+                <p className="mt-1 truncate text-[10px] text-slate-300">{item.name}</p>
+                <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-500">
+                  {item.uploading && <Loader2 className="h-3 w-3 animate-spin" />}
+                  <span>{item.error || (item.uploading ? "Preparing" : "Ready")}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>,
         composer
@@ -359,11 +371,9 @@ export function AdminChatAttachmentBridge() {
         ref={inputRef}
         type="file"
         accept="image/*,application/pdf"
+        multiple
         className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (file) acceptFile(file)
-        }}
+        onChange={(event) => acceptFiles(Array.from(event.target.files || []))}
       />
       {preview}
     </>
