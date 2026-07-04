@@ -22,6 +22,7 @@ type ProgressState = {
 const CHAT_ENDPOINT = "/api/786-admin/chat"
 const PROJECT_ENDPOINT = /^\/api\/786-admin\/projects(?:\/[^/?#]+)?(?:[?#].*)?$/
 const OLD_WORKING_TEXT = "786.Chat is creating real project files"
+const ACTIVE_ATTR = "data-admin-generation-progress-active"
 
 function requestPath(input: RequestInfo | URL): string {
   try {
@@ -41,6 +42,15 @@ function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
 
 function findChatScroll(): HTMLElement | null {
   return document.querySelector<HTMLElement>("main > div > section:first-of-type div.flex-1.overflow-y-auto")
+}
+
+function progressIsActive(): boolean {
+  return document.documentElement.getAttribute(ACTIVE_ATTR) === "true"
+}
+
+function setProgressActive(active: boolean) {
+  if (active) document.documentElement.setAttribute(ACTIVE_ATTR, "true")
+  else document.documentElement.removeAttribute(ACTIVE_ATTR)
 }
 
 function hideLegacyWorkingCard(hidden: boolean) {
@@ -83,6 +93,7 @@ export function AdminChatGenerationProgress() {
     if (pathname !== "/786-admin/chat") {
       setHost(null)
       setProgress({ stage: "idle", detail: "" })
+      setProgressActive(false)
       return
     }
 
@@ -108,12 +119,19 @@ export function AdminChatGenerationProgress() {
       window.requestAnimationFrame(() => hostNode?.scrollIntoView({ behavior: "smooth", block: "end" }))
     }
 
+    const showProgress = (next: ProgressState) => {
+      setProgressActive(true)
+      setProgress(next)
+      hideLegacyWorkingCard(true)
+      ensureHost()
+    }
+
     const finishLater = (next: ProgressState, delay: number) => {
       window.clearTimeout(hideTimer)
-      setProgress(next)
-      ensureHost()
+      showProgress(next)
       hideTimer = window.setTimeout(() => {
         setProgress({ stage: "idle", detail: "" })
+        setProgressActive(false)
         hideLegacyWorkingCard(false)
       }, delay)
     }
@@ -121,7 +139,7 @@ export function AdminChatGenerationProgress() {
     ensureHost()
     const observer = new MutationObserver(() => {
       ensureHost()
-      hideLegacyWorkingCard(active)
+      hideLegacyWorkingCard(progressIsActive())
     })
     observer.observe(document.body, { childList: true, subtree: true })
 
@@ -135,18 +153,13 @@ export function AdminChatGenerationProgress() {
       if (isChatRequest) {
         window.clearTimeout(hideTimer)
         window.clearTimeout(generatingTimer)
-        setProgress({ stage: "thinking", detail: "786.Chat is analysing your instructions before code generation starts." })
-        hideLegacyWorkingCard(true)
-        ensureHost()
+        showProgress({ stage: "thinking", detail: "786.Chat is analysing your instructions before code generation starts." })
         generatingTimer = window.setTimeout(() => {
-          setProgress({ stage: "generating", detail: "The AI is building complete React, TypeScript and project files." })
-          ensureHost()
+          showProgress({ stage: "generating", detail: "The AI is building complete React, TypeScript and project files." })
         }, 500)
       } else if (isProjectSave) {
         window.clearTimeout(generatingTimer)
-        setProgress({ stage: "saving", detail: "Generated files and chat history are being saved to your active project." })
-        hideLegacyWorkingCard(true)
-        ensureHost()
+        showProgress({ stage: "saving", detail: "Generated files and chat history are being saved to your active project." })
       }
 
       try {
@@ -155,8 +168,7 @@ export function AdminChatGenerationProgress() {
         if (isChatRequest) {
           window.clearTimeout(generatingTimer)
           if (response.ok) {
-            setProgress({ stage: "preparing", detail: "Code generation finished. 786.Chat is preparing the preview and project data." })
-            ensureHost()
+            showProgress({ stage: "preparing", detail: "Code generation finished. 786.Chat is preparing the preview and project data." })
           } else {
             finishLater({ stage: "failed", detail: `The generation request returned HTTP ${response.status}. The error message is shown in chat.` }, 6000)
           }
@@ -184,10 +196,11 @@ export function AdminChatGenerationProgress() {
       window.fetch = originalFetch
       window.clearTimeout(hideTimer)
       window.clearTimeout(generatingTimer)
+      setProgressActive(false)
       hideLegacyWorkingCard(false)
       hostNode?.remove()
     }
-  }, [pathname, active])
+  }, [pathname])
 
   if (!host || !active) return null
 
