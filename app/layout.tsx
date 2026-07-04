@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
+import { AdminChatBrowserControls } from '@/components/786-admin/admin-chat-browser-controls'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import './globals.css'
 
@@ -66,6 +67,7 @@ export default function RootLayout({
             {children}
             <AdminChatAttachmentBridge />
             <AdminChatPreviewSourceGuard />
+            <AdminChatBrowserControls />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
