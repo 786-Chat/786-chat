@@ -9,6 +9,7 @@ import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-g
 import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
 import { AdminChatRefreshScrollGuard } from '@/components/786-admin/admin-chat-refresh-scroll-guard'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
+import { AdminChatPreviewStorageGuard } from '@/components/786-admin/admin-chat-preview-storage-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
 import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-card-identity'
 import './globals.css'
@@ -84,6 +85,7 @@ export default function RootLayout({
             <AdminChatProgressVisibilityGuard />
             <AdminChatRefreshScrollGuard />
             <AdminChatPreviewSourceGuard />
+            <AdminChatPreviewStorageGuard />
             <AdminChatThemeControls />
             <AdminProjectCardIdentity />
           </I18nProvider>
