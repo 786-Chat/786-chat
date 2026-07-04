@@ -43,18 +43,9 @@ function injectPreviewSafety(srcDoc: string): string {
 function stripGeneratedModuleLines(srcDoc: string): string {
   let next = srcDoc
 
-  next = next.replace(
-    /\\n[ \t]*import[ \t]+(?:type[ \t]+)?[^\\n]*?[ \t]+from[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g,
-    "\\n"
-  )
-  next = next.replace(
-    /\\n[ \t]*import[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g,
-    "\\n"
-  )
-  next = next.replace(
-    /\\n[ \t]*export[ \t]+(?:\*|\{[^}]*\})[^\\n]*?[ \t]+from[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g,
-    "\\n"
-  )
+  next = next.replace(/\\n[ \t]*import[ \t]+(?:type[ \t]+)?[^\\n]*?[ \t]+from[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g, "\\n")
+  next = next.replace(/\\n[ \t]*import[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g, "\\n")
+  next = next.replace(/\\n[ \t]*export[ \t]+(?:\*|\{[^}]*\})[^\\n]*?[ \t]+from[ \t]+["'][^"']+["'][ \t]*;?[ \t]*(?:\/\/[^\\n]*)?(?=\\n)/g, "\\n")
   next = next.replace(/^[ \t]*import\s+(?:type\s+)?[\s\S]*?\s+from\s+["'][^"']+["']\s*;?\s*(?:\/\/[^\r\n]*)?$/gm, "")
   next = next.replace(/^[ \t]*import\s+["'][^"']+["']\s*;?\s*(?:\/\/[^\r\n]*)?$/gm, "")
   next = next.replace(/^[ \t]*export\s+(?:\*|\{[^}]*\})[\s\S]*?\s+from\s+["'][^"']+["']\s*;?\s*(?:\/\/[^\r\n]*)?$/gm, "")
@@ -89,60 +80,82 @@ function installRealDashboardTheme() {
   style.id = "admin-chat-real-theme-style"
   style.textContent = `
     html[data-real-admin-theme="galaxy"] body {
-      background: radial-gradient(circle at 15% 10%, rgba(168,85,247,.24), transparent 28%), radial-gradient(circle at 82% 8%, rgba(34,211,238,.15), transparent 24%), linear-gradient(135deg,#030511,#080318 48%,#16002c) !important;
+      background: linear-gradient(135deg,#030511,#080318 48%,#16002c) !important;
     }
     html[data-real-admin-theme="ocean"] body {
-      background: radial-gradient(circle at 15% 10%, rgba(56,189,248,.24), transparent 28%), linear-gradient(135deg,#03111f,#082f49,#0f172a) !important;
+      background: linear-gradient(135deg,#03111f,#082f49,#0f172a) !important;
     }
     html[data-real-admin-theme="forest"] body {
-      background: radial-gradient(circle at 15% 10%, rgba(34,197,94,.22), transparent 28%), linear-gradient(135deg,#03110b,#052e16,#0f172a) !important;
+      background: linear-gradient(135deg,#03110b,#052e16,#0f172a) !important;
     }
     html[data-real-admin-theme] main { background: transparent !important; }
+
     html[data-real-admin-theme] main > div > aside,
     html[data-real-admin-theme] main > div > section:first-of-type {
-      background: linear-gradient(180deg, rgba(36,8,70,.92), rgba(3,7,18,.92)) !important;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(36,8,70,.94), rgba(3,7,18,.94)) !important;
       border-right: 1px solid rgba(168,85,247,.24) !important;
       box-shadow: inset -1px 0 0 rgba(168,85,247,.16), 0 0 45px rgba(88,28,135,.18) !important;
     }
-    html[data-real-admin-theme] main > div > section:last-of-type,
-    html[data-real-admin-theme] main > div > section:last-of-type > header,
-    html[data-real-admin-theme] main > div > section:last-of-type > div {
-      background: rgba(3,5,17,.72) !important;
+
+    html[data-real-admin-theme] main > div > aside::before,
+    html[data-real-admin-theme] main > div > section:first-of-type::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .68;
+      background-image: radial-gradient(#fff 1px, transparent 1px), radial-gradient(rgba(216,180,254,.8) 1px, transparent 1px);
+      background-size: 44px 44px, 83px 83px;
+      animation: adminRealStars 18s linear infinite;
+      z-index: 0;
     }
+
+    html[data-real-admin-theme] main > div > aside > *,
+    html[data-real-admin-theme] main > div > section:first-of-type > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    html[data-real-admin-theme] main > div > section:last-of-type,
+    html[data-real-admin-theme] main > div > section:last-of-type > header {
+      background: rgba(3,5,17,.92) !important;
+    }
+
+    html[data-real-admin-theme] main > div > section:last-of-type > div {
+      background: #070b12 !important;
+    }
+
+    html[data-real-admin-theme] iframe {
+      box-shadow: none !important;
+      filter: none !important;
+    }
+
     html[data-real-admin-theme] header,
-    html[data-real-admin-theme] .rounded-2xl,
-    html[data-real-admin-theme] .rounded-3xl,
     html[data-real-admin-theme] textarea,
     html[data-real-admin-theme] input,
     html[data-real-admin-theme] pre {
       border-color: rgba(168,85,247,.24) !important;
-      box-shadow: 0 0 28px rgba(88,28,135,.14) !important;
+      box-shadow: 0 0 28px rgba(88,28,135,.12) !important;
     }
+
     html[data-real-admin-theme] button {
       transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
     }
     html[data-real-admin-theme] button:hover {
       transform: translateY(-1px);
-      box-shadow: 0 0 24px rgba(168,85,247,.36) !important;
+      box-shadow: 0 0 24px rgba(168,85,247,.34) !important;
     }
-    #admin-chat-real-stars {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      opacity: .66;
-      background-image: radial-gradient(#fff 1px, transparent 1px), radial-gradient(rgba(216,180,254,.85) 1px, transparent 1px);
-      background-size: 44px 44px, 83px 83px;
-      animation: adminRealStars 18s linear infinite;
-    }
+
     @keyframes adminRealStars { from { background-position: 0 0, 0 0 } to { background-position: 88px 88px, -83px 83px } }
+
     #admin-chat-real-theme-menu {
-      position: fixed;
-      right: 18px;
-      top: 82px;
-      z-index: 999997;
+      position: relative;
+      z-index: 40;
       color: white;
-      font: 600 13px system-ui, sans-serif;
+      font: 700 13px system-ui, sans-serif;
+      flex-shrink: 0;
     }
     #admin-chat-real-theme-menu button {
       border: 1px solid rgba(168,85,247,.32);
@@ -155,16 +168,19 @@ function installRealDashboardTheme() {
     }
     #admin-chat-real-theme-options {
       display: none;
-      margin-top: 8px;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
       width: 190px;
       border: 1px solid rgba(168,85,247,.28);
       border-radius: 16px;
       padding: 8px;
-      background: rgba(2,6,23,.94);
+      background: rgba(2,6,23,.96);
       box-shadow: 0 24px 70px rgba(0,0,0,.45);
     }
     #admin-chat-real-theme-menu[data-open="true"] #admin-chat-real-theme-options { display: block; }
     #admin-chat-real-theme-options button { display: block; width: 100%; margin-bottom: 6px; text-align: left; }
+
     .admin-chat-magic-dot {
       position: fixed;
       width: 12px;
@@ -184,19 +200,14 @@ function installRealDashboardTheme() {
   document.head.appendChild(style)
 }
 
+function currentTheme() {
+  const saved = localStorage.getItem(REAL_THEME_KEY)
+  return saved === "ocean" || saved === "forest" || saved === "galaxy" ? saved : "galaxy"
+}
+
 function applyRealDashboardTheme() {
   installRealDashboardTheme()
-
-  const saved = localStorage.getItem(REAL_THEME_KEY)
-  const theme = saved === "ocean" || saved === "forest" || saved === "galaxy" ? saved : "galaxy"
-  document.documentElement.setAttribute("data-real-admin-theme", theme)
-
-  if (!document.getElementById("admin-chat-real-stars")) {
-    const stars = document.createElement("div")
-    stars.id = "admin-chat-real-stars"
-    stars.setAttribute("aria-hidden", "true")
-    document.body.appendChild(stars)
-  }
+  document.documentElement.setAttribute("data-real-admin-theme", currentTheme())
 
   let menu = document.getElementById("admin-chat-real-theme-menu")
   if (!menu) {
@@ -210,7 +221,6 @@ function applyRealDashboardTheme() {
         <button type="button" data-theme="forest">Forest Mint</button>
       </div>
     `
-    document.body.appendChild(menu)
     menu.addEventListener("click", (event) => {
       const target = event.target
       if (!(target instanceof Element)) return
@@ -226,14 +236,20 @@ function applyRealDashboardTheme() {
       }
     })
   }
+
+  const topHeader = document.querySelector("main > div > section:last-of-type > header")
+  if (topHeader && !topHeader.contains(menu)) topHeader.appendChild(menu)
 }
 
 function clearFakeDashboardPreviewIfActive() {
   const titleText = document.body.textContent || ""
   if (!titleText.includes("Galaxy Neon Dashboard for 786.Chat")) return
-  try {
-    localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
-  } catch {}
+  try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
+}
+
+function isDashboardChromeTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(target.closest("main > div > aside, main > div > section:first-of-type, main > div > section:last-of-type > header"))
 }
 
 export function AdminChatPreviewSourceGuard() {
@@ -246,6 +262,7 @@ export function AdminChatPreviewSourceGuard() {
     clearFakeDashboardPreviewIfActive()
 
     const onMove = (event: MouseEvent) => {
+      if (!isDashboardChromeTarget(event.target)) return
       const dot = document.createElement("span")
       dot.className = "admin-chat-magic-dot"
       dot.style.left = `${event.clientX}px`
@@ -294,7 +311,6 @@ export function AdminChatPreviewSourceGuard() {
       window.removeEventListener("mousemove", onMove)
       HTMLIFrameElement.prototype.setAttribute = originalSetAttribute
       if (srcdocDescriptor) Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", srcdocDescriptor)
-      document.getElementById("admin-chat-real-stars")?.remove()
       document.getElementById("admin-chat-real-theme-menu")?.remove()
       document.documentElement.removeAttribute("data-real-admin-theme")
     }
