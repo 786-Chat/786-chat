@@ -41,6 +41,26 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
       'removeItem:function(k){delete memory[String(k)]},' +
       'clear:function(){Object.keys(memory).forEach(function(k){delete memory[k]})}' +
     '}};' +
+    'function patchDuplicateDeclarations(source){' +
+      'if(typeof source!=="string")return source;' +
+      'return source.replace(/(^|[\\n;{}])\\s*(const|let)\\s+([A-Za-z_$][\\w$]*)/g,function(match,prefix,_kind,name){' +
+        'if(name.indexOf("__")===0)return match;' +
+        'return prefix+" var "+name;' +
+      '});' +
+    '}' +
+    'function wrapBabel(babel){' +
+      'try{' +
+        'if(!babel||babel.__786PreviewDeclarationGuard)return babel;' +
+        'var originalTransform=babel.transform;' +
+        'if(typeof originalTransform==="function"){' +
+          'babel.transform=function(source,options){return originalTransform.call(this,patchDuplicateDeclarations(source),options)};' +
+          'babel.__786PreviewDeclarationGuard=true;' +
+        '}' +
+      '}catch(_){}' +
+      'return babel;' +
+    '}' +
+    'var babelValue;' +
+    'try{Object.defineProperty(window,"Babel",{configurable:true,enumerable:true,get:function(){return babelValue},set:function(value){babelValue=wrapBabel(value)}})}catch(_){setTimeout(function(){try{if(window.Babel)wrapBabel(window.Babel)}catch(__){}},0)}' +
     'var localStore=createStore(localMemory);var sessionStore=createStore(sessionMemory);' +
     'try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,get:function(){return localStore}})}catch(_){try{window.localStorage=localStore}catch(__){}}' +
     'try{Object.defineProperty(window,"sessionStorage",{configurable:true,enumerable:true,get:function(){return sessionStore}})}catch(_){try{window.sessionStorage=sessionStore}catch(__){}}' +
