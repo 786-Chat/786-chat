@@ -24,6 +24,55 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 })
 
+const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
+(function(){
+  if (window.__786PreviewStorageSrcDocBootstrapInstalled) return;
+  window.__786PreviewStorageSrcDocBootstrapInstalled = true;
+
+  var marker = 'data-786-preview-storage="true"';
+  var shim = '<script ' + marker + '>' +
+    '(function(){try{' +
+    'var localMemory={};var sessionMemory={};' +
+    'function createStore(memory){return {' +
+      'get length(){return Object.keys(memory).length},' +
+      'key:function(i){return Object.keys(memory)[i]||null},' +
+      'getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(memory,k)?memory[k]:null},' +
+      'setItem:function(k,v){memory[String(k)]=String(v)},' +
+      'removeItem:function(k){delete memory[String(k)]},' +
+      'clear:function(){Object.keys(memory).forEach(function(k){delete memory[k]})}' +
+    '}};' +
+    'var localStore=createStore(localMemory);var sessionStore=createStore(sessionMemory);' +
+    'try{Object.defineProperty(window,"localStorage",{configurable:true,enumerable:true,get:function(){return localStore}})}catch(_){try{window.localStorage=localStore}catch(__){}}' +
+    'try{Object.defineProperty(window,"sessionStorage",{configurable:true,enumerable:true,get:function(){return sessionStore}})}catch(_){try{window.sessionStorage=sessionStore}catch(__){}}' +
+    'window.__786PreviewLocalStorage=localStore;window.__786PreviewSessionStorage=sessionStore;' +
+    '}catch(_){}})();' +
+    '<\\/script>';
+
+  function patch(value){
+    if (typeof value !== 'string' || !value || value.indexOf(marker) !== -1) return value;
+    if (value.indexOf('<head>') !== -1) return value.replace('<head>', '<head>\\n' + shim);
+    if (value.indexOf('<body>') !== -1) return value.replace('<body>', '<body>\\n' + shim);
+    return shim + '\\n' + value;
+  }
+
+  var descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'srcdoc');
+  if (descriptor && descriptor.get && descriptor.set) {
+    Object.defineProperty(HTMLIFrameElement.prototype, 'srcdoc', {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get: descriptor.get,
+      set: function(value){ descriptor.set.call(this, patch(value)); }
+    });
+  }
+
+  var originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
+  HTMLIFrameElement.prototype.setAttribute = function(name, value){
+    if (String(name).toLowerCase() === 'srcdoc') value = patch(value);
+    return originalSetAttribute.call(this, name, value);
+  };
+})();
+`
+
 export const metadata: Metadata = {
   title: 'MujeebProAI – Advanced AI Platform for Businesses & Creators',
   description: 'MujeebProAI is a futuristic AI platform built by Mujeeb Sardar in the United Kingdom, helping businesses automate workflows, AI chat, analytics, and smart digital experiences.',
@@ -77,6 +126,7 @@ export default function RootLayout({
         <link rel="preload" href="https://unpkg.com/@babel/standalone@7/babel.min.js" as="script" crossOrigin="anonymous" />
       </head>
       <body className="font-sans antialiased">
+        <script dangerouslySetInnerHTML={{ __html: PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP }} />
         <AuthProvider>
           <I18nProvider>
             <AdminChatCrashBoundary>{children}</AdminChatCrashBoundary>
