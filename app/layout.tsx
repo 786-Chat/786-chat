@@ -9,6 +9,7 @@ import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-g
 import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
+import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-card-identity'
 import './globals.css'
 
 const geist = Geist({ 
@@ -73,6 +74,7 @@ export default function RootLayout({
             <AdminChatProgressVisibilityGuard />
             <AdminChatPreviewSourceGuard />
             <AdminChatThemeControls />
+            <AdminProjectCardIdentity />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
