@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 
 interface User {
@@ -22,6 +22,29 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const VERIFIED_SESSION_CACHE_KEY = "786chat_verified_session_user_v1"
+
+function readVerifiedSessionCache(): User | null {
+  try {
+    const raw = sessionStorage.getItem(VERIFIED_SESSION_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<User>
+    if (!parsed.id || !parsed.email || !parsed.name || !parsed.plan || typeof parsed.credits !== "number") {
+      sessionStorage.removeItem(VERIFIED_SESSION_CACHE_KEY)
+      return null
+    }
+    return parsed as User
+  } catch {
+    return null
+  }
+}
+
+function writeVerifiedSessionCache(user: User | null) {
+  try {
+    if (user) sessionStorage.setItem(VERIFIED_SESSION_CACHE_KEY, JSON.stringify(user))
+    else sessionStorage.removeItem(VERIFIED_SESSION_CACHE_KEY)
+  } catch {}
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -38,14 +61,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
+        writeVerifiedSessionCache(data.user)
       } else {
         setUser(null)
+        writeVerifiedSessionCache(null)
       }
     } catch {
-      setUser(null)
+      const cached = readVerifiedSessionCache()
+      setUser(cached)
     } finally {
       setIsLoading(false)
     }
+  }, [])
+
+  useLayoutEffect(() => {
+    const cached = readVerifiedSessionCache()
+    if (!cached) return
+    setUser(cached)
+    setIsLoading(false)
   }, [])
 
   useEffect(() => {
@@ -65,6 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         setUser(data.user)
+        writeVerifiedSessionCache(data.user)
+        setIsLoading(false)
         return { success: true }
       }
 
@@ -87,6 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.ok) {
         setUser(data.user)
+        writeVerifiedSessionCache(data.user)
+        setIsLoading(false)
         return { success: true }
       }
 
@@ -104,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
     } finally {
       setUser(null)
+      writeVerifiedSessionCache(null)
       router.push("/")
     }
   }
