@@ -6,6 +6,7 @@ import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
 import { AdminChatCrashBoundary } from '@/components/786-admin/admin-chat-crash-boundary'
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
+import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
 import './globals.css'
@@ -69,6 +70,7 @@ export default function RootLayout({
             <AdminChatCrashBoundary>{children}</AdminChatCrashBoundary>
             <AdminChatAttachmentBridge />
             <AdminChatGenerationProgress />
+            <AdminChatProgressVisibilityGuard />
             <AdminChatPreviewSourceGuard />
             <AdminChatThemeControls />
           </I18nProvider>
