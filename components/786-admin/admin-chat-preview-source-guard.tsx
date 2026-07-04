@@ -113,9 +113,13 @@ function installRealDashboardTheme() {
 
     html[data-real-admin-theme] main > div > section:last-of-type { background: #060914 !important; }
     html[data-real-admin-theme] main > div > section:last-of-type > header {
-      height: 76px !important;
+      position: relative !important;
+      z-index: 120 !important;
+      min-height: 76px !important;
+      height: auto !important;
       gap: 14px !important;
-      background: linear-gradient(180deg, rgba(3,5,17,.96), rgba(3,5,17,.82)) !important;
+      overflow: visible !important;
+      background: linear-gradient(180deg, rgba(3,5,17,.98), rgba(3,5,17,.90)) !important;
       border-bottom: 1px solid rgba(168,85,247,.24) !important;
       box-shadow: 0 16px 50px rgba(0,0,0,.34), 0 0 34px rgba(88,28,135,.18) !important;
       backdrop-filter: blur(20px) !important;
@@ -153,8 +157,71 @@ function installRealDashboardTheme() {
       color: #fff !important;
       box-shadow: 0 0 26px rgba(124,58,237,.58) !important;
     }
-    html[data-real-admin-theme] main > div > section:last-of-type > div { background: #070b12 !important; }
+    html[data-real-admin-theme] main > div > section:last-of-type > div { background: #070b12 !important; position: relative !important; z-index: 1 !important; }
     html[data-real-admin-theme] iframe { box-shadow: none !important; filter: none !important; }
+
+    #admin-chat-browser-bar {
+      position: relative;
+      z-index: 110;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 58px;
+      padding: 10px 18px;
+      border-bottom: 1px solid rgba(168,85,247,.22);
+      background: linear-gradient(180deg, rgba(4,7,19,.92), rgba(4,7,19,.82));
+      backdrop-filter: blur(18px);
+      box-shadow: 0 14px 42px rgba(0,0,0,.28);
+    }
+    #admin-chat-browser-bar .browser-label {
+      color: #f8f7ff;
+      font-weight: 850;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #admin-chat-browser-bar .browser-url {
+      flex: 1;
+      min-width: 160px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border-radius: 16px;
+      border: 1px solid rgba(168,85,247,.20);
+      background: rgba(11,14,34,.78);
+      color: #cbd5e1;
+      padding: 0 14px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+    #admin-chat-browser-bar .browser-actions {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex-shrink: 0;
+    }
+    #admin-chat-browser-bar .browser-chip {
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 15px;
+      border: 1px solid rgba(168,85,247,.28);
+      background: rgba(16,18,42,.80);
+      color: #f8f7ff;
+      padding: 0 13px;
+      font-weight: 800;
+    }
+    #admin-chat-browser-bar .browser-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg,#a855f7,#06b6d4);
+      box-shadow: 0 0 22px rgba(168,85,247,.50);
+    }
 
     html[data-real-admin-theme] main > div > section:first-of-type div[class*="rounded-3xl"],
     html[data-real-admin-theme] textarea,
@@ -185,12 +252,7 @@ function installRealDashboardTheme() {
     #admin-chat-agent-card .agent-orb { width:38px; height:38px; border-radius:999px; display:grid; place-items:center; background:radial-gradient(circle,#c084fc,#5b21b6 58%,#0f172a); box-shadow:0 0 24px rgba(168,85,247,.72); animation:agentPulse 1.8s ease-in-out infinite; }
     #admin-chat-agent-card .agent-subtitle { margin-top:2px; color:#a78bfa; font-size:12px; }
 
-    .admin-agent-working {
-      margin-top:14px;
-      display:none;
-      border-top:1px solid rgba(168,85,247,.18);
-      padding-top:14px;
-    }
+    .admin-agent-working { margin-top:14px; display:none; border-top:1px solid rgba(168,85,247,.18); padding-top:14px; }
     html[data-admin-agent-sending="true"] .admin-agent-working { display:block; }
     .admin-agent-ring { width:92px; height:92px; margin: 6px auto 14px; border-radius:999px; position:relative; background:conic-gradient(from 0deg,#22d3ee,#a855f7,#7c3aed,#22d3ee); animation:agentSpin 1.3s linear infinite; box-shadow:0 0 36px rgba(168,85,247,.54); }
     .admin-agent-ring::before { content:"⚙"; position:absolute; inset:9px; border-radius:999px; display:grid; place-items:center; background:#070b18; color:#c084fc; font-size:24px; animation:agentSpinReverse 2s linear infinite; }
@@ -206,9 +268,9 @@ function installRealDashboardTheme() {
     @keyframes agentSpinReverse { to { transform: rotate(-360deg); } }
     @keyframes agentPulse { 50% { transform: scale(1.08); } }
 
-    #admin-chat-real-theme-menu { position: relative; z-index: 60; color: white; font: 800 13px system-ui, sans-serif; flex-shrink: 0; }
+    #admin-chat-real-theme-menu { position: relative; z-index: 2147483000; color: white; font: 800 13px system-ui, sans-serif; flex-shrink: 0; }
     #admin-chat-real-theme-menu button { border:1px solid rgba(168,85,247,.34); background:rgba(15,23,42,.82); color:white; border-radius:16px; padding:10px 13px; cursor:pointer; backdrop-filter:blur(16px); }
-    #admin-chat-real-theme-options { display:none; position:absolute; right:0; top:calc(100% + 10px); width:230px; border:1px solid rgba(168,85,247,.30); border-radius:20px; padding:10px; background:rgba(2,6,23,.97); box-shadow:0 24px 70px rgba(0,0,0,.5),0 0 42px rgba(88,28,135,.28); }
+    #admin-chat-real-theme-options { display:none; position:fixed; right:18px; top:136px; width:250px; max-height:calc(100vh - 156px); overflow:auto; border:1px solid rgba(168,85,247,.34); border-radius:22px; padding:10px; background:rgba(2,6,23,.98); box-shadow:0 28px 90px rgba(0,0,0,.65),0 0 48px rgba(88,28,135,.36); z-index:2147483000; }
     #admin-chat-real-theme-menu[data-open="true"] #admin-chat-real-theme-options { display:block; }
     #admin-chat-real-theme-options button { display:flex; width:100%; margin-bottom:7px; text-align:left; align-items:center; gap:10px; justify-content:flex-start; }
     .admin-chat-magic-dot { position:fixed; width:12px; height:12px; left:0; top:0; z-index:999999; pointer-events:none; border-radius:999px; transform:translate(-50%,-50%); background:radial-gradient(circle,#fff,#a855f7 46%,transparent 78%); box-shadow:0 0 20px rgba(168,85,247,.9); animation:adminMagicDot .6s ease-out forwards; }
@@ -254,8 +316,30 @@ function applyRealDashboardTheme() {
     })
   }
 
-  const topHeader = document.querySelector("main > div > section:last-of-type > header")
-  if (topHeader && !topHeader.contains(menu)) topHeader.appendChild(menu)
+  const rightSection = document.querySelector("main > div > section:last-of-type")
+  const topHeader = rightSection?.querySelector(":scope > header")
+  let browserBar = document.getElementById("admin-chat-browser-bar")
+  if (rightSection && topHeader && !browserBar) {
+    browserBar = document.createElement("div")
+    browserBar.id = "admin-chat-browser-bar"
+    browserBar.innerHTML = `
+      <div class="browser-label">◎ Preview</div>
+      <div class="browser-url"><span>🔒</span><span>https://preview.786.chat</span></div>
+      <div class="browser-actions">
+        <button type="button" class="browser-chip" title="Refresh preview">↻</button>
+        <button type="button" class="browser-chip" title="Open preview">↗</button>
+        <span id="admin-chat-theme-slot"></span>
+        <button type="button" class="browser-chip" title="Light/Dark">☀︎ ●</button>
+        <button type="button" class="browser-chip" title="Sound">🔊</button>
+        <span class="browser-avatar">👤</span>
+      </div>
+    `
+    topHeader.insertAdjacentElement("afterend", browserBar)
+  }
+
+  const themeSlot = document.getElementById("admin-chat-theme-slot")
+  if (themeSlot && !themeSlot.contains(menu)) themeSlot.appendChild(menu)
+  else if (topHeader && !topHeader.contains(menu) && !themeSlot) topHeader.appendChild(menu)
 
   const chatSection = document.querySelector("main > div > section:first-of-type")
   const chatScroll = chatSection?.querySelector("div.flex-1.overflow-y-auto")
@@ -264,10 +348,7 @@ function applyRealDashboardTheme() {
     agent.id = "admin-chat-agent-card"
     agent.innerHTML = `
       <div class="agent-title"><span class="agent-orb">✦</span><div><div>AI Assistant</div><div class="agent-subtitle">Galaxy Model v2.5</div></div></div>
-      <div class="admin-agent-working">
-        <div class="admin-agent-ring"></div>
-        <div class="admin-agent-steps"><span>Analyzing requirements</span><span>Generating components</span><span>Applying premium theme</span><span>Optimizing performance</span></div>
-      </div>
+      <div class="admin-agent-working"><div class="admin-agent-ring"></div><div class="admin-agent-steps"><span>Analyzing requirements</span><span>Generating components</span><span>Applying premium theme</span><span>Optimizing performance</span></div></div>
       <div class="admin-agent-done">Agent ready</div>
     `
     chatScroll.insertAdjacentElement("afterbegin", agent)
@@ -285,7 +366,7 @@ function clearFakeDashboardPreviewIfActive() {
 
 function isDashboardChromeTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false
-  return Boolean(target.closest("main > div > aside, main > div > section:first-of-type, main > div > section:last-of-type > header"))
+  return Boolean(target.closest("main > div > aside, main > div > section:first-of-type, main > div > section:last-of-type > header, #admin-chat-browser-bar"))
 }
 
 export function AdminChatPreviewSourceGuard() {
@@ -346,6 +427,7 @@ export function AdminChatPreviewSourceGuard() {
       HTMLIFrameElement.prototype.setAttribute = originalSetAttribute
       if (srcdocDescriptor) Object.defineProperty(HTMLIFrameElement.prototype, "srcdoc", srcdocDescriptor)
       document.getElementById("admin-chat-real-theme-menu")?.remove()
+      document.getElementById("admin-chat-browser-bar")?.remove()
       document.documentElement.removeAttribute("data-real-admin-theme")
       document.documentElement.removeAttribute("data-admin-agent-sending")
     }
