@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 
 const PROGRESS_HOST_ID = "admin-chat-generation-progress-host"
+const STYLE_ID = "admin-chat-preview-background-style"
 
 function findChatScroller(): HTMLElement | null {
   return document.querySelector<HTMLElement>(
@@ -15,11 +16,26 @@ function isNearBottom(element: HTMLElement): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 140
 }
 
+function installPreviewBackgroundStyle() {
+  if (document.getElementById(STYLE_ID)) return
+  const style = document.createElement("style")
+  style.id = STYLE_ID
+  style.textContent = `
+    body:has(main > div > section:last-of-type iframe) main > div > section:last-of-type iframe,
+    body:has(main > div > section:last-of-type iframe) main > div > section:last-of-type div:has(> iframe) {
+      background: #070b12 !important;
+    }
+  `
+  document.head.appendChild(style)
+}
+
 export function AdminChatRefreshScrollGuard() {
   const pathname = usePathname()
 
   useEffect(() => {
     if (pathname !== "/786-admin/chat") return
+
+    installPreviewBackgroundStyle()
 
     let chatScroller: HTMLElement | null = null
     let userNearBottom = true
