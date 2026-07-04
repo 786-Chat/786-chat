@@ -132,9 +132,28 @@ ABSOLUTE RULES:
 
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
 
+const STRUCTURED_RETRY_PROMPT = `
+
+STRUCTURED OUTPUT RETRY:
+Your previous response could not be parsed into the required project object.
+Return exactly one schema-valid project object and nothing outside it.
+Keep title, description, and reply concise.
+Return complete file contents, but reduce duplication by using a small number of reusable shared components.
+Do not use markdown fences, prose before the object, prose after the object, comments outside file contents, or partial files.
+Ensure every file entry has a non-empty path and complete string content.
+`
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`
+  return String(error)
+}
+
 function isQuotaError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /quota|rate.?limit|resource exhausted|429|exceeded your current quota/i.test(message)
+  return /quota|rate.?limit|resource exhausted|429|exceeded your current quota/i.test(errorMessage(error))
+}
+
+function isStructuredOutputError(error: unknown): boolean {
+  return /no object generated|could not parse|failed to parse|parse error|invalid json|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -185,34 +204,38 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
 
   const userPrompt = promptParts.join("\n")
 
-  const content: unknown[] = [{ type: "text", text: userPrompt }]
-  for (const attachment of attachments) {
-    if (attachment.mediaType.startsWith("image/")) {
-      content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
-    } else {
-      content.push({
-        type: "file",
-        data: attachment.url,
-        mediaType: attachment.mediaType,
-        filename: attachment.name || "attachment",
-      })
+  function buildContent(prompt: string): unknown[] {
+    const content: unknown[] = [{ type: "text", text: prompt }]
+    for (const attachment of attachments) {
+      if (attachment.mediaType.startsWith("image/")) {
+        content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
+      } else {
+        content.push({
+          type: "file",
+          data: attachment.url,
+          mediaType: attachment.mediaType,
+          filename: attachment.name || "attachment",
+        })
+      }
     }
+    return content
   }
 
-  async function run(modelName: string) {
+  async function run(modelName: string, structuredRetry = false) {
     const model = picked.provider === "deepseek" ? deepseek(modelName) : google(modelName)
+    const prompt = structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt
     const request: Parameters<typeof generateObject>[0] = {
       model,
       schema: ProjectSchema,
-      system: SYSTEM_PROMPT,
-      temperature: 0.18,
-      prompt: userPrompt,
+      system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
+      temperature: structuredRetry ? 0.05 : 0.18,
+      prompt,
     }
 
     if (attachments.length > 0) {
       delete (request as { prompt?: string }).prompt
       ;(request as unknown as { messages: unknown[] }).messages = [
-        { role: "user", content },
+        { role: "user", content: buildContent(prompt) },
       ]
     }
 
@@ -225,18 +248,28 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
 
   try {
     result = await run(picked.model)
-  } catch (error) {
+  } catch (firstError) {
     const canRetryWithFlash =
       attachments.length > 0 &&
       picked.provider === "gemini" &&
       picked.model !== "gemini-2.5-flash" &&
-      isQuotaError(error)
+      isQuotaError(firstError)
 
-    if (!canRetryWithFlash) throw error
-
-    usedModel = "gemini-2.5-flash"
-    usedReason = `${picked.reason} Gemini Pro quota was unavailable, so the request retried with Gemini Flash.`
-    result = await run(usedModel)
+    if (canRetryWithFlash) {
+      usedModel = "gemini-2.5-flash"
+      usedReason = `${picked.reason} Gemini Pro quota was unavailable, so the request retried with Gemini Flash.`
+      try {
+        result = await run(usedModel)
+      } catch (flashError) {
+        if (!isStructuredOutputError(flashError)) throw flashError
+        usedReason = `${usedReason} The first structured response could not be parsed, so generation retried once with stricter output rules.`
+        result = await run(usedModel, true)
+      }
+    } else {
+      if (!isStructuredOutputError(firstError)) throw firstError
+      usedReason = `${picked.reason} The first structured response could not be parsed, so generation retried once with stricter output rules.`
+      result = await run(usedModel, true)
+    }
   }
 
   const filesMap: Record<string, string> = {}
