@@ -6,7 +6,6 @@ import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
 import { AdminChatCrashBoundary } from '@/components/786-admin/admin-chat-crash-boundary'
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
-import { AdminChatHydrationShell } from '@/components/786-admin/admin-chat-hydration-shell'
 import { AdminChatProjectHydrationOverlay } from '@/components/786-admin/admin-chat-project-hydration-overlay'
 import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
 import { AdminChatRefreshScrollGuard } from '@/components/786-admin/admin-chat-refresh-scroll-guard'
@@ -72,7 +71,6 @@ export default function RootLayout({
         <AuthProvider>
           <I18nProvider>
             <AdminChatCrashBoundary>{children}</AdminChatCrashBoundary>
-            <AdminChatHydrationShell />
             <AdminChatProjectHydrationOverlay />
             <AdminChatAttachmentBridge />
             <AdminChatGenerationProgress />
