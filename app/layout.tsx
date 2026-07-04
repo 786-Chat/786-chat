@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/contexts/auth-context'
 import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
+import { AdminChatCrashBoundary } from '@/components/786-admin/admin-chat-crash-boundary'
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
@@ -65,7 +66,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <AuthProvider>
           <I18nProvider>
-            {children}
+            <AdminChatCrashBoundary>{children}</AdminChatCrashBoundary>
             <AdminChatAttachmentBridge />
             <AdminChatGenerationProgress />
             <AdminChatPreviewSourceGuard />
