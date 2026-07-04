@@ -18,6 +18,7 @@ jobs:
           fetch-depth: 0
       - name: Isolate generated source scopes
         run: |
+          echo "Applying preview compiler scope fix"
           python - <<'PY'
           from pathlib import Path
           path = Path('app/786-admin/chat/page.tsx')
