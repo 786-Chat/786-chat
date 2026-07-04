@@ -7,6 +7,7 @@ import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-att
 import { AdminChatCrashBoundary } from '@/components/786-admin/admin-chat-crash-boundary'
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
 import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
+import { AdminChatRefreshScrollGuard } from '@/components/786-admin/admin-chat-refresh-scroll-guard'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
 import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-card-identity'
@@ -72,6 +73,7 @@ export default function RootLayout({
             <AdminChatAttachmentBridge />
             <AdminChatGenerationProgress />
             <AdminChatProgressVisibilityGuard />
+            <AdminChatRefreshScrollGuard />
             <AdminChatPreviewSourceGuard />
             <AdminChatThemeControls />
             <AdminProjectCardIdentity />
