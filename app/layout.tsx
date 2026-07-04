@@ -5,7 +5,6 @@ import { AuthProvider } from '@/contexts/auth-context'
 import { I18nProvider } from '@/contexts/i18n-context'
 import { AdminChatAttachmentBridge } from '@/components/786-admin/admin-chat-attachment-bridge'
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
-import { AdminChatPreviewCommonJsGuard } from '@/components/786-admin/admin-chat-preview-commonjs-guard'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
 import './globals.css'
@@ -20,13 +19,14 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono'
 })
 
-const PREVIEW_COMMONJS_BOOTSTRAP = `
+const PREVIEW_RUNTIME_BOOTSTRAP = `
 (function(){
-  if (window.__786PreviewCommonJsBootstrapInstalled) return;
-  window.__786PreviewCommonJsBootstrapInstalled = true;
+  if (window.__786PreviewRuntimeBootstrapInstalled) return;
+  window.__786PreviewRuntimeBootstrapInstalled = true;
 
-  var marker = 'data-786-preview-commonjs="true"';
-  var shim = '<script ' + marker + '>' +
+  var commonJsMarker = 'data-786-preview-commonjs="true"';
+  var safetyMarker = 'data-786-preview-safety="true"';
+  var shim = '<script ' + commonJsMarker + ' ' + safetyMarker + '>' +
     '(function(){try{' +
     'var module={exports:{}};' +
     'var exports=module.exports;' +
@@ -38,11 +38,15 @@ const PREVIEW_COMMONJS_BOOTSTRAP = `
       'return {};' +
     '};' +
     'window.module=module;window.exports=exports;window.require=require;' +
+    'if(typeof EventTarget!=="undefined"&&!EventTarget.prototype.closest){EventTarget.prototype.closest=function(selector){return this&&this.nodeType===1&&Element.prototype.closest?Element.prototype.closest.call(this,selector):null}}' +
+    'if(typeof Node!=="undefined"&&!Node.prototype.closest){Node.prototype.closest=function(selector){return this&&this.nodeType===1&&Element.prototype.closest?Element.prototype.closest.call(this,selector):null}}' +
+    'if(typeof SVGElement!=="undefined"&&!SVGElement.prototype.closest&&typeof Element!=="undefined"&&Element.prototype.closest){SVGElement.prototype.closest=Element.prototype.closest}' +
     '}catch(_){}})();' +
     '<\\/script>';
 
   function patch(value){
-    if (typeof value !== 'string' || !value || value.indexOf(marker) !== -1) return value;
+    if (typeof value !== 'string' || !value) return value;
+    if (value.indexOf(commonJsMarker) !== -1 && value.indexOf(safetyMarker) !== -1) return value;
     if (value.indexOf('<head>') !== -1) return value.replace('<head>', '<head>\\n' + shim);
     if (value.indexOf('<body>') !== -1) return value.replace('<body>', '<body>\\n' + shim);
     return shim + '\\n' + value;
@@ -110,13 +114,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
       <body className="font-sans antialiased">
-        <script dangerouslySetInnerHTML={{ __html: PREVIEW_COMMONJS_BOOTSTRAP }} />
+        <script dangerouslySetInnerHTML={{ __html: PREVIEW_RUNTIME_BOOTSTRAP }} />
         <AuthProvider>
           <I18nProvider>
             {children}
             <AdminChatAttachmentBridge />
             <AdminChatGenerationProgress />
-            <AdminChatPreviewCommonJsGuard />
             <AdminChatPreviewSourceGuard />
             <AdminChatThemeControls />
           </I18nProvider>
