@@ -20,6 +20,7 @@ jobs:
       - name: Execute isolated compiler patch
         shell: bash
         run: |
+          echo "Starting isolated preview compiler patch"
           python <<'PY'
           from pathlib import Path
           workflow = Path('.github/workflows/patch-preview-module-scope.yml').read_text()
