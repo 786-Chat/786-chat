@@ -228,7 +228,7 @@ export function AdminChatBrowserControls() {
         return
       }
 
-      const open = target.closest<HTMLElement>('#admin-chat-browser-bar [title="Open preview"]')
+      const open = target.closest<HTMLElement>('#admin-chat-browser-bar [title="Open preview"], #admin-chat-browser-bar .browser-url')
       if (open) {
         event.preventDefault()
         openPreview()
