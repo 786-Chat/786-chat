@@ -51,6 +51,14 @@ type ActiveProject = {
   preview_state: AdminProjectPreviewState
 }
 
+type PreviewRoute = {
+  path: string
+  sourcePath: string
+  componentName: string
+  body: string
+  exportedNames: string[]
+}
+
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
   return { id: m.id, role: m.role === "system" ? "assistant" : m.role, content: m.content, model: m.model, reason: m.reason }
 }
@@ -60,25 +68,24 @@ function filesToPreviewPayload(files: SevenEightSixProjectFileMap | undefined): 
   return { html, key: stablePreviewKey(files, html) }
 }
 
+function routeFromPagePath(path: string): string | null {
+  const normalized = path.replace(/^src\//, "")
+  const match = normalized.match(/^app\/(.*\/)?page\.(?:tsx?|jsx?)$/)
+  if (!match) return null
+  const segments = (match[1] || "")
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !/^\(.*\)$/.test(segment))
+  return segments.length === 0 ? "/" : `/${segments.join("/")}`
+}
+
 function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
   if (!files || Object.keys(files).length === 0) {
     return buildEmptyPreview("", "Preview will appear here once a project is generated.")
   }
 
-  const pagePath = ["app/page.tsx", "app/page.jsx", "src/app/page.tsx", "src/app/page.jsx"].find(
-    (p) => typeof files[p] === "string" && files[p].trim().length > 0
-  )
-
   const rawCss = files["app/globals.css"] || files["src/app/globals.css"] || ""
   const css = rawCss.replace(/@tailwind\s+[a-z]+\s*;?/gi, "").trim()
-
-  if (!pagePath) {
-    return buildEmptyPreview(css, "No app/page.tsx file was found in this project, so preview is unavailable.")
-  }
-
-  const pageTransform = transformPreviewSource(files[pagePath])
-  const rootName = pageTransform.defaultName || "Page"
-
   const isSourceFile = (path: string) => /\.(tsx?|jsx?)$/.test(path) && !/\.d\.ts$/.test(path)
   const isLayoutFile = (path: string) => /^(src\/)?app\/layout\.(tsx?|jsx?)$/.test(path)
   const dependencyOrder = (path: string): number => {
@@ -89,36 +96,46 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
     return 4
   }
 
-  const sourceEntries = Object.entries(files)
-    .filter(([path]) => {
-      if (path === pagePath) return false
-      if (isLayoutFile(path)) return false
-      return isSourceFile(path)
-    })
-    .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
+  const routeEntries = Object.entries(files)
+    .map(([sourcePath, src]) => ({ sourcePath, src, path: routeFromPagePath(sourcePath) }))
+    .filter((entry): entry is { sourcePath: string; src: string; path: string } => Boolean(entry.path) && typeof entry.src === "string" && entry.src.trim().length > 0)
+    .sort((a, b) => a.path.localeCompare(b.path))
 
-  const componentBodies = sourceEntries
+  if (!routeEntries.some((entry) => entry.path === "/")) {
+    return buildEmptyPreview(css, "No app/page.tsx file was found in this project, so preview is unavailable.")
+  }
+
+  const routePathSet = new Set(routeEntries.map((entry) => entry.sourcePath))
+  const dependencyBodies = Object.entries(files)
+    .filter(([path]) => !routePathSet.has(path) && !isLayoutFile(path) && isSourceFile(path))
+    .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
     .map(([path, src]) => {
       const transformed = transformPreviewSource(src)
       if (!transformed.body) return ""
-
-      const publish = Array.from(
-        new Set([
-          ...transformed.exportedNames,
-          ...(transformed.defaultName ? [transformed.defaultName] : []),
-        ])
-      )
+      const publish = Array.from(new Set([...transformed.exportedNames, ...(transformed.defaultName ? [transformed.defaultName] : [])]))
         .map((name) => `if (typeof ${name} !== "undefined") globalThis.${name} = ${name};`)
         .join("\n")
-
       return `// ${path}\n(function(){\n${transformed.body}\n${publish}\n})();`
     })
-    .filter((body) => body.length > 0)
+    .filter(Boolean)
     .join("\n\n")
 
-  const userScript = [componentBodies, pageTransform.body].filter(Boolean).join("\n\n")
+  const routes: PreviewRoute[] = routeEntries.map(({ path, sourcePath, src }, index) => {
+    const transformed = transformPreviewSource(src)
+    const localDefaultName = transformed.defaultName || `__PreviewPage${index}`
+    const componentName = `__786Route${index}`
+    const publishNamed = transformed.exportedNames
+      .filter((name) => name !== localDefaultName)
+      .map((name) => `if (typeof ${name} !== "undefined") globalThis.${name} = ${name};`)
+      .join("\n")
+    const body = `// ${sourcePath}\n(function(){\n${transformed.body}\n${publishNamed}\nif (typeof ${localDefaultName} !== "undefined") globalThis.${componentName} = ${localDefaultName};\n})();`
+    return { path, sourcePath, componentName, body, exportedNames: transformed.exportedNames }
+  })
+
+  const userScript = [dependencyBodies, ...routes.map((route) => route.body)].filter(Boolean).join("\n\n")
   const safeUserScript = addMissingPreviewDataShims(userScript)
-  const runtimeSource = buildPreviewRuntimeSource(safeUserScript, rootName)
+  const routeRegistry = Object.fromEntries(routes.map((route) => [route.path, route.componentName]))
+  const runtimeSource = buildPreviewRuntimeSource(safeUserScript, routeRegistry)
   const runtimeSourceJson = safeScriptJson(runtimeSource)
 
   return `<!doctype html>
@@ -260,7 +277,8 @@ function addMissingPreviewDataShims(source: string): string {
   return shims.length > 0 ? `${shims.join("\n")}\n\n${source}` : source
 }
 
-function buildPreviewRuntimeSource(userScript: string, rootName: string): string {
+function buildPreviewRuntimeSource(userScript: string, routeRegistry: Record<string, string>): string {
+  const routeRegistryJson = JSON.stringify(routeRegistry)
   return `
 try {
   const __originalCreateContext = React.createContext.bind(React)
@@ -279,32 +297,11 @@ try {
       filteredProducts: __sampleProducts,
       categories: __sampleCategories,
       filters: { search: '', searchTerm: '', query: '', category: 'All', selectedCategory: 'All', sortBy: 'featured', sortOrder: 'asc', minPrice: 0, maxPrice: 9999, priceRange: [0, 9999] },
-      cart: [],
-      cartItems: [],
-      wishlist: [],
-      wishlistItems: [],
+      cart: [], cartItems: [], wishlist: [], wishlistItems: [],
       user: { id: 'preview-user', name: 'Preview User', email: 'preview@786.chat' },
-      theme: 'dark',
-      toast: __noop,
-      total: 0,
-      subtotal: 0,
-      count: 0,
-      quantity: 0,
-      isOpen: false,
-      loading: false,
-      error: null,
-      search: '',
-      query: '',
-      keyword: '',
-      searchTerm: '',
-      searchQuery: '',
-      category: 'All',
-      selectedCategory: 'All',
-      sortBy: 'featured',
-      sortOrder: 'asc',
-      minPrice: 0,
-      maxPrice: 9999,
-      priceRange: [0, 9999]
+      theme: 'dark', toast: __noop, total: 0, subtotal: 0, count: 0, quantity: 0,
+      isOpen: false, loading: false, error: null, search: '', query: '', keyword: '', searchTerm: '', searchQuery: '',
+      category: 'All', selectedCategory: 'All', sortBy: 'featured', sortOrder: 'asc', minPrice: 0, maxPrice: 9999, priceRange: [0, 9999]
     }
     return new Proxy(target, {
       get: function (obj, prop) {
@@ -341,10 +338,7 @@ try {
 
   const __audioNode = function () {
     return {
-      connect: function () { return this },
-      disconnect: __noop,
-      start: __noop,
-      stop: __noop,
+      connect: function () { return this }, disconnect: __noop, start: __noop, stop: __noop,
       frequency: { value: 0, setValueAtTime: __noop, linearRampToValueAtTime: __noop, exponentialRampToValueAtTime: __noop },
       gain: { value: 1, setValueAtTime: __noop, linearRampToValueAtTime: __noop, exponentialRampToValueAtTime: __noop },
     }
@@ -361,20 +355,7 @@ try {
     this.suspend = __resolved
   }
   function __SafeAudio(src) {
-    return {
-      src: src || '',
-      currentTime: 0,
-      volume: 1,
-      muted: false,
-      loop: false,
-      preload: 'auto',
-      play: __resolved,
-      pause: __noop,
-      load: __noop,
-      addEventListener: __noop,
-      removeEventListener: __noop,
-      dispatchEvent: function () { return true },
-    }
+    return { src: src || '', currentTime: 0, volume: 1, muted: false, loop: false, preload: 'auto', play: __resolved, pause: __noop, load: __noop, addEventListener: __noop, removeEventListener: __noop, dispatchEvent: function () { return true } }
   }
   try { globalThis.AudioContext = __SafeAudioContext; window.AudioContext = __SafeAudioContext } catch (_) {}
   try { globalThis.webkitAudioContext = __SafeAudioContext; window.webkitAudioContext = __SafeAudioContext } catch (_) {}
@@ -384,14 +365,12 @@ try {
     globalThis.cn = function () {
       var args = Array.prototype.slice.call(arguments)
       return args.flat(Infinity).filter(Boolean).map(function (a) {
-        return typeof a === 'string'
-          ? a
-          : Object.entries(a || {}).filter(function (e) { return e[1] }).map(function (e) { return e[0] }).join(' ')
+        return typeof a === 'string' ? a : Object.entries(a || {}).filter(function (e) { return e[1] }).map(function (e) { return e[0] }).join(' ')
       }).join(' ')
     }
   }
-  if (typeof globalThis.clsx === 'undefined') { globalThis.clsx = globalThis.cn }
-  if (typeof globalThis.twMerge === 'undefined') { globalThis.twMerge = globalThis.cn }
+  if (typeof globalThis.clsx === 'undefined') globalThis.clsx = globalThis.cn
+  if (typeof globalThis.twMerge === 'undefined') globalThis.twMerge = globalThis.cn
   if (typeof globalThis.cva === 'undefined') {
     globalThis.cva = function (base, _config) {
       return function () {
@@ -404,49 +383,75 @@ try {
   ${escapePreviewScript(userScript)}
 
   class __PreviewErrorBoundary extends React.Component {
-    constructor(props) {
-      super(props)
-      this.state = { error: null }
-    }
-    static getDerivedStateFromError(error) {
-      return { error: error }
-    }
-    componentDidCatch(error, info) {
-      console.error('[786.Chat preview render]', error, info)
-    }
+    constructor(props) { super(props); this.state = { error: null } }
+    static getDerivedStateFromError(error) { return { error: error } }
+    componentDidCatch(error, info) { console.error('[786.Chat preview render]', error, info) }
     render() {
       if (this.state.error) {
         var message = this.state.error && this.state.error.message ? String(this.state.error.message) : String(this.state.error)
-        return React.createElement('div', {
-          style: {
-            margin: 24,
-            padding: 24,
-            borderRadius: 16,
-            border: '1px solid rgba(248,113,113,0.55)',
-            background: 'linear-gradient(135deg, rgba(127,29,29,0.35), rgba(15,23,42,0.95))',
-            color: '#fecaca',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            lineHeight: 1.6
-          }
-        }, [
+        return React.createElement('div', { style: { margin: 24, padding: 24, borderRadius: 16, border: '1px solid rgba(248,113,113,0.55)', background: 'linear-gradient(135deg, rgba(127,29,29,0.35), rgba(15,23,42,0.95))', color: '#fecaca', fontFamily: 'Inter, system-ui, sans-serif', lineHeight: 1.6 } }, [
           React.createElement('div', { key: 'title', style: { color: '#fff', fontWeight: 800, fontSize: 18, marginBottom: 8 } }, 'Preview recovered from a render error'),
-          React.createElement('div', { key: 'msg', style: { fontSize: 13, whiteSpace: 'pre-wrap' } }, message),
-          React.createElement('div', { key: 'hint', style: { marginTop: 12, fontSize: 12, color: '#cbd5e1' } }, 'The iframe stayed alive. This usually means generated demo code needs a provider, context default, or browser-only dependency adjustment.')
+          React.createElement('div', { key: 'msg', style: { fontSize: 13, whiteSpace: 'pre-wrap' } }, message)
         ])
       }
       return this.props.children
     }
   }
 
-  const __Root__ = (typeof ${rootName} !== 'undefined') ? ${rootName} : null
+  const __routeNames = ${routeRegistryJson}
+  const __routes = {}
+  Object.keys(__routeNames).forEach(function(path){
+    var component = globalThis[__routeNames[path]]
+    if (component) __routes[path] = component
+  })
   const __mount__ = document.getElementById('root')
-  if (!__Root__) {
-    window.__showPreviewError('Could not find the default export in app/page.tsx')
-  } else {
-    ReactDOM.createRoot(__mount__).render(
-      React.createElement(__PreviewErrorBoundary, null, React.createElement(__Root__))
-    )
+  const __reactRoot__ = ReactDOM.createRoot(__mount__)
+  function __normalizeRoute(value) {
+    var path = String(value || '/').trim()
+    try { if (/^https?:\/\//i.test(path)) path = new URL(path).pathname || '/' } catch (_) {}
+    path = path.split('?')[0].split('#')[0]
+    if (!path.startsWith('/')) path = '/' + path
+    path = path.replace(/\/{2,}/g, '/')
+    if (path.length > 1) path = path.replace(/\/$/, '')
+    return path || '/'
   }
+  function __notifyRoute(path, found) {
+    try { window.parent.postMessage({ type: '786-preview-route-changed', path: path, found: found }, '*') } catch (_) {}
+  }
+  function __renderRoute(value) {
+    var path = __normalizeRoute(value)
+    var Page = __routes[path]
+    if (!Page) {
+      var available = Object.keys(__routes).sort().join(', ')
+      __reactRoot__.render(React.createElement('div', { id: '__preview_error' }, 'Route not found: ' + path + '\n\nAvailable routes: ' + available))
+      __notifyRoute(path, false)
+      return false
+    }
+    try { history.replaceState({ previewRoute: path }, '', path) } catch (_) {}
+    __reactRoot__.render(React.createElement(__PreviewErrorBoundary, { key: path }, React.createElement(Page)))
+    __notifyRoute(path, true)
+    return true
+  }
+  window.__786PreviewNavigate = __renderRoute
+  document.addEventListener('click', function(event) {
+    var target = event.target
+    if (!target || typeof target.closest !== 'function') return
+    var anchor = target.closest('a[href]')
+    if (!anchor) return
+    var href = anchor.getAttribute('href') || ''
+    if (!href || href.charAt(0) === '#' || /^(mailto:|tel:|javascript:)/i.test(href)) return
+    var url
+    try { url = new URL(href, 'https://preview.786.chat') } catch (_) { return }
+    if (url.origin !== 'https://preview.786.chat') return
+    event.preventDefault()
+    __renderRoute(url.pathname)
+  }, true)
+  window.addEventListener('message', function(event) {
+    var data = event && event.data
+    if (!data || data.type !== '786-preview-navigate') return
+    __renderRoute(data.path)
+  })
+  __renderRoute('/')
 } catch (err) {
   window.__showPreviewError(err && err.message ? String(err.message) : String(err))
   console.error('[786.Chat preview]', err)
@@ -468,9 +473,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; expo
   }
 
   const namedExportRe = /\bexport\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g
-  while ((match = namedExportRe.exec(src)) !== null) {
-    exportedNames.add(match[1])
-  }
+  while ((match = namedExportRe.exec(src)) !== null) exportedNames.add(match[1])
 
   const exportListRe = /\bexport\s*\{([^}]*)\}\s*;?/g
   while ((match = exportListRe.exec(src)) !== null) {
@@ -481,14 +484,9 @@ function transformPreviewSource(src: string): { defaultName: string | null; expo
   }
 
   const jsxIconRe = /<\s*([A-Z][\w$]*Icon)\b/g
-  while ((match = jsxIconRe.exec(src)) !== null) {
-    lucideNames.add(match[1])
-  }
-
+  while ((match = jsxIconRe.exec(src)) !== null) lucideNames.add(match[1])
   const createElementIconRe = /React\.createElement\(\s*([A-Z][\w$]*Icon)\b/g
-  while ((match = createElementIconRe.exec(src)) !== null) {
-    lucideNames.add(match[1])
-  }
+  while ((match = createElementIconRe.exec(src)) !== null) lucideNames.add(match[1])
 
   let source = src
   source = source.replace(/^["']use (client|server)["']\s*;?\s*\n?/m, "")
@@ -521,9 +519,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; expo
   source = source.replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, "")
   source = source.replace(/^\s*export\s+type\s+[\s\S]*?(?=\n|$)/gm, "")
 
-  const lucideShim = Array.from(lucideNames)
-    .map((name) => `globalThis.${name} = __makeIcon('${name}');`)
-    .join("\n")
+  const lucideShim = Array.from(lucideNames).map((name) => `globalThis.${name} = __makeIcon('${name}');`).join("\n")
   const body = (lucideShim ? `${lucideShim}\n` : "") + source.trim()
   return { defaultName, exportedNames: Array.from(exportedNames), body }
 }
@@ -541,13 +537,7 @@ function safeScriptJson(value: string): string {
 }
 
 function stablePreviewKey(files: SevenEightSixProjectFileMap | undefined, html: string): string {
-  const source = files
-    ? Object.keys(files)
-        .sort()
-        .map((path) => `${path}:${files[path]}`)
-        .join("\n---786-file---\n")
-    : html
-
+  const source = files ? Object.keys(files).sort().map((path) => `${path}:${files[path]}`).join("\n---786-file---\n") : html
   let hash = 2166136261
   for (let i = 0; i < source.length; i++) {
     hash ^= source.charCodeAt(i)
@@ -562,17 +552,9 @@ function buildEmptyPreview(css: string, message: string): string {
 
 function buildExistingProjectContext(activeProject: ActiveProject | null, selectedFile: string): ExistingProjectContext | undefined {
   if (!activeProject) return undefined
-
   const fileTree = Object.keys(activeProject.files || {}).sort()
   if (fileTree.length === 0) return undefined
-
-  const orderedCandidates = [
-    selectedFile,
-    ...EDIT_CONTEXT_PRIMARY_FILES,
-    ...fileTree.filter((path) => path.startsWith("app/") || path.startsWith("components/")),
-    ...fileTree,
-  ]
-
+  const orderedCandidates = [selectedFile, ...EDIT_CONTEXT_PRIMARY_FILES, ...fileTree.filter((path) => path.startsWith("app/") || path.startsWith("components/")), ...fileTree]
   const keyFiles: Record<string, string> = {}
   for (const path of orderedCandidates) {
     if (Object.keys(keyFiles).length >= EDIT_CONTEXT_MAX_EXTRA_FILES) break
@@ -581,13 +563,7 @@ function buildExistingProjectContext(activeProject: ActiveProject | null, select
     if (typeof content !== "string") continue
     keyFiles[path] = content
   }
-
-  return {
-    title: activeProject.title,
-    description: activeProject.description,
-    fileTree,
-    keyFiles,
-  }
+  return { title: activeProject.title, description: activeProject.description, fileTree, keyFiles }
 }
 
 export default function SevenEightSixAdminChatPage() {
@@ -733,7 +709,6 @@ export default function SevenEightSixAdminChatPage() {
       const requestBody: Record<string, unknown> = { message: text, mode }
       if (project?.id) requestBody.projectId = project.id
       if (existing) requestBody.existing = existing
-
       const res = await fetch("/api/786-admin/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) })
       const json = await res.json()
       if (!res.ok || !json.success || !json.project) throw new Error(json.error || "Project generation failed.")
@@ -765,52 +740,33 @@ export default function SevenEightSixAdminChatPage() {
   }
 
   const deviceButtonClass = (value: Device) => `inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${device === value ? "bg-cyan-300 text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white"}`
-  const deviceFrameClass = device === "desktop"
-    ? "h-full w-full overflow-hidden bg-white"
-    : `relative shrink-0 overflow-hidden bg-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] ${device === "mobile" ? "rounded-[34px] border-[9px] border-[#111827]" : "rounded-[26px] border-[8px] border-[#111827]"}`
+  const deviceFrameClass = device === "desktop" ? "h-full w-full overflow-hidden bg-white" : `relative shrink-0 overflow-hidden bg-white shadow-[0_24px_80px_rgba(0,0,0,0.55)] ${device === "mobile" ? "rounded-[34px] border-[9px] border-[#111827]" : "rounded-[26px] border-[8px] border-[#111827]"}`
   const iframeClass = `h-full w-full bg-white ${device === "desktop" ? "rounded-none" : device === "mobile" ? "rounded-[24px]" : "rounded-[17px]"}`
 
   return (
     <main className="h-screen overflow-hidden bg-[#050713] text-white">
       <div className="flex h-full">
         <aside className="hidden w-[92px] shrink-0 bg-[#06101c] pt-24 lg:block">
-          <button onClick={() => router.push("/786-admin/projects")} className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/15 text-cyan-100" title="Projects">
-            <FolderKanban className="h-5 w-5" />
-          </button>
+          <button onClick={() => router.push("/786-admin/projects")} className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-cyan-300/30 bg-cyan-300/15 text-cyan-100" title="Projects"><FolderKanban className="h-5 w-5" /></button>
         </aside>
 
         <section className="relative flex h-full min-w-[360px] shrink-0 flex-col bg-[#081322]" style={{ width: chatWidth }}>
           <header className="flex h-[70px] shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4">
-            <button onClick={newChat} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50">
-              <Plus className="h-4 w-4" /><span>New Chat</span>
-            </button>
+            <button onClick={newChat} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/35 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-emerald-50"><Plus className="h-4 w-4" /><span>New Chat</span></button>
             <div className="hidden" aria-hidden="true" />
           </header>
 
           <div className="flex-1 overflow-y-auto px-4 py-5 pb-40">
             {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center text-slate-500">
-                <div className="mx-auto max-w-[300px]">
-                  <p className="text-xl font-semibold text-cyan-100/90">Welcome back to 786.Chat</p>
-                  <p className="mt-3 text-sm leading-6">New chat is empty. Send a build prompt to create real project files.</p>
-                </div>
+              <div className="flex h-full items-center justify-center text-center text-slate-500"><div className="mx-auto max-w-[300px]"><p className="text-xl font-semibold text-cyan-100/90">Welcome back to 786.Chat</p><p className="mt-3 text-sm leading-6">New chat is empty. Send a build prompt to create real project files.</p></div></div>
+            ) : messages.map((m) => (
+              <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === "user" ? "ml-8 border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "mr-8 border-white/10 bg-white/[0.045] text-slate-200"}`}>
+                <div className="mb-2 flex justify-between text-xs font-bold text-slate-400"><span>{m.role === "user" ? "You" : "786.Chat"}</span></div>
+                <p className="whitespace-pre-wrap">{m.content}</p>
+                {false && m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
               </div>
-            ) : (
-              messages.map((m) => (
-                <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === "user" ? "ml-8 border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "mr-8 border-white/10 bg-white/[0.045] text-slate-200"}`}>
-                  <div className="mb-2 flex justify-between text-xs font-bold text-slate-400">
-                    <span>{m.role === "user" ? "You" : "786.Chat"}</span>
-                  </div>
-                  <p className="whitespace-pre-wrap">{m.content}</p>
-                  {false && m.reason && <p className="mt-3 text-xs text-purple-200/80">{m.reason}</p>}
-                </div>
-              ))
-            )}
-            {sending && (
-              <div className="mr-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-                <div className="flex items-center gap-3"><Wand2 className="h-5 w-5 animate-pulse text-cyan-200" /><span>786.Chat is creating real project files...</span></div>
-              </div>
-            )}
+            ))}
+            {sending && <div className="mr-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4"><div className="flex items-center gap-3"><Wand2 className="h-5 w-5 animate-pulse text-cyan-200" /><span>786.Chat is creating real project files...</span></div></div>}
             <div ref={endRef} />
           </div>
 
@@ -818,108 +774,43 @@ export default function SevenEightSixAdminChatPage() {
             <div className="flex gap-3 rounded-3xl border border-white/10 bg-[#162033] px-4 py-3">
               <Paperclip className="mt-2 h-5 w-5 shrink-0 text-slate-500" />
               <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }} rows={1} className="min-h-10 flex-1 resize-none bg-transparent py-2 text-sm text-white outline-none placeholder:text-slate-500" placeholder="Ask 786.Chat to build a real project..." />
-              <button onClick={send} disabled={sending || !input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-600 disabled:opacity-50">
-                <Send className="h-4 w-4" />
-              </button>
+              <button onClick={send} disabled={sending || !input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-600 disabled:opacity-50"><Send className="h-4 w-4" /></button>
             </div>
-            <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">
-              {project ? `Editing project "${project.title}" — changes save to Neon.` : "New Chat is empty. Build prompt creates real files saved to Neon."}
-            </div>
+            <div className="mt-3 truncate rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100">{project ? `Editing project "${project.title}" — changes save to Neon.` : "New Chat is empty. Build prompt creates real files saved to Neon."}</div>
           </div>
         </section>
 
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 bg-white/5 hover:bg-cyan-300/30 lg:block"
-          title="Drag to resize chat and preview"
-        />
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); setIsResizing(true) }} className="hidden h-full w-[2px] shrink-0 cursor-col-resize border-0 bg-white/5 hover:bg-cyan-300/30 lg:block" title="Drag to resize chat and preview" />
 
         <section className="flex min-w-0 flex-1 flex-col bg-[#030408]">
           <header className="flex h-[70px] shrink-0 items-center gap-3 overflow-x-auto border-b border-white/10 px-5">
-            <div className="min-w-[180px] flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400">
-              <span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span>
-            </div>
-
-            {panel === "preview" && (
-              <div className="flex shrink-0 items-center rounded-full border border-white/10 bg-white/[0.035] p-1">
-                <button type="button" onClick={() => setDevice("desktop")} className={deviceButtonClass("desktop")} title="Desktop preview">
-                  <Monitor className="h-4 w-4" /><span>Desktop</span>
-                </button>
-                <button type="button" onClick={() => setDevice("tablet")} className={deviceButtonClass("tablet")} title="Tablet preview">
-                  <Tablet className="h-4 w-4" /><span>Tablet</span>
-                </button>
-                <button type="button" onClick={() => setDevice("ipad")} className={deviceButtonClass("ipad")} title="iPad preview">
-                  <Tablet className="h-4 w-4" /><span>iPad</span>
-                </button>
-                <button type="button" onClick={() => setDevice("mobile")} className={deviceButtonClass("mobile")} title="Mobile preview">
-                  <Smartphone className="h-4 w-4" /><span>Mobile</span>
-                </button>
-              </div>
-            )}
-
-            <button onClick={() => setPanel("preview")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
-              <Monitor className="mr-2 inline h-4 w-4" />Preview
-            </button>
-            <button onClick={() => setPanel("code")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}>
-              <Code2 className="mr-2 inline h-4 w-4" />Code
-            </button>
-            <button className="shrink-0 rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950">
-              <Rocket className="mr-2 inline h-4 w-4" />Publish
-            </button>
+            <div className="min-w-[180px] flex-1 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2 text-sm text-slate-400"><span className="block truncate">{sending ? "Generating new preview..." : project ? project.title : "No project yet"}</span></div>
+            {panel === "preview" && <div className="flex shrink-0 items-center rounded-full border border-white/10 bg-white/[0.035] p-1">
+              <button type="button" onClick={() => setDevice("desktop")} className={deviceButtonClass("desktop")} title="Desktop preview"><Monitor className="h-4 w-4" /><span>Desktop</span></button>
+              <button type="button" onClick={() => setDevice("tablet")} className={deviceButtonClass("tablet")} title="Tablet preview"><Tablet className="h-4 w-4" /><span>Tablet</span></button>
+              <button type="button" onClick={() => setDevice("ipad")} className={deviceButtonClass("ipad")} title="iPad preview"><Tablet className="h-4 w-4" /><span>iPad</span></button>
+              <button type="button" onClick={() => setDevice("mobile")} className={deviceButtonClass("mobile")} title="Mobile preview"><Smartphone className="h-4 w-4" /><span>Mobile</span></button>
+            </div>}
+            <button onClick={() => setPanel("preview")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "preview" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}><Monitor className="mr-2 inline h-4 w-4" />Preview</button>
+            <button onClick={() => setPanel("code")} className={`shrink-0 rounded-full border px-4 py-2 text-sm ${panel === "code" ? "border-cyan-300/25 bg-cyan-300/12 text-cyan-100" : "border-white/10 text-slate-400"}`}><Code2 className="mr-2 inline h-4 w-4" />Code</button>
+            <button className="shrink-0 rounded-full bg-cyan-300 px-5 py-2 text-sm font-black text-slate-950"><Rocket className="mr-2 inline h-4 w-4" />Publish</button>
           </header>
 
           {panel === "preview" ? (
-            sending ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center bg-[#070b12] p-6">
-                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-medium text-slate-300">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />
-                  Loading generated preview...
-                </div>
+            sending ? <div className="flex min-h-0 flex-1 items-center justify-center bg-[#070b12] p-6"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm font-medium text-slate-300"><span className="inline-block h-2 w-2 animate-pulse rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.7)]" />Loading generated preview...</div></div>
+            : project && previewPayload.html ? <div className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#070b12] ${device === "desktop" ? "p-0" : "p-6"}`}>
+              <div className={deviceFrameClass} style={previewFrameStyle}>
+                {device !== "desktop" && <div className={`pointer-events-none absolute left-1/2 top-1.5 z-10 -translate-x-1/2 bg-[#111827] ${device === "mobile" ? "h-5 w-24 rounded-full" : "h-2 w-16 rounded-full"}`} />}
+                <iframe key={`${project.id}-${previewPayload.key}-${device}`} srcDoc={previewPayload.html} title={`${project.title} ${device} preview`} sandbox="allow-scripts allow-forms allow-popups" className={iframeClass} />
               </div>
-            ) : project && previewPayload.html ? (
-              <div className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#070b12] ${device === "desktop" ? "p-0" : "p-6"}`}>
-                <div className={deviceFrameClass} style={previewFrameStyle}>
-                  {device !== "desktop" && (
-                    <div className={`pointer-events-none absolute left-1/2 top-1.5 z-10 -translate-x-1/2 bg-[#111827] ${device === "mobile" ? "h-5 w-24 rounded-full" : "h-2 w-16 rounded-full"}`} />
-                  )}
-                  <iframe
-                    key={`${project.id}-${previewPayload.key}-${device}`}
-                    srcDoc={previewPayload.html}
-                    title={`${project.title} ${device} preview`}
-                    sandbox="allow-scripts allow-forms allow-popups"
-                    className={iframeClass}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center bg-[#070b12] p-6 text-center text-slate-500">
-                <div>
-                  <Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" />
-                  <h2 className="text-xl font-black text-slate-300">No Preview Yet</h2>
-                  <p className="mt-2">New chat starts with empty preview and empty code.</p>
-                </div>
-              </div>
-            )
+            </div>
+            : <div className="flex flex-1 items-center justify-center bg-[#070b12] p-6 text-center text-slate-500"><div><Monitor className="mx-auto mb-4 h-10 w-10 text-cyan-200" /><h2 className="text-xl font-black text-slate-300">No Preview Yet</h2><p className="mt-2">New chat starts with empty preview and empty code.</p></div></div>
           ) : (
             <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6">
               <div className="min-h-0 overflow-auto rounded-3xl border border-white/10 bg-[#0d1320] p-3">
-                {fileNames.length === 0 ? (
-                  <p className="p-3 text-sm text-slate-500">No files yet.</p>
-                ) : (
-                  fileNames.map((file) => (
-                    <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-bold ${selectedFile === file ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-300"}`}>
-                      {file}
-                    </button>
-                  ))
-                )}
+                {fileNames.length === 0 ? <p className="p-3 text-sm text-slate-500">No files yet.</p> : fileNames.map((file) => <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-bold ${selectedFile === file ? "bg-cyan-300 text-slate-950" : "bg-white/5 text-slate-300"}`}>{file}</button>)}
               </div>
-              <pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50">
-                <code>{project?.files?.[selectedFile] || "Select a file."}</code>
-              </pre>
+              <pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-[#0d1320] p-5 text-xs leading-6 text-cyan-50"><code>{project?.files?.[selectedFile] || "Select a file."}</code></pre>
             </div>
           )}
         </section>
