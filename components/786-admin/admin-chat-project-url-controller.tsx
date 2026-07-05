@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
-const PREVIEW_ORIGIN = "https://preview.786.chat"
+const PREVIEW_DISPLAY_ORIGIN = "https://786.chat"
 
 function getProjectId(): string {
   try { return (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || "").trim() } catch { return "" }
@@ -45,17 +45,17 @@ function getPreviewIframe(): HTMLIFrameElement | null {
   return Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe")).find((frame) => /preview/i.test(frame.title || "")) || null
 }
 
-function visibleUrl(projectId: string, path: string, category: string): string {
+function visibleUrl(_projectId: string, path: string, category: string): string {
   const route = path === "/" ? "" : path
   const query = category ? `?category=${encodeURIComponent(category)}` : ""
-  return projectId ? `${PREVIEW_ORIGIN}/${projectId}${route}${query}` : `${PREVIEW_ORIGIN}${route}${query}`
+  return `${PREVIEW_DISPLAY_ORIGIN}${route}${query}`
 }
 
 function parseInput(value: string, projectId: string): { path: string; category: string } {
   let raw = value.trim()
   let category = ""
   try {
-    const url = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw || "/", PREVIEW_ORIGIN)
+    const url = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw || "/", PREVIEW_DISPLAY_ORIGIN)
     raw = url.pathname
     category = (url.searchParams.get("category") || "").trim().toLowerCase()
   } catch {}
