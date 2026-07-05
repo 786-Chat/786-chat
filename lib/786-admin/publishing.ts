@@ -26,6 +26,23 @@ function slugify(value: string): string {
     .slice(0, 54)
 }
 
+function scopePublishedHtml(html: string, slug: string): string {
+  const base = `/p/${slug}`
+  let next = html
+
+  next = next.replace(
+    "try { history.replaceState({ previewRoute: path }, '', path) } catch (_) {}",
+    `try { history.replaceState({ previewRoute: path }, '', '${base}' + (path === '/' ? '' : path)) } catch (_) {}`,
+  )
+
+  next = next.replace(
+    "__renderRoute('/')",
+    `__renderRoute((function(){ var current = window.location.pathname || '/'; var base = '${base}'; if (current === base) return '/'; if (current.indexOf(base + '/') === 0) return current.slice(base.length) || '/'; return '/'; })())`,
+  )
+
+  return next
+}
+
 export async function ensurePublishingSchema(): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS admin_project_deployments (
@@ -79,13 +96,14 @@ export async function publishProject(input: {
   const hasHomePage = Object.keys(fileMap).some((path) => /^(src\/)?app\/page\.(tsx?|jsx?)$/.test(path))
   if (!hasHomePage) throw new Error("Cannot publish: app/page.tsx was not found")
 
-  const html = input.publishedHtml.trim()
-  if (!html || !html.includes("<!doctype html>") || !html.includes('id="root"')) {
+  const rawHtml = input.publishedHtml.trim()
+  if (!rawHtml || !rawHtml.includes("<!doctype html>") || !rawHtml.includes('id="root"')) {
     throw new Error("Cannot publish: the current preview snapshot is invalid")
   }
 
   const base = slugify(project.title) || "project"
   const slug = `${base}-${project.id.slice(0, 8).toLowerCase()}`
+  const html = scopePublishedHtml(rawHtml, slug)
   const filesJson = JSON.stringify(fileMap)
 
   const rows = (await sql`
