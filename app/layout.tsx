@@ -41,8 +41,16 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
       'removeItem:function(k){delete memory[String(k)]},' +
       'clear:function(){Object.keys(memory).forEach(function(k){delete memory[k]})}' +
     '}};' +
+    'function patchBrokenRouteSyntax(source){' +
+      'if(typeof source!=="string")return source;' +
+      'source=source.split("try { if (/^https?:///i.test(path)) path = new URL(path).pathname || \'/\' } catch (_) {}").join("try { if (path.indexOf(\'http://\') === 0 || path.indexOf(\'https://\') === 0) path = new URL(path).pathname || \'/\' } catch (_) {}");' +
+      'source=source.split("path = path.replace(//{2,}/g, \'/\')").join("while (path.indexOf(\'//\') !== -1) path = path.split(\'//\').join(\'/\')");' +
+      'source=source.split("if (path.length > 1) path = path.replace(//$/, \'\')").join("while (path.length > 1 && path.charAt(path.length - 1) === \'/\') path = path.slice(0, -1)");' +
+      'return source;' +
+    '}' +
     'function patchDuplicateDeclarations(source){' +
       'if(typeof source!=="string")return source;' +
+      'source=patchBrokenRouteSyntax(source);' +
       'return source.replace(/(^|[\\n;{}])\\s*(const|let)\\s+([A-Za-z_$][\\w$]*)/g,function(match,prefix,_kind,name){' +
         'if(name.indexOf("__")===0)return match;' +
         'return prefix+" var "+name;' +
