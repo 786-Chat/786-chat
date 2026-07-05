@@ -5,20 +5,78 @@ import { usePathname } from "next/navigation"
 
 const UI_MODE_KEY = "786chat_admin_ui_mode_v1"
 const SOUND_KEY = "786chat_admin_sound_v1"
+const PREVIEW_ROUTE_KEY = "786chat_admin_preview_route_v1"
+const PREVIEW_ORIGIN = "https://preview.786.chat"
+
+function normalizePreviewPath(value: string): string {
+  let path = value.trim()
+  if (!path) return "/"
+  try {
+    if (/^https?:\/\//i.test(path)) path = new URL(path).pathname || "/"
+  } catch {}
+  path = path.split("?")[0].split("#")[0]
+  if (!path.startsWith("/")) path = `/${path}`
+  path = path.replace(/\/{2,}/g, "/")
+  if (path.length > 1) path = path.replace(/\/$/, "")
+  return path || "/"
+}
 
 function getPreviewIframe(): HTMLIFrameElement | null {
   const iframes = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"))
   return iframes.find((iframe) => /preview/i.test(iframe.title || "")) || iframes[0] || null
 }
 
+function getSavedPreviewPath(): string {
+  try { return normalizePreviewPath(localStorage.getItem(PREVIEW_ROUTE_KEY) || "/") } catch { return "/" }
+}
+
+function updatePreviewUrl(path: string) {
+  const normalized = normalizePreviewPath(path)
+  try { localStorage.setItem(PREVIEW_ROUTE_KEY, normalized) } catch {}
+  const input = document.querySelector<HTMLInputElement>("#admin-chat-preview-url")
+  if (input && document.activeElement !== input) {
+    input.value = `${PREVIEW_ORIGIN}${normalized === "/" ? "" : normalized}`
+  }
+}
+
+function ensurePreviewUrlInput() {
+  const container = document.querySelector<HTMLElement>("#admin-chat-browser-bar .browser-url")
+  if (!container) return
+
+  let input = container.querySelector<HTMLInputElement>("#admin-chat-preview-url")
+  if (!input) {
+    container.innerHTML = '<span aria-hidden="true">🔒</span><input id="admin-chat-preview-url" aria-label="Preview URL" spellcheck="false" autocomplete="off" />'
+    input = container.querySelector<HTMLInputElement>("#admin-chat-preview-url")
+  }
+  if (!input) return
+
+  input.value = `${PREVIEW_ORIGIN}${getSavedPreviewPath() === "/" ? "" : getSavedPreviewPath()}`
+  input.style.width = "100%"
+  input.style.minWidth = "0"
+  input.style.border = "0"
+  input.style.outline = "0"
+  input.style.background = "transparent"
+  input.style.color = "inherit"
+  input.style.font = "inherit"
+}
+
+function navigatePreview(path: string) {
+  const normalized = normalizePreviewPath(path)
+  updatePreviewUrl(normalized)
+  const iframe = getPreviewIframe()
+  iframe?.contentWindow?.postMessage({ type: "786-preview-navigate", path: normalized }, "*")
+}
+
 function refreshPreview() {
   const iframe = getPreviewIframe()
   if (!iframe) return
 
+  const route = getSavedPreviewPath()
   const srcDoc = iframe.getAttribute("srcdoc") || iframe.srcdoc
   if (srcDoc) {
     iframe.srcdoc = ""
     window.requestAnimationFrame(() => {
+      iframe.addEventListener("load", () => navigatePreview(route), { once: true })
       iframe.srcdoc = srcDoc
     })
     return
@@ -118,6 +176,7 @@ function installModeStyles() {
 
 function applySavedState() {
   installModeStyles()
+  ensurePreviewUrlInput()
 
   const mode = localStorage.getItem(UI_MODE_KEY) === "light" ? "light" : "dark"
   document.documentElement.setAttribute("data-admin-ui-mode", mode)
@@ -228,7 +287,7 @@ export function AdminChatBrowserControls() {
         return
       }
 
-      const open = target.closest<HTMLElement>('#admin-chat-browser-bar [title="Open preview"], #admin-chat-browser-bar .browser-url')
+      const open = target.closest<HTMLElement>('#admin-chat-browser-bar [title="Open preview"]')
       if (open) {
         event.preventDefault()
         openPreview()
@@ -276,20 +335,36 @@ export function AdminChatBrowserControls() {
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") closeProfileMenu()
-      if (event.key !== "Enter" && event.key !== " ") return
       const target = event.target
+      if (target instanceof HTMLInputElement && target.id === "admin-chat-preview-url" && event.key === "Enter") {
+        event.preventDefault()
+        navigatePreview(target.value)
+        target.blur()
+        return
+      }
+      if (event.key !== "Enter" && event.key !== " ") return
       if (!(target instanceof HTMLElement) || !target.matches("#admin-chat-browser-bar .browser-avatar")) return
       event.preventDefault()
       openProfileMenu(target)
     }
 
+    const onMessage = (event: MessageEvent) => {
+      const iframe = getPreviewIframe()
+      if (!iframe || event.source !== iframe.contentWindow) return
+      const data = event.data as { type?: string; path?: string } | null
+      if (!data || data.type !== "786-preview-route-changed" || typeof data.path !== "string") return
+      updatePreviewUrl(data.path)
+    }
+
     document.addEventListener("click", onClick)
     document.addEventListener("keydown", onKeyDown)
+    window.addEventListener("message", onMessage)
 
     return () => {
       observer.disconnect()
       document.removeEventListener("click", onClick)
       document.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("message", onMessage)
       closeProfileMenu()
       document.documentElement.removeAttribute("data-admin-ui-mode")
     }
