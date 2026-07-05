@@ -98,7 +98,21 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
     .sort(([a], [b]) => dependencyOrder(a) - dependencyOrder(b) || a.localeCompare(b))
 
   const componentBodies = sourceEntries
-    .map(([, src]) => transformPreviewSource(src).body)
+    .map(([path, src]) => {
+      const transformed = transformPreviewSource(src)
+      if (!transformed.body) return ""
+
+      const publish = Array.from(
+        new Set([
+          ...transformed.exportedNames,
+          ...(transformed.defaultName ? [transformed.defaultName] : []),
+        ])
+      )
+        .map((name) => `if (typeof ${name} !== "undefined") globalThis.${name} = ${name};`)
+        .join("\n")
+
+      return `// ${path}\n(function(){\n${transformed.body}\n${publish}\n})();`
+    })
     .filter((body) => body.length > 0)
     .join("\n\n")
 
@@ -440,10 +454,12 @@ try {
 `
 }
 
-function transformPreviewSource(src: string): { defaultName: string | null; body: string } {
+function transformPreviewSource(src: string): { defaultName: string | null; exportedNames: string[]; body: string } {
   const lucideNames = new Set<string>()
+  const exportedNames = new Set<string>()
   const lucideRe = /import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/g
   let match: RegExpExecArray | null
+
   while ((match = lucideRe.exec(src)) !== null) {
     for (const raw of match[1].split(",")) {
       const cleaned = raw.trim().split(/\s+as\s+/i)[0].trim()
@@ -451,10 +467,24 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
     }
   }
 
+  const namedExportRe = /\bexport\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g
+  while ((match = namedExportRe.exec(src)) !== null) {
+    exportedNames.add(match[1])
+  }
+
+  const exportListRe = /\bexport\s*\{([^}]*)\}\s*;?/g
+  while ((match = exportListRe.exec(src)) !== null) {
+    for (const raw of match[1].split(",")) {
+      const localName = raw.trim().split(/\s+as\s+/i)[0].trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(localName)) exportedNames.add(localName)
+    }
+  }
+
   const jsxIconRe = /<\s*([A-Z][\w$]*Icon)\b/g
   while ((match = jsxIconRe.exec(src)) !== null) {
     lucideNames.add(match[1])
   }
+
   const createElementIconRe = /React\.createElement\(\s*([A-Z][\w$]*Icon)\b/g
   while ((match = createElementIconRe.exec(src)) !== null) {
     lucideNames.add(match[1])
@@ -495,7 +525,7 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
     .map((name) => `globalThis.${name} = __makeIcon('${name}');`)
     .join("\n")
   const body = (lucideShim ? `${lucideShim}\n` : "") + source.trim()
-  return { defaultName, body }
+  return { defaultName, exportedNames: Array.from(exportedNames), body }
 }
 
 function escapePreviewScript(value: string): string {
