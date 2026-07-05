@@ -4,6 +4,7 @@ import {
   type CodegenAttachment,
   type CodegenMode,
 } from "@/lib/786-admin/codegen"
+import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
 
 function slugify(v: string) {
   return v
@@ -68,7 +69,8 @@ export async function POST(request: Request) {
           }
         : undefined
 
-    const prompt = message || "Inspect the attached file and update the existing project to match it."
+    const userRequest = message || "Inspect the attached file and update the existing project to match it."
+    const prompt = `${userRequest}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}`
     const codegen = await generateProjectCode({
       prompt,
       mode,
@@ -87,7 +89,7 @@ export async function POST(request: Request) {
         id,
         title: codegen.title,
         description: codegen.description,
-        prompt,
+        prompt: userRequest,
         createdAt: now,
         updatedAt: now,
         files: codegen.files,
