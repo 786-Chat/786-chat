@@ -38,6 +38,22 @@ function getPreviewIframe(): HTMLIFrameElement | null {
   )
 }
 
+function isRefreshButton(target: EventTarget | null): HTMLButtonElement | null {
+  if (!(target instanceof Element)) return null
+
+  const exact = target.closest<HTMLButtonElement>(
+    '#admin-chat-browser-bar button[title="Refresh preview"]',
+  )
+  if (exact) return exact
+
+  const candidate = target.closest<HTMLButtonElement>("#admin-chat-browser-bar button")
+  if (!candidate) return null
+
+  const title = (candidate.getAttribute("title") || "").trim().toLowerCase()
+  const label = (candidate.textContent || "").trim()
+  return title === "refresh preview" || label === "↻" || label === "⟳" ? candidate : null
+}
+
 export function AdminChatPreviewRefreshController() {
   const pathname = usePathname()
 
@@ -47,12 +63,7 @@ export function AdminChatPreviewRefreshController() {
     let refreshing = false
 
     const onClick = (event: MouseEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-
-      const button = target.closest<HTMLButtonElement>(
-        '#admin-chat-browser-bar button[title="Refresh preview"]',
-      )
+      const button = isRefreshButton(event.target)
       if (!button || refreshing) return
 
       const iframe = getPreviewIframe()
@@ -71,11 +82,13 @@ export function AdminChatPreviewRefreshController() {
 
       button.disabled = true
       button.setAttribute("aria-busy", "true")
+      button.setAttribute("data-refreshing", "true")
       button.textContent = "⟳"
-      button.style.transform = "rotate(180deg)"
-      button.style.transition = "transform 300ms ease"
+      button.style.transition = "transform 500ms linear, opacity 180ms ease"
+      button.style.transform = "rotate(360deg)"
+      button.style.opacity = "0.75"
 
-      const restoreRoute = () => {
+      const finish = () => {
         iframe.contentWindow?.postMessage(
           { type: "786-preview-navigate", path: location.path },
           "*",
@@ -86,19 +99,33 @@ export function AdminChatPreviewRefreshController() {
             { type: "786-preview-apply-category", category: location.category },
             "*",
           )
-        }, 100)
+        }, 120)
 
         window.setTimeout(() => {
           refreshing = false
           button.disabled = false
           button.removeAttribute("aria-busy")
+          button.removeAttribute("data-refreshing")
           button.textContent = originalLabel
           button.style.transform = ""
-        }, 250)
+          button.style.opacity = ""
+        }, 420)
       }
 
-      iframe.addEventListener("load", restoreRoute, { once: true })
-      iframe.srcdoc = srcDoc
+      iframe.addEventListener("load", finish, { once: true })
+
+      iframe.removeAttribute("srcdoc")
+      iframe.src = "about:blank"
+
+      window.setTimeout(() => {
+        iframe.removeAttribute("src")
+        iframe.srcdoc = srcDoc
+      }, 60)
+
+      window.setTimeout(() => {
+        if (!refreshing) return
+        finish()
+      }, 1800)
     }
 
     document.addEventListener("click", onClick, true)
