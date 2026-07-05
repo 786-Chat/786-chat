@@ -423,7 +423,7 @@ try {
     var Page = __routes[path]
     if (!Page) {
       var available = Object.keys(__routes).sort().join(', ')
-      __reactRoot__.render(React.createElement('div', { id: '__preview_error' }, 'Route not found: ' + path + '\n\nAvailable routes: ' + available))
+      __reactRoot__.render(React.createElement('div', { id: '__preview_error' }, 'Route not found: ' + path + '\\n\\nAvailable routes: ' + available))
       __notifyRoute(path, false)
       return false
     }
