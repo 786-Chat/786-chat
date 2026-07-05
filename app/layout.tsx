@@ -8,6 +8,7 @@ import { AdminChatCrashBoundary } from '@/components/786-admin/admin-chat-crash-
 import { AdminChatGenerationProgress } from '@/components/786-admin/admin-chat-generation-progress'
 import { AdminChatProgressVisibilityGuard } from '@/components/786-admin/admin-chat-progress-visibility-guard'
 import { AdminChatRefreshScrollGuard } from '@/components/786-admin/admin-chat-refresh-scroll-guard'
+import { AdminChatPreviewRouter } from '@/components/786-admin/admin-chat-preview-router'
 import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-preview-source-guard'
 import { AdminChatPreviewStorageGuard } from '@/components/786-admin/admin-chat-preview-storage-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
@@ -154,6 +155,7 @@ export default function RootLayout({
             <AdminChatGenerationProgress />
             <AdminChatProgressVisibilityGuard />
             <AdminChatRefreshScrollGuard />
+            <AdminChatPreviewRouter />
             <AdminChatPreviewSourceGuard />
             <AdminChatPreviewStorageGuard />
             <AdminChatThemeControls />
