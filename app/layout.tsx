@@ -14,21 +14,13 @@ import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-
 import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-card-identity'
 import './globals.css'
 
-const geist = Geist({
-  subsets: ['latin'],
-  variable: '--font-geist-sans',
-})
-
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-geist-mono',
-})
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 
 const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
 (function(){
   if (window.__786PreviewStorageSrcDocBootstrapInstalled) return;
   window.__786PreviewStorageSrcDocBootstrapInstalled = true;
-
   var marker = 'data-786-preview-storage="true"';
   var shim = '<script ' + marker + '>' +
     '(function(){try{' +
@@ -41,16 +33,28 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
       'removeItem:function(k){delete memory[String(k)]},' +
       'clear:function(){Object.keys(memory).forEach(function(k){delete memory[k]})}' +
     '}};' +
-    'function patchBrokenRouteSyntax(source){' +
+    'function repairRouteNormalizer(source){' +
       'if(typeof source!=="string")return source;' +
-      'source=source.split("try { if (/^https?:///i.test(path)) path = new URL(path).pathname || \'/\' } catch (_) {}").join("try { if (path.indexOf(\'http://\') === 0 || path.indexOf(\'https://\') === 0) path = new URL(path).pathname || \'/\' } catch (_) {}");' +
-      'source=source.split("path = path.replace(//{2,}/g, \'/\')").join("while (path.indexOf(\'//\') !== -1) path = path.split(\'//\').join(\'/\')");' +
-      'source=source.split("if (path.length > 1) path = path.replace(//$/, \'\')").join("while (path.length > 1 && path.charAt(path.length - 1) === \'/\') path = path.slice(0, -1)");' +
-      'return source;' +
+      'var start=source.indexOf("function __normalizeRoute(value) {");' +
+      'var end=start<0?-1:source.indexOf("function __notifyRoute",start);' +
+      'if(start<0||end<0)return source;' +
+      'var lines=[' +
+        '"function __normalizeRoute(value) {",' +
+        '"    var path = String(value || \'/\').trim()",' +
+        '"    try { if (path.indexOf(\'http://\') === 0 || path.indexOf(\'https://\') === 0) path = new URL(path).pathname || \'/\' } catch (_) {}",' +
+        '"    path = path.split(\'?\')[0].split(\'#\')[0]",' +
+        '"    if (path.charAt(0) !== \'/\') path = \'/\' + path",' +
+        '"    while (path.indexOf(\'//\') !== -1) path = path.split(\'//\').join(\'/\')",' +
+        '"    while (path.length > 1 && path.charAt(path.length - 1) === \'/\') path = path.slice(0, -1)",' +
+        '"    return path || \'/\'",' +
+        '"  }",' +
+        '"  "' +
+      '];' +
+      'return source.slice(0,start)+lines.join("\\n")+source.slice(end);' +
     '}' +
     'function patchDuplicateDeclarations(source){' +
       'if(typeof source!=="string")return source;' +
-      'source=patchBrokenRouteSyntax(source);' +
+      'source=repairRouteNormalizer(source);' +
       'return source.replace(/(^|[\\n;{}])\\s*(const|let)\\s+([A-Za-z_$][\\w$]*)/g,function(match,prefix,_kind,name){' +
         'if(name.indexOf("__")===0)return match;' +
         'return prefix+" var "+name;' +
@@ -75,14 +79,12 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
     'window.__786PreviewLocalStorage=localStore;window.__786PreviewSessionStorage=sessionStore;' +
     '}catch(_){}})();' +
     '<\\/script>';
-
   function patch(value){
     if (typeof value !== 'string' || !value || value.indexOf(marker) !== -1) return value;
     if (value.indexOf('<head>') !== -1) return value.replace('<head>', '<head>\\n' + shim);
     if (value.indexOf('<body>') !== -1) return value.replace('<body>', '<body>\\n' + shim);
     return shim + '\\n' + value;
   }
-
   var descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'srcdoc');
   if (descriptor && descriptor.get && descriptor.set) {
     Object.defineProperty(HTMLIFrameElement.prototype, 'srcdoc', {
@@ -92,7 +94,6 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
       set: function(value){ descriptor.set.call(this, patch(value)); }
     });
   }
-
   var originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
   HTMLIFrameElement.prototype.setAttribute = function(name, value){
     if (String(name).toLowerCase() === 'srcdoc') value = patch(value);
@@ -112,9 +113,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'MujeebProAI – Advanced AI Platform for Businesses & Creators',
     description: 'MujeebProAI is a futuristic AI platform built by Mujeeb Sardar in the United Kingdom, helping businesses automate workflows, AI chat, analytics, and smart digital experiences.',
-    type: 'website',
-    siteName: 'MujeebProAI',
-    locale: 'en_GB',
+    type: 'website', siteName: 'MujeebProAI', locale: 'en_GB',
   },
   twitter: {
     card: 'summary_large_image',
@@ -122,26 +121,18 @@ export const metadata: Metadata = {
     description: 'MujeebProAI is a futuristic AI platform built by Mujeeb Sardar in the United Kingdom, helping businesses automate workflows, AI chat, analytics, and smart digital experiences.',
     creator: '@mujeebsardar',
   },
-  icons: {
-    icon: '/images/logo-animated.gif',
-    apple: '/images/logo.png',
-  },
+  icons: { icon: '/images/logo-animated.gif', apple: '/images/logo.png' },
 }
 
 export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
+  width: 'device-width', initialScale: 1,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#0a0a0f' },
     { media: '(prefers-color-scheme: dark)', color: '#0a0a0f' },
   ],
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable} bg-background`}>
       <head>
