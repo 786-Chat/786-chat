@@ -12,6 +12,7 @@ import { AdminChatPreviewSourceGuard } from '@/components/786-admin/admin-chat-p
 import { AdminChatPreviewStorageGuard } from '@/components/786-admin/admin-chat-preview-storage-guard'
 import { AdminChatThemeControls } from '@/components/786-admin/admin-chat-theme-controls'
 import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-card-identity'
+import { AdminChatProjectUrlController } from '@/components/786-admin/admin-chat-project-url-controller'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
@@ -52,9 +53,42 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
       '];' +
       'return source.slice(0,start)+lines.join("\\n")+source.slice(end);' +
     '}' +
+    'function patchCategoryRouteSync(source){' +
+      'if(typeof source!=="string"||source.indexOf("__786CategoryRouteSyncInstalled")!==-1)return source;' +
+      'var anchor="  __renderRoute(\'/\')";' +
+      'var at=source.lastIndexOf(anchor);' +
+      'if(at<0)return source;' +
+      'var lines=[' +
+        '"  var __786CategoryRouteSyncInstalled = true",' +
+        '"  var __786CategoryLabels = { all: \'\', starters: \'starters\', \'main courses\': \'main-courses\', pizza: \'pizza\', desserts: \'desserts\', drinks: \'drinks\' }",' +
+        '"  function __786ButtonLabel(node) { return String(node && node.textContent || \'\').trim().toLowerCase() }",' +
+        '"  document.addEventListener(\'click\', function(event) {",' +
+        '"    var target = event.target",' +
+        '"    if (!target || typeof target.closest !== \'function\') return",' +
+        '"    var button = target.closest(\'button\')",' +
+        '"    if (!button) return",' +
+        '"    var label = __786ButtonLabel(button)",' +
+        '"    if (!Object.prototype.hasOwnProperty.call(__786CategoryLabels, label)) return",' +
+        '"    try { window.parent.postMessage({ type: \'786-preview-category-changed\', category: __786CategoryLabels[label] }, \'*\') } catch (_) {}",' +
+        '"  }, true)",' +
+        '"  window.addEventListener(\'message\', function(event) {",' +
+        '"    var data = event && event.data",' +
+        '"    if (!data || data.type !== \'786-preview-apply-category\') return",' +
+        '"    var wanted = String(data.category || \'\').trim().toLowerCase()",' +
+        '"    var buttons = Array.prototype.slice.call(document.querySelectorAll(\'button\'))",' +
+        '"    for (var i = 0; i < buttons.length; i++) {",' +
+        '"      var label = __786ButtonLabel(buttons[i])",' +
+        '"      if (Object.prototype.hasOwnProperty.call(__786CategoryLabels, label) && __786CategoryLabels[label] === wanted) { buttons[i].click(); break }",' +
+        '"    }",' +
+        '"  })",' +
+        '"  "' +
+      '];' +
+      'return source.slice(0,at)+lines.join("\\n")+source.slice(at);' +
+    '}' +
     'function patchDuplicateDeclarations(source){' +
       'if(typeof source!=="string")return source;' +
       'source=repairRouteNormalizer(source);' +
+      'source=patchCategoryRouteSync(source);' +
       'return source.replace(/(^|[\\n;{}])\\s*(const|let)\\s+([A-Za-z_$][\\w$]*)/g,function(match,prefix,_kind,name){' +
         'if(name.indexOf("__")===0)return match;' +
         'return prefix+" var "+name;' +
@@ -157,6 +191,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <AdminChatPreviewStorageGuard />
             <AdminChatThemeControls />
             <AdminProjectCardIdentity />
+            <AdminChatProjectUrlController />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
