@@ -15,6 +15,7 @@ import { AdminProjectCardIdentity } from '@/components/786-admin/admin-project-c
 import { AdminChatProjectUrlController } from '@/components/786-admin/admin-chat-project-url-controller'
 import { AdminChatPreviewRefreshController } from '@/components/786-admin/admin-chat-preview-refresh-controller'
 import { AdminChatProjectPagesNavigator } from '@/components/786-admin/admin-chat-project-pages-navigator'
+import { AdminChatToolbarCleanup } from '@/components/786-admin/admin-chat-toolbar-cleanup'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
@@ -209,6 +210,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <AdminChatProjectUrlController />
             <AdminChatPreviewRefreshController />
             <AdminChatProjectPagesNavigator />
+            <AdminChatToolbarCleanup />
           </I18nProvider>
         </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
