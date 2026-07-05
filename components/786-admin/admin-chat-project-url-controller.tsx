@@ -6,6 +6,18 @@ import { usePathname } from "next/navigation"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const PREVIEW_DISPLAY_ORIGIN = "https://786.chat"
 
+const CATEGORY_ROUTE_BY_VALUE: Record<string, string> = {
+  starters: "/starters",
+  "main-courses": "/main-courses",
+  pizza: "/pizza",
+  desserts: "/desserts",
+  drinks: "/drinks",
+}
+
+const CATEGORY_VALUE_BY_ROUTE: Record<string, string> = Object.fromEntries(
+  Object.entries(CATEGORY_ROUTE_BY_VALUE).map(([category, route]) => [route, category]),
+)
+
 function getProjectId(): string {
   try { return (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || "").trim() } catch { return "" }
 }
@@ -26,11 +38,18 @@ function normalizePath(value: string): string {
   return path || "/"
 }
 
+function normalizeCategory(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "-")
+}
+
 function readLocation(projectId: string): { path: string; category: string } {
   if (!projectId) return { path: "/", category: "" }
   try {
     const value = JSON.parse(localStorage.getItem(storageKey(projectId)) || "{}") as { path?: string; category?: string }
-    return { path: normalizePath(value.path || "/"), category: String(value.category || "") }
+    return {
+      path: normalizePath(value.path || "/"),
+      category: normalizeCategory(String(value.category || "")),
+    }
   } catch {
     return { path: "/", category: "" }
   }
@@ -46,9 +65,11 @@ function getPreviewIframe(): HTMLIFrameElement | null {
 }
 
 function visibleUrl(_projectId: string, path: string, category: string): string {
-  const route = path === "/" ? "" : path
-  const query = category ? `?category=${encodeURIComponent(category)}` : ""
-  return `${PREVIEW_DISPLAY_ORIGIN}${route}${query}`
+  const normalizedPath = normalizePath(path)
+  const normalizedCategory = normalizeCategory(category)
+  const categoryRoute = normalizedPath === "/menu" ? CATEGORY_ROUTE_BY_VALUE[normalizedCategory] : undefined
+  const route = categoryRoute || (normalizedPath === "/" ? "" : normalizedPath)
+  return `${PREVIEW_DISPLAY_ORIGIN}${route}`
 }
 
 function parseInput(value: string, projectId: string): { path: string; category: string } {
@@ -57,7 +78,7 @@ function parseInput(value: string, projectId: string): { path: string; category:
   try {
     const url = /^https?:\/\//i.test(raw) ? new URL(raw) : new URL(raw || "/", PREVIEW_DISPLAY_ORIGIN)
     raw = url.pathname
-    category = (url.searchParams.get("category") || "").trim().toLowerCase()
+    category = normalizeCategory(url.searchParams.get("category") || "")
   } catch {}
 
   let path = normalizePath(raw)
@@ -68,7 +89,12 @@ function parseInput(value: string, projectId: string): { path: string; category:
     else if (path.startsWith(`${full}/`)) path = path.slice(full.length) || "/"
     else if (path.startsWith(`${short}/`)) path = path.slice(short.length) || "/"
   }
-  return { path: normalizePath(path), category }
+
+  path = normalizePath(path)
+  const cleanCategory = CATEGORY_VALUE_BY_ROUTE[path]
+  if (cleanCategory) return { path: "/menu", category: cleanCategory }
+  if (path === "/menu") return { path, category }
+  return { path, category: "" }
 }
 
 export function AdminChatProjectUrlController() {
@@ -102,7 +128,10 @@ export function AdminChatProjectUrlController() {
     }
 
     const navigate = (next: { path: string; category: string }) => {
-      location = next
+      location = {
+        path: normalizePath(next.path),
+        category: normalizeCategory(next.category),
+      }
       saveLocation(projectId, location.path, location.category)
       ensureInput()
       const frame = getPreviewIframe()
@@ -134,13 +163,19 @@ export function AdminChatProjectUrlController() {
       if (!frame || event.source !== frame.contentWindow) return
       const data = event.data as { type?: string; path?: string; category?: string } | null
       if (!data) return
+
       if (data.type === "786-preview-route-changed" && typeof data.path === "string") {
-        location.path = normalizePath(data.path)
+        const nextPath = normalizePath(data.path)
+        if (nextPath !== "/menu") location.category = ""
+        else if (location.path !== "/menu") location.category = ""
+        location.path = nextPath
       } else if (data.type === "786-preview-category-changed") {
-        location.category = String(data.category || "").trim().toLowerCase()
+        location.path = "/menu"
+        location.category = normalizeCategory(String(data.category || ""))
       } else {
         return
       }
+
       saveLocation(projectId, location.path, location.category)
       ensureInput()
     }
