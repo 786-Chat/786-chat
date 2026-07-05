@@ -408,11 +408,11 @@ try {
   const __reactRoot__ = ReactDOM.createRoot(__mount__)
   function __normalizeRoute(value) {
     var path = String(value || '/').trim()
-    try { if (/^https?:\/\//i.test(path)) path = new URL(path).pathname || '/' } catch (_) {}
+    try { if (/^https?:\\/\\//i.test(path)) path = new URL(path).pathname || '/' } catch (_) {}
     path = path.split('?')[0].split('#')[0]
     if (!path.startsWith('/')) path = '/' + path
-    path = path.replace(/\/{2,}/g, '/')
-    if (path.length > 1) path = path.replace(/\/$/, '')
+    path = path.replace(/\\/{2,}/g, '/')
+    if (path.length > 1) path = path.replace(/\\/$/, '')
     return path || '/'
   }
   function __notifyRoute(path, found) {
