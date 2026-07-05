@@ -55,27 +55,40 @@ const PREVIEW_STORAGE_SRC_DOC_BOOTSTRAP = `
     '}' +
     'function patchCategoryRouteSync(source){' +
       'if(typeof source!=="string"||source.indexOf("__786CategoryRouteSyncInstalled")!==-1)return source;' +
-      'var anchor="  __renderRoute(\'/\')";' +
+      'var anchor="__renderRoute(\'/\')";' +
       'var at=source.lastIndexOf(anchor);' +
       'if(at<0)return source;' +
       'var lines=[' +
         '"  var __786CategoryRouteSyncInstalled = true",' +
         '"  var __786CategoryLabels = { all: \'\', starters: \'starters\', \'main courses\': \'main-courses\', pizza: \'pizza\', desserts: \'desserts\', drinks: \'drinks\' }",' +
-        '"  function __786ButtonLabel(node) { return String(node && node.textContent || \'\').trim().toLowerCase() }",' +
-        '"  document.addEventListener(\'click\', function(event) {",' +
-        '"    var target = event.target",' +
-        '"    if (!target || typeof target.closest !== \'function\') return",' +
-        '"    var button = target.closest(\'button\')",' +
-        '"    if (!button) return",' +
+        '"  function __786ButtonLabel(node) { return String(node && node.textContent || \'\').trim().toLowerCase().replace(/\\s+/g, \' \') }",' +
+        '"  function __786CategoryFromEvent(event) {",' +
+        '"    var target = event && event.target",' +
+        '"    if (!target) return null",' +
+        '"    var button = typeof target.closest === \'function\' ? target.closest(\'button,[role=button]\') : null",' +
+        '"    if (!button && event.composedPath) {",' +
+        '"      var path = event.composedPath()",' +
+        '"      for (var p = 0; p < path.length; p++) { if (path[p] && path[p].tagName === \'BUTTON\') { button = path[p]; break } }",' +
+        '"    }",' +
+        '"    if (!button) return null",' +
         '"    var label = __786ButtonLabel(button)",' +
-        '"    if (!Object.prototype.hasOwnProperty.call(__786CategoryLabels, label)) return",' +
-        '"    try { window.parent.postMessage({ type: \'786-preview-category-changed\', category: __786CategoryLabels[label] }, \'*\') } catch (_) {}",' +
-        '"  }, true)",' +
+        '"    if (Object.prototype.hasOwnProperty.call(__786CategoryLabels, label)) return __786CategoryLabels[label]",' +
+        '"    var keys = Object.keys(__786CategoryLabels)",' +
+        '"    for (var k = 0; k < keys.length; k++) { if (label.indexOf(keys[k]) !== -1) return __786CategoryLabels[keys[k]] }",' +
+        '"    return null",' +
+        '"  }",' +
+        '"  function __786PublishCategory(event) {",' +
+        '"    var category = __786CategoryFromEvent(event)",' +
+        '"    if (category === null) return",' +
+        '"    setTimeout(function(){ try { window.parent.postMessage({ type: \'786-preview-category-changed\', category: category }, \'*\') } catch (_) {} }, 0)",' +
+        '"  }",' +
+        '"  document.addEventListener(\'click\', __786PublishCategory, true)",' +
+        '"  document.addEventListener(\'pointerup\', __786PublishCategory, true)",' +
         '"  window.addEventListener(\'message\', function(event) {",' +
         '"    var data = event && event.data",' +
         '"    if (!data || data.type !== \'786-preview-apply-category\') return",' +
         '"    var wanted = String(data.category || \'\').trim().toLowerCase()",' +
-        '"    var buttons = Array.prototype.slice.call(document.querySelectorAll(\'button\'))",' +
+        '"    var buttons = Array.prototype.slice.call(document.querySelectorAll(\'button,[role=button]\'))",' +
         '"    for (var i = 0; i < buttons.length; i++) {",' +
         '"      var label = __786ButtonLabel(buttons[i])",' +
         '"      if (Object.prototype.hasOwnProperty.call(__786CategoryLabels, label) && __786CategoryLabels[label] === wanted) { buttons[i].click(); break }",' +
