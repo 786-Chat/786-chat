@@ -5,6 +5,12 @@ import { usePathname } from "next/navigation"
 
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 
+type SavedPreviewLocation = {
+  path: string
+  category: string
+  view: string
+}
+
 function getActiveProjectId(): string {
   try {
     return (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || "").trim()
@@ -13,20 +19,22 @@ function getActiveProjectId(): string {
   }
 }
 
-function getSavedLocation(projectId: string): { path: string; category: string } {
-  if (!projectId) return { path: "/", category: "" }
+function getSavedLocation(projectId: string): SavedPreviewLocation {
+  if (!projectId) return { path: "/", category: "", view: "" }
 
   try {
     const raw = localStorage.getItem(`786chat_admin_preview_location_v2_${projectId}`)
-    if (!raw) return { path: "/", category: "" }
+    if (!raw) return { path: "/", category: "", view: "" }
 
-    const parsed = JSON.parse(raw) as { path?: string; category?: string }
+    const parsed = JSON.parse(raw) as { path?: string; category?: string; view?: string }
+    const category = typeof parsed.category === "string" ? parsed.category.trim() : ""
     return {
       path: typeof parsed.path === "string" && parsed.path.trim() ? parsed.path.trim() : "/",
-      category: typeof parsed.category === "string" ? parsed.category.trim() : "",
+      category,
+      view: typeof parsed.view === "string" ? parsed.view.trim() : category,
     }
   } catch {
-    return { path: "/", category: "" }
+    return { path: "/", category: "", view: "" }
   }
 }
 
@@ -95,6 +103,10 @@ export function AdminChatPreviewRefreshController() {
         )
 
         window.setTimeout(() => {
+          iframe.contentWindow?.postMessage(
+            { type: "786-preview-apply-view", view: location.view },
+            "*",
+          )
           iframe.contentWindow?.postMessage(
             { type: "786-preview-apply-category", category: location.category },
             "*",
