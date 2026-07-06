@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
+import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
 
 const STYLE_ID = "admin-chat-toolbar-cleanup-style"
 
@@ -26,5 +27,10 @@ export function AdminChatToolbarCleanup() {
     return () => style.remove()
   }, [pathname])
 
-  return <AdminChatPublishController />
+  return (
+    <>
+      <AdminChatPublishController />
+      <AdminChatPublishingOverviewLink />
+    </>
+  )
 }
