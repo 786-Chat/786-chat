@@ -109,6 +109,23 @@ Safety / performance rules:
 - All import statements must remain at the top of each returned file. Never place import or export statements after executable code.
 `
 
+const ROUTE_INTEGRITY_PROMPT = `
+PROJECT ROUTE INTEGRITY — MANDATORY:
+- Every internal navigation href that begins with "/" MUST have a matching real App Router page file in the final project.
+- Route mapping examples:
+  "/" requires app/page.tsx.
+  "/menu" requires app/menu/page.tsx.
+  "/about" requires app/about/page.tsx.
+  "/contact" requires app/contact/page.tsx.
+  "/payment-method" requires app/payment-method/page.tsx.
+- Never render Menu, About, Contact, Booking, Checkout, Dashboard, Admin, Shop, Products, Services, Gallery, Login, Register, or any other route link unless its matching page file already exists or is returned in the same response.
+- For a one-page project, use section anchors such as "#menu", "#about", and "#contact", and create matching section id attributes in app/page.tsx.
+- Do not use a slash route as a substitute for an in-page section.
+- Do not create decorative, dead, placeholder, or fake navigation links.
+- When editing an existing project, inspect ALL EXISTING FILE PATHS before adding navigation. A path absent from the file tree is not a real page unless you create its page.tsx file in the same response.
+- The final navigation must be fully consistent with the final returned file tree.
+`
+
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator.
 
 Your ONLY job is to emit a real Next.js App Router project as a list of files.
@@ -130,6 +147,7 @@ ABSOLUTE RULES:
 14. Never add fake success text; only say what the returned files actually changed.
 15. Never leave duplicate imports, mid-file imports, or imports with comments after executable code.
 
+${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
 
 const STRUCTURED_RETRY_PROMPT = `
@@ -186,7 +204,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "Emit ONLY files you are creating or modifying.",
       "Preserve all unrelated design, layout, data, and functionality.",
       "Use every attached screenshot/file to understand exact placement and responsive behavior.",
-      "When adding premium animation/design, use the Premium Design Engine permissions from the system prompt but keep the edit targeted."
+      "When adding premium animation/design, use the Premium Design Engine permissions from the system prompt but keep the edit targeted.",
+      "Before returning files, verify that every internal slash navigation link has a matching app/**/page.tsx file in the existing tree or in this response."
     )
   } else {
     promptParts.push(
@@ -198,7 +217,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       "Emit a complete Next.js App Router project with app/page.tsx, app/layout.tsx, app/globals.css, and any required components.",
       "The project must run immediately without missing variables or providers.",
       "Use every attached screenshot/file as visual reference.",
-      "When the request asks for premium animation/design, use the Premium Design Engine permissions from the system prompt."
+      "When the request asks for premium animation/design, use the Premium Design Engine permissions from the system prompt.",
+      "Before returning files, verify that every internal slash navigation link has a matching app/**/page.tsx file in this same response."
     )
   }
 
