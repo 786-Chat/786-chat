@@ -96,7 +96,7 @@ function ensureNavigator(routes: string[], activePath: string): HTMLSelectElemen
     urlContainer.insertAdjacentElement("beforebegin", wrapper)
   }
 
-  wrapper.style.display = routes.length > 0 ? "inline-flex" : "none"
+  wrapper.style.display = routes.length > 1 ? "inline-flex" : "none"
   wrapper.style.gap = "7px"
   wrapper.style.maxWidth = "220px"
   wrapper.style.paddingRight = "8px"
