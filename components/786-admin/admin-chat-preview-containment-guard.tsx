@@ -36,9 +36,13 @@ function containsAdminWorkspace(html: string): boolean {
     lowered.includes("ask 786.chat to build a real project") ||
     lowered.includes("admin-chat-browser-bar") ||
     lowered.includes("admin-chat-real-theme-menu") ||
-    lowered.includes("editing project") && lowered.includes("changes save") ||
-    lowered.includes("new chat") && lowered.includes("786.chat") && lowered.includes("preview") && lowered.includes("publish")
+    (lowered.includes("editing project") && lowered.includes("changes save")) ||
+    (lowered.includes("new chat") && lowered.includes("786.chat") && lowered.includes("preview") && lowered.includes("publish"))
   )
+}
+
+function isAdminPath(pathname: string): boolean {
+  return pathname === "/786-admin/chat" || pathname.startsWith("/786-admin/")
 }
 
 function iframeHasAdminSrc(iframe: HTMLIFrameElement): boolean {
@@ -46,9 +50,20 @@ function iframeHasAdminSrc(iframe: HTMLIFrameElement): boolean {
   if (!raw) return false
   try {
     const url = new URL(raw, window.location.origin)
-    return url.pathname === "/786-admin/chat" || url.pathname.startsWith("/786-admin/")
+    return isAdminPath(url.pathname)
   } catch {
     return raw.includes("/786-admin/")
+  }
+}
+
+function iframeHasAdminLoadedPath(iframe: HTMLIFrameElement): boolean {
+  try {
+    const href = iframe.contentWindow?.location?.href || ""
+    if (!href || href === "about:blank") return false
+    const url = new URL(href, window.location.origin)
+    return isAdminPath(url.pathname)
+  } catch {
+    return false
   }
 }
 
@@ -60,7 +75,7 @@ function resetIframe(iframe: HTMLIFrameElement): void {
 function inspectIframe(iframe: HTMLIFrameElement): void {
   if (!isPreviewIframe(iframe)) return
 
-  if (iframeHasAdminSrc(iframe)) {
+  if (iframeHasAdminSrc(iframe) || iframeHasAdminLoadedPath(iframe)) {
     resetIframe(iframe)
     return
   }
@@ -81,7 +96,14 @@ export function AdminChatPreviewContainmentGuard() {
       }
     }
 
+    const onLoad = (event: Event) => {
+      const target = event.target
+      if (target instanceof HTMLIFrameElement) inspectIframe(target)
+    }
+
     inspectAll()
+    document.addEventListener("load", onLoad, true)
+
     const observer = new MutationObserver(inspectAll)
     observer.observe(document.body, {
       childList: true,
@@ -90,10 +112,11 @@ export function AdminChatPreviewContainmentGuard() {
       attributeFilter: ["src", "srcdoc"],
     })
 
-    const timer = window.setInterval(inspectAll, 1000)
+    const timer = window.setInterval(inspectAll, 350)
 
     return () => {
       observer.disconnect()
+      document.removeEventListener("load", onLoad, true)
       window.clearInterval(timer)
     }
   }, [pathname])
