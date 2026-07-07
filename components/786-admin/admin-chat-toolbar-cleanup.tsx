@@ -22,6 +22,26 @@ export function AdminChatToolbarCleanup() {
       #admin-chat-project-pages {
         display: none !important;
       }
+
+      main > div > section:last-of-type > header {
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: none !important;
+        padding-right: max(16px, env(safe-area-inset-right)) !important;
+      }
+
+      main > div > section:last-of-type > header::-webkit-scrollbar {
+        display: none !important;
+      }
+
+      main > div > section:last-of-type > header > * {
+        flex-shrink: 0 !important;
+      }
+
+      main > div > section:last-of-type > header button {
+        white-space: nowrap !important;
+      }
     `
     document.head.appendChild(style)
 
