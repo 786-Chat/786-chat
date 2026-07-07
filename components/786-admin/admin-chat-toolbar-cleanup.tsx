@@ -8,6 +8,7 @@ import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-ch
 const STYLE_ID = "admin-chat-toolbar-cleanup-style"
 const PROJECT_STYLE_ID = "admin-projects-compact-style"
 const PROJECT_SEARCH_ID = "admin-projects-search"
+const LIVE_NAV_ID = "admin-live-projects-nav"
 const MENU_ID = "admin-chat-device-menu"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const DEVICE_KEY = "786chat_admin_device_dropdown_v1"
@@ -113,6 +114,16 @@ function resetPreviewStateBeforeOpen() {
   } catch {}
 }
 function installProjectSearch() {
+  if (!document.getElementById(LIVE_NAV_ID)) {
+    const nav = document.querySelector<HTMLElement>("aside nav")
+    const button = document.createElement("button")
+    button.id = LIVE_NAV_ID
+    button.type = "button"
+    button.innerHTML = `<span style="display:grid;width:20px;height:20px;place-items:center">📡</span><span>Live Projects</span>`
+    button.style.cssText = "display:flex;width:100%;align-items:center;gap:12px;border-radius:16px;border:1px solid rgba(16,185,129,.25);background:rgba(16,185,129,.10);padding:12px 16px;text-align:left;color:#d1fae5;font:800 14px system-ui;cursor:pointer;box-shadow:0 0 24px rgba(16,185,129,.10);"
+    button.onclick = () => { window.location.href = "/786-admin/live" }
+    nav?.appendChild(button)
+  }
   if (document.getElementById(PROJECT_SEARCH_ID)) return
   const intro = document.querySelector<HTMLElement>("main section > div.mb-8")
   if (!intro) return
@@ -123,26 +134,14 @@ function installProjectSearch() {
   const input = wrap.querySelector("input")
   input?.addEventListener("input", () => {
     const q = input.value.trim().toLowerCase()
-    document.querySelectorAll<HTMLElement>("article").forEach((card) => {
-      card.style.display = card.textContent?.toLowerCase().includes(q) ? "" : "none"
-    })
+    document.querySelectorAll<HTMLElement>("article").forEach((card) => { card.style.display = card.textContent?.toLowerCase().includes(q) ? "" : "none" })
   })
 }
 function installProjectsCompactStyle() {
   document.getElementById(PROJECT_STYLE_ID)?.remove()
   const style = document.createElement("style")
   style.id = PROJECT_STYLE_ID
-  style.textContent = `
-    main section > div.grid.gap-5 { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important; gap: 18px !important; }
-    main section > article, main section article { border-radius: 24px !important; padding: 18px !important; }
-    main section article h2 { font-size: 20px !important; line-height: 1.2 !important; margin-top: 12px !important; }
-    main section article p { font-size: 13px !important; line-height: 1.55 !important; }
-    main section article .mb-5 { margin-bottom: 14px !important; }
-    main section article button { padding: 9px 14px !important; border-radius: 14px !important; font-size: 13px !important; }
-    main section article [class*="h-14"][class*="w-14"] { width: 46px !important; height: 46px !important; border-radius: 16px !important; }
-    main section article [class*="h-7"][class*="w-7"] { width: 22px !important; height: 22px !important; }
-    #${PROJECT_SEARCH_ID} { margin: -10px 0 24px; }
-  `
+  style.textContent = `main section > div.grid.gap-5{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))!important;gap:18px!important}main section>article,main section article{border-radius:24px!important;padding:18px!important}main section article h2{font-size:20px!important;line-height:1.2!important;margin-top:12px!important}main section article p{font-size:13px!important;line-height:1.55!important}main section article .mb-5{margin-bottom:14px!important}main section article button{padding:9px 14px!important;border-radius:14px!important;font-size:13px!important}main section article [class*="h-14"][class*="w-14"]{width:46px!important;height:46px!important;border-radius:16px!important}main section article [class*="h-7"][class*="w-7"]{width:22px!important;height:22px!important}#${PROJECT_SEARCH_ID}{margin:-10px 0 24px}`
   document.head.appendChild(style)
 }
 
@@ -168,26 +167,20 @@ export function AdminChatToolbarCleanup() {
         }))
         if (!cancelled) setTimeout(() => { installProjectSearch(); installProjectCardPreviews(detailed) }, 200)
       }).catch(() => undefined)
-      return () => { cancelled = true; document.removeEventListener("click", openCapture, true); document.getElementById(PROJECT_STYLE_ID)?.remove(); document.getElementById(PROJECT_SEARCH_ID)?.remove() }
+      return () => { cancelled = true; document.removeEventListener("click", openCapture, true); document.getElementById(PROJECT_STYLE_ID)?.remove(); document.getElementById(PROJECT_SEARCH_ID)?.remove(); document.getElementById(LIVE_NAV_ID)?.remove() }
     }
     if (pathname !== "/786-admin/chat") return
     document.getElementById(STYLE_ID)?.remove()
     const style = document.createElement("style")
     style.id = STYLE_ID
-    style.textContent = `
-      #admin-chat-browser-bar,#admin-chat-project-pages,main > div > section:last-of-type > header > div[class*="rounded-full"][class*="p-1"],main > div > section:last-of-type > header button[title="Desktop preview"],main > div > section:last-of-type > header button[title="Tablet preview"],main > div > section:last-of-type > header button[title="iPad preview"],main > div > section:last-of-type > header button[title="Mobile preview"]{display:none!important}
-      main > div > section:last-of-type > header{position:relative!important;overflow:hidden!important;border-color:rgba(168,85,247,.28)!important;background:radial-gradient(circle at 12% 15%,rgba(147,51,234,.36),transparent 34%),radial-gradient(circle at 72% 8%,rgba(14,165,233,.16),transparent 32%),linear-gradient(180deg,rgba(17,8,40,.98),rgba(8,7,24,.96))!important;box-shadow:inset 0 -1px 0 rgba(168,85,247,.22),0 0 55px rgba(88,28,135,.18)!important}
-      main > div > section:last-of-type > header::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;background-image:radial-gradient(#f5d0fe 1px,transparent 1px),radial-gradient(rgba(103,232,249,.7) 1px,transparent 1px);background-size:72px 72px,118px 118px;background-position:8px 12px,42px 38px;animation:adminHeaderStars 18s linear infinite}main > div > section:last-of-type > header>*{position:relative;z-index:1}@keyframes adminHeaderStars{from{background-position:8px 12px,42px 38px}to{background-position:80px 84px,160px 156px}}
-    `
+    style.textContent = `#admin-chat-browser-bar,#admin-chat-project-pages,main > div > section:last-of-type > header > div[class*="rounded-full"][class*="p-1"],main > div > section:last-of-type > header button[title="Desktop preview"],main > div > section:last-of-type > header button[title="Tablet preview"],main > div > section:last-of-type > header button[title="iPad preview"],main > div > section:last-of-type > header button[title="Mobile preview"]{display:none!important}main > div > section:last-of-type > header{position:relative!important;overflow:hidden!important;border-color:rgba(168,85,247,.28)!important;background:radial-gradient(circle at 12% 15%,rgba(147,51,234,.36),transparent 34%),radial-gradient(circle at 72% 8%,rgba(14,165,233,.16),transparent 32%),linear-gradient(180deg,rgba(17,8,40,.98),rgba(8,7,24,.96))!important;box-shadow:inset 0 -1px 0 rgba(168,85,247,.22),0 0 55px rgba(88,28,135,.18)!important}main > div > section:last-of-type > header::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;background-image:radial-gradient(#f5d0fe 1px,transparent 1px),radial-gradient(rgba(103,232,249,.7) 1px,transparent 1px);background-size:72px 72px,118px 118px;background-position:8px 12px,42px 38px;animation:adminHeaderStars 18s linear infinite}main > div > section:last-of-type > header>*{position:relative;z-index:1}@keyframes adminHeaderStars{from{background-position:8px 12px,42px 38px}to{background-position:80px 84px,160px 156px}}`
     document.head.appendChild(style)
     const timer = window.setInterval(() => {
       const preview = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
       if (!preview || preview.dataset.deviceDropdown === "true") return
       preview.dataset.deviceDropdown = "true"; preview.setAttribute("aria-haspopup", "menu"); preview.append(" ▾"); preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
     }, 400)
-    const recoverTimer = window.setTimeout(() => {
-      try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {}
-    }, 1800)
+    const recoverTimer = window.setTimeout(() => { try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {} }, 1800)
     return () => { window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
   }, [pathname])
   return <><AdminChatPublishController /><AdminChatPublishingOverviewLink /></>
