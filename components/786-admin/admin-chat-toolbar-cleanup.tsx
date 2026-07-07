@@ -23,74 +23,90 @@ export function AdminChatToolbarCleanup() {
         display: none !important;
       }
 
-      html[data-real-admin-theme] main > div > section:last-of-type > header,
-      main > div > section:last-of-type > header {
+      main,
+      main > div,
+      main > div > section:last-of-type {
+        max-width: 100vw !important;
         min-width: 0 !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        scrollbar-width: none !important;
-        padding-left: 14px !important;
-        padding-right: max(32px, env(safe-area-inset-right)) !important;
+        overflow: hidden !important;
       }
 
-      html[data-real-admin-theme] main > div > section:last-of-type > header::-webkit-scrollbar,
-      main > div > section:last-of-type > header::-webkit-scrollbar {
-        display: none !important;
+      main > div > section:last-of-type > header {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 7px !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
       }
 
-      html[data-real-admin-theme] main > div > section:last-of-type > header > *,
-      main > div > section:last-of-type > header > * {
-        flex-shrink: 0 !important;
-      }
-
-      html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
-      main > div > section:last-of-type > header > div:first-child {
-        flex: 1 1 220px !important;
-        min-width: 150px !important;
-        max-width: min(360px, 30vw) !important;
-      }
-
-      html[data-real-admin-theme] main > div > section:last-of-type > header button,
-      main > div > section:last-of-type > header button {
+      main > div > section:last-of-type > header::before {
+        flex: 0 0 auto !important;
+        font-size: 16px !important;
+        margin-right: 2px !important;
         white-space: nowrap !important;
       }
 
-      @media (max-width: 1280px) {
-        html[data-real-admin-theme] main > div > section:last-of-type > header,
+      main > div > section:last-of-type > header > * {
+        min-width: 0 !important;
+        flex-shrink: 1 !important;
+      }
+
+      main > div > section:last-of-type > header > div:first-child {
+        flex: 1 1 150px !important;
+        min-width: 110px !important;
+        max-width: 170px !important;
+        overflow: hidden !important;
+      }
+
+      main > div > section:last-of-type > header > div:first-child * {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+      }
+
+      main > div > section:last-of-type > header button {
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        height: 40px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+        white-space: nowrap !important;
+        font-size: 13px !important;
+      }
+
+      @media (max-width: 1500px) {
         main > div > section:last-of-type > header {
-          gap: 8px !important;
-          padding-left: 12px !important;
-          padding-right: 38px !important;
+          gap: 5px !important;
+          padding-left: 8px !important;
+          padding-right: 8px !important;
         }
 
-        html[data-real-admin-theme] main > div > section:last-of-type > header::before,
-        main > div > section:last-of-type > header::before {
-          font-size: 16px !important;
-          margin-right: 2px !important;
-        }
-
-        html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
         main > div > section:last-of-type > header > div:first-child {
-          max-width: 230px !important;
+          max-width: 135px !important;
         }
 
-        html[data-real-admin-theme] main > div > section:last-of-type > header button,
         main > div > section:last-of-type > header button {
-          padding-left: 11px !important;
-          padding-right: 11px !important;
+          height: 38px !important;
+          padding-left: 8px !important;
+          padding-right: 8px !important;
+          font-size: 12px !important;
         }
       }
 
-      @media (max-width: 1100px) {
-        html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
+      @media (max-width: 1220px) {
         main > div > section:last-of-type > header > div:first-child {
-          max-width: 180px !important;
+          display: none !important;
         }
 
-        html[data-real-admin-theme] main > div > section:last-of-type > header button,
         main > div > section:last-of-type > header button {
-          padding-left: 9px !important;
-          padding-right: 9px !important;
+          padding-left: 7px !important;
+          padding-right: 7px !important;
         }
       }
     `
