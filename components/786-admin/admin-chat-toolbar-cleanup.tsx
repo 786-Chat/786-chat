@@ -10,6 +10,7 @@ const PROJECT_STYLE_ID = "admin-projects-compact-style"
 const PROJECT_SEARCH_ID = "admin-projects-search"
 const LIVE_NAV_ID = "admin-live-projects-nav"
 const MENU_ID = "admin-chat-device-menu"
+const DEVICE_LABEL_ID = "admin-chat-device-label"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const DEVICE_KEY = "786chat_admin_device_dropdown_v1"
 
@@ -37,6 +38,28 @@ const DEVICES: DevicePreset[] = [
   { label: "Custom Width", width: 480, height: 860, base: "Mobile", radius: "38px", border: "10px solid #111827" },
 ]
 
+function selectedDeviceLabel() {
+  try {
+    const stored = localStorage.getItem(DEVICE_KEY)
+    return DEVICES.some((device) => device.label === stored) ? stored! : "Full Preview"
+  } catch {
+    return "Full Preview"
+  }
+}
+
+function updatePreviewButtonLabel(anchor: HTMLButtonElement, label = selectedDeviceLabel()) {
+  let badge = anchor.querySelector<HTMLSpanElement>(`#${DEVICE_LABEL_ID}`)
+  if (!badge) {
+    badge = document.createElement("span")
+    badge.id = DEVICE_LABEL_ID
+    badge.style.cssText = "display:inline-flex;align-items:center;max-width:126px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a5f3fc;font:800 12px system-ui;"
+    anchor.appendChild(badge)
+  }
+  badge.textContent = label === "Full Preview" ? "" : `· ${label}`
+  anchor.setAttribute("aria-label", `Preview device: ${label}`)
+  anchor.title = `Preview device: ${label}`
+}
+
 function selectNativeDevice(base: DevicePreset["base"]) { document.querySelector<HTMLButtonElement>(`button[title="${base} preview"]`)?.click() }
 
 function clearDeviceFrameInlineStyles() {
@@ -58,11 +81,12 @@ function clearDeviceFrameInlineStyles() {
   }
 }
 
-function resizePreview(device: DevicePreset) {
+function resizePreview(device: DevicePreset, anchor?: HTMLButtonElement) {
   try { localStorage.setItem(DEVICE_KEY, device.label) } catch {}
+  if (anchor) updatePreviewButtonLabel(anchor, device.label)
   selectNativeDevice(device.base)
   setTimeout(() => {
-    const iframe = document.querySelector<HTMLIFrameElement>('section:last-of-type iframe')
+    const iframe = document.querySelector<HTMLIFrameElement>("section:last-of-type iframe")
     const frame = iframe?.parentElement
     if (!iframe || !frame) return
     frame.style.width = device.width ? `${device.width}px` : "100%"
@@ -72,24 +96,37 @@ function resizePreview(device: DevicePreset) {
     frame.style.border = device.border
     frame.style.borderRadius = device.radius
     frame.style.overflow = "hidden"
-    frame.style.background = "#fff"
+    frame.style.background = "#020617"
     frame.style.boxShadow = device.width ? "0 28px 90px rgba(0,0,0,.58)" : "none"
     iframe.style.borderRadius = device.width ? `calc(${device.radius} - 10px)` : "0"
   }, 120)
 }
+
 function closeMenu() { document.getElementById(MENU_ID)?.remove() }
+
 function openMenu(anchor: HTMLButtonElement) {
-  closeMenu()
+  const existing = document.getElementById(MENU_ID)
+  if (existing) { existing.remove(); return }
   const rect = anchor.getBoundingClientRect()
   const menu = document.createElement("div")
+  const selected = selectedDeviceLabel()
   menu.id = MENU_ID
-  menu.style.cssText = `position:fixed;top:${rect.bottom + 10}px;right:${Math.max(18, window.innerWidth - rect.right)}px;z-index:2147483647;width:260px;max-height:min(520px,calc(100vh - 120px));overflow:auto;padding:10px;border-radius:22px;border:1px solid rgba(139,92,246,.40);background:rgba(2,6,23,.98);box-shadow:0 28px 90px rgba(0,0,0,.72);backdrop-filter:blur(20px);`
+  menu.setAttribute("role", "menu")
+  menu.setAttribute("aria-label", "Preview device selector")
+  const availableBelow = window.innerHeight - rect.bottom - 18
+  const maxHeight = Math.max(220, Math.min(520, availableBelow))
+  menu.style.cssText = `position:fixed;top:${rect.bottom + 10}px;right:${Math.max(18, window.innerWidth - rect.right)}px;z-index:2147483647;width:260px;max-height:${maxHeight}px;overflow:auto;padding:10px;border-radius:22px;border:1px solid rgba(139,92,246,.40);background:#020617;color:white;box-shadow:0 28px 90px rgba(0,0,0,.72);backdrop-filter:blur(20px);scrollbar-color:#475569 #020617;`
   DEVICES.forEach((device) => {
     const option = document.createElement("button")
+    const active = device.label === selected
     option.type = "button"
-    option.textContent = device.label
-    option.style.cssText = "display:block;width:100%;margin:0 0 6px;padding:11px 12px;border-radius:15px;border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.90);color:white;cursor:pointer;font:800 13px system-ui;text-align:left;"
-    option.onclick = () => { resizePreview(device); closeMenu() }
+    option.setAttribute("role", "menuitemradio")
+    option.setAttribute("aria-checked", String(active))
+    option.innerHTML = `<span>${device.label}</span>${active ? '<span aria-hidden="true" style="color:#67e8f9;font-size:16px">✓</span>' : ""}`
+    option.style.cssText = `display:flex;align-items:center;justify-content:space-between;width:100%;margin:0 0 6px;padding:11px 12px;border-radius:15px;border:1px solid ${active ? "rgba(34,211,238,.58)" : "rgba(148,163,184,.18)"};background:${active ? "linear-gradient(135deg,rgba(8,145,178,.32),rgba(109,40,217,.30))" : "rgba(15,23,42,.90)"};color:white;cursor:pointer;font:800 13px system-ui;text-align:left;box-shadow:${active ? "0 0 24px rgba(34,211,238,.12)" : "none"};`
+    option.onmouseenter = () => { if (!active) option.style.background = "rgba(30,41,59,.98)" }
+    option.onmouseleave = () => { if (!active) option.style.background = "rgba(15,23,42,.90)" }
+    option.onclick = () => { resizePreview(device, anchor); closeMenu() }
     menu.appendChild(option)
   })
   document.body.appendChild(menu)
@@ -108,6 +145,7 @@ function projectCardSrcDoc(project: ProjectWithData): string {
   const body = hasLogin ? `<main class="login"><section><h1>${title}</h1><input placeholder="Email"/><input placeholder="Password" type="password"/><button>Sign In</button><a>Forgot password?</a></section></main>` : `<main class="hero"><section><p>786.Chat Preview</p><h1>${title}</h1><span>${description}</span><button>Open Project</button></section></main>`
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css} html,body{margin:0;min-height:100%;font-family:Inter,system-ui,sans-serif;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#0f172a}.login,.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px}.login section{width:min(560px,88vw);border-radius:24px;background:white;padding:42px;box-shadow:0 28px 80px rgba(15,23,42,.28);text-align:center}.login h1,.hero h1{font-size:42px;line-height:1.05;margin:0 0 26px;font-weight:900}.login input{display:block;width:100%;box-sizing:border-box;margin:14px 0;padding:18px 20px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px}.login button,.hero button{border:0;border-radius:10px;background:#2563eb;color:white;padding:16px 24px;font-weight:900;font-size:16px;width:100%;margin-top:10px}.login a{display:block;color:#2563eb;margin-top:22px}.hero section{max-width:760px;color:white}.hero p{font-weight:900;letter-spacing:.16em;text-transform:uppercase;opacity:.8}.hero h1{font-size:58px}.hero span{display:block;font-size:20px;line-height:1.6;opacity:.9;margin-bottom:26px}.hero button{width:auto;background:white;color:#111827}</style></head><body>${body}</body></html>`
 }
+
 function installProjectCardPreviews(projects: ProjectWithData[]) {
   const cards = Array.from(document.querySelectorAll<HTMLElement>("article"))
   cards.forEach((card, index) => {
@@ -123,16 +161,18 @@ function installProjectCardPreviews(projects: ProjectWithData[]) {
     iframe.title = `${project.title} card preview`
     iframe.srcdoc = projectCardSrcDoc(project)
     iframe.sandbox.add("allow-scripts", "allow-forms")
-    iframe.style.cssText = "width:100%;height:100%;border:0;background:white;transform:scale(.45);transform-origin:top left;width:222%;height:222%;pointer-events:none;"
+    iframe.style.cssText = "width:100%;height:100%;border:0;background:#020617;transform:scale(.45);transform-origin:top left;width:222%;height:222%;pointer-events:none;"
     previewBox.appendChild(iframe)
   })
 }
+
 function resetPreviewStateBeforeOpen() {
   try {
     localStorage.removeItem(DEVICE_KEY)
     Object.keys(localStorage).forEach((key) => { if (key.startsWith("786chat_admin_preview_location_v2_")) localStorage.removeItem(key) })
   } catch {}
 }
+
 function installProjectSearch() {
   if (!document.getElementById(LIVE_NAV_ID)) {
     const nav = document.querySelector<HTMLElement>("aside nav")
@@ -157,6 +197,7 @@ function installProjectSearch() {
     document.querySelectorAll<HTMLElement>("article").forEach((card) => { card.style.display = card.textContent?.toLowerCase().includes(q) ? "" : "none" })
   })
 }
+
 function installProjectsCompactStyle() {
   document.getElementById(PROJECT_STYLE_ID)?.remove()
   const style = document.createElement("style")
@@ -197,13 +238,18 @@ export function AdminChatToolbarCleanup() {
       #admin-chat-browser-bar,#admin-chat-project-pages,main > div > section:last-of-type > header > div[class*="rounded-full"][class*="p-1"],main > div > section:last-of-type > header button[title="Desktop preview"],main > div > section:last-of-type > header button[title="Tablet preview"],main > div > section:last-of-type > header button[title="iPad preview"],main > div > section:last-of-type > header button[title="Mobile preview"]{display:none!important}
       main > div > section:last-of-type > header{position:relative!important;overflow:hidden!important;border-color:rgba(168,85,247,.28)!important;background:radial-gradient(circle at 12% 15%,rgba(147,51,234,.36),transparent 34%),radial-gradient(circle at 72% 8%,rgba(14,165,233,.16),transparent 32%),linear-gradient(180deg,rgba(17,8,40,.98),rgba(8,7,24,.96))!important;box-shadow:inset 0 -1px 0 rgba(168,85,247,.22),0 0 55px rgba(88,28,135,.18)!important}
       main > div > section:last-of-type > header::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;background-image:radial-gradient(#f5d0fe 1px,transparent 1px),radial-gradient(rgba(103,232,249,.7) 1px,transparent 1px);background-size:72px 72px,118px 118px;background-position:8px 12px,42px 38px;animation:adminHeaderStars 18s linear infinite}main > div > section:last-of-type > header>*{position:relative;z-index:1}@keyframes adminHeaderStars{from{background-position:8px 12px,42px 38px}to{background-position:80px 84px,160px 156px}}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"],main > div > section:last-of-type:not(:has(iframe)) aside,main > div > section:last-of-type:not(:has(iframe)) nav,main > div > section:last-of-type:not(:has(iframe)) div:has(> button){background:#07101f!important;color:#dbeafe!important;border-color:rgba(34,211,238,.22)!important;box-shadow:none!important}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button,main > div > section:last-of-type:not(:has(iframe)) aside button,main > div > section:last-of-type:not(:has(iframe)) div:has(> button) button{color:#dbeafe!important;background:rgba(15,23,42,.72)!important;border-color:rgba(51,65,85,.7)!important}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button[class*="bg-cyan"],main > div > section:last-of-type:not(:has(iframe)) aside button[class*="bg-cyan"],main > div > section:last-of-type:not(:has(iframe)) div:has(> button) button[class*="bg-cyan"]{background:linear-gradient(135deg,#22d3ee,#7c3aed)!important;color:#06101c!important}
+      main > div > section:last-of-type{background:#020617!important;color:#dbeafe!important}
+      main > div > section:last-of-type > div:not(:has(iframe)),main > div > section:last-of-type > div:not(:has(iframe)) > div,main > div > section:last-of-type aside,main > div > section:last-of-type nav{background:#07101f!important;color:#dbeafe!important;border-color:rgba(34,211,238,.22)!important;box-shadow:none!important}
+      main > div > section:last-of-type > div:not(:has(iframe)) button,main > div > section:last-of-type aside button,main > div > section:last-of-type nav button{color:#dbeafe!important;background:rgba(15,23,42,.82)!important;border-color:rgba(51,65,85,.72)!important}
+      main > div > section:last-of-type > div:not(:has(iframe)) button[class*="bg-cyan"],main > div > section:last-of-type aside button[class*="bg-cyan"],main > div > section:last-of-type nav button[class*="bg-cyan"]{background:linear-gradient(135deg,#22d3ee,#7c3aed)!important;color:#06101c!important}
+      main > div > section:last-of-type pre,main > div > section:last-of-type code{background:#0b1220!important;color:#e2e8f0!important}
+      #${MENU_ID}::-webkit-scrollbar{width:8px}#${MENU_ID}::-webkit-scrollbar-track{background:#020617}#${MENU_ID}::-webkit-scrollbar-thumb{background:#334155;border-radius:999px}
     `
     document.head.appendChild(style)
     const onModeClick = (event: MouseEvent) => {
-      const button = (event.target as HTMLElement | null)?.closest("button")
+      const target = event.target as HTMLElement | null
+      if (!target?.closest(`#${MENU_ID}`) && !target?.closest('button[data-device-dropdown="true"]')) closeMenu()
+      const button = target?.closest("button")
       const label = button?.textContent?.trim().toLowerCase() || ""
       if (label === "code" || label.includes("code")) {
         clearDeviceFrameInlineStyles()
@@ -211,14 +257,26 @@ export function AdminChatToolbarCleanup() {
         window.setTimeout(clearDeviceFrameInlineStyles, 240)
       }
     }
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeMenu() }
     document.addEventListener("click", onModeClick, true)
+    document.addEventListener("keydown", onKeyDown)
     const timer = window.setInterval(() => {
       const preview = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
-      if (!preview || preview.dataset.deviceDropdown === "true") return
-      preview.dataset.deviceDropdown = "true"; preview.setAttribute("aria-haspopup", "menu"); preview.append(" ▾"); preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
+      if (!preview) return
+      updatePreviewButtonLabel(preview)
+      if (preview.dataset.deviceDropdown === "true") return
+      preview.dataset.deviceDropdown = "true"
+      preview.setAttribute("aria-haspopup", "menu")
+      preview.setAttribute("aria-expanded", "false")
+      preview.append(" ▾")
+      preview.addEventListener("click", () => {
+        const willOpen = !document.getElementById(MENU_ID)
+        preview.setAttribute("aria-expanded", String(willOpen))
+        setTimeout(() => openMenu(preview), 0)
+      })
     }, 400)
     const recoverTimer = window.setTimeout(() => { try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {} }, 1800)
-    return () => { document.removeEventListener("click", onModeClick, true); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
+    return () => { document.removeEventListener("click", onModeClick, true); document.removeEventListener("keydown", onKeyDown); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
   }, [pathname])
   return <><AdminChatPublishController /><AdminChatPublishingOverviewLink /></>
 }
