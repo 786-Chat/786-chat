@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 
-const BLOCKED_PREVIEW_HTML = `<!doctype html>
+const fallbackPreviewHtml = `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -18,11 +18,13 @@ const BLOCKED_PREVIEW_HTML = `<!doctype html>
 </head>
 <body>
   <main class="card">
-    <h1>Preview reset</h1>
-    <p>The admin workspace was blocked from loading inside the project preview. Reopen the project or click Refresh Preview to reload the generated customer project.</p>
+    <h1>Preview protected</h1>
+    <p>The generated project tried to open a real 786.Chat route inside Preview. The route was blocked so the admin workspace cannot duplicate inside the iframe.</p>
   </main>
 </body>
 </html>`
+
+const lastSafePreviewByIframe = new WeakMap<HTMLIFrameElement, string>()
 
 function isPreviewIframe(iframe: HTMLIFrameElement): boolean {
   return /preview/i.test(iframe.getAttribute("title") || "")
@@ -45,6 +47,12 @@ function isAdminPath(pathname: string): boolean {
   return pathname === "/786-admin/chat" || pathname.startsWith("/786-admin/")
 }
 
+function rememberSafePreview(iframe: HTMLIFrameElement): void {
+  const srcdoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
+  if (!srcdoc || containsAdminWorkspace(srcdoc)) return
+  lastSafePreviewByIframe.set(iframe, srcdoc)
+}
+
 function iframeHasAdminSrc(iframe: HTMLIFrameElement): boolean {
   const raw = iframe.getAttribute("src") || ""
   if (!raw) return false
@@ -56,10 +64,22 @@ function iframeHasAdminSrc(iframe: HTMLIFrameElement): boolean {
   }
 }
 
+function iframeHasRealAppNavigation(iframe: HTMLIFrameElement): boolean {
+  try {
+    const href = iframe.contentWindow?.location?.href || ""
+    if (!href || href === "about:blank" || href === "about:srcdoc") return false
+    const url = new URL(href)
+    if (url.origin !== window.location.origin) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
 function iframeHasAdminLoadedPath(iframe: HTMLIFrameElement): boolean {
   try {
     const href = iframe.contentWindow?.location?.href || ""
-    if (!href || href === "about:blank") return false
+    if (!href || href === "about:blank" || href === "about:srcdoc") return false
     const url = new URL(href, window.location.origin)
     return isAdminPath(url.pathname)
   } catch {
@@ -68,19 +88,22 @@ function iframeHasAdminLoadedPath(iframe: HTMLIFrameElement): boolean {
 }
 
 function resetIframe(iframe: HTMLIFrameElement): void {
+  const lastSafe = lastSafePreviewByIframe.get(iframe)
   iframe.removeAttribute("src")
-  iframe.srcdoc = BLOCKED_PREVIEW_HTML
+  iframe.srcdoc = lastSafe || fallbackPreviewHtml
 }
 
 function inspectIframe(iframe: HTMLIFrameElement): void {
   if (!isPreviewIframe(iframe)) return
 
-  if (iframeHasAdminSrc(iframe) || iframeHasAdminLoadedPath(iframe)) {
+  const srcdoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
+  if (srcdoc && !containsAdminWorkspace(srcdoc)) rememberSafePreview(iframe)
+
+  if (iframeHasAdminSrc(iframe) || iframeHasAdminLoadedPath(iframe) || iframeHasRealAppNavigation(iframe)) {
     resetIframe(iframe)
     return
   }
 
-  const srcdoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
   if (containsAdminWorkspace(srcdoc)) resetIframe(iframe)
 }
 
@@ -112,7 +135,7 @@ export function AdminChatPreviewContainmentGuard() {
       attributeFilter: ["src", "srcdoc"],
     })
 
-    const timer = window.setInterval(inspectAll, 350)
+    const timer = window.setInterval(inspectAll, 250)
 
     return () => {
       observer.disconnect()
