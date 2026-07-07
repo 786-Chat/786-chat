@@ -30,15 +30,25 @@ function installHeaderStyle() {
   const style = document.createElement("style")
   style.id = HEADER_STYLE_ID
   style.textContent = `
-    main > div > section:last-of-type > header > div:first-child {
+    main > div > section:last-of-type > header > div:first-child,
+    main > div > section:last-of-type > header > div:first-child + span,
+    main > div > section:last-of-type > header > span:first-child,
+    main > div > section:last-of-type > header > [class*="truncate"]:first-child {
       display: none !important;
     }
     main > div > section:last-of-type > header {
       justify-content: flex-end !important;
-      gap: 14px !important;
+      gap: 12px !important;
+      padding-left: 18px !important;
+      padding-right: 20px !important;
     }
     #${LOGOUT_BUTTON_ID} {
-      shrink: 0;
+      width: 46px !important;
+      min-width: 46px !important;
+      padding: 0 !important;
+    }
+    #${LOGOUT_BUTTON_ID} .admin-chat-logout-label {
+      display: none !important;
     }
   `
   document.head.appendChild(style)
@@ -65,8 +75,18 @@ function installLogoutButton() {
   button.type = "button"
   button.title = "Logout"
   button.setAttribute("aria-label", "Logout from 786.Chat admin")
-  button.innerHTML = `<span style="font-size:16px;line-height:1">⎋</span><span>Logout</span>`
-  button.style.cssText = "height:44px;border-radius:9999px;border:1px solid rgba(248,113,113,.38);background:rgba(127,29,29,.30);color:#fecaca;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;font:900 14px system-ui;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.10),0 0 24px rgba(248,113,113,.10);white-space:nowrap;"
+  button.innerHTML = `<span style="font-size:18px;line-height:1;transform:translateY(-1px)">⏻</span><span class="admin-chat-logout-label">Logout</span>`
+  button.style.cssText = "height:44px;border-radius:9999px;border:1px solid rgba(255,255,255,.14);background:rgba(15,23,42,.72);color:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;gap:8px;font:900 14px system-ui;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 24px rgba(139,92,246,.10);white-space:nowrap;"
+  button.onmouseenter = () => {
+    button.style.borderColor = "rgba(248,113,113,.42)"
+    button.style.color = "#fecaca"
+    button.style.background = "rgba(127,29,29,.22)"
+  }
+  button.onmouseleave = () => {
+    button.style.borderColor = "rgba(255,255,255,.14)"
+    button.style.color = "#e5e7eb"
+    button.style.background = "rgba(15,23,42,.72)"
+  }
   button.onclick = (event) => {
     event.preventDefault()
     event.stopPropagation()
