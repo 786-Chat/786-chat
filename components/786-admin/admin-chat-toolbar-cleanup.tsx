@@ -7,66 +7,6 @@ import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-ch
 
 const STYLE_ID = "admin-chat-toolbar-cleanup-style"
 
-function getPreviewIframe(): HTMLIFrameElement | null {
-  const iframes = Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"))
-  return iframes.find((iframe) => /preview/i.test(iframe.title || "")) || iframes[0] || null
-}
-
-function installPreviewEscapeGuard() {
-  let guardedIframe: HTMLIFrameElement | null = null
-  let originalSrcDoc = ""
-  let resetting = false
-
-  const remember = (iframe: HTMLIFrameElement) => {
-    const srcDoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
-    if (srcDoc && srcDoc !== originalSrcDoc) originalSrcDoc = srcDoc
-  }
-
-  const resetIfEscaped = () => {
-    const iframe = getPreviewIframe()
-    if (!iframe) return
-    remember(iframe)
-    if (!originalSrcDoc || resetting) return
-
-    let href = ""
-    try { href = iframe.contentWindow?.location?.href || "" } catch {}
-
-    const src = iframe.getAttribute("src") || ""
-    const escapedToRealSite = /^https?:\/\/(?:www\.)?786\.chat\//i.test(href) || /^https?:\/\/(?:www\.)?786\.chat\//i.test(src)
-    const escapedToAdmin = /\/786-admin(?:\/|$)/i.test(href) || /\/786-admin(?:\/|$)/i.test(src)
-
-    if (!escapedToRealSite && !escapedToAdmin) return
-
-    resetting = true
-    iframe.removeAttribute("src")
-    iframe.srcdoc = originalSrcDoc
-    window.setTimeout(() => { resetting = false }, 150)
-  }
-
-  const bind = () => {
-    const iframe = getPreviewIframe()
-    if (!iframe || iframe === guardedIframe) return
-    if (guardedIframe) guardedIframe.removeEventListener("load", resetIfEscaped)
-    guardedIframe = iframe
-    remember(iframe)
-    iframe.addEventListener("load", resetIfEscaped)
-  }
-
-  bind()
-  const observer = new MutationObserver(() => {
-    bind()
-    window.setTimeout(resetIfEscaped, 0)
-  })
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "srcdoc"] })
-  const interval = window.setInterval(resetIfEscaped, 800)
-
-  return () => {
-    observer.disconnect()
-    window.clearInterval(interval)
-    if (guardedIframe) guardedIframe.removeEventListener("load", resetIfEscaped)
-  }
-}
-
 export function AdminChatToolbarCleanup() {
   const pathname = usePathname()
 
@@ -83,33 +23,80 @@ export function AdminChatToolbarCleanup() {
         display: none !important;
       }
 
+      html[data-real-admin-theme] main > div > section:last-of-type > header,
       main > div > section:last-of-type > header {
         min-width: 0 !important;
         overflow-x: auto !important;
         overflow-y: hidden !important;
         scrollbar-width: none !important;
-        padding-right: max(16px, env(safe-area-inset-right)) !important;
+        padding-left: 14px !important;
+        padding-right: max(32px, env(safe-area-inset-right)) !important;
       }
 
+      html[data-real-admin-theme] main > div > section:last-of-type > header::-webkit-scrollbar,
       main > div > section:last-of-type > header::-webkit-scrollbar {
         display: none !important;
       }
 
+      html[data-real-admin-theme] main > div > section:last-of-type > header > *,
       main > div > section:last-of-type > header > * {
         flex-shrink: 0 !important;
       }
 
+      html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
+      main > div > section:last-of-type > header > div:first-child {
+        flex: 1 1 220px !important;
+        min-width: 150px !important;
+        max-width: min(360px, 30vw) !important;
+      }
+
+      html[data-real-admin-theme] main > div > section:last-of-type > header button,
       main > div > section:last-of-type > header button {
         white-space: nowrap !important;
       }
+
+      @media (max-width: 1280px) {
+        html[data-real-admin-theme] main > div > section:last-of-type > header,
+        main > div > section:last-of-type > header {
+          gap: 8px !important;
+          padding-left: 12px !important;
+          padding-right: 38px !important;
+        }
+
+        html[data-real-admin-theme] main > div > section:last-of-type > header::before,
+        main > div > section:last-of-type > header::before {
+          font-size: 16px !important;
+          margin-right: 2px !important;
+        }
+
+        html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
+        main > div > section:last-of-type > header > div:first-child {
+          max-width: 230px !important;
+        }
+
+        html[data-real-admin-theme] main > div > section:last-of-type > header button,
+        main > div > section:last-of-type > header button {
+          padding-left: 11px !important;
+          padding-right: 11px !important;
+        }
+      }
+
+      @media (max-width: 1100px) {
+        html[data-real-admin-theme] main > div > section:last-of-type > header > div:first-child,
+        main > div > section:last-of-type > header > div:first-child {
+          max-width: 180px !important;
+        }
+
+        html[data-real-admin-theme] main > div > section:last-of-type > header button,
+        main > div > section:last-of-type > header button {
+          padding-left: 9px !important;
+          padding-right: 9px !important;
+        }
+      }
     `
     document.head.appendChild(style)
-    const cleanupPreviewGuard = installPreviewEscapeGuard()
 
-    return () => {
-      cleanupPreviewGuard()
-      style.remove()
-    }
+    return () => style.remove()
   }, [pathname])
 
   return (
