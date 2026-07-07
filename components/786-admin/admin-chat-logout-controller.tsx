@@ -25,14 +25,13 @@ async function logoutAdmin() {
 }
 
 function installHeaderStyle() {
-  document.getElementById(HEADER_STYLE_ID)?.remove()
+  if (document.getElementById(HEADER_STYLE_ID)) return
 
   const style = document.createElement("style")
   style.id = HEADER_STYLE_ID
   style.textContent = `
     main > div > section:first-of-type > header,
     main > div > section:last-of-type > header {
-      position: relative !important;
       border-color: rgba(168,85,247,.30) !important;
       background:
         radial-gradient(circle at 16% 20%, rgba(147,51,234,.34), transparent 32%),
@@ -47,16 +46,13 @@ function installHeaderStyle() {
       padding-left: 14px !important;
       padding-right: 16px !important;
       overflow: hidden !important;
-      font-size: 0 !important;
     }
 
-    main > div > section:last-of-type > header > :not(button):not(#${LOGOUT_BUTTON_ID}) {
+    main > div > section:last-of-type > header > div:first-child,
+    main > div > section:last-of-type > header > div:first-child + span,
+    main > div > section:last-of-type > header > span:first-child,
+    main > div > section:last-of-type > header > [class*="truncate"]:first-child {
       display: none !important;
-      width: 0 !important;
-      min-width: 0 !important;
-      max-width: 0 !important;
-      opacity: 0 !important;
-      pointer-events: none !important;
     }
 
     main > div > section:last-of-type > header button {
@@ -108,26 +104,12 @@ function cleanHeader() {
   const header = document.querySelector<HTMLElement>("main > div > section:last-of-type > header")
   if (!header) return
 
-  Array.from(header.childNodes).forEach((node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim() || ""
-      if (!text || /786\.chat|no project yet|https?:|^\//i.test(text)) node.textContent = ""
-      return
-    }
+  const firstNonButton = Array.from(header.children).find((node) => node instanceof HTMLElement && node.tagName !== "BUTTON" && node.id !== LOGOUT_BUTTON_ID) as HTMLElement | undefined
 
-    if (!(node instanceof HTMLElement)) return
-    if (node.tagName === "BUTTON" || node.id === LOGOUT_BUTTON_ID) return
-
-    const text = node.textContent?.trim() || ""
-    if (!text || /786\.chat|no project yet|https?:|^\//i.test(text) || node.className.toString().includes("truncate")) {
-      node.style.display = "none"
-      node.style.width = "0"
-      node.style.minWidth = "0"
-      node.style.maxWidth = "0"
-      node.style.opacity = "0"
-      node.setAttribute("aria-hidden", "true")
-    }
-  })
+  if (firstNonButton) {
+    firstNonButton.style.display = "none"
+    firstNonButton.setAttribute("aria-hidden", "true")
+  }
 }
 
 function installLogoutButton() {
@@ -169,9 +151,9 @@ function installLogoutButton() {
 export function AdminChatLogoutController() {
   useEffect(() => {
     installLogoutButton()
-    const timer = window.setInterval(installLogoutButton, 200)
+    const timer = window.setInterval(installLogoutButton, 500)
     const observer = new MutationObserver(installLogoutButton)
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+    observer.observe(document.body, { childList: true, subtree: true })
 
     return () => {
       window.clearInterval(timer)
