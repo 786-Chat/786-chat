@@ -10,6 +10,8 @@ const PROJECT_STYLE_ID = "admin-projects-compact-style"
 const PROJECT_SEARCH_ID = "admin-projects-search"
 const LIVE_NAV_ID = "admin-live-projects-nav"
 const MENU_ID = "admin-chat-device-menu"
+const REFRESH_BUTTON_ID = "admin-chat-refresh-preview"
+const THEME_BUTTON_ID = "admin-chat-theme-prompt"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const DEVICE_KEY = "786chat_admin_device_dropdown_v1"
 
@@ -94,6 +96,57 @@ function openMenu(anchor: HTMLButtonElement) {
     menu.appendChild(option)
   })
   document.body.appendChild(menu)
+}
+
+function refreshCurrentPreview() {
+  const previewButton = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
+  previewButton?.click()
+  window.setTimeout(() => {
+    const iframe = document.querySelector<HTMLIFrameElement>("section:last-of-type iframe")
+    if (!iframe) return
+    const current = iframe.srcdoc
+    iframe.srcdoc = ""
+    window.setTimeout(() => { iframe.srcdoc = current }, 35)
+  }, 80)
+}
+
+function prepareThemePrompt() {
+  const textarea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="786.Chat"]')
+  if (!textarea) return
+  const prompt = "Improve this project theme with a more premium modern design, better colors, spacing, typography, shadows, and animations. Keep the existing pages and functionality. Update the real project files only."
+  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set
+  nativeSetter?.call(textarea, prompt)
+  textarea.dispatchEvent(new Event("input", { bubbles: true }))
+  textarea.focus()
+}
+
+function installQuickToolbarActions() {
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button"))
+  const codeButton = buttons.find((button) => button.textContent?.trim().toLowerCase() === "code")
+  if (!codeButton || document.getElementById(REFRESH_BUTTON_ID) || document.getElementById(THEME_BUTTON_ID)) return
+
+  const compactStyle = "shrink:0;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,.12);background:rgba(15,23,42,.72);color:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;font:800 14px system-ui;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);"
+
+  const refresh = document.createElement("button")
+  refresh.id = REFRESH_BUTTON_ID
+  refresh.type = "button"
+  refresh.title = "Refresh preview"
+  refresh.setAttribute("aria-label", "Refresh preview")
+  refresh.innerHTML = `<span style="font-size:16px;line-height:1">↻</span>`
+  refresh.style.cssText = `${compactStyle};width:46px;padding:0;`
+  refresh.onclick = refreshCurrentPreview
+
+  const theme = document.createElement("button")
+  theme.id = THEME_BUTTON_ID
+  theme.type = "button"
+  theme.title = "Theme prompt"
+  theme.setAttribute("aria-label", "Theme prompt")
+  theme.innerHTML = `<span style="font-size:14px;line-height:1">⚙</span><span>Theme</span>`
+  theme.style.cssText = compactStyle
+  theme.onclick = prepareThemePrompt
+
+  codeButton.insertAdjacentElement("afterend", theme)
+  codeButton.insertAdjacentElement("afterend", refresh)
 }
 
 function sanitizePreviewHtml(value: string): string { return value.replace(/<script[\s\S]*?<\/script>/gi, "") }
@@ -215,15 +268,17 @@ export function AdminChatToolbarCleanup() {
       }
     }
     document.addEventListener("click", onModeClick, true)
-    const observer = new MutationObserver(() => forceCodePanelDark())
+    const observer = new MutationObserver(() => { forceCodePanelDark(); installQuickToolbarActions() })
     observer.observe(document.body, { childList: true, subtree: true })
     const timer = window.setInterval(() => {
       const preview = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
-      if (!preview || preview.dataset.deviceDropdown === "true") return
-      preview.dataset.deviceDropdown = "true"; preview.setAttribute("aria-haspopup", "menu"); preview.append(" ▾"); preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
+      if (preview && preview.dataset.deviceDropdown !== "true") {
+        preview.dataset.deviceDropdown = "true"; preview.setAttribute("aria-haspopup", "menu"); preview.append(" ▾"); preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
+      }
+      installQuickToolbarActions()
     }, 400)
     const recoverTimer = window.setTimeout(() => { try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {} }, 1800)
-    return () => { observer.disconnect(); document.removeEventListener("click", onModeClick, true); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
+    return () => { observer.disconnect(); document.removeEventListener("click", onModeClick, true); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); document.getElementById(REFRESH_BUTTON_ID)?.remove(); document.getElementById(THEME_BUTTON_ID)?.remove(); style.remove() }
   }, [pathname])
   return <><AdminChatPublishController /><AdminChatPublishingOverviewLink /></>
 }
