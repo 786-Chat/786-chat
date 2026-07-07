@@ -7,6 +7,8 @@ import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-ch
 
 const STYLE_ID = "admin-chat-toolbar-cleanup-style"
 const MENU_ID = "admin-chat-device-menu"
+const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
+const DEVICE_KEY = "786chat_admin_device_dropdown_v1"
 
 type DevicePreset = {
   label: string
@@ -16,6 +18,9 @@ type DevicePreset = {
   radius: string
   border: string
 }
+
+type ProjectListItem = { id: string; title: string; description?: string; prompt?: string }
+type ProjectWithData = ProjectListItem & { files?: Record<string, string> }
 
 const DEVICES: DevicePreset[] = [
   { label: "Full Preview", width: null, height: null, base: "Desktop", radius: "0", border: "0" },
@@ -42,6 +47,7 @@ function selectNativeDevice(base: DevicePreset["base"]) {
 }
 
 function resizePreview(device: DevicePreset) {
+  try { localStorage.setItem(DEVICE_KEY, device.label) } catch {}
   selectNativeDevice(device.base)
   setTimeout(() => {
     const iframe = document.querySelector<HTMLIFrameElement>('section:last-of-type iframe')
@@ -84,10 +90,85 @@ function openMenu(anchor: HTMLButtonElement) {
   document.body.appendChild(menu)
 }
 
+function sanitizePreviewHtml(value: string): string {
+  return value.replace(/<script[\s\S]*?<\/script>/gi, "")
+}
+
+function projectCardSrcDoc(project: ProjectWithData): string {
+  const files = project.files || {}
+  const htmlFile = files["index.html"] || files["public/index.html"]
+  if (htmlFile && htmlFile.includes("<")) return sanitizePreviewHtml(htmlFile)
+  const css = (files["app/globals.css"] || files["src/app/globals.css"] || "").replace(/@tailwind\s+[a-z]+\s*;?/gi, "")
+  const source = files["app/page.tsx"] || files["src/app/page.tsx"] || ""
+  const hasLogin = /login|sign in|password|email/i.test(`${project.title} ${project.description || ""} ${source}`)
+  const title = project.title || "786.Chat Project"
+  const description = project.description || project.prompt || "Generated 786.Chat project"
+  const body = hasLogin
+    ? `<main class="login"><section><h1>${title}</h1><input placeholder="Email"/><input placeholder="Password" type="password"/><button>Sign In</button><a>Forgot password?</a></section></main>`
+    : `<main class="hero"><section><p>786.Chat Preview</p><h1>${title}</h1><span>${description}</span><button>Open Project</button></section></main>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css} html,body{margin:0;min-height:100%;font-family:Inter,system-ui,sans-serif;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#0f172a}.login,.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:48px}.login section{width:min(560px,88vw);border-radius:24px;background:white;padding:42px;box-shadow:0 28px 80px rgba(15,23,42,.28);text-align:center}.login h1,.hero h1{font-size:42px;line-height:1.05;margin:0 0 26px;font-weight:900}.login input{display:block;width:100%;box-sizing:border-box;margin:14px 0;padding:18px 20px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px}.login button,.hero button{border:0;border-radius:10px;background:#2563eb;color:white;padding:16px 24px;font-weight:900;font-size:16px;width:100%;margin-top:10px}.login a{display:block;color:#2563eb;margin-top:22px}.hero section{max-width:760px;color:white}.hero p{font-weight:900;letter-spacing:.16em;text-transform:uppercase;opacity:.8}.hero h1{font-size:58px}.hero span{display:block;font-size:20px;line-height:1.6;opacity:.9;margin-bottom:26px}.hero button{width:auto;background:white;color:#111827}</style></head><body>${body}</body></html>`
+}
+
+function installProjectCardPreviews(projects: ProjectWithData[]) {
+  const cards = Array.from(document.querySelectorAll<HTMLElement>("article"))
+  cards.forEach((card, index) => {
+    const project = projects[index]
+    if (!project || card.dataset.livePreviewInstalled === "true") return
+    const previewBox = card.querySelector<HTMLElement>(".mb-5.overflow-hidden.rounded-2xl")
+    if (!previewBox) return
+    card.dataset.livePreviewInstalled = "true"
+    previewBox.innerHTML = ""
+    previewBox.style.height = "170px"
+    previewBox.style.background = "#020617"
+    const iframe = document.createElement("iframe")
+    iframe.title = `${project.title} card preview`
+    iframe.srcdoc = projectCardSrcDoc(project)
+    iframe.sandbox.add("allow-scripts", "allow-forms")
+    iframe.style.cssText = "width:100%;height:100%;border:0;background:white;transform:scale(.62);transform-origin:top left;width:161%;height:161%;pointer-events:none;"
+    previewBox.appendChild(iframe)
+  })
+}
+
+function resetPreviewStateBeforeOpen() {
+  try {
+    localStorage.removeItem(DEVICE_KEY)
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("786chat_admin_preview_location_v2_")) localStorage.removeItem(key)
+    })
+  } catch {}
+}
+
 export function AdminChatToolbarCleanup() {
   const pathname = usePathname()
 
   useEffect(() => {
+    if (pathname === "/786-admin/projects") {
+      let cancelled = false
+      const openCapture = (event: MouseEvent) => {
+        const button = (event.target as HTMLElement | null)?.closest("button")
+        if (button?.textContent?.trim() === "Open in chat") resetPreviewStateBeforeOpen()
+      }
+      document.addEventListener("click", openCapture, true)
+      fetch("/api/786-admin/projects", { cache: "no-store" })
+        .then((res) => res.ok ? res.json() : { projects: [] })
+        .then(async (json) => {
+          if (cancelled) return
+          const list = Array.isArray(json.projects) ? (json.projects as ProjectListItem[]) : []
+          const detailed = await Promise.all(list.map(async (project) => {
+            const res = await fetch(`/api/786-admin/projects/${project.id}`, { cache: "no-store" }).catch(() => null)
+            if (!res?.ok) return project
+            const data = await res.json().catch(() => ({}))
+            return (data.project || project) as ProjectWithData
+          }))
+          if (!cancelled) setTimeout(() => installProjectCardPreviews(detailed), 200)
+        })
+        .catch(() => undefined)
+      return () => {
+        cancelled = true
+        document.removeEventListener("click", openCapture, true)
+      }
+    }
+
     if (pathname !== "/786-admin/chat") return
     document.getElementById(STYLE_ID)?.remove()
     const style = document.createElement("style")
@@ -112,8 +193,21 @@ export function AdminChatToolbarCleanup() {
       preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
     }, 400)
 
+    const recoverTimer = window.setTimeout(() => {
+      try {
+        const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
+        const hasIframe = Boolean(document.querySelector("section:last-of-type iframe"))
+        const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"
+        if (activeProjectId && !hasIframe && !alreadyReloaded) {
+          sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1")
+          window.location.reload()
+        }
+      } catch {}
+    }, 1800)
+
     return () => {
       window.clearInterval(timer)
+      window.clearTimeout(recoverTimer)
       closeMenu()
       style.remove()
     }
