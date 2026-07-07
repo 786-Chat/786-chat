@@ -20,7 +20,8 @@ export function AdminChatToolbarCleanup() {
       #admin-chat-browser-bar button[title="Open preview"],
       #admin-chat-browser-bar button[title="Light/Dark"],
       #admin-chat-project-pages,
-      #admin-chat-browser-bar .browser-label {
+      #admin-chat-browser-bar .browser-label,
+      #admin-chat-browser-bar .browser-url {
         display: none !important;
       }
 
@@ -61,9 +62,9 @@ export function AdminChatToolbarCleanup() {
       }
 
       main > div > section:last-of-type > header > div:first-child {
-        flex: 1 1 520px !important;
+        flex: 1 1 440px !important;
         min-width: 220px !important;
-        max-width: none !important;
+        max-width: 520px !important;
         height: 38px !important;
         border-radius: 999px !important;
         border: 1px solid rgba(148,163,184,.17) !important;
@@ -98,6 +99,26 @@ export function AdminChatToolbarCleanup() {
         background: rgba(17,19,33,.88) !important;
       }
 
+      main > div > section:last-of-type > header > div:nth-child(2) button:nth-child(2),
+      main > div > section:last-of-type > header > div:nth-child(2) button:nth-child(3) {
+        position: relative !important;
+      }
+
+      main > div > section:last-of-type > header > div:nth-child(2) button:nth-child(2)::after {
+        content: " / iPad" !important;
+        margin-left: 2px !important;
+      }
+
+      main > div > section:last-of-type > header > div:nth-child(2) button:nth-child(3) {
+        display: none !important;
+      }
+
+      main > div > section:last-of-type > header > div:nth-child(2) button:nth-child(4)::after {
+        content: " ▾" !important;
+        margin-left: 3px !important;
+        opacity: .85 !important;
+      }
+
       main > div > section:last-of-type > header button {
         flex: 0 0 auto !important;
         min-width: 0 !important;
@@ -122,19 +143,15 @@ export function AdminChatToolbarCleanup() {
       }
 
       #admin-chat-browser-bar {
-        min-height: 50px !important;
+        min-height: 48px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: flex-end !important;
         gap: 8px !important;
-        padding: 7px 14px !important;
+        padding: 6px 14px !important;
         border-bottom: 1px solid rgba(255,255,255,.07) !important;
         background: rgba(7,9,18,.94) !important;
         backdrop-filter: blur(18px) !important;
-      }
-
-      #admin-chat-browser-bar .browser-url {
-        display: none !important;
       }
 
       #admin-chat-browser-bar .browser-actions {
@@ -168,15 +185,13 @@ export function AdminChatToolbarCleanup() {
           padding-left: 10px !important;
           padding-right: 10px !important;
         }
+        main > div > section:last-of-type > header > div:first-child {
+          max-width: 360px !important;
+        }
         main > div > section:last-of-type > header button {
           padding-left: 10px !important;
           padding-right: 10px !important;
           font-size: 12px !important;
-        }
-        #admin-chat-browser-bar {
-          gap: 8px !important;
-          padding-left: 10px !important;
-          padding-right: 10px !important;
         }
       }
 
