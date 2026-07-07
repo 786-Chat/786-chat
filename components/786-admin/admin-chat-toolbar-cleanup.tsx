@@ -21,17 +21,6 @@ export function AdminChatToolbarCleanup() {
       #admin-chat-project-pages {
         display: none !important;
       }
-
-      main > div > section:last-of-type > header > div[class*="rounded-full"][class*="p-1"] {
-        display: none !important;
-      }
-
-      main > div > section:last-of-type > header button[title="Desktop preview"],
-      main > div > section:last-of-type > header button[title="Tablet preview"],
-      main > div > section:last-of-type > header button[title="iPad preview"],
-      main > div > section:last-of-type > header button[title="Mobile preview"] {
-        display: none !important;
-      }
     `
     document.head.appendChild(style)
 
