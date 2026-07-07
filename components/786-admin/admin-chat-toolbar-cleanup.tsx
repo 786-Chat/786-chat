@@ -181,6 +181,41 @@ export function AdminChatToolbarCleanup() {
       main > div > section:last-of-type > header button[title="Tablet preview"],
       main > div > section:last-of-type > header button[title="iPad preview"],
       main > div > section:last-of-type > header button[title="Mobile preview"] { display: none !important; }
+
+      main > div > section:last-of-type > header {
+        position: relative !important;
+        overflow: hidden !important;
+        border-color: rgba(168,85,247,.28) !important;
+        background:
+          radial-gradient(circle at 12% 15%, rgba(147,51,234,.36), transparent 34%),
+          radial-gradient(circle at 72% 8%, rgba(14,165,233,.16), transparent 32%),
+          linear-gradient(180deg, rgba(17,8,40,.98), rgba(8,7,24,.96)) !important;
+        box-shadow: inset 0 -1px 0 rgba(168,85,247,.22), 0 0 55px rgba(88,28,135,.18) !important;
+      }
+
+      main > div > section:last-of-type > header::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: .45;
+        background-image:
+          radial-gradient(#f5d0fe 1px, transparent 1px),
+          radial-gradient(rgba(103,232,249,.7) 1px, transparent 1px);
+        background-size: 72px 72px, 118px 118px;
+        background-position: 8px 12px, 42px 38px;
+        animation: adminHeaderStars 18s linear infinite;
+      }
+
+      main > div > section:last-of-type > header > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      @keyframes adminHeaderStars {
+        from { background-position: 8px 12px, 42px 38px; }
+        to { background-position: 80px 84px, 160px 156px; }
+      }
     `
     document.head.appendChild(style)
 
