@@ -30,6 +30,14 @@ function isPreviewIframe(iframe: HTMLIFrameElement): boolean {
   return /preview/i.test(iframe.getAttribute("title") || "")
 }
 
+function hardenPreviewIframe(iframe: HTMLIFrameElement): void {
+  if (!isPreviewIframe(iframe)) return
+  const sandbox = iframe.getAttribute("sandbox") || ""
+  if (!sandbox.includes("allow-same-origin")) {
+    iframe.setAttribute("sandbox", `${sandbox} allow-same-origin`.trim())
+  }
+}
+
 function containsAdminWorkspace(html: string): boolean {
   if (!html) return false
   const lowered = html.toLowerCase()
@@ -58,9 +66,9 @@ function iframeHasAdminSrc(iframe: HTMLIFrameElement): boolean {
   if (!raw) return false
   try {
     const url = new URL(raw, window.location.origin)
-    return isAdminPath(url.pathname)
+    return url.origin === window.location.origin || isAdminPath(url.pathname)
   } catch {
-    return raw.includes("/786-admin/")
+    return raw.includes("/786-admin/") || raw.startsWith("/")
   }
 }
 
@@ -69,8 +77,7 @@ function iframeHasRealAppNavigation(iframe: HTMLIFrameElement): boolean {
     const href = iframe.contentWindow?.location?.href || ""
     if (!href || href === "about:blank" || href === "about:srcdoc") return false
     const url = new URL(href)
-    if (url.origin !== window.location.origin) return false
-    return true
+    return url.origin === window.location.origin
   } catch {
     return false
   }
@@ -95,6 +102,7 @@ function resetIframe(iframe: HTMLIFrameElement): void {
 
 function inspectIframe(iframe: HTMLIFrameElement): void {
   if (!isPreviewIframe(iframe)) return
+  hardenPreviewIframe(iframe)
 
   const srcdoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
   if (srcdoc && !containsAdminWorkspace(srcdoc)) rememberSafePreview(iframe)
@@ -132,10 +140,10 @@ export function AdminChatPreviewContainmentGuard() {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["src", "srcdoc"],
+      attributeFilter: ["src", "srcdoc", "sandbox"],
     })
 
-    const timer = window.setInterval(inspectAll, 250)
+    const timer = window.setInterval(inspectAll, 150)
 
     return () => {
       observer.disconnect()
