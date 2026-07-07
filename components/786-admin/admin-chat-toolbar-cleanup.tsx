@@ -38,6 +38,26 @@ const DEVICES: DevicePreset[] = [
 ]
 
 function selectNativeDevice(base: DevicePreset["base"]) { document.querySelector<HTMLButtonElement>(`button[title="${base} preview"]`)?.click() }
+
+function clearDeviceFrameInlineStyles() {
+  const section = document.querySelector<HTMLElement>("main > div > section:last-of-type")
+  if (!section) return
+  const candidates = Array.from(section.querySelectorAll<HTMLElement>("div,aside,nav"))
+  for (const element of candidates) {
+    const style = element.getAttribute("style") || ""
+    if (!style.includes("calc(100vh - 118px)") && !style.includes("0 28px 90px") && !style.includes("background: #fff") && !style.includes("background: rgb(255") && !style.includes("width: 800px") && !style.includes("width: 1024px") && !style.includes("width: 912px") && !style.includes("width: 768px") && !style.includes("width: 430px") && !style.includes("width: 414px") && !style.includes("width: 390px") && !style.includes("width: 393px") && !style.includes("width: 440px") && !style.includes("width: 412px") && !style.includes("width: 480px")) continue
+    element.style.width = ""
+    element.style.height = ""
+    element.style.maxWidth = ""
+    element.style.maxHeight = ""
+    element.style.border = ""
+    element.style.borderRadius = ""
+    element.style.overflow = ""
+    element.style.background = ""
+    element.style.boxShadow = ""
+  }
+}
+
 function resizePreview(device: DevicePreset) {
   try { localStorage.setItem(DEVICE_KEY, device.label) } catch {}
   selectNativeDevice(device.base)
@@ -177,18 +197,28 @@ export function AdminChatToolbarCleanup() {
       #admin-chat-browser-bar,#admin-chat-project-pages,main > div > section:last-of-type > header > div[class*="rounded-full"][class*="p-1"],main > div > section:last-of-type > header button[title="Desktop preview"],main > div > section:last-of-type > header button[title="Tablet preview"],main > div > section:last-of-type > header button[title="iPad preview"],main > div > section:last-of-type > header button[title="Mobile preview"]{display:none!important}
       main > div > section:last-of-type > header{position:relative!important;overflow:hidden!important;border-color:rgba(168,85,247,.28)!important;background:radial-gradient(circle at 12% 15%,rgba(147,51,234,.36),transparent 34%),radial-gradient(circle at 72% 8%,rgba(14,165,233,.16),transparent 32%),linear-gradient(180deg,rgba(17,8,40,.98),rgba(8,7,24,.96))!important;box-shadow:inset 0 -1px 0 rgba(168,85,247,.22),0 0 55px rgba(88,28,135,.18)!important}
       main > div > section:last-of-type > header::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.45;background-image:radial-gradient(#f5d0fe 1px,transparent 1px),radial-gradient(rgba(103,232,249,.7) 1px,transparent 1px);background-size:72px 72px,118px 118px;background-position:8px 12px,42px 38px;animation:adminHeaderStars 18s linear infinite}main > div > section:last-of-type > header>*{position:relative;z-index:1}@keyframes adminHeaderStars{from{background-position:8px 12px,42px 38px}to{background-position:80px 84px,160px 156px}}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"],main > div > section:last-of-type:not(:has(iframe)) aside,main > div > section:last-of-type:not(:has(iframe)) nav{background:#07101f!important;color:#dbeafe!important;border-color:rgba(34,211,238,.22)!important}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button,main > div > section:last-of-type:not(:has(iframe)) aside button{color:#dbeafe!important;background:rgba(15,23,42,.72)!important;border-color:rgba(51,65,85,.7)!important}
-      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button[class*="bg-cyan"],main > div > section:last-of-type:not(:has(iframe)) aside button[class*="bg-cyan"]{background:linear-gradient(135deg,#22d3ee,#7c3aed)!important;color:#06101c!important}
+      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"],main > div > section:last-of-type:not(:has(iframe)) aside,main > div > section:last-of-type:not(:has(iframe)) nav,main > div > section:last-of-type:not(:has(iframe)) div:has(> button){background:#07101f!important;color:#dbeafe!important;border-color:rgba(34,211,238,.22)!important;box-shadow:none!important}
+      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button,main > div > section:last-of-type:not(:has(iframe)) aside button,main > div > section:last-of-type:not(:has(iframe)) div:has(> button) button{color:#dbeafe!important;background:rgba(15,23,42,.72)!important;border-color:rgba(51,65,85,.7)!important}
+      main > div > section:last-of-type:not(:has(iframe)) div[class*="bg-white"] button[class*="bg-cyan"],main > div > section:last-of-type:not(:has(iframe)) aside button[class*="bg-cyan"],main > div > section:last-of-type:not(:has(iframe)) div:has(> button) button[class*="bg-cyan"]{background:linear-gradient(135deg,#22d3ee,#7c3aed)!important;color:#06101c!important}
     `
     document.head.appendChild(style)
+    const onModeClick = (event: MouseEvent) => {
+      const button = (event.target as HTMLElement | null)?.closest("button")
+      const label = button?.textContent?.trim().toLowerCase() || ""
+      if (label === "code" || label.includes("code")) {
+        clearDeviceFrameInlineStyles()
+        window.setTimeout(clearDeviceFrameInlineStyles, 80)
+        window.setTimeout(clearDeviceFrameInlineStyles, 240)
+      }
+    }
+    document.addEventListener("click", onModeClick, true)
     const timer = window.setInterval(() => {
       const preview = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
       if (!preview || preview.dataset.deviceDropdown === "true") return
       preview.dataset.deviceDropdown = "true"; preview.setAttribute("aria-haspopup", "menu"); preview.append(" ▾"); preview.addEventListener("click", () => setTimeout(() => openMenu(preview), 0))
     }, 400)
     const recoverTimer = window.setTimeout(() => { try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {} }, 1800)
-    return () => { window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
+    return () => { document.removeEventListener("click", onModeClick, true); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); style.remove() }
   }, [pathname])
   return <><AdminChatPublishController /><AdminChatPublishingOverviewLink /></>
 }
