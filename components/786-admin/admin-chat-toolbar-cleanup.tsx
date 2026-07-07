@@ -10,33 +10,43 @@ const PROJECT_STYLE_ID = "admin-projects-compact-style"
 const PROJECT_SEARCH_ID = "admin-projects-search"
 const LIVE_NAV_ID = "admin-live-projects-nav"
 const MENU_ID = "admin-chat-device-menu"
+const THEME_MENU_ID = "admin-chat-theme-menu"
 const REFRESH_BUTTON_ID = "admin-chat-refresh-preview"
 const THEME_BUTTON_ID = "admin-chat-theme-prompt"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const DEVICE_KEY = "786chat_admin_device_dropdown_v1"
 
-type DevicePreset = { label: string; width: number | null; height: number | null; base: "Desktop" | "Tablet" | "iPad" | "Mobile"; radius: string; border: string }
+type DevicePreset = { label: string; icon: string; width: number | null; height: number | null; base: "Desktop" | "Tablet" | "iPad" | "Mobile"; radius: string; border: string }
+type ThemePreset = { label: string; icon: string; tone: string; prompt: string }
 type ProjectListItem = { id: string; title: string; description?: string; prompt?: string }
 type ProjectWithData = ProjectListItem & { files?: Record<string, string> }
 
 const DEVICES: DevicePreset[] = [
-  { label: "Full Preview", width: null, height: null, base: "Desktop", radius: "0", border: "0" },
-  { label: "Desktop", width: null, height: null, base: "Desktop", radius: "0", border: "0" },
-  { label: "Laptop", width: 1366, height: 768, base: "Desktop", radius: "22px", border: "10px solid #0f172a" },
-  { label: "Tablet", width: 768, height: 900, base: "Tablet", radius: "30px", border: "10px solid #111827" },
-  { label: "iPad Mini", width: 744, height: 1000, base: "Tablet", radius: "30px", border: "10px solid #111827" },
-  { label: "iPad Pro", width: 1024, height: 1180, base: "iPad", radius: "30px", border: "10px solid #111827" },
-  { label: "Surface Pro", width: 912, height: 1100, base: "iPad", radius: "30px", border: "10px solid #111827" },
-  { label: "Galaxy Tab", width: 800, height: 1120, base: "Tablet", radius: "30px", border: "10px solid #111827" },
-  { label: "Galaxy Fold", width: 430, height: 932, base: "Mobile", radius: "24px", border: "9px solid #111827" },
-  { label: "iPhone 7 Plus", width: 414, height: 736, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "iPhone 13", width: 390, height: 844, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "iPhone 15", width: 393, height: 852, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "iPhone 16", width: 393, height: 852, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "iPhone 16 Pro Max", width: 440, height: 956, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "Pixel 9", width: 412, height: 915, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "Galaxy S25", width: 412, height: 915, base: "Mobile", radius: "38px", border: "10px solid #111827" },
-  { label: "Custom Width", width: 480, height: 860, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "Full Preview", icon: "▣", width: null, height: null, base: "Desktop", radius: "0", border: "0" },
+  { label: "Desktop", icon: "🖥", width: null, height: null, base: "Desktop", radius: "0", border: "0" },
+  { label: "Laptop", icon: "💻", width: 1366, height: 768, base: "Desktop", radius: "22px", border: "10px solid #0f172a" },
+  { label: "Tablet", icon: "▭", width: 768, height: 900, base: "Tablet", radius: "30px", border: "10px solid #111827" },
+  { label: "iPad Mini", icon: "▭", width: 744, height: 1000, base: "Tablet", radius: "30px", border: "10px solid #111827" },
+  { label: "iPad Pro", icon: "▭", width: 1024, height: 1180, base: "iPad", radius: "30px", border: "10px solid #111827" },
+  { label: "Surface Pro", icon: "▭", width: 912, height: 1100, base: "iPad", radius: "30px", border: "10px solid #111827" },
+  { label: "Galaxy Tab", icon: "▭", width: 800, height: 1120, base: "Tablet", radius: "30px", border: "10px solid #111827" },
+  { label: "Galaxy Fold", icon: "📱", width: 430, height: 932, base: "Mobile", radius: "24px", border: "9px solid #111827" },
+  { label: "iPhone 7 Plus", icon: "📱", width: 414, height: 736, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "iPhone 13", icon: "📱", width: 390, height: 844, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "iPhone 15", icon: "📱", width: 393, height: 852, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "iPhone 16", icon: "📱", width: 393, height: 852, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "iPhone 16 Pro Max", icon: "📱", width: 440, height: 956, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "Pixel 9", icon: "📱", width: 412, height: 915, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "Galaxy S25", icon: "📱", width: 412, height: 915, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+  { label: "Custom Width", icon: "↔", width: 480, height: 860, base: "Mobile", radius: "38px", border: "10px solid #111827" },
+]
+
+const THEMES: ThemePreset[] = [
+  { label: "Purple Premium", icon: "🟣", tone: "Already current premium purple", prompt: "Apply a premium purple theme to this project. Use violet, indigo, soft glow gradients, polished cards, elegant shadows, smooth hover animations, and modern spacing. Keep all existing pages and functionality. Update the real project files only." },
+  { label: "Blue Premium", icon: "🔵", tone: "Clean SaaS blue", prompt: "Apply a premium blue theme to this project. Use deep navy, cyan, sky blue accents, glass cards, clean typography, polished buttons, smooth animations, and professional spacing. Keep all existing pages and functionality. Update the real project files only." },
+  { label: "Green Premium", icon: "🟢", tone: "Fresh emerald design", prompt: "Apply a premium green theme to this project. Use emerald, teal, dark slate contrast, soft gradients, refined cards, clear CTA buttons, and smooth animations. Keep all existing pages and functionality. Update the real project files only." },
+  { label: "Dark Premium", icon: "⚫", tone: "Luxury dark interface", prompt: "Apply a premium dark theme to this project. Use black, slate, silver highlights, strong contrast, glowing accents, luxury spacing, elevated cards, and smooth animations. Keep all existing pages and functionality. Update the real project files only." },
+  { label: "White Premium", icon: "⚪", tone: "Bright clean design", prompt: "Apply a premium white theme to this project. Use clean white surfaces, soft gray sections, dark readable text, subtle color accents, elegant shadows, premium spacing, and smooth animations. Keep all existing pages and functionality. Update the real project files only." },
 ]
 
 function selectNativeDevice(base: DevicePreset["base"]) { document.querySelector<HTMLButtonElement>(`button[title="${base} preview"]`)?.click() }
@@ -80,73 +90,65 @@ function resizePreview(device: DevicePreset) {
     iframe.style.borderRadius = device.width ? `calc(${device.radius} - 10px)` : "0"
   }, 120)
 }
+
 function closeMenu() { document.getElementById(MENU_ID)?.remove() }
-function openMenu(anchor: HTMLButtonElement) {
-  closeMenu()
+function closeThemeMenu() { document.getElementById(THEME_MENU_ID)?.remove() }
+function buttonMenuBase(anchor: HTMLButtonElement, id: string, width = 260) {
   const rect = anchor.getBoundingClientRect()
   const menu = document.createElement("div")
-  menu.id = MENU_ID
-  menu.style.cssText = `position:fixed;top:${rect.bottom + 10}px;right:${Math.max(18, window.innerWidth - rect.right)}px;z-index:2147483647;width:260px;max-height:min(520px,calc(100vh - 120px));overflow:auto;padding:10px;border-radius:22px;border:1px solid rgba(139,92,246,.40);background:rgba(2,6,23,.98);box-shadow:0 28px 90px rgba(0,0,0,.72);backdrop-filter:blur(20px);`
+  menu.id = id
+  menu.style.cssText = `position:fixed;top:${rect.bottom + 10}px;right:${Math.max(18, window.innerWidth - rect.right)}px;z-index:2147483647;width:${width}px;max-height:min(520px,calc(100vh - 120px));overflow:auto;padding:10px;border-radius:22px;border:1px solid rgba(139,92,246,.40);background:rgba(2,6,23,.98);box-shadow:0 28px 90px rgba(0,0,0,.72);backdrop-filter:blur(20px);`
+  return menu
+}
+function openMenu(anchor: HTMLButtonElement) {
+  closeThemeMenu(); closeMenu()
+  const menu = buttonMenuBase(anchor, MENU_ID, 280)
   DEVICES.forEach((device) => {
     const option = document.createElement("button")
     option.type = "button"
-    option.textContent = device.label
-    option.style.cssText = "display:block;width:100%;margin:0 0 6px;padding:11px 12px;border-radius:15px;border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.90);color:white;cursor:pointer;font:800 13px system-ui;text-align:left;"
+    option.innerHTML = `<span style="display:grid;width:26px;height:26px;place-items:center;border-radius:999px;background:rgba(255,255,255,.08)">${device.icon}</span><span>${device.label}</span>`
+    option.style.cssText = "display:flex;width:100%;align-items:center;gap:10px;margin:0 0 6px;padding:10px 12px;border-radius:15px;border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.90);color:white;cursor:pointer;font:800 13px system-ui;text-align:left;"
     option.onclick = () => { resizePreview(device); closeMenu() }
     menu.appendChild(option)
   })
   document.body.appendChild(menu)
 }
 
-function refreshCurrentPreview() {
-  const previewButton = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
-  previewButton?.click()
-  window.setTimeout(() => {
-    const iframe = document.querySelector<HTMLIFrameElement>("section:last-of-type iframe")
-    if (!iframe) return
-    const current = iframe.srcdoc
-    iframe.srcdoc = ""
-    window.setTimeout(() => { iframe.srcdoc = current }, 35)
-  }, 80)
-}
-
-function prepareThemePrompt() {
+function setInputPrompt(prompt: string) {
   const textarea = document.querySelector<HTMLTextAreaElement>('textarea[placeholder*="786.Chat"]')
   if (!textarea) return
-  const prompt = "Improve this project theme with a more premium modern design, better colors, spacing, typography, shadows, and animations. Keep the existing pages and functionality. Update the real project files only."
   const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set
   nativeSetter?.call(textarea, prompt)
   textarea.dispatchEvent(new Event("input", { bubbles: true }))
   textarea.focus()
 }
 
-function installQuickToolbarActions() {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button"))
-  const codeButton = buttons.find((button) => button.textContent?.trim().toLowerCase() === "code")
-  if (!codeButton || document.getElementById(REFRESH_BUTTON_ID) || document.getElementById(THEME_BUTTON_ID)) return
+function openThemeMenu(anchor: HTMLButtonElement) {
+  closeMenu(); closeThemeMenu()
+  const menu = buttonMenuBase(anchor, THEME_MENU_ID, 310)
+  THEMES.forEach((theme) => {
+    const option = document.createElement("button")
+    option.type = "button"
+    option.innerHTML = `<span style="display:grid;width:30px;height:30px;place-items:center;border-radius:999px;background:rgba(255,255,255,.08)">${theme.icon}</span><span style="display:block"><strong style="display:block;color:white;font-size:13px">${theme.label}</strong><small style="display:block;color:#94a3b8;font-size:11px;margin-top:2px">${theme.tone}</small></span>`
+    option.style.cssText = "display:flex;width:100%;align-items:center;gap:11px;margin:0 0 7px;padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.18);background:rgba(15,23,42,.92);cursor:pointer;text-align:left;"
+    option.onclick = () => { setInputPrompt(theme.prompt); closeThemeMenu() }
+    menu.appendChild(option)
+  })
+  document.body.appendChild(menu)
+}
 
-  const compactStyle = "shrink:0;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,.12);background:rgba(15,23,42,.72);color:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;font:800 14px system-ui;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);"
-
-  const refresh = document.createElement("button")
-  refresh.id = REFRESH_BUTTON_ID
-  refresh.type = "button"
-  refresh.title = "Refresh preview"
-  refresh.setAttribute("aria-label", "Refresh preview")
-  refresh.innerHTML = `<span style="font-size:16px;line-height:1">↻</span>`
-  refresh.style.cssText = `${compactStyle};width:46px;padding:0;`
-  refresh.onclick = refreshCurrentPreview
-
-  const theme = document.createElement("button")
-  theme.id = THEME_BUTTON_ID
-  theme.type = "button"
-  theme.title = "Theme prompt"
-  theme.setAttribute("aria-label", "Theme prompt")
-  theme.innerHTML = `<span style="font-size:14px;line-height:1">⚙</span><span>Theme</span>`
-  theme.style.cssText = compactStyle
-  theme.onclick = prepareThemePrompt
-
-  codeButton.insertAdjacentElement("afterend", theme)
-  codeButton.insertAdjacentElement("afterend", refresh)
+function refreshCurrentPreview() {
+  closeMenu(); closeThemeMenu()
+  const previewButton = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button")).find((button) => button.textContent?.includes("Preview"))
+  if (previewButton && !previewButton.className.includes("bg-cyan")) previewButton.click()
+  window.setTimeout(() => {
+    closeMenu(); closeThemeMenu()
+    const iframe = document.querySelector<HTMLIFrameElement>("section:last-of-type iframe")
+    if (!iframe) return
+    const current = iframe.srcdoc
+    iframe.srcdoc = ""
+    window.setTimeout(() => { iframe.srcdoc = current }, 35)
+  }, 80)
 }
 
 function sanitizePreviewHtml(value: string): string { return value.replace(/<script[\s\S]*?<\/script>/gi, "") }
@@ -219,6 +221,35 @@ function installProjectsCompactStyle() {
   document.head.appendChild(style)
 }
 
+function installQuickToolbarActions() {
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button"))
+  const codeButton = buttons.find((button) => button.textContent?.trim().toLowerCase() === "code")
+  if (!codeButton || document.getElementById(REFRESH_BUTTON_ID) || document.getElementById(THEME_BUTTON_ID)) return
+
+  const compactStyle = "shrink:0;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,.12);background:rgba(15,23,42,.72);color:#e5e7eb;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;font:800 14px system-ui;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);"
+
+  const refresh = document.createElement("button")
+  refresh.id = REFRESH_BUTTON_ID
+  refresh.type = "button"
+  refresh.title = "Refresh preview"
+  refresh.setAttribute("aria-label", "Refresh preview")
+  refresh.innerHTML = `<span style="font-size:16px;line-height:1">↻</span>`
+  refresh.style.cssText = `${compactStyle};width:46px;padding:0;`
+  refresh.onclick = (event) => { event.stopPropagation(); refreshCurrentPreview() }
+
+  const theme = document.createElement("button")
+  theme.id = THEME_BUTTON_ID
+  theme.type = "button"
+  theme.title = "Theme choices"
+  theme.setAttribute("aria-label", "Theme choices")
+  theme.innerHTML = `<span style="font-size:14px;line-height:1">⚙</span><span>Theme</span>`
+  theme.style.cssText = compactStyle
+  theme.onclick = (event) => { event.stopPropagation(); openThemeMenu(theme) }
+
+  codeButton.insertAdjacentElement("afterend", theme)
+  codeButton.insertAdjacentElement("afterend", refresh)
+}
+
 export function AdminChatToolbarCleanup() {
   const pathname = usePathname()
   useEffect(() => {
@@ -267,7 +298,14 @@ export function AdminChatToolbarCleanup() {
         window.setTimeout(forceCodePanelDark, 240)
       }
     }
+    const closeOpenMenus = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target?.closest(`#${MENU_ID},#${THEME_MENU_ID},#${THEME_BUTTON_ID},button[aria-haspopup="menu"]`)) {
+        closeMenu(); closeThemeMenu()
+      }
+    }
     document.addEventListener("click", onModeClick, true)
+    document.addEventListener("click", closeOpenMenus)
     const observer = new MutationObserver(() => { forceCodePanelDark(); installQuickToolbarActions() })
     observer.observe(document.body, { childList: true, subtree: true })
     const timer = window.setInterval(() => {
@@ -278,7 +316,7 @@ export function AdminChatToolbarCleanup() {
       installQuickToolbarActions()
     }, 400)
     const recoverTimer = window.setTimeout(() => { try { const activeProjectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY); const hasIframe = Boolean(document.querySelector("section:last-of-type iframe")); const alreadyReloaded = sessionStorage.getItem(`786chat_reload_${activeProjectId}`) === "1"; if (activeProjectId && !hasIframe && !alreadyReloaded) { sessionStorage.setItem(`786chat_reload_${activeProjectId}`, "1"); window.location.reload() } } catch {} }, 1800)
-    return () => { observer.disconnect(); document.removeEventListener("click", onModeClick, true); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); document.getElementById(REFRESH_BUTTON_ID)?.remove(); document.getElementById(THEME_BUTTON_ID)?.remove(); style.remove() }
+    return () => { observer.disconnect(); document.removeEventListener("click", onModeClick, true); document.removeEventListener("click", closeOpenMenus); window.clearInterval(timer); window.clearTimeout(recoverTimer); closeMenu(); closeThemeMenu(); document.getElementById(REFRESH_BUTTON_ID)?.remove(); document.getElementById(THEME_BUTTON_ID)?.remove(); style.remove() }
   }, [pathname])
   return <><AdminChatPublishController /><AdminChatPublishingOverviewLink /></>
 }
