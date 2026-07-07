@@ -1,9 +1,8 @@
 export const BRAND_NAME = "786.chat"
 export const PLATFORM_DOMAIN = "786.chat"
-export const OLD_PLATFORM_DOMAIN = "mujeebproai.com"
 export const OWNER_EMAIL = "mujeeb@job4u.com"
 
-export const GITHUB_REPO = "mujeebpro123/mujeebproai"
+export const GITHUB_REPO = "786-Chat/786-chat"
 
 export const OWNER_EMAILS = [OWNER_EMAIL] as const
 
