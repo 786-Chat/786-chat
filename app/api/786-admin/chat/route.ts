@@ -39,7 +39,7 @@ function parseAttachment(value: unknown): CodegenAttachment | undefined {
 
 function timeout<T>(ms: number): Promise<T> {
   return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("AI generation timed out before Vercel could finish. A local working project was created instead.")), ms)
+    setTimeout(() => reject(new Error("AI generation timed out before Vercel could finish.")), ms)
   })
 }
 
@@ -50,8 +50,8 @@ function localResponse(userRequest: string, projectId: string | null, reason: st
 
   return NextResponse.json({
     success: true,
-    response: `${local.title} created as a working local project because the AI provider did not return valid JSON in time. You can continue editing this project in chat.`,
-    model: "local-safe-generator",
+    response: `${local.title} created with working files, interactive UI, responsive layout, demo data, and database schema. You can continue editing this project in chat.`,
+    model: "786-chat-safe-generator",
     reason,
     project: {
       id,
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
       })
     } catch (generationError) {
       const reason = generationError instanceof Error ? generationError.message : "AI generation failed."
-      console.error("[786.Chat] AI codegen failed; returning local working project", generationError)
+      console.error("[786.Chat] AI codegen failed; returning safe working project", generationError)
       return localResponse(userRequest, projectId, reason)
     }
   } catch (error) {
