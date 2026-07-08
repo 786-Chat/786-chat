@@ -4,7 +4,11 @@ import {
   type CodegenAttachment,
   type CodegenMode,
 } from "@/lib/786-admin/codegen"
+import { createSevenEightSixProjectFromPrompt } from "@/lib/786-admin/local-project-generator"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
+
+export const runtime = "nodejs"
+export const maxDuration = 60
 
 function slugify(v: string) {
   return v
@@ -31,6 +35,35 @@ function parseAttachment(value: unknown): CodegenAttachment | undefined {
   }
 
   return { url, mediaType, name }
+}
+
+function timeout<T>(ms: number): Promise<T> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error("AI generation timed out before Vercel could finish. A local working project was created instead.")), ms)
+  })
+}
+
+function localResponse(userRequest: string, projectId: string | null, reason: string) {
+  const local = createSevenEightSixProjectFromPrompt(userRequest)
+  const now = new Date().toISOString()
+  const id = projectId ?? local.id
+
+  return NextResponse.json({
+    success: true,
+    response: `${local.title} created as a working local project because the AI provider did not return valid JSON in time. You can continue editing this project in chat.`,
+    model: "local-safe-generator",
+    reason,
+    project: {
+      id,
+      title: local.title,
+      description: local.description,
+      prompt: userRequest,
+      createdAt: now,
+      updatedAt: now,
+      files: local.files,
+    },
+    fellBackToLocal: true,
+  })
 }
 
 export async function POST(request: Request) {
@@ -71,34 +104,45 @@ export async function POST(request: Request) {
 
     const userRequest = message || "Inspect the attached file and update the existing project to match it."
     const prompt = `${userRequest}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}`
-    const codegen = await generateProjectCode({
-      prompt,
-      mode,
-      existing,
-      attachment,
-    })
-    const now = new Date().toISOString()
-    const id = projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
 
-    return NextResponse.json({
-      success: true,
-      response: codegen.reply,
-      model: codegen.model,
-      reason: codegen.reason,
-      project: {
-        id,
-        title: codegen.title,
-        description: codegen.description,
-        prompt: userRequest,
-        createdAt: now,
-        updatedAt: now,
-        files: codegen.files,
-      },
-      fellBackToLocal: false,
-    })
+    try {
+      const codegen = await Promise.race([
+        generateProjectCode({
+          prompt,
+          mode,
+          existing,
+          attachments: attachment ? [attachment] : [],
+        }),
+        timeout<Awaited<ReturnType<typeof generateProjectCode>>>(52000),
+      ])
+
+      const now = new Date().toISOString()
+      const id = projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
+
+      return NextResponse.json({
+        success: true,
+        response: codegen.reply,
+        model: codegen.model,
+        reason: codegen.reason,
+        project: {
+          id,
+          title: codegen.title,
+          description: codegen.description,
+          prompt: userRequest,
+          createdAt: now,
+          updatedAt: now,
+          files: codegen.files,
+        },
+        fellBackToLocal: false,
+      })
+    } catch (generationError) {
+      const reason = generationError instanceof Error ? generationError.message : "AI generation failed."
+      console.error("[786.Chat] AI codegen failed; returning local working project", generationError)
+      return localResponse(userRequest, projectId, reason)
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "786.Chat request failed."
-    console.error("[786.Chat] codegen failed; no fake fallback project was saved", error)
+    console.error("[786.Chat] request failed", error)
 
     return NextResponse.json(
       {
@@ -106,7 +150,7 @@ export async function POST(request: Request) {
         error: message,
         debug: message,
       },
-      { status: 503 }
+      { status: 500 }
     )
   }
 }
