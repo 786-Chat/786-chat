@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Code2,
   FolderKanban,
+  Laptop,
   Loader2,
   Monitor,
   Palette,
@@ -17,6 +18,7 @@ import {
   RotateCw,
   Send,
   Settings,
+  Smartphone,
   Sparkles,
   Tablet,
 } from "lucide-react"
@@ -33,6 +35,7 @@ const EDIT_CONTEXT_PRIMARY_FILES = ["app/page.tsx", "app/layout.tsx", "app/globa
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
+type Device = "desktop" | "laptop" | "ipad" | "tablet" | "mobile"
 type ThemeName = "purple" | "green" | "blue" | "navy" | "white"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 type ExistingProjectContext = { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
@@ -45,6 +48,14 @@ const themes: Record<ThemeName, { name: string; sub: string; swatch: string; she
   blue: { name: "Blue Ocean", sub: "Calm & Professional", swatch: "from-blue-950 via-blue-500 to-cyan-300", shell: "from-[#020617] via-[#071d3f] to-[#02040d]" },
   navy: { name: "Dark Navy", sub: "Deep & Focused", swatch: "from-black via-slate-900 to-blue-950", shell: "from-[#000] via-[#07101f] to-[#02040d]" },
   white: { name: "White Mode", sub: "Clean & Minimal", swatch: "from-white via-slate-100 to-slate-300", shell: "from-[#f8fafc] via-white to-[#eef2ff]" },
+}
+
+const devices: Record<Device, { label: string; icon: typeof Monitor; frame: string; iframe: string }> = {
+  desktop: { label: "Desktop", icon: Monitor, frame: "h-full w-full", iframe: "h-full w-full" },
+  laptop: { label: "Laptop", icon: Laptop, frame: "h-[82vh] w-[1280px] max-w-full", iframe: "h-full w-full" },
+  ipad: { label: "iPad", icon: Tablet, frame: "h-[82vh] w-[1024px] max-w-full", iframe: "h-full w-full" },
+  tablet: { label: "Tablet", icon: Tablet, frame: "h-[82vh] w-[768px] max-w-full", iframe: "h-full w-full" },
+  mobile: { label: "Mobile", icon: Smartphone, frame: "h-[82vh] w-[390px] max-w-full", iframe: "h-full w-full" },
 }
 
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
@@ -135,7 +146,7 @@ function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
 const { useState, useEffect, useMemo, useCallback, useRef, Fragment } = React;
 const Link = ({ href, children, ...props }) => React.createElement('a', { href: href || '#', ...props }, children);
 const Image = ({ src, alt, width, height, ...props }) => React.createElement('img', { src, alt: alt || '', width, height, ...props });
-const cn = (...items) => items.flat(Infinity).filter(Boolean).join(' ');
+if (typeof globalThis.cn === 'undefined') globalThis.cn = (...items) => items.flat(Infinity).filter(Boolean).join(' ');
 ${iconShim}
 ${pieces.join("\n\n")}
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -149,8 +160,8 @@ function buildEmptyPreview(message: string): string {
   return `<!doctype html><html><body style="margin:0;background:#020617;color:#94a3b8;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><div style="padding:28px;border:1px solid rgba(148,163,184,.18);border-radius:18px;background:rgba(255,255,255,.04);font-size:13px">${message}</div></body></html>`
 }
 
-function escapePreviewStyle(value: string): string { return value.replace(/<\/style>/gi, "<\\/style>") }
-function safeScriptJson(value: string): string { return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026") }
+function escapePreviewStyle(value: string) { return value.replace(/<\/style>/gi, "<\\/style>") }
+function safeScriptJson(value: string) { return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026") }
 function stablePreviewKey(files: SevenEightSixProjectFileMap | undefined, html: string): string {
   const source = files ? Object.keys(files).sort().map((path) => `${path}:${files[path]}`).join("\n---786-file---\n") : html
   let hash = 2166136261
@@ -182,15 +193,20 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [mode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
+  const [device, setDevice] = useState<Device>("desktop")
   const [theme, setTheme] = useState<ThemeName>("purple")
   const [themeOpen, setThemeOpen] = useState(false)
+  const [deviceOpen, setDeviceOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const endRef = useRef<HTMLDivElement | null>(null)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
   const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files) : { html: "", key: "empty" }), [project])
+  const activeTheme = themes[theme]
+  const ActiveDeviceIcon = devices[device].icon
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
   useEffect(() => {
@@ -218,7 +234,7 @@ export default function SevenEightSixAdminChatPage() {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])
 
   function newChat() {
-    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview")
+    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview"); setRefreshKey((v) => v + 1)
     try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
   }
 
@@ -262,6 +278,7 @@ export default function SevenEightSixAdminChatPage() {
       const persisted = await persistAfterGeneration(generated, text, assistantText, assistantModel, assistantReason)
       if (!persisted) throw new Error("Project generated but could not be saved to Neon. Run setup once, then retry.")
       setProject(persisted)
+      setRefreshKey((v) => v + 1)
       setMessages((current) => [...current, { id: `a-${Date.now()}`, role: "assistant", content: assistantText, model: assistantModel, reason: assistantReason }])
       setSelectedFile((persisted.preview_state.active_file as string | undefined) || (persisted.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(persisted.files)[0]) || "app/page.tsx")
     } catch (error) {
@@ -284,41 +301,45 @@ export default function SevenEightSixAdminChatPage() {
 
   if (isLoading || !isAdmin) return <main className="flex min-h-screen items-center justify-center bg-[#050713] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-200" /></main>
 
-  const activeTheme = themes[theme]
-
   return (
     <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(124,58,237,.42),transparent_26%),radial-gradient(circle_at_55%_0%,rgba(168,85,247,.26),transparent_18%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.12),transparent_26%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(255,255,255,.55)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(124,58,237,.35),transparent_26%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.10),transparent_26%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,.55)_1px,transparent_1px)] [background-size:42px_42px]" />
 
-      <div className="relative flex h-full text-[13px]">
+      <div className="relative flex h-full text-[12px]">
         <aside className="flex w-[61px] shrink-0 flex-col items-center justify-between border-r border-violet-400/20 bg-[#050713]/70 py-4 backdrop-blur-xl">
           <div className="space-y-10">
-            <button onClick={() => router.push('/chat')} className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-600 shadow-[0_0_28px_rgba(124,58,237,.55)]"><Sparkles className="h-5 w-5" /></button>
+            <button onClick={() => router.push('/chat')} className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-600 shadow-[0_0_28px_rgba(124,58,237,.55)]" title="Chat"><Sparkles className="h-5 w-5" /></button>
             <div className="space-y-5">
-              <button onClick={() => router.push('/chat')} className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white"><FolderKanban className="h-5 w-5" /></button>
-              <button onClick={() => router.push('/786-admin/projects')} className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10"><FolderKanban className="h-5 w-5" /></button>
+              <button onClick={() => router.push('/chat')} className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white" title="Chat"><FolderKanban className="h-4 w-4" /></button>
+              <button onClick={() => router.push('/786-admin/projects')} className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Projects"><FolderKanban className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10"><Settings className="h-5 w-5" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 font-black">M</div></div>
+          <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Settings"><Settings className="h-4 w-4" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-xs font-black">M</div></div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[82px] shrink-0 items-center gap-3 border-b border-violet-400/20 bg-[#07031a]/70 px-4 backdrop-blur-2xl">
-            <button onClick={newChat} className="ml-2 inline-flex h-10 items-center gap-2 rounded-2xl bg-violet-600 px-5 text-xs font-black shadow-[0_0_28px_rgba(124,58,237,.4)] transition hover:-translate-y-0.5"><Plus className="h-4 w-4" />New Chat</button>
-            <div className="mx-auto hidden h-10 w-[280px] items-center justify-center gap-3 rounded-full border border-violet-400/20 bg-black/25 px-4 text-slate-300 md:flex"><Monitor className="h-4 w-4" /><span>/</span></div>
-            <button onClick={() => setPanel('preview')} className={`inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-xs font-black ${panel === 'preview' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`}><Monitor className="h-4 w-4" />Preview<ChevronDown className="h-3 w-3" /></button>
-            <button onClick={() => setPanel('code')} className={`inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-xs font-black ${panel === 'code' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`}><Code2 className="h-4 w-4" />Code</button>
-            <button className="grid h-10 w-10 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200"><RotateCw className="h-4 w-4" /></button>
-            <button onClick={publish} disabled={!project || publishing} className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-400/20 bg-black/25 px-4 text-xs font-black text-slate-200 disabled:opacity-40"><Rocket className="h-4 w-4" />{publishing ? 'Publishing' : 'Publish'}<ChevronDown className="h-3 w-3" /></button>
+          <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-violet-400/20 bg-[#07031a]/70 px-4 backdrop-blur-2xl">
+            <button onClick={newChat} className="ml-2 inline-flex h-10 items-center gap-2 rounded-2xl bg-violet-600 px-5 text-xs font-black shadow-[0_0_28px_rgba(124,58,237,.4)] transition hover:-translate-y-0.5" title="New Chat"><Plus className="h-4 w-4" /><span>New Chat</span></button>
+            <div className="mx-auto hidden h-10 w-[280px] items-center justify-center gap-3 rounded-full border border-violet-400/20 bg-black/25 px-4 text-xs text-slate-300 md:flex"><Monitor className="h-4 w-4" /><span>/</span></div>
+            <button onClick={() => setPanel('preview')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'preview' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`} title="Preview"><Monitor className="h-4 w-4" /></button>
+            <button onClick={() => setPanel('code')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'code' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`} title="Code"><Code2 className="h-4 w-4" /></button>
             <div className="relative">
-              <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-400/20 bg-black/25 px-4 text-xs font-black text-slate-200"><Palette className="h-4 w-4" />Theme<ChevronDown className="h-3 w-3" /></button>
-              {themeOpen && <div className="absolute right-0 top-14 z-50 w-[222px] rounded-xl border border-violet-400/25 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
+              <button onClick={() => setDeviceOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title={devices[device].label}><ActiveDeviceIcon className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
+              {deviceOpen && <div className="absolute right-0 top-12 z-50 w-40 rounded-xl border border-violet-400/25 bg-[#100821]/95 p-2 shadow-2xl backdrop-blur-2xl">
+                {(Object.keys(devices) as Device[]).map((key) => { const Icon = devices[key].icon; return <button key={key} onClick={() => { setDevice(key); setDeviceOpen(false); setPanel('preview') }} className={`mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold ${device === key ? 'bg-violet-600/30 text-white' : 'text-slate-300 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{devices[key].label}</button> })}
+              </div>}
+            </div>
+            <button onClick={() => setRefreshKey((v) => v + 1)} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Refresh"><RotateCw className="h-4 w-4" /></button>
+            <button onClick={publish} disabled={!project || publishing} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10 disabled:opacity-40" title="Publish"><Rocket className="h-4 w-4" /></button>
+            <div className="relative">
+              <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
+              {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-violet-400/25 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
                 <p className="mb-3 text-center text-xs text-slate-400">Choose Theme</p>
                 {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); setThemeOpen(false) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-violet-400/60 bg-violet-600/20' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-violet-200" />}</button>)}
               </div>}
             </div>
-            <button className="grid h-10 w-10 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200"><Power className="h-4 w-4" /></button>
+            <button onClick={() => router.push('/786-admin/login')} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Power"><Power className="h-4 w-4" /></button>
           </header>
 
           <div className="flex min-h-0 flex-1">
@@ -335,8 +356,8 @@ export default function SevenEightSixAdminChatPage() {
             </section>
 
             <section className="flex min-w-0 flex-1 flex-col bg-[#020617]/60">
-              {panel === 'preview' ? <div className="grid min-h-0 flex-1 place-items-center p-6">
-                {sending ? <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-slate-300"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading generated preview...</div> : project && previewPayload.html ? <iframe key={`${project.id}-${previewPayload.key}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className="h-full w-full rounded-3xl border border-violet-400/20 bg-white shadow-2xl" /> : <div className="text-center"><Monitor className="mx-auto mb-5 h-16 w-16 text-cyan-300" /><h2 className="text-2xl font-black">No Preview Yet</h2><p className="mt-4 text-sm text-slate-400">New chat starts with empty preview and empty code.</p></div>}
+              {panel === 'preview' ? <div className={`min-h-0 flex-1 ${device === 'desktop' ? 'p-0' : 'flex items-center justify-center overflow-auto p-5'}`}>
+                {sending ? <div className="grid h-full place-items-center"><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-slate-300"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading generated preview...</div></div> : project && previewPayload.html ? <div className={devices[device].frame}><iframe key={`${project.id}-${previewPayload.key}-${device}-${refreshKey}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className={`${devices[device].iframe} bg-white`} /></div> : <div className="grid h-full place-items-center text-center"><div><Monitor className="mx-auto mb-5 h-16 w-16 text-cyan-300" /><h2 className="text-2xl font-black">No Preview Yet</h2><p className="mt-4 text-sm text-slate-400">New chat starts with empty preview and empty code.</p></div></div>}
               </div> : <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6"><div className="overflow-auto rounded-3xl border border-violet-400/20 bg-black/30 p-3">{fileNames.length === 0 ? <p className="p-3 text-sm text-slate-500">No files yet.</p> : fileNames.map((file) => <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-black ${selectedFile === file ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{file}</button>)}</div><pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-violet-400/20 bg-black/30 p-5 text-xs leading-6 text-cyan-50"><code>{project?.files?.[selectedFile] || 'Select a file.'}</code></pre></div>}
             </section>
           </div>
