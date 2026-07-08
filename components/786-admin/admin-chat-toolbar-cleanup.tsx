@@ -2,20 +2,41 @@
 
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { Check, ChevronDown, Code2, Globe2, Monitor, Palette, Power, RefreshCw, Rocket, Sparkles } from "lucide-react"
+import { Check, ChevronDown, Code2, Globe2, Monitor, Palette, Power, RefreshCw, Rocket, Smartphone, Sparkles } from "lucide-react"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
 
+const devices = [
+  ["Full Preview", "desktop"],
+  ["Desktop", "desktop"],
+  ["Laptop", "desktop"],
+  ["Tablet", "tablet"],
+  ["iPad Mini", "ipad"],
+  ["iPad Pro", "ipad"],
+  ["Surface Pro", "tablet"],
+  ["Galaxy Tab", "tablet"],
+  ["Galaxy Fold", "mobile"],
+  ["iPhone 7 Plus", "mobile"],
+  ["iPhone 13", "mobile"],
+  ["iPhone 15", "mobile"],
+  ["iPhone 16", "mobile"],
+  ["iPhone 16 Pro Max", "mobile"],
+  ["Pixel 9", "mobile"],
+  ["Galaxy S25", "mobile"],
+  ["Custom Width", "desktop"],
+]
+
 const themes = [
-  ["Purple Galaxy", "Default", "from-violet-950 via-purple-700 to-fuchsia-400"],
-  ["Green Aurora", "Fresh & Modern", "from-emerald-950 via-emerald-500 to-teal-200"],
-  ["Blue Ocean", "Calm & Professional", "from-blue-950 via-blue-600 to-cyan-300"],
-  ["Dark Navy", "Deep & Focused", "from-black via-slate-950 to-cyan-950"],
-  ["White Mode", "Clean & Minimal", "from-white via-slate-100 to-white"],
+  ["Purple Galaxy", "Default", "from-violet-950 via-purple-700 to-fuchsia-400", "galaxy"],
+  ["Dark Navy", "Deep & Focused", "from-black via-slate-950 to-cyan-950", "galaxy"],
+  ["Green Aurora", "Fresh & Modern", "from-emerald-950 via-emerald-500 to-teal-200", "forest"],
+  ["Blue Ocean", "Calm & Professional", "from-blue-950 via-blue-600 to-cyan-300", "ocean"],
+  ["Mixed Galaxy", "Purple, blue & green", "from-violet-700 via-cyan-500 to-emerald-400", "galaxy"],
+  ["White Mode", "Clean & Minimal", "from-white via-slate-100 to-white", "galaxy"],
 ]
 
 function findNativeButton(label: string) {
-  return Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.toLowerCase().includes(label.toLowerCase()))
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("main > div > section:last-of-type > header button, main > div > section:first-of-type > header button")).find((button) => button.textContent?.toLowerCase().includes(label.toLowerCase()))
 }
 
 function refreshPreview() {
@@ -28,8 +49,21 @@ function refreshPreview() {
   }, 40)
 }
 
+function selectNativeDevice(kind: string) {
+  const label = kind === "desktop" ? "Desktop" : kind === "tablet" ? "Tablet" : kind === "ipad" ? "iPad" : "Mobile"
+  findNativeButton(label)?.click()
+}
+
+function applyTheme(theme: string) {
+  try { localStorage.setItem("786chat_admin_real_theme_v1", theme) } catch {}
+  document.documentElement.setAttribute("data-real-admin-theme", theme)
+}
+
 function AdminChatGalaxyHeader() {
-  const [open, setOpen] = useState(false)
+  const [deviceOpen, setDeviceOpen] = useState(false)
+  const [themeOpen, setThemeOpen] = useState(false)
+  const [selectedDevice, setSelectedDevice] = useState("Full Preview")
+  const [selectedTheme, setSelectedTheme] = useState("Purple Galaxy")
 
   useEffect(() => {
     const style = document.createElement("style")
@@ -64,12 +98,31 @@ function AdminChatGalaxyHeader() {
           <span className="hidden sm:inline">New Chat</span>
         </button>
 
-        <div className="mx-auto flex min-w-0 max-w-[520px] flex-1 items-center gap-3 rounded-2xl border border-violet-300/25 bg-black/20 px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
+        <div className="mx-auto flex min-w-0 max-w-[430px] flex-1 items-center gap-3 rounded-2xl border border-violet-300/25 bg-black/20 px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
           <Globe2 className="h-4 w-4 shrink-0 text-violet-100/85" />
           <div className="truncate text-sm font-bold text-violet-50">/</div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 overflow-x-auto">
+          <div className="relative">
+            <button type="button" onClick={() => setDeviceOpen((value) => !value)} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-violet-300/25 bg-white/[0.045] px-3 text-sm font-black text-white transition hover:border-cyan-200/50 hover:bg-cyan-400/10">
+              <Smartphone className="h-4 w-4 text-cyan-200" />
+              <span className="hidden lg:inline">{selectedDevice}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-violet-200/70" />
+            </button>
+            {deviceOpen && (
+              <div className="absolute right-0 top-[56px] max-h-[70vh] w-[260px] overflow-auto rounded-3xl border border-violet-300/25 bg-[#080516]/95 p-2 shadow-[0_30px_90px_rgba(0,0,0,.70)] backdrop-blur-2xl">
+                <div className="px-3 pb-2 pt-2 text-xs font-semibold text-violet-100/70">Preview Size</div>
+                {devices.map(([label, kind]) => (
+                  <button key={label} type="button" onClick={() => { setSelectedDevice(label); selectNativeDevice(kind); setDeviceOpen(false) }} className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm font-bold transition hover:bg-violet-500/15 ${selectedDevice === label ? "bg-violet-600/25 text-white" : "text-slate-300"}`}>
+                    <span>{label}</span>
+                    {selectedDevice === label && <Check className="h-4 w-4 text-violet-100" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button type="button" onClick={() => findNativeButton("Preview")?.click()} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-violet-300/25 bg-white/[0.045] px-3 text-sm font-black text-white transition hover:border-cyan-200/50 hover:bg-cyan-400/10">
             <Monitor className="h-4 w-4 text-cyan-200" /><span className="hidden md:inline">Preview</span><ChevronDown className="hidden h-3.5 w-3.5 text-violet-200/70 md:block" />
           </button>
@@ -84,18 +137,18 @@ function AdminChatGalaxyHeader() {
           </button>
 
           <div className="relative">
-            <button type="button" onClick={() => setOpen((value) => !value)} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-violet-300/25 bg-white/[0.045] px-3 text-sm font-black text-white transition hover:border-violet-200/60 hover:bg-violet-500/15">
+            <button type="button" onClick={() => setThemeOpen((value) => !value)} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-violet-300/25 bg-white/[0.045] px-3 text-sm font-black text-white transition hover:border-violet-200/60 hover:bg-violet-500/15">
               <Palette className="h-4 w-4 text-violet-100" /><span className="hidden lg:inline">Theme</span><ChevronDown className="hidden h-3.5 w-3.5 text-violet-200/70 lg:block" />
             </button>
-            {open && (
+            {themeOpen && (
               <div className="absolute right-0 top-[56px] w-[290px] rounded-3xl border border-violet-300/25 bg-[#080516]/95 p-3 shadow-[0_30px_90px_rgba(0,0,0,.70)] backdrop-blur-2xl">
                 <div className="px-3 pb-3 pt-2 text-center text-xs font-semibold text-violet-100/70">Choose Theme</div>
                 <div className="space-y-2">
-                  {themes.map(([label, description, swatch], index) => (
-                    <button key={label} type="button" onClick={() => setOpen(false)} className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${index === 0 ? "border-violet-300/65 bg-violet-600/25" : "border-transparent hover:border-white/10 hover:bg-white/[0.045]"}`}>
+                  {themes.map(([label, description, swatch, theme]) => (
+                    <button key={label} type="button" onClick={() => { setSelectedTheme(label); applyTheme(theme); setThemeOpen(false) }} className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${selectedTheme === label ? "border-violet-300/65 bg-violet-600/25" : "border-transparent hover:border-white/10 hover:bg-white/[0.045]"}`}>
                       <span className={`grid h-10 w-10 shrink-0 rounded-full bg-gradient-to-br ${swatch}`} />
                       <span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-white">{label}</span><span className="block truncate text-xs font-medium text-slate-300/80">{description}</span></span>
-                      {index === 0 && <Check className="h-4 w-4 shrink-0 text-violet-100" />}
+                      {selectedTheme === label && <Check className="h-4 w-4 shrink-0 text-violet-100" />}
                     </button>
                   ))}
                 </div>
