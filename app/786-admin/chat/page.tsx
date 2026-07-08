@@ -35,27 +35,39 @@ const EDIT_CONTEXT_PRIMARY_FILES = ["app/page.tsx", "app/layout.tsx", "app/globa
 
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
-type Device = "desktop" | "laptop" | "ipad" | "tablet" | "mobile"
+type Device = "full" | "desktop" | "laptop" | "tablet" | "ipadMini" | "ipadPro" | "surfacePro" | "galaxyTab" | "galaxyFold" | "iphone7Plus" | "iphone13" | "iphone15" | "iphone16" | "iphone16ProMax" | "pixel9" | "galaxyS25" | "custom"
 type ThemeName = "purple" | "green" | "blue" | "navy" | "white"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 type ExistingProjectContext = { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
 type PreviewPayload = { html: string; key: string }
 type ActiveProject = { id: string; title: string; description: string; prompt: string; files: SevenEightSixProjectFileMap; preview_state: AdminProjectPreviewState }
 
-const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string }> = {
-  purple: { name: "Purple Galaxy", sub: "Default", swatch: "from-violet-950 via-violet-600 to-cyan-300", shell: "from-[#050010] via-[#12002d] to-[#02040d]" },
-  green: { name: "Green Aurora", sub: "Fresh & Modern", swatch: "from-emerald-900 via-emerald-500 to-cyan-300", shell: "from-[#00110d] via-[#05251f] to-[#02040d]" },
-  blue: { name: "Blue Ocean", sub: "Calm & Professional", swatch: "from-blue-950 via-blue-500 to-cyan-300", shell: "from-[#020617] via-[#071d3f] to-[#02040d]" },
-  navy: { name: "Dark Navy", sub: "Deep & Focused", swatch: "from-black via-slate-900 to-blue-950", shell: "from-[#000] via-[#07101f] to-[#02040d]" },
-  white: { name: "White Mode", sub: "Clean & Minimal", swatch: "from-white via-slate-100 to-slate-300", shell: "from-[#f8fafc] via-white to-[#eef2ff]" },
+const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
+  purple: { name: "Purple Galaxy", sub: "Default", swatch: "from-violet-950 via-violet-600 to-cyan-300", shell: "from-[#050010] via-[#12002d] to-[#02040d]", accent: "124,58,237" },
+  green: { name: "Green Aurora", sub: "Fresh & Modern", swatch: "from-emerald-900 via-emerald-500 to-cyan-300", shell: "from-[#00110d] via-[#05251f] to-[#02040d]", accent: "16,185,129" },
+  blue: { name: "Blue Ocean", sub: "Calm & Professional", swatch: "from-blue-950 via-blue-500 to-cyan-300", shell: "from-[#020617] via-[#071d3f] to-[#02040d]", accent: "14,165,233" },
+  navy: { name: "Dark Navy", sub: "Deep & Focused", swatch: "from-black via-slate-900 to-blue-950", shell: "from-[#000] via-[#07101f] to-[#02040d]", accent: "30,64,175" },
+  white: { name: "White Mode", sub: "Clean & Minimal", swatch: "from-white via-slate-100 to-slate-300", shell: "from-[#f8fafc] via-white to-[#eef2ff]", accent: "148,163,184" },
 }
 
 const devices: Record<Device, { label: string; icon: typeof Monitor; frame: string; iframe: string }> = {
+  full: { label: "Full Preview", icon: Monitor, frame: "h-full w-full", iframe: "h-full w-full" },
   desktop: { label: "Desktop", icon: Monitor, frame: "h-full w-full", iframe: "h-full w-full" },
-  laptop: { label: "Laptop", icon: Laptop, frame: "h-[82vh] w-[1280px] max-w-full", iframe: "h-full w-full" },
-  ipad: { label: "iPad", icon: Tablet, frame: "h-[82vh] w-[1024px] max-w-full", iframe: "h-full w-full" },
+  laptop: { label: "Laptop", icon: Laptop, frame: "h-[82vh] w-[1366px] max-w-full", iframe: "h-full w-full" },
   tablet: { label: "Tablet", icon: Tablet, frame: "h-[82vh] w-[768px] max-w-full", iframe: "h-full w-full" },
-  mobile: { label: "Mobile", icon: Smartphone, frame: "h-[82vh] w-[390px] max-w-full", iframe: "h-full w-full" },
+  ipadMini: { label: "iPad Mini", icon: Tablet, frame: "h-[82vh] w-[744px] max-w-full", iframe: "h-full w-full" },
+  ipadPro: { label: "iPad Pro", icon: Tablet, frame: "h-[82vh] w-[1024px] max-w-full", iframe: "h-full w-full" },
+  surfacePro: { label: "Surface Pro", icon: Tablet, frame: "h-[82vh] w-[912px] max-w-full", iframe: "h-full w-full" },
+  galaxyTab: { label: "Galaxy Tab", icon: Tablet, frame: "h-[82vh] w-[800px] max-w-full", iframe: "h-full w-full" },
+  galaxyFold: { label: "Galaxy Fold", icon: Smartphone, frame: "h-[82vh] w-[344px] max-w-full", iframe: "h-full w-full" },
+  iphone7Plus: { label: "iPhone 7 Plus", icon: Smartphone, frame: "h-[82vh] w-[414px] max-w-full", iframe: "h-full w-full" },
+  iphone13: { label: "iPhone 13", icon: Smartphone, frame: "h-[82vh] w-[390px] max-w-full", iframe: "h-full w-full" },
+  iphone15: { label: "iPhone 15", icon: Smartphone, frame: "h-[82vh] w-[393px] max-w-full", iframe: "h-full w-full" },
+  iphone16: { label: "iPhone 16", icon: Smartphone, frame: "h-[82vh] w-[393px] max-w-full", iframe: "h-full w-full" },
+  iphone16ProMax: { label: "iPhone 16 Pro Max", icon: Smartphone, frame: "h-[82vh] w-[440px] max-w-full", iframe: "h-full w-full" },
+  pixel9: { label: "Pixel 9", icon: Smartphone, frame: "h-[82vh] w-[412px] max-w-full", iframe: "h-full w-full" },
+  galaxyS25: { label: "Galaxy S25", icon: Smartphone, frame: "h-[82vh] w-[412px] max-w-full", iframe: "h-full w-full" },
+  custom: { label: "Custom Width", icon: Monitor, frame: "h-[82vh] w-[960px] max-w-full", iframe: "h-full w-full" },
 }
 
 function uiFromAdminMessage(m: AdminMessage): UiMessage {
@@ -111,12 +123,18 @@ function transformPreviewSource(src: string): { defaultName: string | null; body
   return { defaultName, body: source.trim(), iconNames: Array.from(icons) }
 }
 
-function filesToPreviewPayload(files: SevenEightSixProjectFileMap | undefined): PreviewPayload {
-  const html = filesToHtml(files)
+function filesToPreviewPayload(files: SevenEightSixProjectFileMap | undefined, theme: ThemeName): PreviewPayload {
+  const html = filesToHtml(files, theme)
   return { html, key: stablePreviewKey(files, html) }
 }
 
-function filesToHtml(files: SevenEightSixProjectFileMap | undefined) {
+function previewThemeCss(theme: ThemeName) {
+  const hue = theme === "green" ? "110deg" : theme === "blue" ? "35deg" : theme === "navy" ? "210deg" : theme === "white" ? "0deg" : "0deg"
+  const brightness = theme === "white" ? "1.08" : "1"
+  return `#root>*{border-radius:0!important;border:0!important;outline:0!important;box-shadow:none!important;min-height:100vh!important}body{overflow:auto!important}${theme === "purple" ? "" : `#root{filter:hue-rotate(${hue}) saturate(1.12) brightness(${brightness});}`}`
+}
+
+function filesToHtml(files: SevenEightSixProjectFileMap | undefined, theme: ThemeName) {
   if (!files || Object.keys(files).length === 0) return buildEmptyPreview("Preview will appear here once a project is generated.")
 
   const rawCss = files["app/globals.css"] || files["src/app/globals.css"] || ""
@@ -153,10 +171,10 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(globalThis.__Page || (() => React.createElement('div', { className: 'p-8 text-slate-200' }, 'Preview component not found'))));
 `
 
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}</style><style>html,body,#root{margin:0;min-height:100%;background:#020617;color:#e2e8f0;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_error{margin:24px;padding:18px;border:1px solid rgba(248,113,113,.5);border-radius:16px;background:#190b12;color:#fecaca;font-size:13px;white-space:pre-wrap}</style></head><body><div id="root"></div><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script><script>function showError(e){document.getElementById('root').innerHTML='<div id="__preview_error">Preview error: '+String(e&&e.message?e.message:e).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</div>'}try{var compiled=Babel.transform(${safeScriptJson(source)},{filename:'preview.tsx',presets:['env','react','typescript']}).code;new Function(compiled)()}catch(e){showError(e);console.error(e)}</script></body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdn.tailwindcss.com"></script><style>${escapePreviewStyle(css)}${previewThemeCss(theme)}</style><style>html,body,#root{margin:0;min-height:100%;background:#020617;color:#e2e8f0;font-family:Inter,system-ui,-apple-system,sans-serif}#__preview_error{margin:24px;padding:18px;border:1px solid rgba(248,113,113,.5);border-radius:16px;background:#190b12;color:#fecaca;font-size:13px;white-space:pre-wrap}</style></head><body><div id="root"></div><script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script><script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script><script>function showError(e){document.getElementById('root').innerHTML='<div id="__preview_error">Preview error: '+String(e&&e.message?e.message:e).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})+'</div>'}try{var compiled=Babel.transform(${safeScriptJson(source)},{filename:'preview.tsx',presets:['env','react','typescript']}).code;new Function(compiled)()}catch(e){showError(e);console.error(e)}</script></body></html>`
 }
 
-function buildEmptyPreview(message: string): string {
+function buildEmptyPreview(message: string) {
   return `<!doctype html><html><body style="margin:0;background:#020617;color:#94a3b8;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;min-height:100vh"><div style="padding:28px;border:1px solid rgba(148,163,184,.18);border-radius:18px;background:rgba(255,255,255,.04);font-size:13px">${message}</div></body></html>`
 }
 
@@ -193,7 +211,7 @@ export default function SevenEightSixAdminChatPage() {
   const [input, setInput] = useState("")
   const [mode] = useState<Mode>("auto")
   const [panel, setPanel] = useState<Panel>("preview")
-  const [device, setDevice] = useState<Device>("desktop")
+  const [device, setDevice] = useState<Device>("full")
   const [theme, setTheme] = useState<ThemeName>("purple")
   const [themeOpen, setThemeOpen] = useState(false)
   const [deviceOpen, setDeviceOpen] = useState(false)
@@ -204,7 +222,7 @@ export default function SevenEightSixAdminChatPage() {
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
-  const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files) : { html: "", key: "empty" }), [project])
+  const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files, theme) : { html: "", key: "empty" }), [project, theme])
   const activeTheme = themes[theme]
   const ActiveDeviceIcon = devices[device].icon
 
@@ -302,63 +320,63 @@ export default function SevenEightSixAdminChatPage() {
   if (isLoading || !isAdmin) return <main className="flex min-h-screen items-center justify-center bg-[#050713] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-200" /></main>
 
   return (
-    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(124,58,237,.35),transparent_26%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.10),transparent_26%)]" />
+    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(var(--accent),.35),transparent_26%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.10),transparent_26%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,.55)_1px,transparent_1px)] [background-size:42px_42px]" />
 
       <div className="relative flex h-full text-[12px]">
-        <aside className="flex w-[61px] shrink-0 flex-col items-center justify-between border-r border-violet-400/20 bg-[#050713]/70 py-4 backdrop-blur-xl">
+        <aside className="flex w-[61px] shrink-0 flex-col items-center justify-between border-r border-white/10 bg-[#050713]/70 py-4 backdrop-blur-xl">
           <div className="space-y-10">
-            <button onClick={() => router.push('/chat')} className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-600 shadow-[0_0_28px_rgba(124,58,237,.55)]" title="Chat"><Sparkles className="h-5 w-5" /></button>
+            <button onClick={() => router.push('/chat')} className="grid h-11 w-11 place-items-center rounded-2xl bg-[rgb(var(--accent))] shadow-[0_0_28px_rgba(var(--accent),.55)]" title="Chat"><Sparkles className="h-5 w-5" /></button>
             <div className="space-y-5">
-              <button onClick={() => router.push('/chat')} className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white" title="Chat"><FolderKanban className="h-4 w-4" /></button>
+              <button onClick={() => router.push('/chat')} className="grid h-10 w-10 place-items-center rounded-xl bg-[rgb(var(--accent))] text-white" title="Chat"><FolderKanban className="h-4 w-4" /></button>
               <button onClick={() => router.push('/786-admin/projects')} className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Projects"><FolderKanban className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Settings"><Settings className="h-4 w-4" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-xs font-black">M</div></div>
+          <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Settings"><Settings className="h-4 w-4" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-[rgb(var(--accent))] text-xs font-black">M</div></div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-violet-400/20 bg-[#07031a]/70 px-4 backdrop-blur-2xl">
-            <button onClick={newChat} className="ml-2 inline-flex h-10 items-center gap-2 rounded-2xl bg-violet-600 px-5 text-xs font-black shadow-[0_0_28px_rgba(124,58,237,.4)] transition hover:-translate-y-0.5" title="New Chat"><Plus className="h-4 w-4" /><span>New Chat</span></button>
-            <div className="mx-auto hidden h-10 w-[280px] items-center justify-center gap-3 rounded-full border border-violet-400/20 bg-black/25 px-4 text-xs text-slate-300 md:flex"><Monitor className="h-4 w-4" /><span>/</span></div>
-            <button onClick={() => setPanel('preview')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'preview' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`} title="Preview"><Monitor className="h-4 w-4" /></button>
-            <button onClick={() => setPanel('code')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'code' ? 'border-violet-400/40 bg-violet-600/25 text-white' : 'border-violet-400/20 bg-black/25 text-slate-300'}`} title="Code"><Code2 className="h-4 w-4" /></button>
+          <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#07031a]/70 px-4 backdrop-blur-2xl">
+            <button onClick={newChat} className="ml-2 inline-flex h-10 items-center gap-2 rounded-2xl bg-[rgb(var(--accent))] px-5 text-xs font-black shadow-[0_0_28px_rgba(var(--accent),.4)] transition hover:-translate-y-0.5" title="New Chat"><Plus className="h-4 w-4" /><span>New Chat</span></button>
+            <div className="mx-auto hidden h-10 w-[280px] items-center justify-center gap-3 rounded-full border border-white/10 bg-black/25 px-4 text-xs text-slate-300 md:flex"><Monitor className="h-4 w-4" /><span>/</span></div>
+            <button onClick={() => setPanel('preview')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'preview' ? 'border-white/20 bg-[rgba(var(--accent),.35)] text-white' : 'border-white/10 bg-black/25 text-slate-300'}`} title="Preview"><Monitor className="h-4 w-4" /></button>
+            <button onClick={() => setPanel('code')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'code' ? 'border-white/20 bg-[rgba(var(--accent),.35)] text-white' : 'border-white/10 bg-black/25 text-slate-300'}`} title="Code"><Code2 className="h-4 w-4" /></button>
             <div className="relative">
-              <button onClick={() => setDeviceOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title={devices[device].label}><ActiveDeviceIcon className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
-              {deviceOpen && <div className="absolute right-0 top-12 z-50 w-40 rounded-xl border border-violet-400/25 bg-[#100821]/95 p-2 shadow-2xl backdrop-blur-2xl">
-                {(Object.keys(devices) as Device[]).map((key) => { const Icon = devices[key].icon; return <button key={key} onClick={() => { setDevice(key); setDeviceOpen(false); setPanel('preview') }} className={`mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold ${device === key ? 'bg-violet-600/30 text-white' : 'text-slate-300 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{devices[key].label}</button> })}
+              <button onClick={() => setDeviceOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title={devices[device].label}><ActiveDeviceIcon className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
+              {deviceOpen && <div className="absolute right-0 top-12 z-50 max-h-[430px] w-52 overflow-y-auto rounded-xl border border-white/10 bg-[#100821]/95 p-2 shadow-2xl backdrop-blur-2xl">
+                {(Object.keys(devices) as Device[]).map((key) => { const Icon = devices[key].icon; return <button key={key} onClick={() => { setDevice(key); setDeviceOpen(false); setPanel('preview') }} className={`mb-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold ${device === key ? 'bg-[rgba(var(--accent),.35)] text-white' : 'text-slate-300 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{devices[key].label}</button> })}
               </div>}
             </div>
-            <button onClick={() => setRefreshKey((v) => v + 1)} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Refresh"><RotateCw className="h-4 w-4" /></button>
-            <button onClick={publish} disabled={!project || publishing} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10 disabled:opacity-40" title="Publish"><Rocket className="h-4 w-4" /></button>
+            <button onClick={() => setRefreshKey((v) => v + 1)} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Refresh"><RotateCw className="h-4 w-4" /></button>
+            <button onClick={publish} disabled={!project || publishing} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10 disabled:opacity-40" title="Publish"><Rocket className="h-4 w-4" /></button>
             <div className="relative">
-              <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
-              {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-violet-400/25 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
+              <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
+              {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-white/10 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
                 <p className="mb-3 text-center text-xs text-slate-400">Choose Theme</p>
-                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); setThemeOpen(false) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-violet-400/60 bg-violet-600/20' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-violet-200" />}</button>)}
+                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); setThemeOpen(false); setRefreshKey((v) => v + 1) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-white/20 bg-[rgba(var(--accent),.35)]' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-white" />}</button>)}
               </div>}
             </div>
-            <button onClick={() => router.push('/786-admin/login')} className="grid h-10 w-12 place-items-center rounded-xl border border-violet-400/20 bg-black/25 text-slate-200 hover:bg-white/10" title="Power"><Power className="h-4 w-4" /></button>
+            <button onClick={() => router.push('/786-admin/login')} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Power"><Power className="h-4 w-4" /></button>
           </header>
 
           <div className="flex min-h-0 flex-1">
-            <section className="relative flex w-[328px] shrink-0 flex-col border-r border-violet-500/60 bg-[#09051a]/55 backdrop-blur-xl">
+            <section className="relative flex w-[328px] shrink-0 flex-col border-r border-white/10 bg-[#09051a]/55 backdrop-blur-xl">
               <div className="flex-1 overflow-y-auto p-5 pb-36">
                 {messages.length === 0 ? <div className="flex h-full flex-col justify-center text-center">
-                  <div className="mb-28 rounded-[22px] border border-violet-400/25 bg-black/30 p-5 text-left shadow-[0_0_60px_rgba(124,58,237,.18)]"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-full bg-violet-600"><Sparkles className="h-5 w-5" /></div><div><p className="font-black">AI Assistant</p><p className="text-xs text-violet-200">Galaxy Model v2.5</p></div></div><p className="mt-5 inline-flex items-center gap-2 text-xs font-black text-emerald-300"><span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500"><Check className="h-4 w-4 text-white" /></span>Agent ready</p></div>
+                  <div className="mb-28 rounded-[22px] border border-white/10 bg-black/30 p-5 text-left shadow-[0_0_60px_rgba(var(--accent),.18)]"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-full bg-[rgb(var(--accent))]"><Sparkles className="h-5 w-5" /></div><div><p className="font-black">AI Assistant</p><p className="text-xs text-violet-200">Galaxy Model v2.5</p></div></div><p className="mt-5 inline-flex items-center gap-2 text-xs font-black text-emerald-300"><span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500"><Check className="h-4 w-4 text-white" /></span>Agent ready</p></div>
                   <h1 className="text-xl font-black text-slate-200">Welcome back to 786.Chat</h1><p className="mx-auto mt-4 max-w-[260px] text-sm leading-6 text-slate-400">New chat is empty. Send a build prompt to create real project files.</p>
-                </div> : messages.map((m) => <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === 'user' ? 'ml-5 border-violet-300/25 bg-violet-600/20 text-violet-50' : 'mr-5 border-white/10 bg-white/[0.045] text-slate-200'}`}><div className="mb-2 text-xs font-black text-slate-400">{m.role === 'user' ? 'You' : '786.Chat'}</div><p className="whitespace-pre-wrap">{m.content}</p></div>)}
-                {sending && <div className="rounded-3xl border border-violet-300/20 bg-violet-600/15 p-4 text-sm"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Creating real project files...</div>}
+                </div> : messages.map((m) => <div key={m.id} className={`mb-4 rounded-3xl border p-4 text-sm leading-6 ${m.role === 'user' ? 'ml-5 border-white/10 bg-[rgba(var(--accent),.25)] text-white' : 'mr-5 border-white/10 bg-white/[0.045] text-slate-200'}`}><div className="mb-2 text-xs font-black text-slate-400">{m.role === 'user' ? 'You' : '786.Chat'}</div><p className="whitespace-pre-wrap">{m.content}</p></div>)}
+                {sending && <div className="rounded-3xl border border-white/10 bg-[rgba(var(--accent),.18)] p-4 text-sm"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Creating real project files...</div>}
                 <div ref={endRef} />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 border-t border-violet-400/15 bg-[#09051a]/95 p-4 backdrop-blur-xl"><div className="flex items-center gap-3 rounded-2xl border border-violet-400/20 bg-black/25 px-4 py-3"><Paperclip className="h-5 w-5 text-slate-400" /><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={1} className="min-h-8 flex-1 resize-none bg-transparent py-1 text-xs text-white outline-none placeholder:text-slate-500" placeholder="Ask 786.Chat to build a real project..." /><button onClick={send} disabled={sending || !input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-violet-600 disabled:opacity-40"><Send className="h-4 w-4" /></button></div><p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold text-cyan-100">{project ? `Editing ${project.title} — auto-save on` : 'New Chat is empty. Build prompt creates real files saved to Neon.'}</p></div>
+              <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#09051a]/95 p-4 backdrop-blur-xl"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3"><Paperclip className="h-5 w-5 text-slate-400" /><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={1} className="min-h-8 flex-1 resize-none bg-transparent py-1 text-xs text-white outline-none placeholder:text-slate-500" placeholder="Ask 786.Chat to build a real project..." /><button onClick={send} disabled={sending || !input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[rgb(var(--accent))] disabled:opacity-40"><Send className="h-4 w-4" /></button></div><p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold text-cyan-100">{project ? `Editing ${project.title} — auto-save on` : 'New Chat is empty. Build prompt creates real files saved to Neon.'}</p></div>
             </section>
 
             <section className="flex min-w-0 flex-1 flex-col bg-[#020617]/60">
-              {panel === 'preview' ? <div className={`min-h-0 flex-1 ${device === 'desktop' ? 'p-0' : 'flex items-center justify-center overflow-auto p-5'}`}>
-                {sending ? <div className="grid h-full place-items-center"><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-slate-300"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading generated preview...</div></div> : project && previewPayload.html ? <div className={devices[device].frame}><iframe key={`${project.id}-${previewPayload.key}-${device}-${refreshKey}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className={`${devices[device].iframe} bg-white`} /></div> : <div className="grid h-full place-items-center text-center"><div><Monitor className="mx-auto mb-5 h-16 w-16 text-cyan-300" /><h2 className="text-2xl font-black">No Preview Yet</h2><p className="mt-4 text-sm text-slate-400">New chat starts with empty preview and empty code.</p></div></div>}
-              </div> : <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6"><div className="overflow-auto rounded-3xl border border-violet-400/20 bg-black/30 p-3">{fileNames.length === 0 ? <p className="p-3 text-sm text-slate-500">No files yet.</p> : fileNames.map((file) => <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-black ${selectedFile === file ? 'bg-violet-600 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{file}</button>)}</div><pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-violet-400/20 bg-black/30 p-5 text-xs leading-6 text-cyan-50"><code>{project?.files?.[selectedFile] || 'Select a file.'}</code></pre></div>}
+              {panel === 'preview' ? <div className={`min-h-0 flex-1 ${device === 'full' || device === 'desktop' ? 'p-0' : 'flex items-center justify-center overflow-auto p-5'}`}>
+                {sending ? <div className="grid h-full place-items-center"><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-slate-300"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading generated preview...</div></div> : project && previewPayload.html ? <div className={`${devices[device].frame} overflow-hidden bg-white`}><iframe key={`${project.id}-${previewPayload.key}-${device}-${refreshKey}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className={`${devices[device].iframe} block border-0 bg-white`} /></div> : <div className="grid h-full place-items-center text-center"><div><Monitor className="mx-auto mb-5 h-16 w-16 text-cyan-300" /><h2 className="text-2xl font-black">No Preview Yet</h2><p className="mt-4 text-sm text-slate-400">New chat starts with empty preview and empty code.</p></div></div>}
+              </div> : <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6"><div className="overflow-auto rounded-3xl border border-white/10 bg-black/30 p-3">{fileNames.length === 0 ? <p className="p-3 text-sm text-slate-500">No files yet.</p> : fileNames.map((file) => <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-black ${selectedFile === file ? 'bg-[rgb(var(--accent))] text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{file}</button>)}</div><pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-black/30 p-5 text-xs leading-6 text-cyan-50"><code>{project?.files?.[selectedFile] || 'Select a file.'}</code></pre></div>}
             </section>
           </div>
         </div>
