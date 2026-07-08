@@ -21,7 +21,7 @@ function AdminChatGalaxyHeader() {
         <div className="absolute inset-0 opacity-50 [background-image:radial-gradient(rgba(245,208,254,.9)_1px,transparent_1px),radial-gradient(rgba(103,232,249,.7)_1px,transparent_1px)] [background-position:12px_18px,54px_34px] [background-size:72px_72px,120px_120px]" />
       </div>
 
-      <div className="pointer-events-auto relative flex h-full items-center gap-3 px-3 sm:px-5 lg:px-6">
+      <div className="relative flex h-full items-center gap-3 px-3 sm:px-5 lg:px-6">
         <div className="hidden h-12 w-12 shrink-0 place-items-center rounded-2xl border border-violet-300/30 bg-violet-500/20 shadow-[0_0_35px_rgba(139,92,246,.30)] lg:grid">
           <Sparkles className="h-5 w-5 text-violet-100" />
         </div>
