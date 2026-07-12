@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
+import { PremiumAdminBackground } from "@/components/786-admin/premium-background"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 
@@ -65,8 +66,7 @@ export default function SevenEightSixAdminLoginPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#03040b] text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(0,255,255,0.26),transparent_26%),radial-gradient(circle_at_72%_28%,rgba(129,92,255,0.24),transparent_34%),radial-gradient(circle_at_48%_100%,rgba(0,255,170,0.16),transparent_32%)]" />
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:42px_42px] opacity-25" />
+      <PremiumAdminBackground />
 
       <section className="relative z-10 grid min-h-screen lg:grid-cols-[0.88fr_1.12fr]">
         <div className="flex items-center justify-center px-5 py-10">
@@ -74,16 +74,16 @@ export default function SevenEightSixAdminLoginPage() {
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.45, ease: "easeOut" }}
-            className="w-full max-w-[390px]"
+            className="w-full max-w-[410px]"
           >
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-white/[0.04] px-3 py-1.5 text-xs text-cyan-100 shadow-[0_0_30px_rgba(0,255,255,0.12)] backdrop-blur-xl">
               <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
               Owner-only secure access
             </div>
 
-            <div className="relative rounded-[26px] border border-cyan-300/20 bg-[#070a14]/82 p-[1px] shadow-[0_0_75px_rgba(0,255,255,0.16)] backdrop-blur-2xl">
+            <div className="relative rounded-[30px] border border-white/15 bg-white/[0.055] p-[1px] shadow-[0_0_75px_rgba(0,255,255,0.16)] backdrop-blur-2xl">
               <div className="absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-cyan-300 to-transparent" />
-              <div className="rounded-[25px] border border-white/5 bg-black/35 px-6 py-7">
+              <div className="rounded-[29px] border border-white/10 bg-black/30 px-6 py-7">
                 <div className="mb-7">
                   <div className="mb-4 flex h-13 w-13 items-center justify-center rounded-2xl border border-cyan-300/25 bg-cyan-300/10 shadow-[0_0_34px_rgba(0,255,255,0.18)]">
                     <Sparkles className="h-6 w-6 text-cyan-200" />
@@ -189,7 +189,7 @@ export default function SevenEightSixAdminLoginPage() {
                 786
               </div>
               <h2 className="text-5xl font-semibold tracking-tight text-white">
-                Build faster with <span className="text-cyan-200">786.Chat</span>
+                Build beautifully with <span className="bg-gradient-to-r from-cyan-200 via-violet-200 to-fuchsia-200 bg-clip-text text-transparent">786.Chat</span>
               </h2>
               <p className="mx-auto mt-5 max-w-md text-base leading-7 text-slate-300">
                 Premium AI admin workspace for code, design, files, APIs, projects and deployment control.

@@ -1,0 +1,104 @@
+.backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(var(--admin-accent) / .24), transparent 30%),
+    radial-gradient(circle at 88% 18%, rgb(var(--admin-secondary) / .2), transparent 32%),
+    radial-gradient(circle at 48% 110%, rgb(var(--admin-tertiary) / .18), transparent 38%),
+    linear-gradient(145deg, rgb(var(--admin-bg-start)), rgb(var(--admin-bg-mid)) 52%, rgb(var(--admin-bg-end)));
+}
+
+.backdrop::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: conic-gradient(from 180deg at 50% 50%, transparent 0deg, rgb(var(--admin-accent) / .13) 72deg, transparent 145deg, rgb(var(--admin-secondary) / .12) 232deg, transparent 315deg);
+  filter: blur(70px);
+  animation: adminAuroraSpin 24s linear infinite;
+}
+
+.backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .3;
+  background-image:
+    linear-gradient(rgb(255 255 255 / .04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / .04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 88%);
+}
+
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(18px);
+  opacity: .55;
+  mix-blend-mode: screen;
+  animation: adminFloat 13s ease-in-out infinite alternate;
+}
+
+.orbOne {
+  left: 7%;
+  top: 16%;
+  width: 18rem;
+  height: 18rem;
+  background: rgb(var(--admin-accent) / .28);
+}
+
+.orbTwo {
+  right: 9%;
+  top: 10%;
+  width: 22rem;
+  height: 22rem;
+  background: rgb(var(--admin-secondary) / .22);
+  animation-delay: -5s;
+}
+
+.orbThree {
+  left: 42%;
+  bottom: -10%;
+  width: 25rem;
+  height: 25rem;
+  background: rgb(var(--admin-tertiary) / .2);
+  animation-delay: -9s;
+}
+
+.sparkles {
+  position: absolute;
+  inset: 0;
+  opacity: .42;
+  background-image:
+    radial-gradient(circle, rgb(255 255 255 / .8) 0 1px, transparent 1.6px),
+    radial-gradient(circle, rgb(var(--admin-accent) / .9) 0 1px, transparent 1.5px);
+  background-position: 0 0, 24px 36px;
+  background-size: 82px 82px, 113px 113px;
+  animation: adminDrift 28s linear infinite;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 35%, rgb(0 0 0 / .42) 100%);
+}
+
+@keyframes adminAuroraSpin {
+  to { transform: rotate(360deg) scale(1.06); }
+}
+
+@keyframes adminFloat {
+  from { transform: translate3d(-2%, -3%, 0) scale(.96); }
+  to { transform: translate3d(7%, 8%, 0) scale(1.08); }
+}
+
+@keyframes adminDrift {
+  to { background-position: 82px 82px, -89px 149px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop::before,
+  .orb,
+  .sparkles { animation: none; }
+}

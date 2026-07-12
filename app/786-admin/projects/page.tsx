@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { AdminProjectListItem } from "@/lib/786-admin/types"
+import { PremiumAdminBackground } from "@/components/786-admin/premium-background"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
@@ -492,12 +493,13 @@ export default function SevenEightSixProjectsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050713] text-slate-100">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[240px_1fr]">
-        <aside className="hidden border-r border-cyan-300/15 bg-[#06101c] p-4 lg:flex lg:flex-col">
+    <main className="relative min-h-screen overflow-hidden bg-[#050713] text-slate-100">
+      <PremiumAdminBackground />
+      <div className="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">
+        <aside className="hidden border-r border-white/10 bg-black/25 p-5 backdrop-blur-2xl lg:flex lg:flex-col">
           <button
             onClick={() => router.push("/786-admin/chat")}
-            className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-lg font-black text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.25)]"
+            className="mb-8 flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-cyan-200 via-violet-300 to-fuchsia-300 text-lg font-black text-slate-950 shadow-[0_0_40px_rgba(139,92,246,0.35)] transition hover:scale-105"
           >
             786
           </button>
@@ -516,7 +518,7 @@ export default function SevenEightSixProjectsPage() {
           </nav>
         </aside>
 
-        <section className="px-6 py-10 lg:px-16">
+        <section className="px-6 py-10 lg:px-14 xl:px-20">
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-4xl font-black tracking-tight text-white">Projects</h1>
