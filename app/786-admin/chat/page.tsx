@@ -28,7 +28,6 @@ import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
 import { ADMIN_THEME_STORAGE_KEY, PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"
-import whiteThemeStyles from "@/components/786-admin/white-theme-overrides.module.css"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
@@ -40,7 +39,7 @@ const EDIT_CONTEXT_PRIMARY_FILES = ["app/page.tsx", "app/layout.tsx", "app/globa
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type Device = "full" | "desktop" | "laptop" | "tablet" | "ipadMini" | "ipadPro" | "surfacePro" | "galaxyTab" | "galaxyFold" | "iphone7Plus" | "iphone13" | "iphone15" | "iphone16" | "iphone16ProMax" | "pixel9" | "galaxyS25" | "custom"
-type ThemeName = "purple" | "green" | "blue" | "navy" | "white"
+type ThemeName = "purple" | "green" | "blue" | "navy"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 type ExistingProjectContext = { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
 type PreviewPayload = { html: string; key: string }
@@ -56,7 +55,6 @@ const visualThemes: Record<ThemeName, AdminVisualTheme> = {
   green: "emerald",
   blue: "ocean",
   navy: "midnight",
-  white: "pearl",
 }
 
 const themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {
@@ -64,7 +62,7 @@ const themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {
   emerald: "green",
   ocean: "blue",
   midnight: "navy",
-  pearl: "white",
+  pearl: "purple",
 }
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
@@ -72,7 +70,6 @@ const themes: Record<ThemeName, { name: string; sub: string; swatch: string; she
   green: { name: "Green Aurora", sub: "Fresh & Modern", swatch: "from-emerald-900 via-emerald-500 to-cyan-300", shell: "from-[#00110d] via-[#05251f] to-[#02040d]", accent: "16,185,129" },
   blue: { name: "Blue Ocean", sub: "Calm & Professional", swatch: "from-blue-950 via-blue-500 to-cyan-300", shell: "from-[#020617] via-[#071d3f] to-[#02040d]", accent: "14,165,233" },
   navy: { name: "Dark Navy", sub: "Deep & Focused", swatch: "from-black via-slate-900 to-blue-950", shell: "from-[#000] via-[#07101f] to-[#02040d]", accent: "30,64,175" },
-  white: { name: "White Mode", sub: "Clean & Minimal", swatch: "from-white via-slate-100 to-slate-300", shell: "from-[#f8fafc] via-white to-[#eef2ff]", accent: "148,163,184" },
 }
 
 const devices: Record<Device, { label: string; icon: typeof Monitor; frame: string; iframe: string }> = {
@@ -252,7 +249,6 @@ export default function SevenEightSixAdminChatPage() {
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
   const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files, theme) : { html: "", key: "empty" }), [project, theme])
   const activeTheme = themes[theme]
-  const isLightTheme = theme === "white"
   const ActiveDeviceIcon = devices[device].icon
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
@@ -386,7 +382,7 @@ export default function SevenEightSixAdminChatPage() {
   if (isLoading || !isAdmin) return <main className="flex min-h-screen items-center justify-center bg-[#050713] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-200" /></main>
 
   return (
-    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} ${isLightTheme ? whiteThemeStyles.lightTheme : "text-white"}`} style={{ ["--accent" as string]: activeTheme.accent }}>
+    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>
       <PremiumAdminBackground theme={visualThemes[theme]} />
 
       <div className="relative z-10 flex h-full p-2 text-[12px] lg:p-3">
