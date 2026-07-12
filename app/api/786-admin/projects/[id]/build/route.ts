@@ -114,7 +114,11 @@ export async function POST(request: Request, { params }: Ctx) {
   })
 
   try {
-    const runner = await dispatchGeneratedProjectBuild({ buildId: build.id, projectId: id })
+    const runner = await dispatchGeneratedProjectBuild({
+      buildId: build.id,
+      projectId: id,
+      baseUrl: new URL(request.url).origin,
+    })
     await appendBuildLog({
       buildId: build.id,
       line: `[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
