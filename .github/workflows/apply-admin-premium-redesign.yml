@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   apply:
-    if: contains(github.event.head_commit.message, 'one-time premium redesign applicator')
+    if: contains(github.event.head_commit.message, 'persistent theme patch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,52 +19,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Patch admin pages
+      - name: Persist selected admin theme
         run: |
           python - <<'PY'
           from pathlib import Path
-
-          # Login
-          p = Path('app/786-admin/login/page.tsx')
-          s = p.read_text()
-          s = s.replace('import { useAuth } from "@/contexts/auth-context"', 'import { useAuth } from "@/contexts/auth-context"\nimport { PremiumAdminBackground } from "@/components/786-admin/premium-background"')
-          s = s.replace('''      <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_18%,rgba(0,255,255,0.26),transparent_26%),radial-gradient(circle_at_72%_28%,rgba(129,92,255,0.24),transparent_34%),radial-gradient(circle_at_48%_100%,rgba(0,255,170,0.16),transparent_32%)]" />\n      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:42px_42px] opacity-25" />''', '      <PremiumAdminBackground />')
-          s = s.replace('className="w-full max-w-[390px]"', 'className="w-full max-w-[410px]"')
-          s = s.replace('rounded-[26px] border border-cyan-300/20 bg-[#070a14]/82', 'rounded-[30px] border border-white/15 bg-white/[0.055]')
-          s = s.replace('rounded-[25px] border border-white/5 bg-black/35', 'rounded-[29px] border border-white/10 bg-black/30')
-          s = s.replace('Build faster with <span className="text-cyan-200">786.Chat</span>', 'Build beautifully with <span className="bg-gradient-to-r from-cyan-200 via-violet-200 to-fuchsia-200 bg-clip-text text-transparent">786.Chat</span>')
-          p.write_text(s)
-
-          # Projects
-          p = Path('app/786-admin/projects/page.tsx')
-          s = p.read_text()
-          s = s.replace('import type { AdminProjectListItem } from "@/lib/786-admin/types"', 'import type { AdminProjectListItem } from "@/lib/786-admin/types"\nimport { PremiumAdminBackground } from "@/components/786-admin/premium-background"')
-          s = s.replace('<main className="min-h-screen bg-[#050713] text-slate-100">\n      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[240px_1fr]">', '<main className="relative min-h-screen overflow-hidden bg-[#050713] text-slate-100">\n      <PremiumAdminBackground />\n      <div className="relative z-10 grid min-h-screen grid-cols-1 lg:grid-cols-[260px_1fr]">')
-          s = s.replace('className="hidden border-r border-cyan-300/15 bg-[#06101c] p-4 lg:flex lg:flex-col"', 'className="hidden border-r border-white/10 bg-black/25 p-5 backdrop-blur-2xl lg:flex lg:flex-col"')
-          s = s.replace('className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-300 text-lg font-black text-slate-950 shadow-[0_0_28px_rgba(34,211,238,0.25)]"', 'className="mb-8 flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-cyan-200 via-violet-300 to-fuchsia-300 text-lg font-black text-slate-950 shadow-[0_0_40px_rgba(139,92,246,0.35)] transition hover:scale-105"')
-          s = s.replace('className="px-6 py-10 lg:px-16"', 'className="px-6 py-10 lg:px-14 xl:px-20"')
-          p.write_text(s)
-
-          # Chat workspace
           p = Path('app/786-admin/chat/page.tsx')
           s = p.read_text()
-          s = s.replace('import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"', 'import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"\nimport { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"')
-          marker = '''const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {'''
-          insert = '''const visualThemes: Record<ThemeName, AdminVisualTheme> = {\n  purple: "cosmic",\n  green: "emerald",\n  blue: "ocean",\n  navy: "midnight",\n  white: "pearl",\n}\n\nconst themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {'''
-          s = s.replace(marker, insert)
-          s = s.replace('''    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>\n      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(var(--accent),.35),transparent_26%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.10),transparent_26%)]" />\n      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,.55)_1px,transparent_1px)] [background-size:42px_42px]" />''', '''    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>\n      <PremiumAdminBackground theme={visualThemes[theme]} />''')
-          s = s.replace('className="relative flex h-full text-[12px]"', 'className="relative z-10 flex h-full p-2 text-[12px] lg:p-3"')
-          s = s.replace('className="flex w-[61px] shrink-0 flex-col items-center justify-between border-r border-white/10 bg-[#050713]/70 py-4 backdrop-blur-xl"', 'className="flex w-[68px] shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/10 bg-black/25 py-4 shadow-2xl backdrop-blur-2xl"')
-          s = s.replace('className="flex min-w-0 flex-1 flex-col"', 'className="ml-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/10 bg-black/20 shadow-2xl backdrop-blur-xl"', 1)
-          s = s.replace('className="flex h-[72px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#07031a]/70 px-4 backdrop-blur-2xl"', 'className="flex h-[72px] shrink-0 items-center gap-3 border-b border-white/10 bg-white/[0.035] px-4 backdrop-blur-2xl"')
-          s = s.replace('className="relative flex w-[328px] shrink-0 flex-col border-r border-white/10 bg-[#09051a]/55 backdrop-blur-xl"', 'className="relative flex w-[340px] shrink-0 flex-col border-r border-white/10 bg-black/20 backdrop-blur-2xl"')
-          s = s.replace('className="flex min-w-0 flex-1 flex-col bg-[#020617]/60"', 'className="flex min-w-0 flex-1 flex-col bg-black/15"')
+          s = s.replace(
+            'import { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"',
+            'import { ADMIN_THEME_STORAGE_KEY, PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"'
+          )
+          anchor = '''const visualThemes: Record<ThemeName, AdminVisualTheme> = {\n  purple: "cosmic",\n  green: "emerald",\n  blue: "ocean",\n  navy: "midnight",\n  white: "pearl",\n}\n'''
+          replacement = anchor + '''\nconst themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {\n  cosmic: "purple",\n  emerald: "green",\n  ocean: "blue",\n  midnight: "navy",\n  pearl: "white",\n}\n'''
+          s = s.replace(anchor, replacement)
+          effect_anchor = '  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])\n'
+          effect = effect_anchor + '''  useEffect(() => {\n    try {\n      const saved = localStorage.getItem(ADMIN_THEME_STORAGE_KEY) as AdminVisualTheme | null\n      if (saved && themeNamesByVisual[saved]) setTheme(themeNamesByVisual[saved])\n    } catch {}\n  }, [])\n'''
+          s = s.replace(effect_anchor, effect)
           p.write_text(s)
           PY
-      - name: Commit redesign
+      - name: Commit persistent theme
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/786-admin/login/page.tsx app/786-admin/projects/page.tsx app/786-admin/chat/page.tsx
-          git commit -m "feat(admin-ui): apply premium animated dashboard redesign"
+          git add app/786-admin/chat/page.tsx
+          git commit -m "feat(admin-ui): persist selected theme across admin pages"
           git push origin HEAD:agent/admin-dashboard-redesign
