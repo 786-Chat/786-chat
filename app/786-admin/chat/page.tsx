@@ -28,6 +28,7 @@ import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
 import { ADMIN_THEME_STORAGE_KEY, PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"
+import whiteThemeStyles from "@/components/786-admin/white-theme-overrides.module.css"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
