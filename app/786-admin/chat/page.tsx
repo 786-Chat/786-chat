@@ -27,6 +27,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
+import { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
@@ -48,6 +49,14 @@ type PendingAttachment = { id: string; name: string; mediaType: string; url: str
 const MAX_ATTACHMENTS = 4
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"])
+
+const visualThemes: Record<ThemeName, AdminVisualTheme> = {
+  purple: "cosmic",
+  green: "emerald",
+  blue: "ocean",
+  navy: "midnight",
+  white: "pearl",
+}
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
   purple: { name: "Purple Galaxy", sub: "Default", swatch: "from-violet-950 via-violet-600 to-cyan-300", shell: "from-[#050010] via-[#12002d] to-[#02040d]", accent: "124,58,237" },
@@ -362,11 +371,10 @@ export default function SevenEightSixAdminChatPage() {
 
   return (
     <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_12%,rgba(var(--accent),.35),transparent_26%),radial-gradient(circle_at_80%_70%,rgba(34,211,238,.10),transparent_26%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,.55)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <PremiumAdminBackground theme={visualThemes[theme]} />
 
-      <div className="relative flex h-full text-[12px]">
-        <aside className="flex w-[61px] shrink-0 flex-col items-center justify-between border-r border-white/10 bg-[#050713]/70 py-4 backdrop-blur-xl">
+      <div className="relative z-10 flex h-full p-2 text-[12px] lg:p-3">
+        <aside className="flex w-[68px] shrink-0 flex-col items-center justify-between rounded-[24px] border border-white/10 bg-black/25 py-4 shadow-2xl backdrop-blur-2xl">
           <div className="space-y-10">
             <button onClick={() => router.push('/chat')} className="grid h-11 w-11 place-items-center rounded-2xl bg-[rgb(var(--accent))] shadow-[0_0_28px_rgba(var(--accent),.55)]" title="Chat"><Sparkles className="h-5 w-5" /></button>
             <div className="space-y-5">
@@ -377,8 +385,8 @@ export default function SevenEightSixAdminChatPage() {
           <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Settings"><Settings className="h-4 w-4" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-[rgb(var(--accent))] text-xs font-black">M</div></div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-white/10 bg-[#07031a]/70 px-4 backdrop-blur-2xl">
+        <div className="ml-2 flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/10 bg-black/20 shadow-2xl backdrop-blur-xl">
+          <header className="flex h-[72px] shrink-0 items-center gap-3 border-b border-white/10 bg-white/[0.035] px-4 backdrop-blur-2xl">
             <button onClick={newChat} className="ml-2 inline-flex h-10 items-center gap-2 rounded-2xl bg-[rgb(var(--accent))] px-5 text-xs font-black shadow-[0_0_28px_rgba(var(--accent),.4)] transition hover:-translate-y-0.5" title="New Chat"><Plus className="h-4 w-4" /><span>New Chat</span></button>
             <div className="mx-auto hidden h-10 w-[280px] items-center justify-center gap-3 rounded-full border border-white/10 bg-black/25 px-4 text-xs text-slate-300 md:flex"><Monitor className="h-4 w-4" /><span>/</span></div>
             <button onClick={() => setPanel('preview')} className={`grid h-10 w-12 place-items-center rounded-xl border text-xs font-black ${panel === 'preview' ? 'border-white/20 bg-[rgba(var(--accent),.35)] text-white' : 'border-white/10 bg-black/25 text-slate-300'}`} title="Preview"><Monitor className="h-4 w-4" /></button>
@@ -402,7 +410,7 @@ export default function SevenEightSixAdminChatPage() {
           </header>
 
           <div className="flex min-h-0 flex-1">
-            <section className="relative flex w-[328px] shrink-0 flex-col border-r border-white/10 bg-[#09051a]/55 backdrop-blur-xl">
+            <section className="relative flex w-[340px] shrink-0 flex-col border-r border-white/10 bg-black/20 backdrop-blur-2xl">
               <div className="flex-1 overflow-y-auto p-5 pb-36">
                 {messages.length === 0 ? <div className="flex h-full flex-col justify-center text-center">
                   <div className="mb-28 rounded-[22px] border border-white/10 bg-black/30 p-5 text-left shadow-[0_0_60px_rgba(var(--accent),.18)]"><div className="flex items-center gap-3"><div className="grid h-11 w-11 place-items-center rounded-full bg-[rgb(var(--accent))]"><Sparkles className="h-5 w-5" /></div><div><p className="font-black">AI Assistant</p><p className="text-xs text-violet-200">Galaxy Model v2.5</p></div></div><p className="mt-5 inline-flex items-center gap-2 text-xs font-black text-emerald-300"><span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-500"><Check className="h-4 w-4 text-white" /></span>Agent ready</p></div>
@@ -430,7 +438,7 @@ export default function SevenEightSixAdminChatPage() {
               </div>
             </section>
 
-            <section className="flex min-w-0 flex-1 flex-col bg-[#020617]/60">
+            <section className="flex min-w-0 flex-1 flex-col bg-black/15">
               {panel === 'preview' ? <div className={`min-h-0 flex-1 ${device === 'full' || device === 'desktop' ? 'p-0' : 'flex items-center justify-center overflow-auto p-5'}`}>
                 {sending ? <div className="grid h-full place-items-center"><div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-4 text-sm text-slate-300"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Loading generated preview...</div></div> : project && previewPayload.html ? <div className={`${devices[device].frame} overflow-hidden bg-white`}><iframe key={`${project.id}-${previewPayload.key}-${device}-${refreshKey}`} srcDoc={previewPayload.html} title={`${project.title} preview`} sandbox="allow-scripts allow-forms allow-popups" className={`${devices[device].iframe} block border-0 bg-white`} /></div> : <div className="grid h-full place-items-center text-center"><div><Monitor className="mx-auto mb-5 h-16 w-16 text-cyan-300" /><h2 className="text-2xl font-black">No Preview Yet</h2><p className="mt-4 text-sm text-slate-400">New chat starts with empty preview and empty code.</p></div></div>}
               </div> : <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr] gap-4 p-6"><div className="overflow-auto rounded-3xl border border-white/10 bg-black/30 p-3">{fileNames.length === 0 ? <p className="p-3 text-sm text-slate-500">No files yet.</p> : fileNames.map((file) => <button key={file} onClick={() => setSelectedFile(file)} className={`mb-2 block w-full rounded-2xl px-3 py-2 text-left text-xs font-black ${selectedFile === file ? 'bg-[rgb(var(--accent))] text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{file}</button>)}</div><pre className="min-h-0 overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-black/30 p-5 text-xs leading-6 text-cyan-50"><code>{project?.files?.[selectedFile] || 'Select a file.'}</code></pre></div>}
