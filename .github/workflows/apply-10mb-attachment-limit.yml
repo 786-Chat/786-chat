@@ -1,0 +1,50 @@
+name: Apply 10 MB attachment limit
+
+on:
+  push:
+    branches:
+      - agent/phase-2-images
+    paths:
+      - ".github/workflows/apply-10mb-attachment-limit.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  update-limit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-2-images
+          fetch-depth: 0
+
+      - name: Update client and server limits
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('app/786-admin/chat/page.tsx')
+          text = page.read_text()
+          text = text.replace('const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024', 'const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024')
+          text = text.replace('maximum size is 5 MB.', 'maximum size is 10 MB.')
+          page.write_text(text)
+
+          server = Path('lib/786-admin/attachment-validation.ts')
+          text = server.read_text()
+          text = text.replace('const MAX_ATTACHMENT_DATA_URL_LENGTH = 8_000_000', 'const MAX_ATTACHMENT_DATA_URL_LENGTH = 14_000_000')
+          server.write_text(text)
+          PY
+
+      - name: Remove one-time workflow
+        run: rm .github/workflows/apply-10mb-attachment-limit.yml
+
+      - name: Commit update
+        shell: bash
+        run: |
+          git config user.name "786.Chat Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/786-admin/chat/page.tsx lib/786-admin/attachment-validation.ts .github/workflows/apply-10mb-attachment-limit.yml
+          git commit -m "fix: raise attachment limit to 10 MB"
+          git push origin HEAD:agent/phase-2-images
