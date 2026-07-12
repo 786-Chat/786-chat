@@ -2,80 +2,58 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { jwtVerify } from "jose"
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production"
-)
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com")
+  .trim()
+  .toLowerCase()
 
-// Admin emails that are allowed to access /admin routes
-const ADMIN_EMAILS = ["mujeeb@job4u.com", "admin@mujeebproai.com"]
+function unauthorized(request: NextRequest, api: boolean) {
+  if (api) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const loginUrl = new URL("/786-admin/login", request.url)
+  loginUrl.searchParams.set("next", request.nextUrl.pathname)
+  return NextResponse.redirect(loginUrl)
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const isAdminApi = pathname.startsWith("/api/786-admin")
+  const isAdminPage = pathname.startsWith("/786-admin")
 
-  // Skip middleware for login pages AND shop-dashboard (auth handled in page)
-  if (pathname === "/admin-login" || pathname === "/shop-login" || pathname.startsWith("/shop-dashboard")) {
+  if (!isAdminApi && !isAdminPage) return NextResponse.next()
+  if (pathname === "/786-admin/login") return NextResponse.next()
+
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    console.error("[786.Chat] JWT_SECRET is not configured")
+    return isAdminApi
+      ? NextResponse.json({ error: "Server authentication is not configured" }, { status: 503 })
+      : NextResponse.redirect(new URL("/786-admin/login?error=configuration", request.url))
+  }
+
+  const token =
+    request.cookies.get("auth_token")?.value ||
+    request.cookies.get("auth-token")?.value
+
+  if (!token) return unauthorized(request, isAdminApi)
+
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
+    const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
+
+    if (email !== ADMIN_EMAIL) {
+      return isAdminApi
+        ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+        : NextResponse.redirect(new URL("/786-admin/login?error=forbidden", request.url))
+    }
+
     return NextResponse.next()
+  } catch {
+    return unauthorized(request, isAdminApi)
   }
-
-  // Only protect /admin routes (except /admin-login)
-  if (pathname.startsWith("/admin")) {
-    const token = request.cookies.get("auth_token")?.value || request.cookies.get("auth-token")?.value
-
-    if (!token) {
-      // Redirect to admin login if no token
-      return NextResponse.redirect(new URL("/admin-login", request.url))
-    }
-
-    try {
-      // Verify token server-side
-      const { payload } = await jwtVerify(token, JWT_SECRET)
-      const email = payload.email as string
-
-      // Check if user is admin
-      if (!email || !ADMIN_EMAILS.includes(email.toLowerCase())) {
-        // Not an admin - redirect to admin login
-        return NextResponse.redirect(new URL("/admin-login", request.url))
-      }
-
-      // Admin verified - continue
-      return NextResponse.next()
-    } catch (error) {
-      // Invalid token - redirect to admin login
-      console.error("[Middleware] Token verification failed:", error)
-      return NextResponse.redirect(new URL("/admin-login", request.url))
-    }
-  }
-
-  // Protect admin API routes
-  if (pathname.startsWith("/api/admin")) {
-    const token =
-  request.cookies.get("auth_token")?.value ||
-  request.cookies.get("auth-token")?.value
-
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    try {
-      const { payload } = await jwtVerify(token, JWT_SECRET)
-      const email = payload.email as string
-
-      if (!email || !ADMIN_EMAILS.includes(email.toLowerCase())) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
-
-      return NextResponse.next()
-    } catch (error) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-  }
-
-  return NextResponse.next()
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/api/admin/:path*"
-  ]
+  matcher: ["/786-admin/:path*", "/api/786-admin/:path*"],
 }
