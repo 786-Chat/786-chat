@@ -46,7 +46,7 @@ type ActiveProject = { id: string; title: string; description: string; prompt: s
 type PendingAttachment = { id: string; name: string; mediaType: string; url: string; size: number }
 
 const MAX_ATTACHMENTS = 4
-const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"])
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
@@ -304,7 +304,7 @@ export default function SevenEightSixAdminChatPage() {
     const next: PendingAttachment[] = []
     for (const file of selected) {
       if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) { setAttachmentError(`${file.name}: unsupported type.`); continue }
-      if (file.size > MAX_ATTACHMENT_BYTES) { setAttachmentError(`${file.name}: maximum size is 5 MB.`); continue }
+      if (file.size > MAX_ATTACHMENT_BYTES) { setAttachmentError(`${file.name}: maximum size is 10 MB.`); continue }
       try {
         next.push({ id: `${Date.now()}-${Math.random()}`, name: file.name, mediaType: file.type, url: await fileToDataUrl(file), size: file.size })
       } catch { setAttachmentError(`${file.name}: could not be read.`) }

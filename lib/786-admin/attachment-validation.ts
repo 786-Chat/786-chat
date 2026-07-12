@@ -1,7 +1,7 @@
 import type { CodegenAttachment } from "@/lib/786-admin/codegen"
 
 const MAX_ATTACHMENTS = 4
-const MAX_ATTACHMENT_DATA_URL_LENGTH = 8_000_000
+const MAX_ATTACHMENT_DATA_URL_LENGTH = 14_000_000
 const MAX_ATTACHMENT_NAME_LENGTH = 200
 const ALLOWED_MEDIA_TYPES = new Set([
   "image/png",
