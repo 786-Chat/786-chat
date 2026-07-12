@@ -43,7 +43,7 @@ const variables: Record<AdminVisualTheme, React.CSSProperties> = {
   pearl: {
     "--admin-accent": "99 102 241",
     "--admin-secondary": "14 165 233",
-    "--admin-tertiary": "168 85 247",
+    "--admin-tertiary": "125 211 252",
     "--admin-bg-start": "222 228 248",
     "--admin-bg-mid": "238 242 255",
     "--admin-bg-end": "211 220 247",

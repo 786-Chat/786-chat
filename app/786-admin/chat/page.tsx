@@ -39,7 +39,7 @@ const EDIT_CONTEXT_PRIMARY_FILES = ["app/page.tsx", "app/layout.tsx", "app/globa
 type Mode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 type Panel = "preview" | "code"
 type Device = "full" | "desktop" | "laptop" | "tablet" | "ipadMini" | "ipadPro" | "surfacePro" | "galaxyTab" | "galaxyFold" | "iphone7Plus" | "iphone13" | "iphone15" | "iphone16" | "iphone16ProMax" | "pixel9" | "galaxyS25" | "custom"
-type ThemeName = "purple" | "green" | "blue" | "navy" | "white"
+type ThemeName = "purple" | "green" | "blue" | "navy"
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; model?: string | null; reason?: string | null }
 type ExistingProjectContext = { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
 type PreviewPayload = { html: string; key: string }
@@ -55,7 +55,6 @@ const visualThemes: Record<ThemeName, AdminVisualTheme> = {
   green: "emerald",
   blue: "ocean",
   navy: "midnight",
-  white: "pearl",
 }
 
 const themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {
@@ -63,7 +62,7 @@ const themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {
   emerald: "green",
   ocean: "blue",
   midnight: "navy",
-  pearl: "white",
+  pearl: "purple",
 }
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
@@ -71,7 +70,6 @@ const themes: Record<ThemeName, { name: string; sub: string; swatch: string; she
   green: { name: "Green Aurora", sub: "Fresh & Modern", swatch: "from-emerald-900 via-emerald-500 to-cyan-300", shell: "from-[#00110d] via-[#05251f] to-[#02040d]", accent: "16,185,129" },
   blue: { name: "Blue Ocean", sub: "Calm & Professional", swatch: "from-blue-950 via-blue-500 to-cyan-300", shell: "from-[#020617] via-[#071d3f] to-[#02040d]", accent: "14,165,233" },
   navy: { name: "Dark Navy", sub: "Deep & Focused", swatch: "from-black via-slate-900 to-blue-950", shell: "from-[#000] via-[#07101f] to-[#02040d]", accent: "30,64,175" },
-  white: { name: "White Mode", sub: "Clean & Minimal", swatch: "from-white via-slate-100 to-slate-300", shell: "from-[#f8fafc] via-white to-[#eef2ff]", accent: "148,163,184" },
 }
 
 const devices: Record<Device, { label: string; icon: typeof Monitor; frame: string; iframe: string }> = {
@@ -417,7 +415,7 @@ export default function SevenEightSixAdminChatPage() {
               <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
               {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-white/10 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
                 <p className="mb-3 text-center text-xs text-slate-400">Choose Theme</p>
-                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); setThemeOpen(false); setRefreshKey((v) => v + 1) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-white/20 bg-[rgba(var(--accent),.35)]' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-white" />}</button>)}
+                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); try { localStorage.setItem(ADMIN_THEME_STORAGE_KEY, visualThemes[key]) } catch {}; setThemeOpen(false); setRefreshKey((v) => v + 1) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-white/20 bg-[rgba(var(--accent),.35)]' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-white" />}</button>)}
               </div>}
             </div>
             <button onClick={() => router.push('/786-admin/login')} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Power"><Power className="h-4 w-4" /></button>
