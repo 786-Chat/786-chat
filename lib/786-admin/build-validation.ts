@@ -163,7 +163,17 @@ export function validateGeneratedProject(
       ? "yarn"
       : "npm"
   const runner = packageManager === "npm" ? "npm run" : packageManager
-  const install = packageManager === "npm" ? "npm ci" : `${packageManager} install --frozen-lockfile`
+  const install = packageManager === "npm"
+    ? files["package-lock.json"]
+      ? "npm ci --ignore-scripts"
+      : "npm install --ignore-scripts"
+    : packageManager === "pnpm"
+      ? files["pnpm-lock.yaml"]
+        ? "pnpm install --frozen-lockfile --ignore-scripts"
+        : "pnpm install --ignore-scripts"
+      : files["yarn.lock"]
+        ? "yarn install --frozen-lockfile --ignore-scripts"
+        : "yarn install --ignore-scripts"
   const commands = [install]
   if (scripts.lint) commands.push(`${runner} lint`)
   commands.push("npx tsc --noEmit", `${runner} build`)
