@@ -251,6 +251,7 @@ export default function SevenEightSixAdminChatPage() {
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
   const previewPayload = useMemo(() => (project ? filesToPreviewPayload(project.files, theme) : { html: "", key: "empty" }), [project, theme])
   const activeTheme = themes[theme]
+  const isLightTheme = theme === "white"
   const ActiveDeviceIcon = devices[device].icon
 
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
@@ -384,7 +385,7 @@ export default function SevenEightSixAdminChatPage() {
   if (isLoading || !isAdmin) return <main className="flex min-h-screen items-center justify-center bg-[#050713] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-200" /></main>
 
   return (
-    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>
+    <main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} ${isLightTheme ? whiteThemeStyles.lightTheme : "text-white"}`} style={{ ["--accent" as string]: activeTheme.accent }}>
       <PremiumAdminBackground theme={visualThemes[theme]} />
 
       <div className="relative z-10 flex h-full p-2 text-[12px] lg:p-3">
@@ -417,7 +418,7 @@ export default function SevenEightSixAdminChatPage() {
               <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
               {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-white/10 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
                 <p className="mb-3 text-center text-xs text-slate-400">Choose Theme</p>
-                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); setThemeOpen(false); setRefreshKey((v) => v + 1) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-white/20 bg-[rgba(var(--accent),.35)]' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-white" />}</button>)}
+                {(Object.keys(themes) as ThemeName[]).map((key) => <button key={key} onClick={() => { setTheme(key); try { localStorage.setItem(ADMIN_THEME_STORAGE_KEY, visualThemes[key]) } catch {}; setThemeOpen(false); setRefreshKey((v) => v + 1) }} className={`mb-2 flex w-full items-center gap-3 rounded-xl border p-2 text-left ${theme === key ? 'border-white/20 bg-[rgba(var(--accent),.35)]' : 'border-transparent hover:bg-white/5'}`}><span className={`h-8 w-8 rounded-full bg-gradient-to-br ${themes[key].swatch}`} /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{themes[key].name}</span><span className="text-[11px] text-slate-400">{themes[key].sub}</span></span>{theme === key && <Check className="h-4 w-4 text-white" />}</button>)}
               </div>}
             </div>
             <button onClick={() => router.push('/786-admin/login')} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Power"><Power className="h-4 w-4" /></button>
