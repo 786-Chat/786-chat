@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { completeRunnerBuild, getRunnerBuildBundle } from "@/lib/786-admin/build-runner-store"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
+import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
@@ -18,7 +19,6 @@ export async function POST(request: Request) {
     status?: unknown
     logs?: unknown
     errorMessage?: unknown
-    deploymentUrl?: unknown
   }
 
   if (!body || typeof body.buildId !== "string") {
@@ -34,12 +34,13 @@ export async function POST(request: Request) {
   let githubBranch: string | null = null
   let githubCommitSha: string | null = null
   let githubPrUrl: string | null = null
-  let publishingLog = ""
+  let deploymentUrl: string | null = null
+  const lifecycleLogs: string[] = []
 
   if (status === "passed") {
     try {
       const bundle = await getRunnerBuildBundle(body.buildId)
-      if (!bundle) throw new Error("Validated source bundle is unavailable for GitHub publishing")
+      if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
       const published = await publishGeneratedProjectToGitHub({
         buildId: bundle.buildId,
@@ -52,20 +53,31 @@ export async function POST(request: Request) {
       githubBranch = published.branch
       githubCommitSha = published.commitSha
       githubPrUrl = published.pullRequestUrl
-      publishingLog = [
-        "",
+      lifecycleLogs.push(
         `[publisher] Created branch ${published.branch}.`,
         `[publisher] Commit ${published.commitSha}.`,
         `[publisher] Draft PR ${published.pullRequestUrl}.`,
-      ].join("\n")
+      )
+
+      const deployment = await deployGeneratedProjectToVercel({
+        projectId: bundle.projectId,
+        branch: published.branch,
+        commitSha: published.commitSha,
+      })
+      deploymentUrl = deployment.url
+      lifecycleLogs.push(
+        `[vercel] Deployment ${deployment.id} queued with state ${deployment.readyState}.`,
+        `[vercel] Preview ${deployment.url}.`,
+      )
     } catch (error) {
       status = "failed"
-      errorMessage = error instanceof Error ? error.message : "GitHub project publishing failed"
-      publishingLog = `\n[publisher] ${errorMessage}\n`
+      errorMessage = error instanceof Error ? error.message : "Generated project publishing failed"
+      lifecycleLogs.push(`[publish/deploy] ${errorMessage}`)
     }
   }
 
-  const logs = `${typeof body.logs === "string" ? body.logs : ""}${publishingLog}`
+  const suffix = lifecycleLogs.length ? `\n${lifecycleLogs.join("\n")}\n` : ""
+  const logs = `${typeof body.logs === "string" ? body.logs : ""}${suffix}`
   const updated = await completeRunnerBuild({
     buildId: body.buildId,
     status,
@@ -74,7 +86,7 @@ export async function POST(request: Request) {
     githubBranch,
     githubCommitSha,
     githubPrUrl,
-    deploymentUrl: typeof body.deploymentUrl === "string" ? body.deploymentUrl : null,
+    deploymentUrl,
   })
 
   if (!updated) {
@@ -87,6 +99,7 @@ export async function POST(request: Request) {
     github: githubPrUrl
       ? { branch: githubBranch, commitSha: githubCommitSha, pullRequestUrl: githubPrUrl }
       : null,
+    deployment: deploymentUrl ? { url: deploymentUrl } : null,
     error: status === "failed" ? errorMessage : null,
   })
 }
