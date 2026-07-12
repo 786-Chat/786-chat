@@ -1,24 +1,19 @@
-// Admin configuration
-// Only this email gets access to Vercel AI Gateway + Agent Mode
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com")
+  .trim()
+  .toLowerCase()
 
-export const ADMIN_EMAIL = "mujeeb@job4u.com"
-
-export function isAdminUser(email: string | undefined): boolean {
-  if (!email) return false
-  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+export function isAdminUser(email: string | null | undefined): boolean {
+  return Boolean(email && email.trim().toLowerCase() === ADMIN_EMAIL)
 }
 
-// Agent tools configuration
 export const AGENT_CONFIG = {
-  // GitHub repo for MujeebProAI
   github: {
-    owner: "mujeebpro123",
-    repo: "mujeebproai",
-    branch: "main",
+    owner: process.env.GITHUB_REPOSITORY_OWNER || "786-Chat",
+    repo: process.env.GITHUB_REPOSITORY_NAME || "786-chat",
+    branch: process.env.GITHUB_DEFAULT_BRANCH || "main",
   },
-  // Vercel project
   vercel: {
-    projectId: "prj_0KcMrXwOTFJGHZ1GkVAF8lRRBMm2",
-    teamId: "team_ramDdJPbDZUAmHzZhWYHvxEt",
+    projectId: process.env.VERCEL_PROJECT_ID || "",
+    teamId: process.env.VERCEL_TEAM_ID || "",
   },
-}
+} as const
