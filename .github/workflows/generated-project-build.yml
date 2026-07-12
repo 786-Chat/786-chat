@@ -1,0 +1,142 @@
+name: Build generated project
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Neon build record ID
+        required: true
+        type: string
+      project_id:
+        description: 786.chat project ID
+        required: true
+        type: string
+      base_url:
+        description: Trusted 786.chat base URL
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generated-project-${{ inputs.project_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BUILD_ID: ${{ inputs.build_id }}
+      BASE_URL: ${{ inputs.base_url }}
+      RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
+    steps:
+      - name: Validate runner configuration
+        shell: bash
+        run: |
+          test -n "$RUNNER_SECRET" || { echo "BUILD_RUNNER_SECRET is missing"; exit 1; }
+          case "$BASE_URL" in
+            https://786.chat|https://*.vercel.app) ;;
+            *) echo "Untrusted base URL"; exit 1 ;;
+          esac
+
+      - name: Download validated source bundle
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/generated-project"
+          curl --fail --silent --show-error \
+            --retry 2 \
+            --connect-timeout 15 \
+            --max-time 90 \
+            -H "Authorization: Bearer $RUNNER_SECRET" \
+            "$BASE_URL/api/786-admin/build-runner/source?build_id=$BUILD_ID" \
+            -o "$RUNNER_TEMP/bundle.json"
+
+      - name: Materialize project safely
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const payload = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/bundle.json', 'utf8'))
+          if (!payload.success || !payload.bundle || typeof payload.bundle.files !== 'object') {
+            throw new Error('Invalid runner bundle')
+          }
+          const root = path.resolve(process.env.RUNNER_TEMP, 'generated-project')
+          for (const [relative, content] of Object.entries(payload.bundle.files)) {
+            if (typeof content !== 'string') throw new Error(`Invalid content: ${relative}`)
+            const target = path.resolve(root, relative)
+            if (!target.startsWith(root + path.sep)) throw new Error(`Unsafe path: ${relative}`)
+            fs.mkdirSync(path.dirname(target), { recursive: true })
+            fs.writeFileSync(target, content, 'utf8')
+          }
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/commands.json', JSON.stringify(payload.bundle.commands || []))
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ runner.temp }}/generated-project/package-lock.json
+
+      - name: Install, lint, type-check, and build
+        id: execute
+        continue-on-error: true
+        working-directory: ${{ runner.temp }}/generated-project
+        shell: bash
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/build.log"
+          : > "$LOG_FILE"
+          node <<'NODE' > "$RUNNER_TEMP/run-commands.sh"
+          const fs = require('fs')
+          const commands = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/commands.json', 'utf8'))
+          const allowed = /^(npm ci|npm install|npm run (lint|build)|npx tsc --noEmit|pnpm install --frozen-lockfile|pnpm (lint|build)|yarn install --frozen-lockfile|yarn (lint|build))$/
+          for (const command of commands) {
+            if (typeof command !== 'string' || !allowed.test(command)) throw new Error(`Rejected command: ${command}`)
+            process.stdout.write(`echo '$ ${command.replaceAll("'", "'\\''")}'\n`)
+            process.stdout.write(`${command}\n`)
+          }
+          NODE
+          bash "$RUNNER_TEMP/run-commands.sh" 2>&1 | tee "$LOG_FILE"
+
+      - name: Report build result
+        if: always()
+        shell: bash
+        env:
+          STEP_OUTCOME: ${{ steps.execute.outcome }}
+        run: |
+          STATUS="passed"
+          ERROR_MESSAGE=""
+          if [ "$STEP_OUTCOME" != "success" ]; then
+            STATUS="failed"
+            ERROR_MESSAGE="One or more isolated build commands failed."
+          fi
+          node <<'NODE' > "$RUNNER_TEMP/callback.json"
+          const fs = require('fs')
+          const logsPath = process.env.RUNNER_TEMP + '/build.log'
+          const logs = fs.existsSync(logsPath) ? fs.readFileSync(logsPath, 'utf8').slice(-900000) : ''
+          process.stdout.write(JSON.stringify({
+            buildId: process.env.BUILD_ID,
+            status: process.env.STATUS,
+            logs,
+            errorMessage: process.env.ERROR_MESSAGE || null,
+          }))
+          NODE
+          curl --fail --silent --show-error \
+            --retry 3 \
+            --connect-timeout 15 \
+            --max-time 90 \
+            -X POST \
+            -H "Authorization: Bearer $RUNNER_SECRET" \
+            -H "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/callback.json" \
+            "$BASE_URL/api/786-admin/build-runner/callback"
+        env:
+          STATUS: ${{ steps.execute.outcome == 'success' && 'passed' || 'failed' }}
+          ERROR_MESSAGE: ${{ steps.execute.outcome == 'success' && '' || 'One or more isolated build commands failed.' }}
+
+      - name: Fail workflow when build failed
+        if: steps.execute.outcome != 'success'
+        run: exit 1
