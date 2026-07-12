@@ -1,8 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import styles from "./premium-background.module.css"
 
 export type AdminVisualTheme = "cosmic" | "emerald" | "ocean" | "midnight" | "pearl"
+
+export const ADMIN_THEME_STORAGE_KEY = "786chat_admin_visual_theme_v1"
 
 const variables: Record<AdminVisualTheme, React.CSSProperties> = {
   cosmic: {
@@ -41,15 +44,35 @@ const variables: Record<AdminVisualTheme, React.CSSProperties> = {
     "--admin-accent": "99 102 241",
     "--admin-secondary": "14 165 233",
     "--admin-tertiary": "168 85 247",
-    "--admin-bg-start": "235 239 255",
-    "--admin-bg-mid": "245 247 255",
-    "--admin-bg-end": "226 232 255",
+    "--admin-bg-start": "222 228 248",
+    "--admin-bg-mid": "238 242 255",
+    "--admin-bg-end": "211 220 247",
   } as React.CSSProperties,
 }
 
-export function PremiumAdminBackground({ theme = "cosmic" }: { theme?: AdminVisualTheme }) {
+function isAdminVisualTheme(value: string | null): value is AdminVisualTheme {
+  return value === "cosmic" || value === "emerald" || value === "ocean" || value === "midnight" || value === "pearl"
+}
+
+export function PremiumAdminBackground({ theme }: { theme?: AdminVisualTheme }) {
+  const [storedTheme, setStoredTheme] = useState<AdminVisualTheme>(theme ?? "cosmic")
+
+  useEffect(() => {
+    if (theme) {
+      setStoredTheme(theme)
+      try { localStorage.setItem(ADMIN_THEME_STORAGE_KEY, theme) } catch {}
+      return
+    }
+    try {
+      const saved = localStorage.getItem(ADMIN_THEME_STORAGE_KEY)
+      if (isAdminVisualTheme(saved)) setStoredTheme(saved)
+    } catch {}
+  }, [theme])
+
+  const activeTheme = theme ?? storedTheme
+
   return (
-    <div className={styles.backdrop} style={variables[theme]} aria-hidden="true">
+    <div className={styles.backdrop} style={variables[activeTheme]} aria-hidden="true">
       <span className={`${styles.orb} ${styles.orbOne}`} />
       <span className={`${styles.orb} ${styles.orbTwo}`} />
       <span className={`${styles.orb} ${styles.orbThree}`} />
