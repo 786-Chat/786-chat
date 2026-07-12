@@ -1,0 +1,37 @@
+name: Apply Phase 2 chat patch
+
+on:
+  push:
+    branches:
+      - agent/phase-2-images
+    paths:
+      - "scripts/apply-phase2-chat-attachments.py"
+      - ".github/workflows/apply-phase2-chat-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-chat:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase-2-images
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply targeted patch
+        run: python scripts/apply-phase2-chat-attachments.py
+      - name: Commit patched chat UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/786-admin/chat/page.tsx
+          if git diff --cached --quiet; then
+            echo "No patch changes were required."
+            exit 0
+          fi
+          git commit -m "feat: add Gemini image attachments to admin chat"
+          git push origin HEAD:agent/phase-2-images

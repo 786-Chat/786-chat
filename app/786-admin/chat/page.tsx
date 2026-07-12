@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Code2,
+  FileText,
   FolderKanban,
   Laptop,
   Loader2,
@@ -21,6 +22,7 @@ import {
   Smartphone,
   Sparkles,
   Tablet,
+  X,
 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
@@ -41,6 +43,11 @@ type UiMessage = { id: string; role: "user" | "assistant"; content: string; mode
 type ExistingProjectContext = { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
 type PreviewPayload = { html: string; key: string }
 type ActiveProject = { id: string; title: string; description: string; prompt: string; files: SevenEightSixProjectFileMap; preview_state: AdminProjectPreviewState }
+type PendingAttachment = { id: string; name: string; mediaType: string; url: string; size: number }
+
+const MAX_ATTACHMENTS = 4
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const ALLOWED_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"])
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
   purple: { name: "Purple Galaxy", sub: "Default", swatch: "from-violet-950 via-violet-600 to-cyan-300", shell: "from-[#050010] via-[#12002d] to-[#02040d]", accent: "124,58,237" },
@@ -217,8 +224,11 @@ export default function SevenEightSixAdminChatPage() {
   const [deviceOpen, setDeviceOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
@@ -252,7 +262,7 @@ export default function SevenEightSixAdminChatPage() {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])
 
   function newChat() {
-    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setPanel("preview"); setRefreshKey((v) => v + 1)
+    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setAttachments([]); setAttachmentError(null); setPanel("preview"); setRefreshKey((v) => v + 1)
     try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
   }
 
@@ -276,14 +286,43 @@ export default function SevenEightSixAdminChatPage() {
     } catch (error) { console.error("[786.Chat] persistence failed", error); return null }
   }
 
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read attachment."))
+      reader.onerror = () => reject(new Error("Could not read attachment."))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function addAttachments(files: FileList | null) {
+    if (!files?.length) return
+    setAttachmentError(null)
+    const available = MAX_ATTACHMENTS - attachments.length
+    if (available <= 0) { setAttachmentError(`Maximum ${MAX_ATTACHMENTS} attachments.`); return }
+    const selected = Array.from(files).slice(0, available)
+    const next: PendingAttachment[] = []
+    for (const file of selected) {
+      if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) { setAttachmentError(`${file.name}: unsupported type.`); continue }
+      if (file.size > MAX_ATTACHMENT_BYTES) { setAttachmentError(`${file.name}: maximum size is 10 MB.`); continue }
+      try {
+        next.push({ id: `${Date.now()}-${Math.random()}`, name: file.name, mediaType: file.type, url: await fileToDataUrl(file), size: file.size })
+      } catch { setAttachmentError(`${file.name}: could not be read.`) }
+    }
+    if (next.length) setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS))
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
   async function send() {
     const text = input.trim()
-    if (!text || sending) return
-    setMessages((old) => [...old, { id: `u-${Date.now()}`, role: "user", content: text }])
+    if ((!text && attachments.length === 0) || sending) return
+    const userText = text || "Inspect the attached file and update this project."
+    const attachmentLabel = attachments.length ? `\nAttached: ${attachments.map((item) => item.name).join(", ")}` : ""
+    setMessages((old) => [...old, { id: `u-${Date.now()}`, role: "user", content: `${userText}${attachmentLabel}` }])
     setInput(""); setSending(true); setPanel("preview")
     try {
       const existing = buildExistingProjectContext(project, selectedFile)
-      const requestBody: Record<string, unknown> = { message: text, mode }
+      const requestBody: Record<string, unknown> = { message: userText, mode, attachments: attachments.map(({ name, mediaType, url }) => ({ name, mediaType, url })) }
       if (project?.id) requestBody.projectId = project.id
       if (existing) requestBody.existing = existing
       const res = await fetch("/api/786-admin/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) })
@@ -293,9 +332,11 @@ export default function SevenEightSixAdminChatPage() {
       const assistantText = json.response || `Created project: ${generated.title}\nFiles: ${Object.keys(generated.files).length}`
       const assistantModel: string | null = json.model ?? null
       const assistantReason: string | null = json.reason ?? null
-      const persisted = await persistAfterGeneration(generated, text, assistantText, assistantModel, assistantReason)
+      const persisted = await persistAfterGeneration(generated, userText, assistantText, assistantModel, assistantReason)
       if (!persisted) throw new Error("Project generated but could not be saved to Neon. Run setup once, then retry.")
       setProject(persisted)
+      setAttachments([])
+      setAttachmentError(null)
       setRefreshKey((v) => v + 1)
       setMessages((current) => [...current, { id: `a-${Date.now()}`, role: "assistant", content: assistantText, model: assistantModel, reason: assistantReason }])
       setSelectedFile((persisted.preview_state.active_file as string | undefined) || (persisted.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(persisted.files)[0]) || "app/page.tsx")
@@ -370,7 +411,23 @@ export default function SevenEightSixAdminChatPage() {
                 {sending && <div className="rounded-3xl border border-white/10 bg-[rgba(var(--accent),.18)] p-4 text-sm"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Creating real project files...</div>}
                 <div ref={endRef} />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#09051a]/95 p-4 backdrop-blur-xl"><div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3"><Paperclip className="h-5 w-5 text-slate-400" /><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={1} className="min-h-8 flex-1 resize-none bg-transparent py-1 text-xs text-white outline-none placeholder:text-slate-500" placeholder="Ask 786.Chat to build a real project..." /><button onClick={send} disabled={sending || !input.trim()} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[rgb(var(--accent))] disabled:opacity-40"><Send className="h-4 w-4" /></button></div><p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold text-cyan-100">{project ? `Editing ${project.title} — auto-save on` : 'New Chat is empty. Build prompt creates real files saved to Neon.'}</p></div>
+              <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-[#09051a]/95 p-4 backdrop-blur-xl">
+                <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" multiple className="hidden" onChange={(event) => void addAttachments(event.target.files)} />
+                {attachments.length > 0 && <div className="mb-3 flex max-h-24 flex-wrap gap-2 overflow-y-auto">
+                  {attachments.map((item) => <div key={item.id} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[10px] text-slate-200">
+                    {item.mediaType === "application/pdf" ? <FileText className="h-4 w-4 shrink-0 text-rose-300" /> : <img src={item.url} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />}
+                    <span className="max-w-36 truncate">{item.name}</span>
+                    <button type="button" onClick={() => setAttachments((current) => current.filter((attachment) => attachment.id !== item.id))} className="rounded-full p-1 hover:bg-white/10" aria-label={`Remove ${item.name}`}><X className="h-3 w-3" /></button>
+                  </div>)}
+                </div>}
+                {attachmentError && <p className="mb-2 text-[11px] font-semibold text-rose-300">{attachmentError}</p>}
+                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending || attachments.length >= MAX_ATTACHMENTS} className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-40" title="Attach image or PDF"><Paperclip className="h-5 w-5" /></button>
+                  <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() } }} rows={1} className="min-h-8 flex-1 resize-none bg-transparent py-1 text-xs text-white outline-none placeholder:text-slate-500" placeholder="Ask 786.Chat to build from text, screenshots, or PDFs..." />
+                  <button onClick={() => void send()} disabled={sending || (!input.trim() && attachments.length === 0)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[rgb(var(--accent))] disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                </div>
+                <p className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold text-cyan-100">{attachments.length ? `${attachments.length} attachment${attachments.length === 1 ? '' : 's'} — Gemini multimodal` : project ? `Editing ${project.title} — auto-save on` : 'Text uses DeepSeek. Attachments use Gemini. Projects save to Neon.'}</p>
+              </div>
             </section>
 
             <section className="flex min-w-0 flex-1 flex-col bg-[#020617]/60">
