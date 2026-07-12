@@ -13,9 +13,18 @@ function requiredEnv(name: string): string {
   return value
 }
 
+function trustedBaseUrl(value: string): string {
+  const url = new URL(value)
+  const isProduction = url.protocol === "https:" && url.hostname === "786.chat"
+  const isVercelPreview = url.protocol === "https:" && url.hostname.endsWith(".vercel.app")
+  if (!isProduction && !isVercelPreview) throw new Error("Untrusted build callback origin")
+  return url.origin
+}
+
 export async function dispatchGeneratedProjectBuild(input: {
   buildId: string
   projectId: string
+  baseUrl: string
 }): Promise<BuildDispatchResult> {
   const token = requiredEnv("GITHUB_BUILD_TOKEN")
   requiredEnv("BUILD_RUNNER_SECRET")
@@ -23,7 +32,7 @@ export async function dispatchGeneratedProjectBuild(input: {
   const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
   const workflow = process.env.GITHUB_BUILD_WORKFLOW?.trim() || DEFAULT_WORKFLOW
   const ref = process.env.GITHUB_BUILD_REF?.trim() || "agent/phase-3-publishing-v2"
-  const baseUrl = requiredEnv("PRODUCTION_BASE_URL").replace(/\/$/, "")
+  const baseUrl = trustedBaseUrl(input.baseUrl)
 
   const response = await fetch(
     `https://api.github.com/repos/${repository}/actions/workflows/${workflow}/dispatches`,
