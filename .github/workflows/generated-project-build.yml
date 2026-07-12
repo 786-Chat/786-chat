@@ -77,8 +77,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ runner.temp }}/generated-project/package-lock.json
+
+      - name: Enable package managers
+        shell: bash
+        run: corepack enable
 
       - name: Install, lint, type-check, and build
         id: execute
@@ -92,7 +94,7 @@ jobs:
           node <<'NODE' > "$RUNNER_TEMP/run-commands.sh"
           const fs = require('fs')
           const commands = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/commands.json', 'utf8'))
-          const allowed = /^(npm ci|npm install|npm run (lint|build)|npx tsc --noEmit|pnpm install --frozen-lockfile|pnpm (lint|build)|yarn install --frozen-lockfile|yarn (lint|build))$/
+          const allowed = /^(npm ci --ignore-scripts|npm install --ignore-scripts|npm run (lint|build)|npx tsc --noEmit|pnpm install --frozen-lockfile --ignore-scripts|pnpm install --ignore-scripts|pnpm (lint|build)|yarn install --frozen-lockfile --ignore-scripts|yarn install --ignore-scripts|yarn (lint|build))$/
           for (const command of commands) {
             if (typeof command !== 'string' || !allowed.test(command)) throw new Error(`Rejected command: ${command}`)
             process.stdout.write(`echo '$ ${command.replaceAll("'", "'\\''")}'\n`)
@@ -105,14 +107,9 @@ jobs:
         if: always()
         shell: bash
         env:
-          STEP_OUTCOME: ${{ steps.execute.outcome }}
+          STATUS: ${{ steps.execute.outcome == 'success' && 'passed' || 'failed' }}
+          ERROR_MESSAGE: ${{ steps.execute.outcome == 'success' && '' || 'One or more isolated build commands failed.' }}
         run: |
-          STATUS="passed"
-          ERROR_MESSAGE=""
-          if [ "$STEP_OUTCOME" != "success" ]; then
-            STATUS="failed"
-            ERROR_MESSAGE="One or more isolated build commands failed."
-          fi
           node <<'NODE' > "$RUNNER_TEMP/callback.json"
           const fs = require('fs')
           const logsPath = process.env.RUNNER_TEMP + '/build.log'
@@ -133,9 +130,6 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary "@$RUNNER_TEMP/callback.json" \
             "$BASE_URL/api/786-admin/build-runner/callback"
-        env:
-          STATUS: ${{ steps.execute.outcome == 'success' && 'passed' || 'failed' }}
-          ERROR_MESSAGE: ${{ steps.execute.outcome == 'success' && '' || 'One or more isolated build commands failed.' }}
 
       - name: Fail workflow when build failed
         if: steps.execute.outcome != 'success'
