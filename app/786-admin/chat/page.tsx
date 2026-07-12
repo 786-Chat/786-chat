@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/contexts/auth-context"
 import type { SevenEightSixProject, SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-generator"
 import type { AdminMessage, AdminProjectPreviewState, AdminProjectWithData } from "@/lib/786-admin/types"
-import { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"
+import { ADMIN_THEME_STORAGE_KEY, PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"
 
 const ADMIN_EMAIL = "mujeeb@job4u.com"
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
@@ -56,6 +56,14 @@ const visualThemes: Record<ThemeName, AdminVisualTheme> = {
   blue: "ocean",
   navy: "midnight",
   white: "pearl",
+}
+
+const themeNamesByVisual: Record<AdminVisualTheme, ThemeName> = {
+  cosmic: "purple",
+  emerald: "green",
+  ocean: "blue",
+  midnight: "navy",
+  pearl: "white",
 }
 
 const themes: Record<ThemeName, { name: string; sub: string; swatch: string; shell: string; accent: string }> = {
@@ -269,6 +277,12 @@ export default function SevenEightSixAdminChatPage() {
     return () => { cancelled = true }
   }, [isAdmin])
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(ADMIN_THEME_STORAGE_KEY) as AdminVisualTheme | null
+      if (saved && themeNamesByVisual[saved]) setTheme(themeNamesByVisual[saved])
+    } catch {}
+  }, [])
 
   function newChat() {
     setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setAttachments([]); setAttachmentError(null); setPanel("preview"); setRefreshKey((v) => v + 1)
