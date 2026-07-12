@@ -22,21 +22,22 @@ jobs:
 
           p = Path('app/786-admin/chat/page.tsx')
           s = p.read_text()
+          current = 'import { ADMIN_THEME_STORAGE_KEY, PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"'
+          replacement = current + '\nimport whiteThemeStyles from "@/components/786-admin/white-theme-overrides.module.css"'
+          if 'white-theme-overrides.module.css' not in s:
+              s = s.replace(current, replacement)
+          if 'const isLightTheme = theme === "white"' not in s:
+              s = s.replace(
+                  '  const activeTheme = themes[theme]\n  const ActiveDeviceIcon = devices[device].icon',
+                  '  const activeTheme = themes[theme]\n  const isLightTheme = theme === "white"\n  const ActiveDeviceIcon = devices[device].icon'
+              )
           s = s.replace(
-            'import { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"',
-            'import { PremiumAdminBackground, type AdminVisualTheme } from "@/components/786-admin/premium-background"\nimport whiteThemeStyles from "@/components/786-admin/white-theme-overrides.module.css"'
+              '<main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>',
+              '<main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} ${isLightTheme ? whiteThemeStyles.lightTheme : "text-white"}`} style={{ ["--accent" as string]: activeTheme.accent }}>'
           )
           s = s.replace(
-            '  const activeTheme = themes[theme]\n  const ActiveDeviceIcon = devices[device].icon',
-            '  const activeTheme = themes[theme]\n  const isLightTheme = theme === "white"\n  const ActiveDeviceIcon = devices[device].icon'
-          )
-          s = s.replace(
-            '<main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} text-white`} style={{ ["--accent" as string]: activeTheme.accent }}>',
-            '<main className={`relative h-screen overflow-hidden bg-gradient-to-br ${activeTheme.shell} ${isLightTheme ? whiteThemeStyles.lightTheme : "text-white"}`} style={{ ["--accent" as string]: activeTheme.accent }}>'
-          )
-          s = s.replace(
-            "onClick={() => { setTheme(key); setThemeOpen(false); setRefreshKey((v) => v + 1) }}",
-            "onClick={() => { setTheme(key); try { localStorage.setItem(ADMIN_THEME_STORAGE_KEY, visualThemes[key]) } catch {}; setThemeOpen(false); setRefreshKey((v) => v + 1) }}"
+              "onClick={() => { setTheme(key); setThemeOpen(false); setRefreshKey((v) => v + 1) }}",
+              "onClick={() => { setTheme(key); try { localStorage.setItem(ADMIN_THEME_STORAGE_KEY, visualThemes[key]) } catch {}; setThemeOpen(false); setRefreshKey((v) => v + 1) }}"
           )
           p.write_text(s)
 
@@ -53,5 +54,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/786-admin/chat/page.tsx components/786-admin/premium-background.tsx
-          git commit -m "fix(admin-ui): make white theme readable and neutral"
+          git diff --cached --quiet || git commit -m "fix(admin-ui): make white theme readable and neutral"
           git push origin HEAD:agent/fix-white-theme
