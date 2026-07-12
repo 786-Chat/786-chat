@@ -1,3 +1,4 @@
+import { validateGeneratedProject } from "./build-validation"
 import { sql } from "./db"
 
 export type AdminProjectDeployment = {
@@ -93,8 +94,14 @@ export async function publishProject(input: {
   const fileMap: Record<string, string> = {}
   for (const file of files) fileMap[file.path] = file.content
 
-  const hasHomePage = Object.keys(fileMap).some((path) => /^(src\/)?app\/page\.(tsx?|jsx?)$/.test(path))
-  if (!hasHomePage) throw new Error("Cannot publish: app/page.tsx was not found")
+  const validation = validateGeneratedProject(fileMap)
+  if (!validation.valid) {
+    const details = validation.errors
+      .slice(0, 5)
+      .map((issue) => `${issue.path ? `${issue.path}: ` : ""}${issue.message}`)
+      .join("; ")
+    throw new Error(`Cannot publish: project validation failed. ${details}`)
+  }
 
   const rawHtml = input.publishedHtml.trim()
   if (!rawHtml || !rawHtml.includes("<!doctype html>") || !rawHtml.includes('id="root"')) {
@@ -131,6 +138,7 @@ export async function publishProject(input: {
       published: true,
       published_slug: slug,
       published_url: `/p/${slug}`,
+      validation_passed: true,
     })}::jsonb,
         updated_at = NOW()
     WHERE id = ${project.id}
