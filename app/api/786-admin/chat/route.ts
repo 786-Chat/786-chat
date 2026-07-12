@@ -3,9 +3,9 @@ import { getSession } from "@/lib/auth"
 import { isAdminUser } from "@/lib/admin-config"
 import {
   generateProjectCode,
-  type CodegenAttachment,
   type CodegenMode,
 } from "@/lib/786-admin/codegen"
+import { parseAttachments } from "@/lib/786-admin/attachment-validation"
 import { createSevenEightSixProjectFromPrompt } from "@/lib/786-admin/local-project-generator"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
 
@@ -29,28 +29,6 @@ function slugify(v: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "")
     .slice(0, 48)
-}
-
-function parseAttachment(value: unknown): CodegenAttachment | undefined {
-  if (!value || typeof value !== "object") return undefined
-
-  const raw = value as Record<string, unknown>
-  const url = typeof raw.url === "string" ? raw.url.trim() : ""
-  const mediaType = typeof raw.mediaType === "string" ? raw.mediaType.trim() : ""
-  const name = typeof raw.name === "string" ? raw.name.trim().slice(0, 200) : undefined
-
-  if (!url || !mediaType) return undefined
-  if (!mediaType.startsWith("image/") && mediaType !== "application/pdf") {
-    throw new Error("Only images and PDFs are supported.")
-  }
-  if (!url.startsWith("https://") && !url.startsWith("http://") && !url.startsWith("data:")) {
-    throw new Error("Attachment URL is invalid.")
-  }
-  if (url.length > 8_000_000) {
-    throw new Error("Attachment is too large.")
-  }
-
-  return { url, mediaType, name }
 }
 
 function timeout<T>(ms: number): Promise<T> {
@@ -113,11 +91,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json().catch(() => ({}))
-    const message = String(body?.message || "").trim()
-    const attachment = parseAttachment(body?.attachment)
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const message = String(body.message || "").trim()
+    const attachments = parseAttachments(body)
 
-    if (!message && !attachment) {
+    if (!message && attachments.length === 0) {
       return NextResponse.json(
         { success: false, error: "Message or attachment is required." },
         { status: 400 }
@@ -127,10 +105,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Message is too large." }, { status: 413 })
     }
 
-    const requestedMode = String(body?.mode || "auto") as CodegenMode
+    const requestedMode = String(body.mode || "auto") as CodegenMode
     const mode: CodegenMode = ALLOWED_MODES.has(requestedMode) ? requestedMode : "auto"
     const projectId =
-      typeof body?.projectId === "string" && body.projectId.trim()
+      typeof body.projectId === "string" && body.projectId.trim()
         ? body.projectId.trim().slice(0, 200)
         : null
 
@@ -142,8 +120,8 @@ export async function POST(request: Request) {
         generateProjectCode({
           prompt,
           mode,
-          existing: safeExisting(body?.existing),
-          attachments: attachment ? [attachment] : [],
+          existing: safeExisting(body.existing),
+          attachments,
         }),
         timeout<Awaited<ReturnType<typeof generateProjectCode>>>(52_000),
       ])
@@ -173,13 +151,15 @@ export async function POST(request: Request) {
       return localResponse(userRequest, projectId, reason)
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : "786.Chat request failed."
+    const isValidationError = /attachment|supported|maximum|too large|invalid/i.test(message)
     console.error("[786.Chat] request failed", error)
     return NextResponse.json(
       {
         success: false,
-        error: "786.Chat request failed. Please check the request and try again.",
+        error: isValidationError ? message : "786.Chat request failed. Please check the request and try again.",
       },
-      { status: 500 }
+      { status: isValidationError ? 400 : 500 }
     )
   }
 }
