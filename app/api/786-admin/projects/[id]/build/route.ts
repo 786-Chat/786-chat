@@ -2,7 +2,8 @@ import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { isAdminUser } from "@/lib/admin-config"
-import { createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
+import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
+import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData } from "@/lib/786-admin/projects"
 
@@ -112,6 +113,34 @@ export async function POST(request: Request, { params }: Ctx) {
     sourceVersion: version,
   })
 
+  try {
+    const runner = await dispatchGeneratedProjectBuild({ buildId: build.id, projectId: id })
+    await appendBuildLog({
+      buildId: build.id,
+      line: `[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not dispatch isolated build"
+    await appendBuildLog({
+      buildId: build.id,
+      line: `[dispatcher] ${message}`,
+      status: "failed",
+      errorMessage: message,
+    })
+
+    return NextResponse.json(
+      {
+        success: false,
+        ready: true,
+        queued: false,
+        error: message,
+        validation,
+        build: { ...build, status: "failed", error_message: message },
+      },
+      { status: 503 },
+    )
+  }
+
   return NextResponse.json(
     {
       success: true,
@@ -121,7 +150,7 @@ export async function POST(request: Request, { params }: Ctx) {
       project: { id: project.id, title: project.title },
       validation,
       build,
-      message: "Build queued successfully.",
+      message: "Build queued on the isolated GitHub Actions runner.",
     },
     { status: 202 },
   )
