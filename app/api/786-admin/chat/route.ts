@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server"
+import { getSession } from "@/lib/auth"
+import { isAdminUser } from "@/lib/admin-config"
 import {
   generateProjectCode,
   type CodegenAttachment,
@@ -9,6 +11,17 @@ import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature
 
 export const runtime = "nodejs"
 export const maxDuration = 60
+
+const ALLOWED_MODES = new Set<CodegenMode>([
+  "auto",
+  "deepseek-flash",
+  "deepseek-pro",
+  "gemini-flash",
+  "gemini-pro",
+])
+const MAX_MESSAGE_LENGTH = 20_000
+const MAX_CONTEXT_FILES = 200
+const MAX_CONTEXT_FILE_LENGTH = 80_000
 
 function slugify(v: string) {
   return v
@@ -24,7 +37,7 @@ function parseAttachment(value: unknown): CodegenAttachment | undefined {
   const raw = value as Record<string, unknown>
   const url = typeof raw.url === "string" ? raw.url.trim() : ""
   const mediaType = typeof raw.mediaType === "string" ? raw.mediaType.trim() : ""
-  const name = typeof raw.name === "string" ? raw.name.trim() : undefined
+  const name = typeof raw.name === "string" ? raw.name.trim().slice(0, 200) : undefined
 
   if (!url || !mediaType) return undefined
   if (!mediaType.startsWith("image/") && mediaType !== "application/pdf") {
@@ -32,6 +45,9 @@ function parseAttachment(value: unknown): CodegenAttachment | undefined {
   }
   if (!url.startsWith("https://") && !url.startsWith("http://") && !url.startsWith("data:")) {
     throw new Error("Attachment URL is invalid.")
+  }
+  if (url.length > 8_000_000) {
+    throw new Error("Attachment is too large.")
   }
 
   return { url, mediaType, name }
@@ -41,6 +57,30 @@ function timeout<T>(ms: number): Promise<T> {
   return new Promise((_, reject) => {
     setTimeout(() => reject(new Error("AI generation timed out before Vercel could finish.")), ms)
   })
+}
+
+function safeExisting(value: unknown) {
+  if (!value || typeof value !== "object") return undefined
+  const raw = value as Record<string, unknown>
+  if (!Array.isArray(raw.fileTree) || !raw.keyFiles || typeof raw.keyFiles !== "object") {
+    return undefined
+  }
+
+  return {
+    title: String(raw.title || "").slice(0, 200),
+    description: String(raw.description || "").slice(0, 2_000),
+    fileTree: raw.fileTree
+      .slice(0, MAX_CONTEXT_FILES)
+      .map((path) => String(path).slice(0, 500)),
+    keyFiles: Object.fromEntries(
+      Object.entries(raw.keyFiles as Record<string, unknown>)
+        .slice(0, 20)
+        .map(([path, content]) => [
+          String(path).slice(0, 500),
+          String(content).slice(0, MAX_CONTEXT_FILE_LENGTH),
+        ])
+    ),
+  }
 }
 
 function localResponse(userRequest: string, projectId: string | null, reason: string) {
@@ -67,6 +107,11 @@ function localResponse(userRequest: string, projectId: string | null, reason: st
 }
 
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!isAdminUser(session?.email)) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const body = await request.json().catch(() => ({}))
     const message = String(body?.message || "").trim()
@@ -78,29 +123,16 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json({ success: false, error: "Message is too large." }, { status: 413 })
+    }
 
-    const mode = String(body?.mode || "auto") as CodegenMode
+    const requestedMode = String(body?.mode || "auto") as CodegenMode
+    const mode: CodegenMode = ALLOWED_MODES.has(requestedMode) ? requestedMode : "auto"
     const projectId =
       typeof body?.projectId === "string" && body.projectId.trim()
-        ? body.projectId.trim()
+        ? body.projectId.trim().slice(0, 200)
         : null
-
-    const raw = body?.existing
-    const existing =
-      raw &&
-      typeof raw === "object" &&
-      Array.isArray(raw.fileTree) &&
-      raw.keyFiles &&
-      typeof raw.keyFiles === "object"
-        ? {
-            title: String(raw.title || ""),
-            description: String(raw.description || ""),
-            fileTree: raw.fileTree.map((p: unknown) => String(p)),
-            keyFiles: Object.fromEntries(
-              Object.entries(raw.keyFiles).map(([k, v]) => [String(k), String(v)])
-            ),
-          }
-        : undefined
 
     const userRequest = message || "Inspect the attached file and update the existing project to match it."
     const prompt = `${userRequest}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}`
@@ -110,10 +142,10 @@ export async function POST(request: Request) {
         generateProjectCode({
           prompt,
           mode,
-          existing,
+          existing: safeExisting(body?.existing),
           attachments: attachment ? [attachment] : [],
         }),
-        timeout<Awaited<ReturnType<typeof generateProjectCode>>>(52000),
+        timeout<Awaited<ReturnType<typeof generateProjectCode>>>(52_000),
       ])
 
       const now = new Date().toISOString()
@@ -141,14 +173,11 @@ export async function POST(request: Request) {
       return localResponse(userRequest, projectId, reason)
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "786.Chat request failed."
     console.error("[786.Chat] request failed", error)
-
     return NextResponse.json(
       {
         success: false,
-        error: message,
-        debug: message,
+        error: "786.Chat request failed. Please check the request and try again.",
       },
       { status: 500 }
     )
