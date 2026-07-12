@@ -1,0 +1,104 @@
+name: Verify Neon schema
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/phase-2-images
+    paths:
+      - ".github/workflows/verify-neon.yml"
+      - "sql/**"
+      - "lib/786-admin/**"
+      - "app/api/786-admin/**"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-neon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL_READONLY }}
+    steps:
+      - name: Validate secret configuration
+        shell: bash
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "NEON_DATABASE_URL_READONLY is not configured."
+            exit 1
+          fi
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Verify connection and permissions
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT current_database() AS database_name,
+                 current_user AS database_role,
+                 has_database_privilege(current_user, current_database(), 'CONNECT') AS can_connect;
+
+          SELECT has_schema_privilege(current_user, 'public', 'USAGE') AS public_schema_usage;
+          SQL
+
+      - name: Verify required admin-builder tables
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            missing_tables text;
+          BEGIN
+            SELECT string_agg(required_table, ', ' ORDER BY required_table)
+            INTO missing_tables
+            FROM (VALUES
+              ('admin_projects'),
+              ('admin_project_files'),
+              ('admin_messages')
+            ) AS required(required_table)
+            WHERE to_regclass('public.' || required_table) IS NULL;
+
+            IF missing_tables IS NOT NULL THEN
+              RAISE EXCEPTION 'Missing required tables: %', missing_tables;
+            END IF;
+          END $$;
+
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+            AND table_name IN ('admin_projects', 'admin_project_files', 'admin_messages')
+          ORDER BY table_name;
+          SQL
+
+      - name: Verify required columns and indexes
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT table_name, column_name, data_type, is_nullable
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name IN ('admin_projects', 'admin_project_files', 'admin_messages')
+          ORDER BY table_name, ordinal_position;
+
+          SELECT schemaname, tablename, indexname
+          FROM pg_indexes
+          WHERE schemaname = 'public'
+            AND tablename IN ('admin_projects', 'admin_project_files', 'admin_messages')
+          ORDER BY tablename, indexname;
+          SQL
+
+      - name: Verify read-only access
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT
+            has_table_privilege(current_user, 'public.admin_projects', 'SELECT') AS projects_select,
+            has_table_privilege(current_user, 'public.admin_projects', 'INSERT') AS projects_insert,
+            has_table_privilege(current_user, 'public.admin_projects', 'UPDATE') AS projects_update,
+            has_table_privilege(current_user, 'public.admin_projects', 'DELETE') AS projects_delete;
+          SQL
