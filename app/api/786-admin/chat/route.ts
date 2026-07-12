@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server"
-import {
-  generateProjectCode,
-  type CodegenMode,
-} from "@/lib/786-admin/codegen"
+import { getSession } from "@/lib/auth"
+import { isAdminUser } from "@/lib/admin-config"
+import { generateProjectCode, type CodegenMode } from "@/lib/786-admin/codegen"
 import type { SevenEightSixProject } from "@/lib/786-admin/local-project-generator"
 
-// Subsystem #3 — real prompt-driven file generation.
-// Routes the prompt through structured AI codegen and returns a real
-// SevenEightSixProject payload to the client. The client then persists via
-// /api/786-admin/projects (POST or PATCH), so Subsystem #1 ON CONFLICT upsert
-// handles edits with no duplicate rows.
-//
-// IMPORTANT: Do not return local fallback templates from this route. A fallback
-// template looks like a successful generated project and can overwrite/save old
-// placeholder UI into Neon. If AI codegen fails, fail loudly so no fake preview
-// is persisted.
+const ALLOWED_MODES = new Set<CodegenMode>([
+  "auto",
+  "deepseek-flash",
+  "deepseek-pro",
+  "gemini-flash",
+  "gemini-pro",
+])
+const MAX_MESSAGE_LENGTH = 20_000
+const MAX_CONTEXT_FILES = 200
+const MAX_CONTEXT_FILE_LENGTH = 80_000
 
 type ExistingInput = {
   title?: string
@@ -31,53 +30,58 @@ function slugify(value: string) {
     .slice(0, 48)
 }
 
+function safeExisting(value: unknown) {
+  if (!value || typeof value !== "object") return undefined
+  const input = value as ExistingInput
+  if (!Array.isArray(input.fileTree) || !input.keyFiles || typeof input.keyFiles !== "object") {
+    return undefined
+  }
+
+  return {
+    title: String(input.title || "").slice(0, 200),
+    description: String(input.description || "").slice(0, 2_000),
+    fileTree: input.fileTree.slice(0, MAX_CONTEXT_FILES).map((path) => String(path).slice(0, 500)),
+    keyFiles: Object.fromEntries(
+      Object.entries(input.keyFiles)
+        .slice(0, 20)
+        .map(([path, content]) => [String(path).slice(0, 500), String(content).slice(0, MAX_CONTEXT_FILE_LENGTH)])
+    ),
+  }
+}
+
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!isAdminUser(session?.email)) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const body = await request.json().catch(() => ({}))
     const message = String(body?.message || "").trim()
-    const mode = String(body?.mode || "auto") as CodegenMode
-    const projectIdRaw = body?.projectId
-    const projectId =
-      typeof projectIdRaw === "string" && projectIdRaw.trim()
-        ? projectIdRaw.trim()
-        : null
-    const existingRaw: ExistingInput | undefined =
-      body?.existing && typeof body.existing === "object"
-        ? (body.existing as ExistingInput)
-        : undefined
+    const requestedMode = String(body?.mode || "auto") as CodegenMode
+    const mode: CodegenMode = ALLOWED_MODES.has(requestedMode) ? requestedMode : "auto"
 
     if (!message) {
-      return NextResponse.json(
-        { success: false, error: "Message is required." },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: "Message is required." }, { status: 400 })
+    }
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json({ success: false, error: "Message is too large." }, { status: 413 })
     }
 
-    const existing =
-      existingRaw &&
-      Array.isArray(existingRaw.fileTree) &&
-      existingRaw.keyFiles &&
-      typeof existingRaw.keyFiles === "object"
-        ? {
-            title: String(existingRaw.title || ""),
-            description: String(existingRaw.description || ""),
-            fileTree: existingRaw.fileTree.map((p) => String(p)),
-            keyFiles: Object.fromEntries(
-              Object.entries(existingRaw.keyFiles).map(([k, v]) => [
-                String(k),
-                String(v),
-              ])
-            ),
-          }
-        : undefined
+    const projectIdRaw = body?.projectId
+    const projectId = typeof projectIdRaw === "string" && projectIdRaw.trim()
+      ? projectIdRaw.trim().slice(0, 200)
+      : null
 
-    const codegen = await generateProjectCode({ prompt: message, mode, existing })
+    const codegen = await generateProjectCode({
+      prompt: message,
+      mode,
+      existing: safeExisting(body?.existing),
+    })
 
     const now = new Date().toISOString()
-    const id = projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`
-
     const project: SevenEightSixProject = {
-      id,
+      id: projectId ?? `${slugify(codegen.title) || "project"}-${Date.now()}`,
       title: codegen.title,
       description: codegen.description,
       prompt: message,
@@ -95,16 +99,11 @@ export async function POST(request: Request) {
       fellBackToLocal: false,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : "AI codegen failed."
-
-    console.error("[786.Chat] codegen failed; no fallback preview was saved", error)
-
+    console.error("[786.Chat] code generation failed", error)
     return NextResponse.json(
       {
         success: false,
-        error:
-          "786.Chat could not generate real project files. No fallback template was saved. Please retry after checking the AI provider/API key.",
-        debug: message,
+        error: "786.Chat could not generate project files. Check the configured DeepSeek or Gemini credentials and retry.",
       },
       { status: 503 }
     )
