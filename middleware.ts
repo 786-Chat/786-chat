@@ -16,13 +16,36 @@ function unauthorized(request: NextRequest, api: boolean) {
   return NextResponse.redirect(loginUrl)
 }
 
+function getAuthToken(request: NextRequest) {
+  return (
+    request.cookies.get("auth_token")?.value ||
+    request.cookies.get("auth-token")?.value ||
+    ""
+  )
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const secret = process.env.JWT_SECRET
+  const token = getAuthToken(request)
 
-  // Retire the old dashboard chat before its legacy client layout can render.
-  // The redirect happens at the edge, so users never see the old workspace.
+  // Customer chat stays on the customer dashboard. Only the configured owner/admin
+  // account is sent to the protected 786 admin builder.
   if (pathname === "/dashboard/chat") {
-    return NextResponse.redirect(new URL("/786-admin/chat", request.url))
+    if (!secret || !token) return NextResponse.next()
+
+    try {
+      const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
+      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
+
+      if (email === ADMIN_EMAIL) {
+        return NextResponse.redirect(new URL("/786-admin/chat", request.url))
+      }
+    } catch {
+      // Let the customer dashboard handle an expired or invalid customer session.
+    }
+
+    return NextResponse.next()
   }
 
   const isAdminApi = pathname.startsWith("/api/786-admin")
@@ -31,17 +54,12 @@ export async function middleware(request: NextRequest) {
   if (!isAdminApi && !isAdminPage) return NextResponse.next()
   if (pathname === "/786-admin/login") return NextResponse.next()
 
-  const secret = process.env.JWT_SECRET
   if (!secret) {
     console.error("[786.Chat] JWT_SECRET is not configured")
     return isAdminApi
       ? NextResponse.json({ error: "Server authentication is not configured" }, { status: 503 })
       : NextResponse.redirect(new URL("/786-admin/login?error=configuration", request.url))
   }
-
-  const token =
-    request.cookies.get("auth_token")?.value ||
-    request.cookies.get("auth-token")?.value
 
   if (!token) return unauthorized(request, isAdminApi)
 
