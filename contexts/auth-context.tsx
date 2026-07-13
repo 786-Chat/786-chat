@@ -24,8 +24,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const VERIFIED_SESSION_CACHE_KEY = "786chat_verified_session_user_v1"
 
+function isExplicitLogoutVisit() {
+  if (typeof window === "undefined") return false
+  return new URLSearchParams(window.location.search).get("logged_out") === "1"
+}
+
 function readVerifiedSessionCache(): User | null {
   try {
+    if (isExplicitLogoutVisit()) {
+      sessionStorage.removeItem(VERIFIED_SESSION_CACHE_KEY)
+      return null
+    }
+
     const raw = sessionStorage.getItem(VERIFIED_SESSION_CACHE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<User>
@@ -52,13 +62,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   const refreshUser = useCallback(async () => {
+    if (isExplicitLogoutVisit()) {
+      setUser(null)
+      writeVerifiedSessionCache(null)
+    }
+
     try {
       const response = await fetch("/api/auth/me", {
         credentials: "include",
         cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       })
 
-      if (response.ok) {
+      if (response.ok && !isExplicitLogoutVisit()) {
         const data = await response.json()
         setUser(data.user)
         writeVerifiedSessionCache(data.user)
@@ -75,6 +91,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useLayoutEffect(() => {
+    if (isExplicitLogoutVisit()) {
+      setUser(null)
+      writeVerifiedSessionCache(null)
+      setIsLoading(false)
+      return
+    }
+
     const cached = readVerifiedSessionCache()
     if (!cached) return
     setUser(cached)
@@ -138,11 +161,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
       })
     } finally {
       setUser(null)
       writeVerifiedSessionCache(null)
-      router.push("/")
+      router.replace("/")
     }
   }
 
