@@ -1,7 +1,6 @@
 "use client"
 
 import { motion } from "framer-motion"
-import useSWR from "swr"
 
 interface LogoProps {
   variant?: "full" | "compact" | "icon" | "favicon"
@@ -11,114 +10,49 @@ interface LogoProps {
   className?: string
 }
 
-interface ActiveLogo {
-  id: string
-  type: "image" | "video"
-  url: string
-  filename: string
-}
-
 const sizeMap = {
   xs: { icon: 36, text: "text-base" },
   sm: { icon: 48, text: "text-xl" },
   md: { icon: 60, text: "text-2xl" },
   lg: { icon: 80, text: "text-3xl" },
-  xl: { icon: 110, text: "text-5xl" },
+  xl: { icon: 96, text: "text-5xl" },
 }
 
-const brandColors = [
-  "#ff4d6a",
-  "#ff8c42",
-  "#ffd000",
-  "#44cc66",
-  "#44cc66",
-  "#22aaff",
-  "#6655ee",
-  "#ff4d6a",
-  "#ff8c42",
-  "#22aaff",
-  "#44cc66",
-]
-
-const brandText = "MujeebProAI"
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: "no-store" })
-
-  if (!res.ok) {
-    return { logo: null }
-  }
-
-  return res.json()
-}
-
-function ColorfulBrandText({ textClass }: { textClass: string }) {
+function BrandMark({ size, animated }: { size: number; animated: boolean }) {
   return (
-    <span className={`font-bold tracking-tight ${textClass}`}>
-      {brandText.split("").map((letter, i) => (
+    <motion.div
+      className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-[28%] border border-cyan-300/25 bg-slate-950/90 shadow-[0_0_28px_rgba(34,211,238,0.18)]"
+      style={{ width: size, height: size }}
+      animate={animated ? { y: [0, -2, 0], boxShadow: ["0 0 20px rgba(34,211,238,.14)", "0 0 34px rgba(139,92,246,.28)", "0 0 20px rgba(34,211,238,.14)"] } : undefined}
+      transition={animated ? { duration: 4, repeat: Infinity, ease: "easeInOut" } : undefined}
+      aria-label="786 Chat AI"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(34,211,238,.22),transparent_42%),radial-gradient(circle_at_80%_80%,rgba(139,92,246,.24),transparent_45%)]" />
+      <div className="relative flex flex-col items-center justify-center leading-none">
         <span
-          key={i}
-          style={{ color: brandColors[i] }}
-          className="drop-shadow-[0_0_6px_rgba(255,255,255,0.15)]"
+          className="bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text font-black tracking-[-0.08em] text-transparent"
+          style={{ fontSize: Math.max(15, size * 0.36) }}
         >
-          {letter}
+          786
         </span>
-      ))}
-    </span>
+        <span
+          className="mt-1 font-semibold uppercase tracking-[0.12em] text-white/90"
+          style={{ fontSize: Math.max(6, size * 0.1) }}
+        >
+          Chat AI
+        </span>
+      </div>
+    </motion.div>
   )
 }
 
-function BrandLogo({
-  size,
-  animated,
-  customLogo,
-}: {
-  size: number
-  animated: boolean
-  customLogo?: ActiveLogo | null
-}) {
-  const defaultLogoSrc = "/images/logo-animated.gif"
-  const logoSrc = customLogo?.url || defaultLogoSrc
-  const isVideo = customLogo?.type === "video"
-
+function BrandText({ textClass }: { textClass: string }) {
   return (
-    <div
-      className="relative flex-shrink-0 rounded-full overflow-hidden"
-      style={{ width: size, height: size }}
+    <span
+      className={`bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text font-black tracking-[-0.06em] text-transparent drop-shadow-[0_0_12px_rgba(34,211,238,0.18)] ${textClass}`}
     >
-      {isVideo ? (
-        <video
-          src={logoSrc}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="object-cover w-[115%] h-[115%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
-          draggable={false}
-        />
-      ) : (
-        <img
-          src={logoSrc}
-          alt="MujeebProAI"
-          width={size}
-          height={size}
-          className="object-cover w-[115%] h-[115%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
-          draggable={false}
-        />
-      )}
-
-      {animated && (
-        <motion.div
-          className="absolute inset-[-4px] rounded-full pointer-events-none -z-10 blur-md"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(0,180,100,0.25) 0%, rgba(0,100,220,0.15) 50%, transparent 70%)",
-          }}
-          animate={{ opacity: [0.3, 0.7, 0.3] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        />
-      )}
-    </div>
+      786
+    </span>
   )
 }
 
@@ -131,39 +65,18 @@ export function MujeebProAILogo({
 }: LogoProps) {
   const dims = sizeMap[size]
 
-  const { data } = useSWR<{ logo: ActiveLogo | null }>(
-    "/api/logo/active",
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60000,
-      shouldRetryOnError: false,
-    }
-  )
-
-  const customLogo = data?.logo || null
-
   if (variant === "favicon" || variant === "icon") {
     return (
-      <div className={`relative flex-shrink-0 ${className}`}>
-        <BrandLogo size={dims.icon} animated={animated} customLogo={customLogo} />
-      </div>
-    )
-  }
-
-  if (variant === "compact") {
-    return (
-      <div className={`flex items-center gap-3 relative z-20 ${className}`}>
-        <BrandLogo size={dims.icon} animated={false} customLogo={customLogo} />
-        {showText && <ColorfulBrandText textClass={dims.text} />}
+      <div className={`relative shrink-0 ${className}`}>
+        <BrandMark size={dims.icon} animated={animated} />
       </div>
     )
   }
 
   return (
-    <div className={`flex items-center gap-4 group relative z-20 ${className}`}>
-      <BrandLogo size={dims.icon} animated={animated} customLogo={customLogo} />
-      {showText && <ColorfulBrandText textClass={dims.text} />}
+    <div className={`relative z-20 flex items-center ${variant === "compact" ? "gap-2" : "gap-4"} ${className}`}>
+      <BrandMark size={dims.icon} animated={variant === "compact" ? false : animated} />
+      {showText && <BrandText textClass={dims.text} />}
     </div>
   )
 }

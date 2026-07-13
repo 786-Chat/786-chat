@@ -1,5 +1,4 @@
-/* Chat dashboard empty-state branding.
-   This targets the current WorkspaceChatPanel welcome title only. */
+/* Customer workspace branding. */
 h1.text-3xl.font-bold.text-white.mb-2 {
   color: transparent;
   font-size: 0;
@@ -7,7 +6,7 @@ h1.text-3xl.font-bold.text-white.mb-2 {
 }
 
 h1.text-3xl.font-bold.text-white.mb-2::after {
-  content: "Welcome to 786.Chat";
+  content: "Welcome to 786 Chat AI";
   display: block;
   font-size: clamp(2rem, 4vw, 3.4rem);
   font-weight: 900;
