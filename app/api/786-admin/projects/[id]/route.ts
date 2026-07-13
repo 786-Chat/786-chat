@@ -6,6 +6,7 @@ import {
   getProjectWithData,
   persistProjectAtomic,
 } from "@/lib/786-admin/projects"
+import { createProjectRevision } from "@/lib/786-admin/project-revisions"
 import type {
   AdminMessageRole,
   AdminProjectMetadata,
@@ -67,6 +68,26 @@ export async function PATCH(request: Request, { params }: Ctx) {
     : undefined
 
   try {
+    const changesProjectState = Boolean(
+      files || previewStatePatch || metadataPatch ||
+      typeof body.title === "string" ||
+      typeof body.description === "string" ||
+      typeof body.prompt === "string"
+    )
+
+    if (changesProjectState) {
+      await createProjectRevision({
+        projectId: id,
+        ownerEmail: email,
+        label: typeof body.revision_label === "string"
+          ? body.revision_label
+          : files
+            ? `Before editing ${Object.keys(files).length} file${Object.keys(files).length === 1 ? "" : "s"}`
+            : "Before project update",
+        source: typeof body.revision_source === "string" ? body.revision_source : "auto-save",
+      })
+    }
+
     const project = await persistProjectAtomic(email, {
       projectId: id,
       title: typeof body.title === "string" ? body.title : undefined,
