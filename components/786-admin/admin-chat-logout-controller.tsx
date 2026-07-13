@@ -8,19 +8,26 @@ const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
 const VERIFIED_SESSION_CACHE_KEY = "786chat_verified_session_user_v1"
 
 async function logoutAdmin() {
+  const button = document.getElementById(LOGOUT_BUTTON_ID) as HTMLButtonElement | null
+  if (button) button.disabled = true
+
   try {
     await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "include",
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
     })
   } catch {
+    // Local session state is still cleared below. Middleware will reject the old page.
   } finally {
     try {
-      sessionStorage.removeItem(VERIFIED_SESSION_CACHE_KEY)
+      sessionStorage.clear()
       localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+      localStorage.removeItem(VERIFIED_SESSION_CACHE_KEY)
     } catch {}
 
-    window.location.href = "/786-admin/login"
+    window.location.replace(`/786-admin/login?logged_out=1&t=${Date.now()}`)
   }
 }
 
@@ -87,6 +94,11 @@ function installHeaderStyle() {
       border-color: rgba(248,113,113,.44) !important;
       background: rgba(127,29,29,.22) !important;
       color: #fecaca !important;
+    }
+
+    #${LOGOUT_BUTTON_ID}:disabled {
+      cursor: wait !important;
+      opacity: .55 !important;
     }
 
     main > div > button[title*="resize"],

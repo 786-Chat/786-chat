@@ -24,28 +24,32 @@ function getAuthToken(request: NextRequest) {
   )
 }
 
+function customerLogin(request: NextRequest) {
+  const loginUrl = new URL("/login", request.url)
+  loginUrl.searchParams.set("next", "/dashboard")
+  return NextResponse.redirect(loginUrl)
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const secret = process.env.JWT_SECRET
   const token = getAuthToken(request)
 
-  // Customer chat stays on the customer dashboard. Only the configured owner/admin
-  // account is sent to the protected 786 admin builder.
+  // The retired customer chat route must never render the legacy builder.
+  // Admins go to the owner builder; customers go to their dashboard.
   if (pathname === "/dashboard/chat") {
-    if (!secret || !token) return NextResponse.next()
+    if (!secret || !token) return customerLogin(request)
 
     try {
       const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
       const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
 
-      if (email === ADMIN_EMAIL) {
-        return NextResponse.redirect(new URL("/786-admin/chat", request.url))
-      }
+      return NextResponse.redirect(
+        new URL(email === ADMIN_EMAIL ? "/786-admin/chat" : "/dashboard", request.url)
+      )
     } catch {
-      // Let the customer dashboard handle an expired or invalid customer session.
+      return customerLogin(request)
     }
-
-    return NextResponse.next()
   }
 
   const isAdminApi = pathname.startsWith("/api/786-admin")
