@@ -18,6 +18,13 @@ function unauthorized(request: NextRequest, api: boolean) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // Retire the old dashboard chat before its legacy client layout can render.
+  // The redirect happens at the edge, so users never see the old workspace.
+  if (pathname === "/dashboard/chat") {
+    return NextResponse.redirect(new URL("/786-admin/chat", request.url))
+  }
+
   const isAdminApi = pathname.startsWith("/api/786-admin")
   const isAdminPage = pathname.startsWith("/786-admin")
 
@@ -55,5 +62,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/786-admin/:path*", "/api/786-admin/:path*"],
+  matcher: ["/dashboard/chat", "/786-admin/:path*", "/api/786-admin/:path*"],
 }
