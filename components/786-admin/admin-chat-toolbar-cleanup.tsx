@@ -1,5 +1,6 @@
 "use client"
 
+import { AdminChatAiEditReview } from "@/components/786-admin/admin-chat-ai-edit-review"
 import { AdminChatBuildStatus } from "@/components/786-admin/admin-chat-build-status"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
@@ -12,6 +13,7 @@ export function AdminChatToolbarCleanup() {
       <AdminChatPublishingOverviewLink />
       <AdminChatBuildStatus />
       <AdminChatRevisionHistory />
+      <AdminChatAiEditReview />
     </>
   )
 }
