@@ -47,27 +47,27 @@ export function Navbar() {
       }`}
     >
       <nav className="mx-auto flex h-20 sm:h-28 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 overflow-hidden">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-0 group relative z-20 flex-shrink-0 max-w-[60%] sm:max-w-none overflow-hidden">
-          {/* Mobile: smaller logo */}
+        <Link
+          href="/"
+          aria-label="786 Chat AI home"
+          className="flex items-center group relative z-20 flex-shrink-0"
+        >
           <div className="block sm:hidden">
-            <MujeebProAILogo variant="compact" size="sm" />
+            <MujeebProAILogo variant="icon" size="sm" animated={false} />
           </div>
-          {/* Desktop: full logo */}
           <div className="hidden sm:block">
-            <MujeebProAILogo variant="full" size="xl" />
+            <MujeebProAILogo variant="icon" size="xl" />
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
         <div className="hidden items-center gap-8 md:flex">
           {navLinks.map((link, index) => {
-            const isActive = link.href === "/themes" 
+            const isActive = link.href === "/themes"
               ? pathname === "/themes" || pathname?.startsWith("/themes/")
-              : link.href === "/" 
+              : link.href === "/"
                 ? pathname === "/"
                 : pathname?.startsWith(link.href) && link.href !== "/"
-            
+
             return (
               <motion.div
                 key={link.href}
@@ -91,8 +91,7 @@ export function Navbar() {
           })}
         </div>
 
-        {/* Desktop Auth Buttons */}
-        <motion.div 
+        <motion.div
           className="hidden items-center gap-3 md:flex"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -108,8 +107,8 @@ export function Navbar() {
                   Dashboard
                 </Link>
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleLogout}
                 className="border-white/10 hover:border-primary/50 hover:bg-primary/10"
               >
@@ -123,8 +122,8 @@ export function Navbar() {
                 <Link href="/login">Log in</Link>
               </Button>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button 
-                  asChild 
+                <Button
+                  asChild
                   className="relative overflow-hidden bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg shadow-primary/25"
                 >
                   <Link href="/register">
@@ -142,7 +141,6 @@ export function Navbar() {
           )}
         </motion.div>
 
-        {/* Mobile Menu Button */}
         <motion.button
           whileTap={{ scale: 0.9 }}
           className="flex h-10 w-10 items-center justify-center rounded-xl glass md:hidden"
@@ -175,7 +173,6 @@ export function Navbar() {
         </motion.button>
       </nav>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -202,7 +199,7 @@ export function Navbar() {
                   </Link>
                 </motion.div>
               ))}
-              <motion.div 
+              <motion.div
                 className="flex flex-col gap-3 pt-4 mt-2 border-t border-white/5"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
