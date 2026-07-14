@@ -33,6 +33,12 @@ async function verifyToken(token: string, secret: string) {
   return jwtVerify(token, new TextEncoder().encode(secret))
 }
 
+function rewriteCustomerWorkspace(request: NextRequest) {
+  const target = new URL("/customer-workspace", request.url)
+  target.search = request.nextUrl.search
+  return NextResponse.rewrite(target)
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const secret = process.env.JWT_SECRET
@@ -40,7 +46,9 @@ export async function middleware(request: NextRequest) {
 
   const isAdminApi = pathname.startsWith("/api/786-admin")
   const isAdminPage = pathname.startsWith("/786-admin")
+  const isCustomerWorkspace = pathname === "/customer-workspace"
   const isCustomerDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/")
+  const isMainCustomerWorkspaceRoute = pathname === "/dashboard" || pathname === "/dashboard/chat"
 
   if (pathname === "/786-admin/login") return NextResponse.next()
 
@@ -49,24 +57,25 @@ export async function middleware(request: NextRequest) {
 
     if (isAdminApi) return apiError("Server authentication is not configured", 503)
     if (isAdminPage) return adminLogin(request, "configuration")
-    if (isCustomerDashboard) return customerLogin(request)
+    if (isCustomerDashboard || isCustomerWorkspace) return customerLogin(request)
     return NextResponse.next()
   }
 
-  if (isCustomerDashboard) {
+  if (isCustomerDashboard || isCustomerWorkspace) {
     if (!token) return customerLogin(request)
 
     try {
       const { payload } = await verifyToken(token, secret)
       const email = emailFromPayload(payload)
 
-      // Owner/admin sessions always use the dedicated owner workspace.
       if (email === ADMIN_EMAIL) {
         return NextResponse.redirect(new URL("/786-admin/chat", request.url))
       }
 
-      // Authenticated customers may use every customer dashboard route,
-      // including /dashboard/chat, which is the current customer AI workspace.
+      if (isMainCustomerWorkspaceRoute) {
+        return rewriteCustomerWorkspace(request)
+      }
+
       return NextResponse.next()
     } catch {
       return customerLogin(request)
@@ -91,5 +100,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/786-admin/:path*", "/api/786-admin/:path*"],
+  matcher: ["/dashboard/:path*", "/customer-workspace", "/786-admin/:path*", "/api/786-admin/:path*"],
 }
