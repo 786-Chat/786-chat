@@ -2,23 +2,39 @@ import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 
+const NO_STORE = { "Cache-Control": "no-store" }
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+type RouteParams = { id: string } | Promise<{ id: string }>
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: NO_STORE })
+}
+
 function normalizeFiles(files: unknown): Record<string, string> {
   if (!files || typeof files !== "object" || Array.isArray(files)) return {}
 
-  const output: Record<string, string> = {}
-
-  for (const [path, value] of Object.entries(files as Record<string, unknown>)) {
-    if (typeof path === "string" && typeof value === "string") {
-      output[path] = value
-    }
-  }
-
-  return output
+  return Object.fromEntries(
+    Object.entries(files as Record<string, unknown>).filter(
+      ([path, value]) => typeof path === "string" && typeof value === "string"
+    )
+  ) as Record<string, string>
 }
 
-async function getProjectId(params: { id: string } | Promise<{ id: string }>) {
-  const resolvedParams = await Promise.resolve(params)
-  return String(resolvedParams.id || "")
+async function getProjectId(params: RouteParams) {
+  const resolved = await Promise.resolve(params)
+  const id = String(resolved.id || "").trim()
+  return UUID_PATTERN.test(id) ? id : ""
+}
+
+async function requireProjectContext(params: RouteParams) {
+  const session = await getSession()
+  if (!session?.id) return { response: json({ error: "Unauthorized" }, 401) }
+
+  const projectId = await getProjectId(params)
+  if (!projectId) return { response: json({ error: "Invalid project id" }, 400) }
+
+  return { session, projectId }
 }
 
 async function softDeleteProject(projectId: string, userId: string) {
@@ -47,17 +63,9 @@ async function restoreProject(projectId: string, userId: string) {
     RETURNING id
   `
 
-  if (!rows.length) {
-    return NextResponse.json(
-      { error: "Project not found or recovery period expired" },
-      { status: 404, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-
-  return NextResponse.json(
-    { success: true, restored: true },
-    { headers: { "Cache-Control": "no-store" } }
-  )
+  return rows.length
+    ? json({ success: true, restored: true })
+    : json({ error: "Project not found or recovery period expired" }, 404)
 }
 
 async function permanentlyDeleteProject(projectId: string, userId: string) {
@@ -69,201 +77,105 @@ async function permanentlyDeleteProject(projectId: string, userId: string) {
     RETURNING id
   `
 
-  if (!rows.length) {
-    return NextResponse.json(
-      { error: "Project not found in Recover Projects" },
-      { status: 404, headers: { "Cache-Control": "no-store" } }
-    )
-  }
-
-  return NextResponse.json(
-    { success: true, permanentlyDeleted: true },
-    { headers: { "Cache-Control": "no-store" } }
-  )
+  return rows.length
+    ? json({ success: true, permanentlyDeleted: true })
+    : json({ error: "Project not found in Recover Projects" }, 404)
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
+export async function GET(_request: Request, { params }: { params: RouteParams }) {
+  const context = await requireProjectContext(params)
+  if ("response" in context) return context.response
+
   try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const projectId = await getProjectId(params)
-
     const rows = await sql`
-      SELECT id, user_id, name, description, domain, custom_domain, status, template, files, created_at, updated_at, deleted_at, delete_after
+      SELECT id, name, description, domain, custom_domain, status, template, files,
+             created_at, updated_at, deleted_at, delete_after
       FROM projects
-      WHERE id = ${projectId}::uuid
-        AND user_id = ${session.id}::uuid
+      WHERE id = ${context.projectId}::uuid
+        AND user_id = ${context.session.id}::uuid
       LIMIT 1
     `
 
-    if (!rows.length) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 })
-    }
+    if (!rows.length) return json({ error: "Project not found" }, 404)
 
     const project = rows[0]
     const files = normalizeFiles(project.files)
 
-    return NextResponse.json(
-      {
-        success: true,
-        project: {
-          id: project.id,
-          user_id: project.user_id,
-          name: project.name || "AI Project",
-          description: project.description || "",
-          domain: project.domain || null,
-          custom_domain: project.custom_domain || null,
-          status: project.status || "active",
-          template: project.template || "custom",
-          files,
-          fileCount: Object.keys(files).length,
-          created_at: project.created_at,
-          updated_at: project.updated_at,
-          deleted_at: project.deleted_at,
-          delete_after: project.delete_after,
-        },
+    return json({
+      success: true,
+      project: {
+        id: project.id,
+        name: project.name || "AI Project",
+        description: project.description || "",
+        domain: project.domain || null,
+        custom_domain: project.custom_domain || null,
+        status: project.status || "active",
+        template: project.template || "custom",
+        files,
+        fileCount: Object.keys(files).length,
+        created_at: project.created_at,
+        updated_at: project.updated_at,
+        deleted_at: project.deleted_at,
+        delete_after: project.delete_after,
       },
-      { headers: { "Cache-Control": "no-store" } }
-    )
+    })
   } catch (error) {
     console.error("Get project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to get project",
-        debug: error instanceof Error ? error.message : "Unknown project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
+    return json({ error: "Failed to get project" }, 500)
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: { params: RouteParams }) {
+  const context = await requireProjectContext(params)
+  if ("response" in context) return context.response
+
   try {
-    const session = await getSession()
+    const permanent = new URL(request.url).searchParams.get("permanent") === "true"
+    if (permanent) return permanentlyDeleteProject(context.projectId, context.session.id)
 
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const projectId = await getProjectId(params)
-    const url = new URL(request.url)
-    const permanent = url.searchParams.get("permanent") === "true"
-
-    if (permanent) {
-      return permanentlyDeleteProject(projectId, session.id)
-    }
-
-    const rows = await softDeleteProject(projectId, session.id)
-
-    if (!rows.length) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 })
-    }
-
-    return NextResponse.json(
-      { success: true, deleted: true },
-      { headers: { "Cache-Control": "no-store" } }
-    )
+    const rows = await softDeleteProject(context.projectId, context.session.id)
+    return rows.length
+      ? json({ success: true, deleted: true })
+      : json({ error: "Project not found" }, 404)
   } catch (error) {
     console.error("Delete project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to delete project",
-        debug: error instanceof Error ? error.message : "Unknown delete project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
+    return json({ error: "Failed to delete project" }, 500)
   }
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
+async function handleAction(request: Request, params: RouteParams) {
+  const context = await requireProjectContext(params)
+  if ("response" in context) return context.response
+
   try {
-    const session = await getSession()
-
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await request.json().catch(() => ({}))
-    const projectId = await getProjectId(params)
 
     if (body?.action === "delete") {
-      const rows = await softDeleteProject(projectId, session.id)
-
-      if (!rows.length) {
-        return NextResponse.json({ error: "Project not found" }, { status: 404 })
-      }
-
-      return NextResponse.json(
-        { success: true, deleted: true },
-        { headers: { "Cache-Control": "no-store" } }
-      )
+      const rows = await softDeleteProject(context.projectId, context.session.id)
+      return rows.length
+        ? json({ success: true, deleted: true })
+        : json({ error: "Project not found" }, 404)
     }
 
     if (body?.action === "restore") {
-      return restoreProject(projectId, session.id)
+      return restoreProject(context.projectId, context.session.id)
     }
 
     if (body?.action === "deleteForever" || body?.action === "permanentDelete") {
-      return permanentlyDeleteProject(projectId, session.id)
+      return permanentlyDeleteProject(context.projectId, context.session.id)
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    return json({ error: "Invalid action" }, 400)
   } catch (error) {
     console.error("Project action error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to update project",
-        debug: error instanceof Error ? error.message : "Unknown project action error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
+    return json({ error: "Failed to update project" }, 500)
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> }
-) {
-  try {
-    const session = await getSession()
+export async function POST(request: Request, { params }: { params: RouteParams }) {
+  return handleAction(request, params)
+}
 
-    if (!session?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const body = await request.json().catch(() => ({}))
-    const projectId = await getProjectId(params)
-
-    if (body?.action === "restore") {
-      return restoreProject(projectId, session.id)
-    }
-
-    if (body?.action === "deleteForever" || body?.action === "permanentDelete") {
-      return permanentlyDeleteProject(projectId, session.id)
-    }
-
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
-  } catch (error) {
-    console.error("Restore project error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to restore project",
-        debug: error instanceof Error ? error.message : "Unknown restore project error",
-      },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    )
-  }
+export async function PATCH(request: Request, { params }: { params: RouteParams }) {
+  return handleAction(request, params)
 }
