@@ -1,264 +1,159 @@
 "use client"
 
+import Link from "next/link"
+import { motion } from "framer-motion"
+import { ArrowRight, Bot, Code2, Globe2, Rocket, ShieldCheck, Sparkles, Users } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { SpaceBackground } from "@/components/ui/space-background"
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
-import { motion } from "framer-motion"
-import { 
-  Sparkles,
-  ArrowRight,
-  Globe,
-  ShoppingCart,
-  UtensilsCrossed,
-  Monitor,
-  Truck,
-  Store,
-  Heart,
-  Target,
-  Users,
-  Zap
-} from "lucide-react"
 
-const stats = [
-  { value: "500+", label: "Businesses Launched" },
-  { value: "50+", label: "Theme Templates" },
-  { value: "24/7", label: "Support Available" },
-  { value: "99.9%", label: "Uptime Guaranteed" },
-]
-
-const values = [
+const capabilities = [
   {
-    icon: Heart,
-    title: "Customer First",
-    description: "We build for our customers. Every feature, every design decision is made with your success in mind."
+    icon: Bot,
+    title: "Build with AI",
+    description: "Turn an idea into a real multi-file project, then continue improving it through natural conversation.",
   },
   {
-    icon: Target,
-    title: "Simple & Effective",
-    description: "No complicated setups or confusing interfaces. We make powerful tools that anyone can use."
+    icon: Code2,
+    title: "Edit with confidence",
+    description: "Review proposed file changes, keep revision checkpoints, and apply only the updates you approve.",
   },
   {
-    icon: Zap,
-    title: "Fast & Reliable",
-    description: "Your website needs to be fast. We ensure lightning-fast load times and 99.9% uptime."
+    icon: Rocket,
+    title: "Publish faster",
+    description: "Validate projects, publish through GitHub, and create Vercel previews from one connected workspace.",
   },
   {
     icon: Users,
-    title: "Local Focus",
-    description: "We specialize in helping local businesses succeed online, with features designed for your needs."
+    title: "Work together",
+    description: "Invite collaborators, assign roles, leave review comments, and keep project decisions organised.",
   },
 ]
 
-const services = [
-  { icon: Globe, label: "Professional Websites" },
-  { icon: UtensilsCrossed, label: "Menu Builders" },
-  { icon: ShoppingCart, label: "Online Ordering" },
-  { icon: Monitor, label: "Kitchen Displays" },
-  { icon: Truck, label: "Delivery Systems" },
-  { icon: Store, label: "Marketplace Listings" },
+const principles = [
+  {
+    icon: Sparkles,
+    title: "Simple by design",
+    description: "Powerful AI tools should feel clear, approachable, and useful from the first prompt.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Safe project workflows",
+    description: "Build validation, revision history, controlled publishing, and health monitoring protect every project.",
+  },
+  {
+    icon: Globe2,
+    title: "Made for real launches",
+    description: "786 Chat AI is built to take projects beyond a demo and into a dependable deployment workflow.",
+  },
 ]
 
 export default function AboutPage() {
   return (
-    <main className="relative min-h-screen bg-background overflow-hidden">
+    <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <SpaceBackground />
-      
       <div className="relative z-10">
         <Navbar />
-        
-        {/* Hero Section */}
-        <section className="pt-40 pb-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="max-w-3xl">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/10 mb-6"
-              >
-                <Sparkles className="w-4 h-4 text-cyan-400" />
-                <span className="text-sm font-medium text-white/80">About Us</span>
-              </motion.div>
-              
-              <motion.h1
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6"
-              >
-                <span className="text-white">Helping local businesses</span>
-                <span className="block gradient-text mt-2">succeed online</span>
-              </motion.h1>
-              
-              <motion.p
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-lg text-white/60 mb-8 leading-relaxed"
-              >
-                MujeebProAI helps restaurants, takeaways, cafes, and local businesses 
-                launch professional websites, ordering systems, and digital tools quickly.
-                We believe every business deserves a powerful online presence, 
-                regardless of technical expertise.
-              </motion.p>
 
-              <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="flex flex-wrap gap-4"
-              >
-                <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90">
+        <section className="px-4 pb-20 pt-36 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-4xl"
+            >
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/5 px-4 py-2 text-sm text-cyan-200">
+                <Sparkles className="h-4 w-4" />
+                About 786 Chat AI
+              </div>
+              <h1 className="text-4xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
+                Build, edit and launch
+                <span className="mt-2 block bg-gradient-to-r from-cyan-400 via-teal-300 to-blue-500 bg-clip-text text-transparent">
+                  real projects with AI
+                </span>
+              </h1>
+              <p className="mt-7 max-w-3xl text-lg leading-8 text-white/65 sm:text-xl">
+                786 Chat AI is an AI-powered project workspace for creating websites and applications, reviewing multi-file edits, collaborating with a team, and publishing through GitHub and Vercel.
+              </p>
+              <div className="mt-9 flex flex-wrap gap-4">
+                <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white">
                   <Link href="/register">
-                    Start Your Website
+                    Start building free
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="border-white/10 hover:bg-white/5">
-                  <Link href="/contact">Contact Us</Link>
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
-        {/* Stats Section */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="grid grid-cols-2 md:grid-cols-4 gap-8"
-            >
-              {stats.map((stat, index) => (
-                <motion.div
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="text-center"
-                >
-                  <div className="text-4xl sm:text-5xl font-bold gradient-text mb-2">
-                    {stat.value}
-                  </div>
-                  <div className="text-white/60">{stat.label}</div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
-
-        {/* What We Do Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-16"
-            >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                What we do
-              </h2>
-              <p className="text-white/60 max-w-2xl mx-auto">
-                We provide everything local businesses need to succeed online
-              </p>
-            </motion.div>
-
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {services.map((service, index) => (
-                <motion.div
-                  key={service.label}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.05 }}
-                  className="glass rounded-2xl border border-white/5 p-6 hover:border-white/10 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-purple-500 p-0.5">
-                      <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-background/90">
-                        <service.icon className="h-5 w-5 text-white" />
-                      </div>
-                    </div>
-                    <span className="text-lg font-semibold text-white">{service.label}</span>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Our Values Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="text-center mb-16"
-            >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Our values
-              </h2>
-              <p className="text-white/60 max-w-2xl mx-auto">
-                The principles that guide everything we do
-              </p>
-            </motion.div>
-
-            <div className="grid gap-8 md:grid-cols-2">
-              {values.map((value, index) => (
-                <motion.div
-                  key={value.title}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="glass rounded-2xl border border-white/5 p-8"
-                >
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-purple-500 p-0.5 mb-6">
-                    <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-background/90">
-                      <value.icon className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-3">{value.title}</h3>
-                  <p className="text-white/60 leading-relaxed">{value.description}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="glass rounded-3xl border border-white/10 p-12"
-            >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Ready to grow your business?
-              </h2>
-              <p className="text-white/60 text-lg mb-8 max-w-2xl mx-auto">
-                Join hundreds of local businesses already using MujeebProAI.
-                Get started today with a free consultation.
-              </p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90">
-                  <Link href="/themes">
-                    Browse Themes
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="border-white/10 hover:bg-white/5">
-                  <Link href="/contact">Contact Support</Link>
+                <Button asChild size="lg" variant="outline" className="border-white/15 bg-black/20 hover:bg-white/5">
+                  <Link href="/features">Explore features</Link>
                 </Button>
               </div>
             </motion.div>
+          </div>
+        </section>
+
+        <section className="px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-12 max-w-3xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">What we provide</p>
+              <h2 className="mt-4 text-3xl font-bold sm:text-5xl">One workspace from prompt to production</h2>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              {capabilities.map((item, index) => (
+                <motion.article
+                  key={item.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.08 }}
+                  className="rounded-3xl border border-white/10 bg-black/30 p-7 backdrop-blur-xl"
+                >
+                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/25 to-blue-600/25 text-cyan-300">
+                    <item.icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-xl font-semibold">{item.title}</h3>
+                  <p className="mt-3 leading-7 text-white/60">{item.description}</p>
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2rem] border border-white/10 bg-gradient-to-br from-cyan-500/10 via-black/50 to-blue-600/10 p-8 sm:p-12">
+            <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">Our principles</p>
+                <h2 className="mt-4 text-3xl font-bold sm:text-4xl">Useful AI, dependable workflows</h2>
+              </div>
+              <div className="space-y-6">
+                {principles.map((item) => (
+                  <div key={item.title} className="flex gap-4 rounded-2xl border border-white/10 bg-black/25 p-5">
+                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{item.title}</h3>
+                      <p className="mt-2 leading-6 text-white/60">{item.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-20 text-center sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="text-3xl font-bold sm:text-5xl">Ready to create with 786 Chat AI?</h2>
+            <p className="mx-auto mt-5 max-w-2xl text-lg text-white/60">
+              Start a project, generate real files, review AI changes, collaborate and publish from one workspace.
+            </p>
+            <Button asChild size="lg" className="mt-8 bg-gradient-to-r from-cyan-500 to-blue-600 text-white">
+              <Link href="/register">
+                Create your account
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
           </div>
         </section>
 
