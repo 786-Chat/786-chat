@@ -1,33 +1,36 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { jwtVerify } from "jose"
+import { jwtVerify, type JWTPayload } from "jose"
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com")
-  .trim()
-  .toLowerCase()
-
-function unauthorized(request: NextRequest, api: boolean) {
-  if (api) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const loginUrl = new URL("/786-admin/login", request.url)
-  loginUrl.searchParams.set("next", request.nextUrl.pathname)
-  return NextResponse.redirect(loginUrl)
-}
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com").trim().toLowerCase()
 
 function getAuthToken(request: NextRequest) {
-  return (
-    request.cookies.get("auth_token")?.value ||
-    request.cookies.get("auth-token")?.value ||
-    ""
-  )
+  return request.cookies.get("auth_token")?.value || request.cookies.get("auth-token")?.value || ""
 }
 
 function customerLogin(request: NextRequest) {
   const loginUrl = new URL("/login", request.url)
-  loginUrl.searchParams.set("next", "/dashboard")
+  loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search)
   return NextResponse.redirect(loginUrl)
+}
+
+function adminLogin(request: NextRequest, reason?: string) {
+  const loginUrl = new URL("/786-admin/login", request.url)
+  loginUrl.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search)
+  if (reason) loginUrl.searchParams.set("error", reason)
+  return NextResponse.redirect(loginUrl)
+}
+
+function apiError(message: string, status: number) {
+  return NextResponse.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } })
+}
+
+function emailFromPayload(payload: JWTPayload) {
+  return typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
+}
+
+async function verifyToken(token: string, secret: string) {
+  return jwtVerify(token, new TextEncoder().encode(secret))
 }
 
 export async function middleware(request: NextRequest) {
@@ -35,54 +38,61 @@ export async function middleware(request: NextRequest) {
   const secret = process.env.JWT_SECRET
   const token = getAuthToken(request)
 
-  // The retired customer chat route must never render the legacy builder.
-  // Admins go to the owner builder; customers go to their dashboard.
-  if (pathname === "/dashboard/chat") {
-    if (!secret || !token) return customerLogin(request)
+  const isAdminApi = pathname.startsWith("/api/786-admin")
+  const isAdminPage = pathname.startsWith("/786-admin")
+  const isCustomerDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/")
+
+  if (pathname === "/786-admin/login") return NextResponse.next()
+
+  if (!secret) {
+    console.error("[786 Chat AI] JWT_SECRET is not configured")
+
+    if (isAdminApi) return apiError("Server authentication is not configured", 503)
+    if (isAdminPage) return adminLogin(request, "configuration")
+    if (isCustomerDashboard) return customerLogin(request)
+    return NextResponse.next()
+  }
+
+  if (isCustomerDashboard) {
+    if (!token) return customerLogin(request)
 
     try {
-      const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
-      const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
+      const { payload } = await verifyToken(token, secret)
+      const email = emailFromPayload(payload)
 
-      return NextResponse.redirect(
-        new URL(email === ADMIN_EMAIL ? "/786-admin/chat" : "/dashboard", request.url)
-      )
+      // The retired customer chat route never renders the legacy builder.
+      if (pathname === "/dashboard/chat") {
+        return NextResponse.redirect(new URL(email === ADMIN_EMAIL ? "/786-admin/chat" : "/dashboard", request.url))
+      }
+
+      // Owner/admin sessions use the dedicated owner workspace, never a customer dashboard.
+      if (email === ADMIN_EMAIL) {
+        return NextResponse.redirect(new URL("/786-admin/chat", request.url))
+      }
+
+      return NextResponse.next()
     } catch {
       return customerLogin(request)
     }
   }
 
-  const isAdminApi = pathname.startsWith("/api/786-admin")
-  const isAdminPage = pathname.startsWith("/786-admin")
-
   if (!isAdminApi && !isAdminPage) return NextResponse.next()
-  if (pathname === "/786-admin/login") return NextResponse.next()
-
-  if (!secret) {
-    console.error("[786.Chat] JWT_SECRET is not configured")
-    return isAdminApi
-      ? NextResponse.json({ error: "Server authentication is not configured" }, { status: 503 })
-      : NextResponse.redirect(new URL("/786-admin/login?error=configuration", request.url))
-  }
-
-  if (!token) return unauthorized(request, isAdminApi)
+  if (!token) return isAdminApi ? apiError("Unauthorized", 401) : adminLogin(request)
 
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret))
-    const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : ""
+    const { payload } = await verifyToken(token, secret)
+    const email = emailFromPayload(payload)
 
     if (email !== ADMIN_EMAIL) {
-      return isAdminApi
-        ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
-        : NextResponse.redirect(new URL("/786-admin/login?error=forbidden", request.url))
+      return isAdminApi ? apiError("Forbidden", 403) : adminLogin(request, "forbidden")
     }
 
     return NextResponse.next()
   } catch {
-    return unauthorized(request, isAdminApi)
+    return isAdminApi ? apiError("Unauthorized", 401) : adminLogin(request)
   }
 }
 
 export const config = {
-  matcher: ["/dashboard/chat", "/786-admin/:path*", "/api/786-admin/:path*"],
+  matcher: ["/dashboard/:path*", "/786-admin/:path*", "/api/786-admin/:path*"],
 }
