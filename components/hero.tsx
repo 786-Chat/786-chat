@@ -1,396 +1,86 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
+import { motion } from "framer-motion"
+import { ArrowRight, Bot, Check, Code2, Layers3, Rocket, ShieldCheck, Sparkles, Users, WandSparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Play, Sparkles, Zap, Shield, Globe, Bot, Cpu, BrainCircuit, X, Palette, Upload } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
-import { AIOrb } from "@/components/ui/ai-orb"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 
-const floatingWords = ["Neural", "Quantum", "Cognitive", "Vision", "Transform"]
+const features = [
+  [WandSparkles, "Build with AI", "Describe your idea and generate a complete, editable project in minutes."],
+  [Code2, "Edit every file", "Review AI changes, accept files individually, and restore earlier revisions safely."],
+  [Rocket, "Publish instantly", "Run production builds, create GitHub pull requests, and launch Vercel previews."],
+  [Users, "Work together", "Invite collaborators, assign roles, leave comments, and resolve reviews."],
+  [Layers3, "Start from templates", "Use ready-made templates for SaaS, restaurants, portfolios, shops, and more."],
+  [ShieldCheck, "Production ready", "Use deployment history, health monitoring, secure headers, and reliable AI fallback."],
+] as const
+
+const faqs = [
+  ["What is 786 Chat AI?", "An AI workspace for generating, editing, reviewing, and publishing complete web projects."],
+  ["Can I edit generated code?", "Yes. Edit files directly, review AI multi-file changes, and restore previous revisions."],
+  ["Can I deploy projects?", "Yes. The platform supports production builds, GitHub publishing, and Vercel preview deployments."],
+  ["Can teams collaborate?", "Yes. Add editors, reviewers, and viewers, then use comments and review controls."],
+]
 
 export function Hero() {
-  const [demoOpen, setDemoOpen] = useState(false)
   return (
-    <section className="relative min-h-screen overflow-hidden pt-32 pb-20">
-      {/* Floating AI Words */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {floatingWords.map((word, i) => (
-          <motion.div
-            key={word}
-            className="absolute text-white/[0.03] font-bold text-4xl md:text-6xl select-none"
-            style={{
-              left: `${10 + (i % 3) * 30}%`,
-              top: `${20 + Math.floor(i / 3) * 35}%`,
-            }}
-            animate={{
-              y: [0, -30, 0],
-              opacity: [0.02, 0.06, 0.02],
-              rotateX: [0, 10, 0],
-            }}
-            transition={{
-              duration: 10 + i * 2,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: i * 0.5,
-            }}
-          >
-            {word}
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center text-center">
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full glass border border-white/10 px-5 py-2.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
-              </span>
-              <span className="text-sm font-medium text-foreground/80">
-                Powered by Next-Gen AI Technology
-              </span>
-              <Sparkles className="h-4 w-4 text-accent" />
-            </div>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.1 }}
-            className="max-w-5xl text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl lg:text-8xl"
-          >
-            <span className="block text-foreground">The Future of</span>
-            <motion.span 
-              className="block gradient-text mt-2"
-              animate={{ 
-                backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-              }}
-              transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-              style={{ backgroundSize: "200% 200%" }}
-            >
-              Artificial Intelligence
-            </motion.span>
-          </motion.h1>
-
-          {/* Subheadline */}
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="mt-8 max-w-2xl text-lg text-muted-foreground sm:text-xl leading-relaxed"
-          >
-            MujeebProAI helps restaurants, cafes, takeaways, and local businesses launch
-            professional websites with online ordering, menu builders, and delivery systems.
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            className="mt-10 flex flex-col gap-4 sm:flex-row"
-          >
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button 
-                size="lg" 
-                asChild 
-                className="h-14 px-8 text-base bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_100%] hover:bg-[position:100%_0] transition-all duration-500 shadow-lg shadow-primary/25"
-              >
-                <Link href="/register">
-                  <Sparkles className="mr-2 h-5 w-5" />
-                  Start Building Free
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+    <div className="relative overflow-hidden">
+      <section className="relative px-4 pb-24 pt-32 sm:px-6 lg:px-8">
+        <div className="absolute left-1/2 top-24 -z-10 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-500/15 to-violet-500/20 blur-3xl" />
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-4xl text-center">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-100">
+              <Sparkles className="h-4 w-4" /> AI generation, editing, collaboration, and deployment
+            </motion.div>
+            <motion.h1 initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="text-balance text-5xl font-black tracking-tight sm:text-6xl lg:text-8xl">
+              Turn your idea into a
+              <span className="block bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400 bg-clip-text text-transparent">real product with AI</span>
+            </motion.h1>
+            <motion.p initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }} className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-white/65 sm:text-xl">
+              786 Chat AI gives you one workspace to generate projects, edit code safely, collaborate with your team, and publish production-ready builds.
+            </motion.p>
+            <motion.div initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <Button asChild size="lg" className="h-14 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-8 text-base font-bold shadow-2xl shadow-blue-500/25">
+                <Link href="/register">Start building free <ArrowRight className="ml-2 h-5 w-5" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="h-14 rounded-2xl border-white/15 bg-white/5 px-8 text-base">
+                <Link href="/login">Open your workspace</Link>
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="h-14 px-8 text-base border-white/10 hover:border-white/20 hover:bg-white/5 group"
-                onClick={() => setDemoOpen(true)}
-              >
-                <Play className="mr-2 h-5 w-5 group-hover:text-accent transition-colors" />
-                Watch Demo
-              </Button>
-            </motion.div>
-          </motion.div>
-
-          {/* Quick Action Links */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="mt-6 flex flex-wrap justify-center gap-4"
-          >
-            <Link 
-              href="/themes" 
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <Palette className="w-4 h-4 text-cyan-400" />
-              <span>Browse Themes</span>
-              <ArrowRight className="w-3 h-3 opacity-0 -ml-1 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-            </Link>
-            <span className="text-white/20">|</span>
-            <Link 
-              href="/import-website" 
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
-            >
-              <Upload className="w-4 h-4 text-cyan-400" />
-              <span>Import Existing Website</span>
-              <ArrowRight className="w-3 h-3 opacity-0 -ml-1 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-            </Link>
-          </motion.div>
-
-          {/* Demo Video Modal */}
-          <Dialog open={demoOpen} onOpenChange={setDemoOpen}>
-            <DialogContent className="max-w-4xl w-[95vw] bg-[#0d0d14] border-white/10 p-0 overflow-hidden max-h-[90vh]">
-              <DialogHeader className="p-4 border-b border-white/10">
-                <DialogTitle className="text-white flex items-center gap-2">
-                  <Play className="w-5 h-5 text-cyan-400" />
-                  MujeebProAI Demo
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Watch a demo of MujeebProAI capabilities
-                </DialogDescription>
-              </DialogHeader>
-              <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
-                <div className="bg-black/50 flex items-center justify-center min-h-[400px]">
-                  {/* Demo Video Content */}
-                  <div className="text-center p-6 sm:p-8 w-full">
-                    <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="mb-6"
-                    >
-                      <AIOrb size="lg" />
-                    </motion.div>
-                    <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">Welcome to MujeebProAI</h3>
-                    <p className="text-white/60 mb-6 max-w-md mx-auto text-sm sm:text-base">
-                      Experience the power of AI-assisted coding, writing, and analysis. 
-                      Get instant help with any task.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 max-w-2xl mx-auto px-2">
-                      <motion.div 
-                        className="p-3 sm:p-4 rounded-xl bg-white/[0.03] border border-white/10"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <Bot className="w-6 h-6 sm:w-8 sm:h-8 text-cyan-400 mx-auto mb-2" />
-                        <h4 className="text-sm font-medium text-white">AI Chat</h4>
-                        <p className="text-xs text-white/50 mt-1">Natural conversations</p>
-                      </motion.div>
-                      <motion.div 
-                        className="p-3 sm:p-4 rounded-xl bg-white/[0.03] border border-white/10"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <Cpu className="w-6 h-6 sm:w-8 sm:h-8 text-cyan-400 mx-auto mb-2" />
-                        <h4 className="text-sm font-medium text-white">Code Generation</h4>
-                        <p className="text-xs text-white/50 mt-1">Write code instantly</p>
-                      </motion.div>
-                      <motion.div 
-                        className="p-3 sm:p-4 rounded-xl bg-white/[0.03] border border-white/10"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <BrainCircuit className="w-6 h-6 sm:w-8 sm:h-8 text-cyan-400 mx-auto mb-2" />
-                        <h4 className="text-sm font-medium text-white">Smart Analysis</h4>
-                        <p className="text-xs text-white/50 mt-1">Analyze anything</p>
-                      </motion.div>
-                    </div>
-                    <Button 
-                      className="mt-6 sm:mt-8 bg-gradient-to-r from-cyan-500 to-blue-600"
-                      onClick={() => {
-                        setDemoOpen(false)
-                        window.location.href = "/register"
-                      }}
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Start Building Free
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* AI Orb with Orbiting Elements */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 0.4 }}
-            className="relative mt-20 mb-16"
-          >
-            <AIOrb size="xl" />
-            
-            {/* Orbiting Icons */}
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ width: 320, height: 320, left: "50%", top: "50%", marginLeft: -160, marginTop: -160 }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-            >
-              {[
-                { Icon: Bot, color: "from-primary to-blue-400" },
-                { Icon: Cpu, color: "from-accent to-cyan-400" },
-                { Icon: BrainCircuit, color: "from-purple-500 to-pink-400" },
-              ].map(({ Icon, color }, i) => (
-                <motion.div
-                  key={i}
-                  className="absolute"
-                  style={{
-                    top: "50%",
-                    left: "50%",
-                    transform: `rotate(${i * 120}deg) translateX(160px) rotate(-${i * 120}deg)`,
-                    marginTop: -24,
-                    marginLeft: -24,
-                  }}
-                >
-                  <motion.div
-                    className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} p-0.5 shadow-lg`}
-                    whileHover={{ scale: 1.2 }}
-                    animate={{ rotate: [-i * 120, -i * 120 - 360] }}
-                    transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-                  >
-                    <div className="w-full h-full rounded-[10px] bg-background/90 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-foreground" />
-                    </div>
-                  </motion.div>
-                </motion.div>
-              ))}
-            </motion.div>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto"
-          >
-            {[
-              { value: "500+", label: "Businesses Launched" },
-              { value: "99.9%", label: "Uptime Guaranteed" },
-              { value: "24/7", label: "Support Available" },
-              { value: "50+", label: "Theme Templates" },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 + i * 0.1 }}
-                className="group"
-              >
-                <motion.div 
-                  className="text-3xl md:text-4xl font-bold gradient-text"
-                  whileHover={{ scale: 1.05 }}
-                >
-                  {stat.value}
-                </motion.div>
-                <div className="text-sm text-muted-foreground mt-1 group-hover:text-foreground/70 transition-colors">
-                  {stat.label}
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-
-          {/* Trusted By */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 0.8 }}
-            className="mt-24 pt-12 border-t border-white/5 w-full"
-          >
-            <p className="mb-8 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-              Everything You Need to Succeed
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-10 md:gap-16">
-              {["Online Ordering", "Menu Builder", "Delivery System", "Kitchen Display", "Marketplace"].map((feature, i) => (
-                <motion.span
-                  key={feature}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.6 }}
-                  whileHover={{ opacity: 1, scale: 1.05 }}
-                  transition={{ delay: 0.9 + i * 0.1 }}
-                  className="text-lg md:text-xl font-semibold text-muted-foreground cursor-default transition-all"
-                >
-                  {feature}
-                </motion.span>
-              ))}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-white/50">
+              {['No credit card required','Editable source files','GitHub and Vercel ready'].map((item) => <span key={item} className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-emerald-400" /> {item}</span>)}
             </div>
-          </motion.div>
+          </div>
 
-          {/* Dashboard Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 60 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.6 }}
-            className="relative mt-20 w-full max-w-5xl"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-accent/20 to-purple-500/20 blur-3xl opacity-30" />
-            <motion.div 
-              className="relative overflow-hidden rounded-2xl border border-white/10 glass p-1.5 shadow-2xl"
-              whileHover={{ scale: 1.01 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="rounded-xl bg-background/80 backdrop-blur-sm overflow-hidden">
-                {/* Window Header */}
-                <div className="flex items-center gap-3 border-b border-white/5 px-5 py-4 bg-black/20">
-                  <div className="flex gap-2">
-                    <div className="h-3 w-3 rounded-full bg-red-500/80" />
-                    <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
-                    <div className="h-3 w-3 rounded-full bg-green-500/80" />
-                  </div>
-                  <div className="flex-1 text-center">
-                    <span className="text-sm text-muted-foreground font-medium">MujeebProAI Dashboard</span>
-                  </div>
-                  <div className="w-16" />
-                </div>
-                {/* Window Content */}
-                <div className="grid gap-4 p-6 md:grid-cols-3">
-                  {[
-                    { label: "Active Sites", value: "12", progress: 75, color: "from-primary to-blue-400" },
-                    { label: "Orders Today", value: "156", progress: 60, color: "from-accent to-cyan-400" },
-                    { label: "Monthly Revenue", value: "£8.2K", progress: 90, color: "from-green-500 to-emerald-400" },
-                  ].map((card, i) => (
-                    <motion.div
-                      key={card.label}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.8 + i * 0.1 }}
-                      className="rounded-xl border border-white/5 bg-white/[0.02] p-5 hover:bg-white/[0.04] transition-colors"
-                    >
-                      <div className="text-sm text-muted-foreground mb-2">{card.label}</div>
-                      <div className="text-3xl font-bold text-foreground">{card.value}</div>
-                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/5">
-                        <motion.div
-                          className={`h-full rounded-full bg-gradient-to-r ${card.color}`}
-                          initial={{ width: 0 }}
-                          animate={{ width: `${card.progress}%` }}
-                          transition={{ duration: 1, delay: 1 + i * 0.1 }}
-                        />
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+          <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mx-auto mt-20 max-w-6xl overflow-hidden rounded-[32px] border border-white/10 bg-slate-950/70 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
+            <div className="rounded-[24px] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/60 p-6 sm:p-10">
+              <div className="mb-8 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 font-black text-slate-950">786</div><div className="text-left"><div className="font-bold">786 Chat AI</div><div className="text-sm text-white/45">Project workspace</div></div></div>
+                <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">System ready</div>
               </div>
-            </motion.div>
+              <div className="grid gap-4 lg:grid-cols-[1fr_1.35fr]">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left"><div className="mb-4 flex items-center gap-2 text-sm font-semibold text-cyan-300"><Bot className="h-4 w-4" /> AI request</div><p className="text-white/80">Build a modern SaaS dashboard with authentication, analytics, team roles, and deployment tools.</p></div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-5 text-left font-mono text-sm"><div className="space-y-2 text-white/65"><p><span className="text-cyan-300">✓</span> Creating project files</p><p><span className="text-cyan-300">✓</span> Adding responsive components</p><p><span className="text-cyan-300">✓</span> Configuring authentication</p><p><span className="text-cyan-300">✓</span> Preparing GitHub build</p><p><span className="text-emerald-300">✓</span> Vercel preview ready</p></div></div>
+              </div>
+            </div>
           </motion.div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section className="border-y border-white/10 bg-white/[0.025] px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl"><div className="mx-auto max-w-3xl text-center"><p className="text-sm font-bold uppercase tracking-[0.24em] text-cyan-300">Everything in one place</p><h2 className="mt-4 text-3xl font-black sm:text-5xl">From first prompt to live deployment</h2><p className="mt-5 text-lg text-white/55">A complete workflow for building, reviewing, and shipping modern web projects.</p></div>
+          <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{features.map(([Icon,title,description]) => <div key={title} className="rounded-3xl border border-white/10 bg-white/[0.04] p-7 transition hover:-translate-y-1 hover:border-cyan-300/30"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-300"><Icon className="h-6 w-6" /></div><h3 className="mt-5 text-xl font-bold">{title}</h3><p className="mt-3 leading-7 text-white/55">{description}</p></div>)}</div>
+        </div>
+      </section>
+
+      <section id="pricing" className="px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-6xl text-center"><p className="text-sm font-bold uppercase tracking-[0.24em] text-violet-300">Simple launch path</p><h2 className="mt-4 text-3xl font-black sm:text-5xl">Start free and grow into production</h2><p className="mx-auto mt-5 max-w-2xl text-lg text-white/55">Create your first project today. Advanced paid plans and team options are being prepared.</p><div className="mt-12 grid gap-5 md:grid-cols-3">{[['Starter','Free','AI generation, templates, revisions, and previews'],['Pro','Coming soon','Advanced editing, GitHub publishing, and deployments'],['Team','Coming soon','Shared workspaces, roles, comments, and monitoring']].map(([name,price,text],index) => <div key={name} className={`rounded-3xl border p-8 text-left ${index===1?'border-cyan-300/40 bg-cyan-400/10':'border-white/10 bg-white/[0.035]'}`}><h3 className="text-2xl font-black">{name}</h3><div className="mt-4 text-3xl font-black">{price}</div><p className="mt-4 min-h-20 leading-7 text-white/55">{text}</p><Button asChild variant={index===1?'default':'outline'} className="mt-6 w-full rounded-xl"><Link href="/register">Get started</Link></Button></div>)}</div></div>
+      </section>
+
+      <section id="faq" className="border-y border-white/10 bg-white/[0.025] px-4 py-24 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl"><div className="text-center"><p className="text-sm font-bold uppercase tracking-[0.24em] text-cyan-300">FAQ</p><h2 className="mt-4 text-3xl font-black sm:text-5xl">Questions before you start?</h2></div><div className="mt-12 grid gap-4">{faqs.map(([question,answer]) => <details key={question} className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 open:border-cyan-300/25"><summary className="cursor-pointer list-none text-lg font-bold">{question}</summary><p className="mt-4 leading-7 text-white/55">{answer}</p></details>)}</div></div>
+      </section>
+
+      <section className="px-4 py-24 sm:px-6 lg:px-8"><div className="mx-auto max-w-6xl rounded-[36px] border border-cyan-300/20 bg-gradient-to-r from-cyan-500/15 via-blue-500/15 to-violet-500/15 p-8 text-center sm:p-14"><h2 className="text-3xl font-black sm:text-5xl">Your next project can start today</h2><p className="mx-auto mt-5 max-w-2xl text-lg text-white/60">Create your account, describe what you want, and let 786 Chat AI help take it from idea to deployment.</p><Button asChild size="lg" className="mt-8 h-14 rounded-2xl px-8"><Link href="/register">Start building free <ArrowRight className="ml-2 h-5 w-5" /></Link></Button></div></section>
+    </div>
   )
 }
