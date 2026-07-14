@@ -6,258 +6,165 @@ import { SpaceBackground } from "@/components/ui/space-background"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { 
-  Palette, 
-  Globe, 
-  UtensilsCrossed, 
-  ShoppingCart, 
-  Monitor, 
-  Truck, 
-  Store, 
-  MapPin,
-  Upload,
-  Code,
+import {
+  Bot,
+  Code2,
+  Files,
+  GitBranch,
+  History,
+  MonitorCheck,
+  Rocket,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  WandSparkles,
   Check,
   ArrowRight,
-  Sparkles
 } from "lucide-react"
 
 const features = [
   {
-    icon: Palette,
-    title: "Theme Marketplace",
-    description: "Browse 50+ professionally designed themes for restaurants, cafes, salons, and local businesses. Each theme is mobile-responsive, SEO-optimized, and fully customizable to match your brand.",
-    color: "from-pink-500 to-rose-500",
-    benefits: ["50+ premium themes", "Mobile responsive", "One-click install", "Full customization"],
-    cta: { label: "Browse Themes", href: "/themes" }
-  },
-  {
-    icon: Globe,
-    title: "Website Builder",
-    description: "Create a professional website in minutes with our drag-and-drop builder. Add pages, customize colors, upload your logo, and publish instantly with your custom domain.",
-    color: "from-blue-500 to-cyan-500",
-    benefits: ["Drag & drop editor", "Custom domain", "SSL certificate", "SEO optimization"],
-    cta: { label: "Start Building", href: "/register" }
-  },
-  {
-    icon: UtensilsCrossed,
-    title: "Menu Builder",
-    description: "Build beautiful digital menus with categories, modifiers, dietary labels, size variants, and pricing options. Import existing menus or create from scratch with our easy editor.",
-    color: "from-orange-500 to-red-500",
-    benefits: ["Categories & items", "Size variants", "Dietary labels", "Bulk import"],
-    cta: { label: "Start Free", href: "/register" }
-  },
-  {
-    icon: ShoppingCart,
-    title: "Online Ordering",
-    description: "Accept orders online 24/7 with real-time notifications, payment processing, and automatic order confirmation. Customers can track their orders and reorder favorites.",
-    color: "from-purple-500 to-pink-500",
-    benefits: ["Real-time orders", "Payment processing", "Order tracking", "Customer accounts"],
-    cta: { label: "Get Started", href: "/register" }
-  },
-  {
-    icon: Monitor,
-    title: "Kitchen Display System",
-    description: "Streamline kitchen operations with our digital display system. See incoming orders, track prep times, mark items as ready, and manage kitchen workflow efficiently.",
-    color: "from-indigo-500 to-purple-500",
-    benefits: ["Order queue", "Prep timers", "Status updates", "Multi-station"],
-    cta: { label: "Learn More", href: "/register" }
-  },
-  {
-    icon: Truck,
-    title: "Driver System",
-    description: "Manage your delivery drivers with real-time tracking, order assignment, route optimization, and delivery status updates. Drivers get their own mobile app.",
-    color: "from-green-500 to-emerald-500",
-    benefits: ["Real-time tracking", "Order assignment", "Driver app", "Delivery zones"],
-    cta: { label: "Get Started", href: "/register" }
-  },
-  {
-    icon: Store,
-    title: "Marketplace Listing",
-    description: "Get discovered by local customers through our marketplace. Featured listings, customer reviews, and search visibility help you attract new customers.",
-    color: "from-yellow-500 to-orange-500",
-    benefits: ["Local visibility", "Customer reviews", "Featured spots", "Search ranking"],
-    cta: { label: "Join Marketplace", href: "/register" }
-  },
-  {
-    icon: MapPin,
-    title: "Google Business Setup",
-    description: "We help you set up and optimize your Google Business Profile. Get found on Google Maps, collect reviews, and appear in local search results.",
-    color: "from-red-500 to-pink-500",
-    benefits: ["Google Maps listing", "Review management", "Local SEO", "Business hours"],
-    cta: { label: "Get Help", href: "/contact" }
-  },
-  {
-    icon: Upload,
-    title: "Import Existing Website",
-    description: "Already have a website? We can import your existing design, content, and branding. Just share your URL and our team will recreate it with all our features.",
+    icon: WandSparkles,
+    title: "AI project generation",
+    description: "Describe the project you want and generate a real multi-file starting point that can be saved to your customer workspace.",
     color: "from-cyan-500 to-blue-500",
-    benefits: ["Design import", "Content migration", "Brand matching", "Feature upgrade"],
-    cta: { label: "Import Website", href: "/import-website" }
+    benefits: ["Prompt-based generation", "Multi-file projects", "Saved project records", "Live workspace preview"],
   },
   {
-    icon: Code,
-    title: "AI Developer Help",
-    description: "Need custom features or changes? Our AI developer assistance provides premium support for custom coding, integrations, and advanced modifications.",
+    icon: Code2,
+    title: "AI editing workflow",
+    description: "Request changes to an existing project, review proposed file edits and apply only the changes you approve.",
     color: "from-violet-500 to-purple-500",
-    benefits: ["Custom features", "API integrations", "Priority support", "Code changes"],
-    cta: { label: "Contact Us", href: "/contact" }
+    benefits: ["File-level proposals", "Accept or reject changes", "Conflict feedback", "Workspace refresh after apply"],
+  },
+  {
+    icon: Files,
+    title: "Project workspace",
+    description: "Keep project files, preview state and project history together in one authenticated customer workspace.",
+    color: "from-blue-500 to-indigo-500",
+    benefits: ["Customer-owned projects", "File preview", "Project search", "Recover deleted projects"],
+  },
+  {
+    icon: History,
+    title: "Revision history",
+    description: "Create checkpoints before major edits and restore an earlier project state when a change does not work as expected.",
+    color: "from-amber-500 to-orange-500",
+    benefits: ["Revision checkpoints", "Restore support", "Change traceability", "Safer AI editing"],
+  },
+  {
+    icon: GitBranch,
+    title: "GitHub publishing",
+    description: "Validated generated projects can be published to isolated GitHub branches with commit and pull-request metadata.",
+    color: "from-slate-500 to-zinc-300",
+    benefits: ["Dedicated project branches", "Generated project commits", "Draft pull requests", "No direct commit to main"],
+  },
+  {
+    icon: Rocket,
+    title: "Build and deployment pipeline",
+    description: "Run isolated validation builds and request Vercel previews after successful project publishing.",
+    color: "from-emerald-500 to-cyan-500",
+    benefits: ["Queued build states", "Install and build checks", "Build logs", "Preview deployment links"],
+  },
+  {
+    icon: Users,
+    title: "Project collaboration",
+    description: "Invite collaborators, assign a project role and track review comments without exposing another customer’s private projects.",
+    color: "from-pink-500 to-rose-500",
+    benefits: ["Editor/reviewer/viewer roles", "Project comments", "Resolve and reopen reviews", "Account-scoped access"],
+  },
+  {
+    icon: Search,
+    title: "Template gallery",
+    description: "Start a project from a searchable template gallery and create a new customer-owned project with one action.",
+    color: "from-fuchsia-500 to-purple-500",
+    benefits: ["Category filters", "Search", "Custom project names", "One-click creation"],
+  },
+  {
+    icon: MonitorCheck,
+    title: "Deployment and monitoring views",
+    description: "Review build history, deployment status, logs, readiness and service-health information from the admin workspace.",
+    color: "from-teal-500 to-emerald-500",
+    benefits: ["Deployment history", "Build errors and logs", "Readiness checks", "Service status"],
+  },
+  {
+    icon: ShieldCheck,
+    title: "Account and project isolation",
+    description: "Customer project APIs require an authenticated session and scope project reads and destructive actions to the owning user.",
+    color: "from-green-500 to-lime-500",
+    benefits: ["Authenticated APIs", "Owner-scoped queries", "No password sharing", "No-store private responses"],
   },
 ]
 
 export default function FeaturesPage() {
   return (
-    <main className="relative min-h-screen bg-background overflow-hidden">
+    <main className="relative min-h-screen overflow-hidden bg-background">
       <SpaceBackground />
-      
       <div className="relative z-10">
         <Navbar />
-        
-        {/* Hero Section */}
-        <section className="pt-40 pb-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/10 mb-6"
-            >
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              <span className="text-sm font-medium text-white/80">All Features</span>
+
+        <section className="px-4 pb-20 pt-40 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl text-center">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 glass">
+              <Sparkles className="h-4 w-4 text-cyan-400" />
+              <span className="text-sm font-medium text-white/80">Working product capabilities</span>
             </motion.div>
-            
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6"
-            >
-              <span className="text-white">Everything you need to</span>
-              <span className="block gradient-text mt-2">grow your business online</span>
+
+            <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+              <span className="text-white">Build, edit and publish with</span>
+              <span className="mt-2 block gradient-text">786 Chat AI</span>
             </motion.h1>
-            
-            <motion.p
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="max-w-2xl mx-auto text-lg text-white/60 mb-10"
-            >
-              From professional websites to complete restaurant ordering systems,
-              MujeebProAI provides all the tools you need to succeed.
+
+            <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mx-auto mb-10 max-w-3xl text-lg leading-relaxed text-white/60">
+              The platform combines AI generation, controlled multi-file editing, customer-owned projects, GitHub publishing, deployment tracking and production monitoring.
             </motion.p>
 
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex flex-wrap justify-center gap-4"
-            >
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex flex-wrap justify-center gap-4">
               <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90">
-                <Link href="/themes">
-                  <Palette className="mr-2 h-5 w-5" />
-                  Browse Themes
-                </Link>
+                <Link href="/register"><Bot className="mr-2 h-5 w-5" />Start building</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/10 hover:bg-white/5">
-                <Link href="/import-website">
-                  <Upload className="mr-2 h-5 w-5" />
-                  Import Existing Website
-                </Link>
+                <Link href="/themes">Browse templates</Link>
               </Button>
             </motion.div>
           </div>
         </section>
 
-        {/* Features Grid */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="space-y-16">
-              {features.map((feature, index) => (
-                <motion.div
-                  key={feature.title}
-                  initial={{ opacity: 0, y: 50 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`flex flex-col ${index % 2 === 1 ? 'lg:flex-row-reverse' : 'lg:flex-row'} gap-8 lg:gap-16 items-center`}
-                >
-                  {/* Content */}
-                  <div className="flex-1 max-w-xl">
-                    <div className={`inline-flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br ${feature.color} p-0.5 mb-6`}>
-                      <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-background/90">
-                        <feature.icon className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                    
-                    <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-                      {feature.title}
-                    </h2>
-                    
-                    <p className="text-white/60 text-lg mb-6 leading-relaxed">
-                      {feature.description}
-                    </p>
-                    
-                    <ul className="space-y-3 mb-8">
-                      {feature.benefits.map((benefit) => (
-                        <li key={benefit} className="flex items-center gap-3">
-                          <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${feature.color}`}>
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                          <span className="text-white/80">{benefit}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    
-                    <Button asChild className={`bg-gradient-to-r ${feature.color} hover:opacity-90`}>
-                      <Link href={feature.cta.href}>
-                        {feature.cta.label}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                  
-                  {/* Visual */}
-                  <div className="flex-1 w-full max-w-lg">
-                    <div className={`relative overflow-hidden rounded-2xl border border-white/10 glass p-8 bg-gradient-to-br ${feature.color} bg-opacity-5`}>
-                      <div className={`absolute -inset-px rounded-2xl bg-gradient-to-br ${feature.color} opacity-10 blur-xl`} />
-                      <div className="relative flex items-center justify-center h-48">
-                        <feature.icon className="h-24 w-24 text-white/20" />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+        <section className="px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {features.map((feature, index) => (
+              <motion.article key={feature.title} initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.04 }} className="rounded-2xl border border-white/10 p-7 glass">
+                <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${feature.color}`}>
+                  <feature.icon className="h-6 w-6 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-white">{feature.title}</h2>
+                <p className="mt-3 leading-relaxed text-white/60">{feature.description}</p>
+                <ul className="mt-5 space-y-2.5">
+                  {feature.benefits.map((benefit) => (
+                    <li key={benefit} className="flex items-center gap-2 text-sm text-white/75">
+                      <Check className="h-4 w-4 shrink-0 text-cyan-400" />
+                      {benefit}
+                    </li>
+                  ))}
+                </ul>
+              </motion.article>
+            ))}
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-20 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="glass rounded-3xl border border-white/10 p-12"
-            >
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Ready to get started?
-              </h2>
-              <p className="text-white/60 text-lg mb-8 max-w-2xl mx-auto">
-                Join hundreds of businesses already using MujeebProAI to grow online.
-                Start free today and upgrade as you grow.
-              </p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90">
-                  <Link href="/register">
-                    Start Restaurant Website
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="border-white/10 hover:bg-white/5">
-                  <Link href="/contact">Contact Support</Link>
-                </Button>
-              </div>
-            </motion.div>
-          </div>
+        <section className="px-4 py-20 sm:px-6 lg:px-8">
+          <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mx-auto max-w-4xl rounded-3xl border border-white/10 p-10 text-center glass sm:p-12">
+            <h2 className="text-3xl font-bold text-white sm:text-4xl">Create your private customer workspace</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-white/60">Register, create a project and keep your project data separated from other customer accounts.</p>
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+              <Button asChild size="lg" className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:opacity-90">
+                <Link href="/register">Create account<ArrowRight className="ml-2 h-5 w-5" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="border-white/10 hover:bg-white/5">
+                <Link href="/contact">Contact support</Link>
+              </Button>
+            </div>
+          </motion.div>
         </section>
 
         <Footer />
