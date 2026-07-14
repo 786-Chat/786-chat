@@ -60,16 +60,13 @@ export async function middleware(request: NextRequest) {
       const { payload } = await verifyToken(token, secret)
       const email = emailFromPayload(payload)
 
-      // The retired customer chat route never renders the legacy builder.
-      if (pathname === "/dashboard/chat") {
-        return NextResponse.redirect(new URL(email === ADMIN_EMAIL ? "/786-admin/chat" : "/dashboard", request.url))
-      }
-
-      // Owner/admin sessions use the dedicated owner workspace, never a customer dashboard.
+      // Owner/admin sessions always use the dedicated owner workspace.
       if (email === ADMIN_EMAIL) {
         return NextResponse.redirect(new URL("/786-admin/chat", request.url))
       }
 
+      // Authenticated customers may use every customer dashboard route,
+      // including /dashboard/chat, which is the current customer AI workspace.
       return NextResponse.next()
     } catch {
       return customerLogin(request)
