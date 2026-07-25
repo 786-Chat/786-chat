@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { AdminChatLogoutController } from "@/components/786-admin/admin-chat-logout-controller"
 import { AdminChatSafeThemeController } from "@/components/786-admin/admin-chat-safe-theme-controller"
 import { AdminChatUrlHeaderController } from "@/components/786-admin/admin-chat-url-header-controller"
+import { AdminChatSidebarCleanup } from "@/components/786-admin/admin-chat-sidebar-cleanup"
 
 export default function AdminChatLayout({ children }: { children: ReactNode }) {
   return (
@@ -10,6 +11,7 @@ export default function AdminChatLayout({ children }: { children: ReactNode }) {
       <AdminChatLogoutController />
       <AdminChatSafeThemeController />
       <AdminChatUrlHeaderController />
+      <AdminChatSidebarCleanup />
       <style>{`
         .admin-chat-route section > div.absolute.bottom-0 > p.mt-3 {
           display: none !important;
