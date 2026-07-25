@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 
 import { useAuth } from "@/contexts/auth-context"
@@ -16,6 +16,7 @@ type CustomerProject = {
   name: string
   template?: string
   files?: Record<string, string>
+  buildReady?: boolean
 }
 
 export default function CustomerWorkspacePage() {
@@ -31,10 +32,31 @@ export default function CustomerWorkspacePage() {
   const [expanded, setExpanded] = useState(false)
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
   const [refreshKey, setRefreshKey] = useState(0)
+  const preparingRef = useRef(new Set<string>())
 
   useEffect(() => {
     setActiveProjectId(routeProjectId)
   }, [routeProjectId])
+
+  const prepareProject = useCallback(async (projectId: string) => {
+    if (!projectId || preparingRef.current.has(projectId)) return null
+    preparingRef.current.add(projectId)
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepareBuildFiles" }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data?.files) return null
+      return data.files as Record<string, string>
+    } catch {
+      return null
+    } finally {
+      preparingRef.current.delete(projectId)
+    }
+  }, [])
 
   const loadProject = useCallback(async (projectId: string) => {
     if (!projectId) {
@@ -50,14 +72,26 @@ export default function CustomerWorkspacePage() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data?.project) return
 
+      let files =
+        data.project.files && typeof data.project.files === "object" && !Array.isArray(data.project.files)
+          ? (data.project.files as Record<string, string>)
+          : {}
+      let buildReady = Boolean(data.project.buildReady)
+
+      if (!buildReady && (files["app/page.tsx"] || files["app/page.jsx"])) {
+        const preparedFiles = await prepareProject(projectId)
+        if (preparedFiles) {
+          files = preparedFiles
+          buildReady = true
+        }
+      }
+
       const nextProject: CustomerProject = {
         id: String(data.project.id),
         name: String(data.project.name || "AI Project"),
         template: data.project.template ? String(data.project.template) : "custom",
-        files:
-          data.project.files && typeof data.project.files === "object" && !Array.isArray(data.project.files)
-            ? (data.project.files as Record<string, string>)
-            : {},
+        files,
+        buildReady,
       }
 
       setProject(nextProject)
@@ -66,7 +100,7 @@ export default function CustomerWorkspacePage() {
     } catch {
       // Keep the workspace usable if a project refresh briefly fails.
     }
-  }, [])
+  }, [prepareProject])
 
   useEffect(() => {
     loadProject(activeProjectId)
