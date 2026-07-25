@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { SharedWorkspaceShell } from "@/components/workspace/shared-workspace-shell"
 import { WorkspaceChatPanel } from "@/components/workspace/chat-panel"
 import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
+import { CustomerCodeEditor } from "@/components/workspace/customer-code-editor"
 import { getWorkspaceCapabilities } from "@/lib/workspace/roles"
 
 const capabilities = getWorkspaceCapabilities("customer")
@@ -100,7 +101,6 @@ export default function CustomerWorkspacePage() {
         buildReady,
       })
       setRefreshKey((value) => value + 1)
-      setViewMode("preview")
     } catch {
       // Keep the workspace usable if a project refresh briefly fails.
     }
@@ -238,22 +238,34 @@ export default function CustomerWorkspacePage() {
     />
   )
 
-  const preview = (
-    <WorkspacePreviewPanel
-      key={`${refreshKey}-${activeProjectId}`}
-      project={project}
-      device={device}
-      setDevice={setDevice}
-      previewUrl={previewUrl}
-      setPreviewUrl={setPreviewUrl}
-      onClose={() => undefined}
-      expanded={expanded}
-      setExpanded={setExpanded}
-      previewHtml={previewHtml}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
-    />
-  )
+  const preview =
+    viewMode === "code" && project?.id ? (
+      <CustomerCodeEditor
+        projectId={project.id}
+        files={project.files || {}}
+        onSaved={(files) => {
+          setProject((current) => (current ? { ...current, files } : current))
+          setPreviewHtml("")
+          setPreviewUrl("")
+          setRefreshKey((value) => value + 1)
+        }}
+      />
+    ) : (
+      <WorkspacePreviewPanel
+        key={`${refreshKey}-${activeProjectId}`}
+        project={project}
+        device={device}
+        setDevice={setDevice}
+        previewUrl={previewUrl}
+        setPreviewUrl={setPreviewUrl}
+        onClose={() => undefined}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        previewHtml={previewHtml}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
+    )
 
   return (
     <SharedWorkspaceShell
