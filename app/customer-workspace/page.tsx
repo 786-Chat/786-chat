@@ -10,6 +10,7 @@ import { WorkspacePreviewPanel } from "@/components/workspace/preview-panel"
 import { getWorkspaceCapabilities } from "@/lib/workspace/roles"
 
 const capabilities = getWorkspaceCapabilities("customer")
+const FINAL_DEPLOYMENT_STATES = new Set(["ready", "error", "failed", "canceled", "cancelled"])
 
 type CustomerProject = {
   id: string
@@ -17,6 +18,10 @@ type CustomerProject = {
   template?: string
   files?: Record<string, string>
   buildReady?: boolean
+}
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
 export default function CustomerWorkspacePage() {
@@ -159,6 +164,28 @@ export default function CustomerWorkspacePage() {
     setViewMode("preview")
   }
 
+  async function pollDeployment(projectId: string, historyId: string) {
+    for (let attempt = 0; attempt < 45; attempt += 1) {
+      const response = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/deploy/${encodeURIComponent(historyId)}`,
+        { credentials: "include", cache: "no-store" }
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.error || "Could not read deployment status")
+
+      const status = String(data?.deployment?.status || "queued").toLowerCase()
+      const url = String(data?.deployment?.deployment_url || "")
+      if (status === "ready") return { status, url }
+      if (FINAL_DEPLOYMENT_STATES.has(status)) {
+        throw new Error(data?.deployment?.error_message || "Deployment failed")
+      }
+
+      await wait(2000)
+    }
+
+    throw new Error("Deployment is still building. Check again shortly.")
+  }
+
   async function publishProject() {
     if (!activeProjectId || publishBusy) return
     setPublishBusy(true)
@@ -171,19 +198,26 @@ export default function CustomerWorkspacePage() {
       })
       const data = await response.json().catch(() => ({}))
 
-      if (!response.ok) {
-        window.alert(data?.message || data?.error || "Project deployment failed")
-        return
+      if (!response.ok) throw new Error(data?.message || data?.error || "Project deployment failed")
+
+      const historyId = data?.deployment?.historyId ? String(data.deployment.historyId) : ""
+      const initialUrl = data?.deployment?.url ? String(data.deployment.url) : ""
+      const initialStatus = String(data?.deployment?.readyState || "queued").toLowerCase()
+
+      let finalUrl = initialUrl
+      if (historyId && initialStatus !== "ready") {
+        const result = await pollDeployment(activeProjectId, historyId)
+        finalUrl = result.url || finalUrl
       }
 
-      const url = data?.deployment?.url ? String(data.deployment.url) : ""
-      if (url) {
-        setPreviewUrl(url)
+      if (finalUrl) {
+        setPreviewUrl(finalUrl)
         setViewMode("preview")
-        window.open(url, "_blank", "noopener,noreferrer")
+        window.open(finalUrl, "_blank", "noopener,noreferrer")
       }
-    } catch {
-      window.alert("Project deployment could not be started")
+      await loadProject(activeProjectId)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Project deployment could not be completed")
     } finally {
       setPublishBusy(false)
     }
