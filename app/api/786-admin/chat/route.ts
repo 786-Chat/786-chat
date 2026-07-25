@@ -23,6 +23,39 @@ const MAX_MESSAGE_LENGTH = 20_000
 const MAX_CONTEXT_FILES = 200
 const MAX_CONTEXT_FILE_LENGTH = 80_000
 
+const RESPONSIVE_PROJECT_RULES = `
+RESPONSIVE LAYOUT QUALITY — MANDATORY:
+- Every page must work at 320px, 375px, 390px, 414px, 768px, 820px, 1024px, 1366px, and wide desktop sizes.
+- Never use a fixed page width that can exceed the viewport. Use w-full, max-w-*, min-w-0, flex-wrap, responsive grids, and responsive padding.
+- Every flex or grid child that contains text, cards, charts, forms, or tables must be allowed to shrink with min-w-0.
+- Text must wrap safely. Use break-words or overflow-wrap:anywhere for long names, email addresses, IDs, URLs, labels, and headings.
+- Images, videos, SVGs, canvases, and iframes must use max-width:100% and height:auto unless a deliberate responsive aspect ratio is used.
+- Tables and dense data must be placed inside an overflow-x-auto wrapper. Do not let tables widen the whole page.
+- Navigation, toolbars, filters, form rows, metric cards, and action buttons must wrap or stack on narrow screens.
+- Large desktop grids must collapse progressively: one column on mobile, suitable tablet columns, then desktop columns.
+- Do not use fixed left margins, negative offsets, absolute positioning, or fixed pixel widths that cut content on mobile or iPad.
+- Modals, drawers, cards, forms, and panels must use max-w-[calc(100vw-...)] or responsive width classes and remain fully reachable.
+- The document must not have horizontal page scrolling. Only intentional local containers such as tables or code blocks may scroll horizontally.
+- Verify all borders, card contents, buttons, badges, inputs, charts, and text remain inside their parent at every target width.
+- Preserve all functionality while making layouts responsive. Do not hide important content merely to avoid overflow.
+`
+
+const RESPONSIVE_SAFETY_CSS = `
+
+/* 786.Chat responsive safety layer */
+html, body { max-width: 100%; overflow-x: hidden; }
+*, *::before, *::after { box-sizing: border-box; min-width: 0; }
+img, video, svg, canvas, iframe { max-width: 100%; height: auto; }
+pre, code { max-width: 100%; overflow-wrap: anywhere; }
+table { max-width: 100%; }
+input, select, textarea, button { max-width: 100%; }
+p, h1, h2, h3, h4, h5, h6, a, span, label, td, th { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  [class*="grid-cols-"] { grid-template-columns: minmax(0, 1fr); }
+  [class*="min-w-["], [class*="w-["] { max-width: 100%; }
+}
+`
+
 function slugify(v: string) {
   return v
     .toLowerCase()
@@ -61,6 +94,21 @@ function safeExisting(value: unknown) {
   }
 }
 
+function addResponsiveSafety(files: Record<string, string>): Record<string, string> {
+  const next = { ...files }
+  const cssPath = next["app/globals.css"] !== undefined
+    ? "app/globals.css"
+    : next["src/app/globals.css"] !== undefined
+      ? "src/app/globals.css"
+      : null
+
+  if (cssPath && !next[cssPath].includes("786.Chat responsive safety layer")) {
+    next[cssPath] = `${next[cssPath].trimEnd()}${RESPONSIVE_SAFETY_CSS}`
+  }
+
+  return next
+}
+
 function localResponse(userRequest: string, projectId: string | null, reason: string) {
   const local = createSevenEightSixProjectFromPrompt(userRequest)
   const now = new Date().toISOString()
@@ -78,7 +126,7 @@ function localResponse(userRequest: string, projectId: string | null, reason: st
       prompt: userRequest,
       createdAt: now,
       updatedAt: now,
-      files: local.files,
+      files: addResponsiveSafety(local.files),
     },
     fellBackToLocal: true,
   })
@@ -113,7 +161,7 @@ export async function POST(request: Request) {
         : null
 
     const userRequest = message || "Inspect the attached file and update the existing project to match it."
-    const prompt = `${userRequest}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}`
+    const prompt = `${userRequest}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}\n\n${RESPONSIVE_PROJECT_RULES}`
 
     try {
       const codegen = await Promise.race([
@@ -141,7 +189,7 @@ export async function POST(request: Request) {
           prompt: userRequest,
           createdAt: now,
           updatedAt: now,
-          files: codegen.files,
+          files: addResponsiveSafety(codegen.files),
         },
         fellBackToLocal: false,
       })
