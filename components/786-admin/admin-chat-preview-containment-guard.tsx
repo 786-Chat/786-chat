@@ -24,6 +24,23 @@ const fallbackPreviewHtml = `<!doctype html>
 </body>
 </html>`
 
+const PREVIEW_RESPONSIVE_STYLE_ID = "786-chat-preview-responsive-safety"
+const PREVIEW_RESPONSIVE_CSS = `
+html,body{max-width:100%!important;overflow-x:hidden!important}
+*,*::before,*::after{box-sizing:border-box!important;min-width:0}
+body,#root,#root>*{width:100%;max-width:100%}
+img,video,svg,canvas,iframe{max-width:100%!important;height:auto}
+pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
+input,select,textarea,button{max-width:100%}
+p,h1,h2,h3,h4,h5,h6,a,span,label,td,th{overflow-wrap:anywhere;word-break:break-word}
+table{max-width:100%}
+@media(max-width:767px){
+  [class*="grid-cols-"]{grid-template-columns:minmax(0,1fr)!important}
+  [class*="min-w-["],[class*="w-["]{max-width:100%!important}
+  [class*="flex-row"]{flex-wrap:wrap}
+}
+`
+
 const lastSafePreviewByIframe = new WeakMap<HTMLIFrameElement, string>()
 
 function isPreviewIframe(iframe: HTMLIFrameElement): boolean {
@@ -36,6 +53,18 @@ function hardenPreviewIframe(iframe: HTMLIFrameElement): void {
   if (!sandbox.includes("allow-same-origin")) {
     iframe.setAttribute("sandbox", `${sandbox} allow-same-origin`.trim())
   }
+}
+
+function injectResponsiveSafety(iframe: HTMLIFrameElement): void {
+  if (!isPreviewIframe(iframe)) return
+  try {
+    const doc = iframe.contentDocument
+    if (!doc?.head || doc.getElementById(PREVIEW_RESPONSIVE_STYLE_ID)) return
+    const style = doc.createElement("style")
+    style.id = PREVIEW_RESPONSIVE_STYLE_ID
+    style.textContent = PREVIEW_RESPONSIVE_CSS
+    doc.head.appendChild(style)
+  } catch {}
 }
 
 function containsAdminWorkspace(html: string): boolean {
@@ -112,7 +141,12 @@ function inspectIframe(iframe: HTMLIFrameElement): void {
     return
   }
 
-  if (containsAdminWorkspace(srcdoc)) resetIframe(iframe)
+  if (containsAdminWorkspace(srcdoc)) {
+    resetIframe(iframe)
+    return
+  }
+
+  injectResponsiveSafety(iframe)
 }
 
 export function AdminChatPreviewContainmentGuard() {
