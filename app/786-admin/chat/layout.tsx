@@ -5,11 +5,16 @@ import { AdminChatUrlHeaderController } from "@/components/786-admin/admin-chat-
 
 export default function AdminChatLayout({ children }: { children: ReactNode }) {
   return (
-    <>
+    <div className="admin-chat-route contents">
       {children}
       <AdminChatLogoutController />
       <AdminChatSafeThemeController />
       <AdminChatUrlHeaderController />
-    </>
+      <style>{`
+        .admin-chat-route section > div.absolute.bottom-0 > p.mt-3 {
+          display: none !important;
+        }
+      `}</style>
+    </div>
   )
 }
