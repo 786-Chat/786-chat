@@ -32,6 +32,7 @@ export default function CustomerWorkspacePage() {
   const [expanded, setExpanded] = useState(false)
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview")
   const [refreshKey, setRefreshKey] = useState(0)
+  const [publishBusy, setPublishBusy] = useState(false)
   const preparingRef = useRef(new Set<string>())
 
   useEffect(() => {
@@ -86,15 +87,13 @@ export default function CustomerWorkspacePage() {
         }
       }
 
-      const nextProject: CustomerProject = {
+      setProject({
         id: String(data.project.id),
         name: String(data.project.name || "AI Project"),
         template: data.project.template ? String(data.project.template) : "custom",
         files,
         buildReady,
-      }
-
-      setProject(nextProject)
+      })
       setRefreshKey((value) => value + 1)
       setViewMode("preview")
     } catch {
@@ -111,7 +110,6 @@ export default function CustomerWorkspacePage() {
       const detail = (event as CustomEvent).detail
       const nextProjectId = detail?.projectId ? String(detail.projectId) : ""
       if (!nextProjectId) return
-
       setActiveProjectId(nextProjectId)
       loadProject(nextProjectId)
     }
@@ -161,6 +159,36 @@ export default function CustomerWorkspacePage() {
     setViewMode("preview")
   }
 
+  async function publishProject() {
+    if (!activeProjectId || publishBusy) return
+    setPublishBusy(true)
+
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(activeProjectId)}/deploy`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        window.alert(data?.message || data?.error || "Project deployment failed")
+        return
+      }
+
+      const url = data?.deployment?.url ? String(data.deployment.url) : ""
+      if (url) {
+        setPreviewUrl(url)
+        setViewMode("preview")
+        window.open(url, "_blank", "noopener,noreferrer")
+      }
+    } catch {
+      window.alert("Project deployment could not be started")
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
   async function signOut() {
     await logout()
     router.replace("/")
@@ -205,6 +233,8 @@ export default function CustomerWorkspacePage() {
         setRefreshKey((value) => value + 1)
         if (activeProjectId) loadProject(activeProjectId)
       }}
+      onPublish={activeProjectId ? publishProject : undefined}
+      publishBusy={publishBusy}
       onSignOut={signOut}
       projectLabel={project?.name || (activeProjectId ? `Project ${activeProjectId.slice(0, 8)}` : "/")}
     />
