@@ -42,6 +42,107 @@ function validateFiles(files: unknown) {
   return { files: normalized }
 }
 
+function projectSlug(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64) || "786-chat-project"
+}
+
+function prepareBuildFiles(existingFiles: Record<string, string>, projectName: string) {
+  const files = { ...existingFiles }
+  const slug = projectSlug(projectName)
+
+  if (!files["app/layout.tsx"]) {
+    files["app/layout.tsx"] = `import type { Metadata } from "next"\nimport "./globals.css"\n\nexport const metadata: Metadata = {\n  title: ${JSON.stringify(projectName)},\n  description: "Built with 786 Chat AI",\n}\n\nexport default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {\n  return (\n    <html lang="en">\n      <body>{children}</body>\n    </html>\n  )\n}\n`
+  }
+
+  if (!files["app/globals.css"]) {
+    files["app/globals.css"] = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n* { box-sizing: border-box; }\nhtml { scroll-behavior: smooth; }\nbody { margin: 0; min-height: 100vh; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }\nbutton, input, textarea, select { font: inherit; }\n`
+  }
+
+  if (!files["package.json"]) {
+    files["package.json"] = JSON.stringify({
+      name: slug,
+      version: "1.0.0",
+      private: true,
+      scripts: {
+        dev: "next dev",
+        build: "next build",
+        start: "next start",
+        lint: "next lint",
+        typecheck: "tsc --noEmit",
+      },
+      dependencies: {
+        "@types/node": "latest",
+        "@types/react": "latest",
+        "@types/react-dom": "latest",
+        next: "latest",
+        react: "latest",
+        "react-dom": "latest",
+        "lucide-react": "latest",
+      },
+      devDependencies: {
+        autoprefixer: "latest",
+        postcss: "latest",
+        tailwindcss: "latest",
+        typescript: "latest",
+      },
+    }, null, 2) + "\n"
+  }
+
+  if (!files["tsconfig.json"]) {
+    files["tsconfig.json"] = JSON.stringify({
+      compilerOptions: {
+        target: "ES2017",
+        lib: ["dom", "dom.iterable", "esnext"],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: true,
+        noEmit: true,
+        esModuleInterop: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: "preserve",
+        incremental: true,
+        plugins: [{ name: "next" }],
+        paths: { "@/*": ["./*"] },
+      },
+      include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+      exclude: ["node_modules"],
+    }, null, 2) + "\n"
+  }
+
+  if (!files["next.config.mjs"]) {
+    files["next.config.mjs"] = `/** @type {import('next').NextConfig} */\nconst nextConfig = { reactStrictMode: true }\n\nexport default nextConfig\n`
+  }
+
+  if (!files["postcss.config.mjs"]) {
+    files["postcss.config.mjs"] = `export default { plugins: { tailwindcss: {}, autoprefixer: {} } }\n`
+  }
+
+  if (!files["tailwind.config.ts"]) {
+    files["tailwind.config.ts"] = `import type { Config } from "tailwindcss"\n\nconst config: Config = {\n  content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx,mdx}"],\n  theme: { extend: {} },\n  plugins: [],\n}\n\nexport default config\n`
+  }
+
+  if (!files[".env.example"]) {
+    files[".env.example"] = `# Add project secrets in your deployment dashboard.\n# Never commit real secret values.\nNEXT_PUBLIC_APP_NAME=${projectName.replace(/\n/g, " ")}\n`
+  }
+
+  if (!files["README.md"]) {
+    files["README.md"] = `# ${projectName}\n\nGenerated with 786 Chat AI.\n\n## Run locally\n\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\`\n\n## Validate\n\n\`\`\`bash\nnpm run typecheck\nnpm run build\n\`\`\`\n`
+  }
+
+  if (!files[".gitignore"]) {
+    files[".gitignore"] = `.next\nnode_modules\n.env\n.env.local\n.vercel\n*.log\n`
+  }
+
+  return files
+}
+
 async function getProjectId(params: RouteParams) {
   const resolved = await Promise.resolve(params)
   const id = String(resolved.id || "").trim()
@@ -111,6 +212,7 @@ export async function GET(_request: Request, { params }: { params: RouteParams }
         template: project.template || "custom",
         files,
         fileCount: Object.keys(files).length,
+        buildReady: Boolean(files["package.json"] && files["app/page.tsx"] && files["app/layout.tsx"]),
         created_at: project.created_at,
         updated_at: project.updated_at,
         deleted_at: project.deleted_at,
@@ -157,6 +259,44 @@ async function handleAction(request: Request, params: RouteParams) {
       return rows.length
         ? json({ success: true, saved: true, updated_at: rows[0].updated_at, fileCount: Object.keys(validated.files).length })
         : json({ error: "Project not found" }, 404)
+    }
+
+    if (body?.action === "prepareBuildFiles") {
+      const rows = await sql`
+        SELECT id, name, files
+        FROM projects
+        WHERE id = ${context.projectId}::uuid
+          AND user_id = ${context.session.id}::uuid
+          AND deleted_at IS NULL
+        LIMIT 1
+      `
+      if (!rows.length) return json({ error: "Project not found" }, 404)
+
+      const currentFiles = normalizeFiles(rows[0].files)
+      if (!currentFiles["app/page.tsx"] && !currentFiles["app/page.jsx"]) {
+        return json({ error: "Project is missing app/page.tsx" }, 400)
+      }
+
+      const preparedFiles = prepareBuildFiles(currentFiles, String(rows[0].name || "AI Project"))
+      const validated = validateFiles(preparedFiles)
+      if ("error" in validated) return json({ error: validated.error }, 400)
+
+      const updated = await sql`
+        UPDATE projects
+        SET files = ${JSON.stringify(validated.files)}::jsonb, updated_at = NOW()
+        WHERE id = ${context.projectId}::uuid
+          AND user_id = ${context.session.id}::uuid
+          AND deleted_at IS NULL
+        RETURNING id, updated_at
+      `
+
+      return json({
+        success: true,
+        prepared: true,
+        files: validated.files,
+        fileCount: Object.keys(validated.files).length,
+        updated_at: updated[0]?.updated_at,
+      })
     }
 
     if (body?.action === "delete") {
