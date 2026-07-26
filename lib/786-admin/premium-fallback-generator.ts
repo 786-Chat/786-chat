@@ -9,17 +9,22 @@ type PremiumProfile = {
   ink: string
   radius: string
   layout: Layout
+  font: string
 }
 
 const PROFILES: PremiumProfile[] = [
-  { name: "aurora-glass", primary: "#22d3ee", secondary: "#8b5cf6", surface: "#061426", ink: "#effcff", radius: "2rem", layout: "split" },
-  { name: "royal-gold", primary: "#d4af37", secondary: "#2563eb", surface: "#07112d", ink: "#fffaf0", radius: ".75rem", layout: "centered" },
-  { name: "editorial-coral", primary: "#e76f51", secondary: "#264653", surface: "#f4eadb", ink: "#172126", radius: "0", layout: "editorial" },
-  { name: "neon-cyber", primary: "#22d3ee", secondary: "#ec4899", surface: "#04040b", ink: "#f5f3ff", radius: "1.25rem", layout: "dashboard" },
-  { name: "emerald-vip", primary: "#10b981", secondary: "#d4af37", surface: "#03120d", ink: "#f0fdf4", radius: "1.75rem", layout: "split" },
-  { name: "sunset-future", primary: "#fb7185", secondary: "#8b5cf6", surface: "#120a2a", ink: "#fff7ed", radius: "2.5rem", layout: "centered" },
-  { name: "industrial-lime", primary: "#a3e635", secondary: "#f59e0b", surface: "#121416", ink: "#f7fee7", radius: ".25rem", layout: "dashboard" },
-  { name: "organic-terracotta", primary: "#2f6b4f", secondary: "#c96f4a", surface: "#f7f0df", ink: "#173127", radius: "3rem", layout: "editorial" },
+  { name: "aurora-glass", primary: "#22d3ee", secondary: "#8b5cf6", surface: "#061426", ink: "#effcff", radius: "2rem", layout: "split", font: "modern" },
+  { name: "royal-gold", primary: "#d4af37", secondary: "#f5efe0", surface: "#090805", ink: "#fffaf0", radius: ".65rem", layout: "editorial", font: "serif" },
+  { name: "editorial-coral", primary: "#e76f51", secondary: "#264653", surface: "#f4eadb", ink: "#172126", radius: "0", layout: "editorial", font: "serif" },
+  { name: "neon-cyber", primary: "#22d3ee", secondary: "#ec4899", surface: "#04040b", ink: "#f5f3ff", radius: "1.25rem", layout: "dashboard", font: "mono" },
+  { name: "emerald-vip", primary: "#10b981", secondary: "#d4af37", surface: "#03120d", ink: "#f0fdf4", radius: "1.75rem", layout: "split", font: "modern" },
+  { name: "sunset-future", primary: "#fb7185", secondary: "#8b5cf6", surface: "#120a2a", ink: "#fff7ed", radius: "2.5rem", layout: "centered", font: "modern" },
+  { name: "industrial-lime", primary: "#a3e635", secondary: "#f59e0b", surface: "#121416", ink: "#f7fee7", radius: ".2rem", layout: "dashboard", font: "mono" },
+  { name: "organic-terracotta", primary: "#2f6b4f", secondary: "#c96f4a", surface: "#f7f0df", ink: "#173127", radius: "3rem", layout: "split", font: "serif" },
+  { name: "playful-primary", primary: "#ffd60a", secondary: "#2563eb", surface: "#fffdf4", ink: "#172554", radius: "2.2rem", layout: "dashboard", font: "rounded" },
+  { name: "medical-clean", primary: "#0ea5a4", secondary: "#2563eb", surface: "#f7fcff", ink: "#102a43", radius: "1rem", layout: "split", font: "modern" },
+  { name: "fashion-ink", primary: "#ef4444", secondary: "#f5f5f4", surface: "#0a0a0a", ink: "#fafafa", radius: "0", layout: "centered", font: "serif" },
+  { name: "lavender-soft", primary: "#7c3aed", secondary: "#f472b6", surface: "#faf7ff", ink: "#2e1065", radius: "1.5rem", layout: "centered", font: "rounded" },
 ]
 
 function hashText(value: string) {
@@ -40,115 +45,79 @@ function cleanPrompt(prompt: string) {
 }
 
 function titleFromPrompt(prompt: string) {
-  const quoted = prompt.match(/[“\"]([^”\"]{3,60})[”\"]/)
-  if (quoted?.[1]) return quoted[1]
-  const named = prompt.match(/(?:called|named)\s+([A-Z][\w\s&'-]{2,50})/i)
-  if (named?.[1]) return named[1].trim().replace(/[.,].*$/, "")
-  const words = prompt.replace(/[^a-z0-9\s]/gi, " ").trim().split(/\s+/).slice(0, 5)
-  return words.length ? words.map((word) => word[0]?.toUpperCase() + word.slice(1)).join(" ") : "Premium 786 Project"
+  const quoted = prompt.match(/[“"]([^”"\n]{3,60})[”"]/)?.[1]
+  if (quoted) return quoted.trim()
+  const named = prompt.match(/(?:called|named)\s+[“"]?([^\n.!?,"”]{2,60})/i)?.[1]
+  if (named) return named.trim()
+  const firstLine = prompt.split("\n").find((line) => line.trim()) || "Premium 786 Project"
+  return firstLine.replace(/^(create|build|make|design)\s+(a|an|the)?\s*/i, "").trim().slice(0, 60) || "Premium 786 Project"
 }
 
 function featuresFromPrompt(prompt: string) {
   const text = prompt.toLowerCase()
-  const pool = [
-    ["restaurant", ["Signature Menu", "Private Dining", "Chef Stories", "Reservations"]],
-    ["travel", ["Trip Planner", "Destinations", "Luxury Stays", "Concierge"]],
-    ["school", ["Courses", "Student Portal", "Admissions", "Results"]],
-    ["saas", ["Analytics", "Automation", "Workspace", "Integrations"]],
-    ["shop", ["Collections", "Smart Search", "Checkout", "Order Tracking"]],
-    ["gaming", ["Tournaments", "Leaderboards", "Profiles", "Community"]],
-  ] as const
-  return pool.find(([keyword]) => text.includes(keyword))?.[1] || ["Interactive Experience", "Premium Features", "Smart Workflow", "VIP Support"]
+  const groups: Array<[RegExp, string[]]> = [
+    [/restaurant|food|cafe|pizza/, ["Signature Menu", "Reservations", "Chef Stories", "Guest Reviews"]],
+    [/travel|aviation|airline|hotel/, ["Fleet & Journeys", "Destinations", "Membership", "Concierge"]],
+    [/school|academy|learning|student|children|kids/, ["Courses", "Learning Progress", "Quizzes", "Student Profiles"]],
+    [/saas|dashboard|analytics|software/, ["Analytics", "Automation", "Team Workspace", "Integrations"]],
+    [/shop|store|fashion|commerce/, ["Collections", "Smart Search", "Secure Checkout", "Order Tracking"]],
+    [/gaming|game|esport/, ["Live Tournaments", "Leaderboards", "Player Profiles", "Community"]],
+    [/medical|clinic|health|doctor/, ["Services", "Specialists", "Appointments", "Patient Support"]],
+    [/property|real estate|estate agent/, ["Featured Homes", "Smart Search", "Area Guides", "Book a Viewing"]],
+  ]
+  return groups.find(([pattern]) => pattern.test(text))?.[1] || ["Signature Experience", "Premium Features", "Smart Workflow", "VIP Support"]
 }
 
-function sharedImports(features: readonly string[]) {
-  return `"use client"\n\nimport { useState } from "react"\nimport { ArrowRight, Menu, Sparkles, X } from "lucide-react"\n\nconst features = ${JSON.stringify(features)}\n`
+function chooseProfile(prompt: string, seed: string) {
+  const text = prompt.toLowerCase()
+  if (/children|kids|school|academy|learning|playful|bright yellow|cobalt|coral/.test(text)) return PROFILES.find((p) => p.name === "playful-primary")!
+  if (/aviation|private jet|luxury|vvip|black.*gold|champagne gold|royal/.test(text)) return PROFILES.find((p) => p.name === "royal-gold")!
+  if (/cyber|gaming|neon|hologram|esport/.test(text)) return PROFILES.find((p) => p.name === "neon-cyber")!
+  if (/restaurant|cafe|editorial|magazine/.test(text)) return PROFILES.find((p) => p.name === "editorial-coral")!
+  if (/medical|clinic|health|doctor|clean white/.test(text)) return PROFILES.find((p) => p.name === "medical-clean")!
+  if (/fashion|runway|boutique|monochrome/.test(text)) return PROFILES.find((p) => p.name === "fashion-ink")!
+  if (/manufacturing|industrial|warehouse|erp/.test(text)) return PROFILES.find((p) => p.name === "industrial-lime")!
+  if (/organic|wellness|nature|botanical/.test(text)) return PROFILES.find((p) => p.name === "organic-terracotta")!
+  if (/emerald|executive|finance/.test(text)) return PROFILES.find((p) => p.name === "emerald-vip")!
+  return PROFILES[hashText(`${seed}:${prompt}`) % PROFILES.length]
 }
 
-function splitPage(title: string, description: string, features: readonly string[]) {
-  return `${sharedImports(features)}
-export default function Page() {
-  const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
-  return <main className="site split-site">
-    <nav className="top-nav glass"><a href="#home" className="brand">${title}</a><button className="menu" onClick={() => setOpen(v => !v)}>{open ? <X /> : <Menu />}</button><div className={open ? "links open" : "links"}><a href="#home">Home</a><a href="#features">Experience</a><a href="#contact">Contact</a></div></nav>
-    <section id="home" className="split-hero">
-      <div className="split-copy"><span className="eyebrow"><Sparkles size={16}/> Private digital experience</span><h1>${title}</h1><p>${description}</p><div className="actions"><a className="primary" href="#features">Discover <ArrowRight size={18}/></a><a className="ghost" href="#contact">Book a consultation</a></div></div>
-      <div className="scene"><div className="scene-ring one"/><div className="scene-ring two"/><article className="floating-card"><span>Featured</span><strong>{features[active]}</strong><small>Move through a layered, interactive product story.</small></article></div>
-    </section>
-    <section id="features" className="feature-band"><div className="section-intro"><span>Curated system</span><h2>Four signature experiences.</h2></div><div className="cards">{features.map((item,index)=><button key={item} onClick={()=>setActive(index)} className={active===index?"card active":"card"}><span>0{index+1}</span><h3>{item}</h3><p>Purpose-built interactions, rich states and responsive detail.</p></button>)}</div></section>
-    <section id="contact" className="contact-panel"><div><span>Start now</span><h2>Create something exceptional.</h2></div><form onSubmit={e=>e.preventDefault()}><input placeholder="Your name" required/><input type="email" placeholder="Email address" required/><button className="primary">Send enquiry <ArrowRight size={18}/></button></form></section>
-  </main>
-}
-`
-}
-
-function centeredPage(title: string, description: string, features: readonly string[]) {
-  return `${sharedImports(features)}
-export default function Page() {
-  const [open, setOpen] = useState(false)
-  return <main className="site centered-site">
-    <nav className="top-nav capsule"><a href="#home" className="brand">${title}</a><button className="menu" onClick={()=>setOpen(v=>!v)}>{open?<X/>:<Menu/>}</button><div className={open?"links open":"links"}><a href="#vision">Vision</a><a href="#features">Highlights</a><a href="#contact">Contact</a></div></nav>
-    <section id="home" className="center-hero"><div className="crown">✦</div><span className="eyebrow">Top-tier digital craftsmanship</span><h1>${title}</h1><p>${description}</p><div className="actions center"><a href="#features" className="primary">Enter the experience <ArrowRight size={18}/></a></div><div className="halo"><div className="halo-card"><strong>VVIP</strong><span>Original composition</span></div><div className="halo-card offset"><strong>3D</strong><span>Motion and depth</span></div></div></section>
-    <section id="vision" className="manifesto"><p>Not a recoloured template.</p><h2>A cinematic identity composed specifically for this project.</h2></section>
-    <section id="features" className="numbered-list">{features.map((item,index)=><article key={item}><span>0{index+1}</span><div><h3>{item}</h3><p>Premium functionality with elegant motion, refined hierarchy and responsive behaviour.</p></div><ArrowRight/></article>)}</section>
-    <section id="contact" className="royal-contact"><span>Private enquiry</span><h2>Let us build the next chapter.</h2><form onSubmit={e=>e.preventDefault()}><input placeholder="Name" required/><input type="email" placeholder="Email" required/><button className="primary">Request access</button></form></section>
-  </main>
-}
-`
-}
-
-function editorialPage(title: string, description: string, features: readonly string[]) {
-  return `${sharedImports(features)}
-export default function Page() {
-  const [open,setOpen]=useState(false)
-  return <main className="site editorial-site">
-    <header className="editorial-header"><a className="brand" href="#home">${title}</a><span className="issue">Edition 01 / Original</span><button className="menu" onClick={()=>setOpen(v=>!v)}>{open?<X/>:<Menu/>}</button><div className={open?"links open":"links"}><a href="#story">Story</a><a href="#features">Sections</a><a href="#contact">Enquire</a></div></header>
-    <section id="home" className="editorial-hero"><div className="vertical-note">Designed by 786.Chat</div><div className="editorial-title"><span>Independent digital journal</span><h1>${title}</h1><p>${description}</p></div><div className="poster"><div className="poster-shape"/><strong>01</strong><span>Distinctive by design</span></div></section>
-    <section id="story" className="story-grid"><div className="dropcap">A</div><p>Every project deserves its own visual language. This composition uses editorial scale, offset rhythm, sharp contrast and magazine-inspired pacing instead of a standard SaaS scaffold.</p><blockquote>“Custom structure before decoration.”</blockquote></section>
-    <section id="features" className="editorial-features">{features.map((item,index)=><article key={item}><span>{String(index+1).padStart(2,"0")}</span><h3>{item}</h3><p>Developed as a standalone chapter with its own hierarchy and interaction.</p></article>)}</section>
-    <section id="contact" className="editorial-contact"><div><span>Commission a project</span><h2>Tell us what should exist next.</h2></div><form onSubmit={e=>e.preventDefault()}><input placeholder="Name" required/><input type="email" placeholder="Email" required/><button className="primary">Submit brief <ArrowRight size={18}/></button></form></section>
-  </main>
-}
-`
-}
-
-function dashboardPage(title: string, description: string, features: readonly string[]) {
-  return `${sharedImports(features)}
-export default function Page() {
-  const [active,setActive]=useState(0)
-  const [open,setOpen]=useState(false)
-  return <main className="site dashboard-site">
-    <aside className={open?"side open":"side"}><a className="brand" href="#">${title}</a><nav>{features.map((item,index)=><button key={item} onClick={()=>setActive(index)} className={active===index?"side-link active":"side-link"}><span>0{index+1}</span>{item}</button>)}</nav><div className="status"><i/> System online</div></aside>
-    <section className="workspace"><header className="workspace-header"><button className="menu dashboard-menu" onClick={()=>setOpen(v=>!v)}>{open?<X/>:<Menu/>}</button><div><span>Command centre</span><h1>${title}</h1></div><button className="primary">Launch</button></header>
-      <div className="dashboard-grid"><article className="main-console"><span>Active module</span><h2>{features[active]}</h2><p>${description}</p><div className="console-visual"><div className="scan"/><strong>{String(active+1).padStart(2,"0")}</strong></div></article><div className="metrics"><article><strong>99.9%</strong><span>Uptime</span></article><article><strong>24/7</strong><span>Automation</span></article><article><strong>3D</strong><span>Interface depth</span></article></div><article className="activity"><span>Live activity</span>{features.map((item,index)=><div key={item}><i/><p>{item}</p><small>{index+2} min ago</small></div>)}</article></div>
-      <section id="contact" className="command-contact"><div><span>New command</span><h2>Start a custom build.</h2></div><form onSubmit={e=>e.preventDefault()}><input placeholder="Project name" required/><input type="email" placeholder="Email" required/><button className="primary">Create request <ArrowRight size={18}/></button></form></section>
-    </section>
-  </main>
-}
-`
-}
-
-function pageSource(title: string, description: string, profile: PremiumProfile, features: readonly string[]) {
-  if (profile.layout === "centered") return centeredPage(title, description, features)
-  if (profile.layout === "editorial") return editorialPage(title, description, features)
-  if (profile.layout === "dashboard") return dashboardPage(title, description, features)
-  return splitPage(title, description, features)
+function pageSource(title: string, description: string, profile: PremiumProfile, features: string[]) {
+  const featureJson = JSON.stringify(features)
+  if (profile.layout === "editorial") return `"use client"
+import { useState } from "react"
+import { ArrowRight, Menu, X } from "lucide-react"
+const features = ${featureJson}
+export default function Page(){const[open,setOpen]=useState(false);return <main className="site editorial"><header><a className="brand" href="#top">${title}</a><button className="menu" onClick={()=>setOpen(!open)}>{open?<X/>:<Menu/>}</button><nav className={open?"open":""}>{features.map(x=><a key={x} href={'#'+x.replace(/\\s/g,'-')}>{x}</a>)}</nav></header><section id="top" className="editorial-hero"><div className="issue">PRIVATE EDITION · 786</div><h1>${title}</h1><div className="editorial-grid"><p>${description}</p><div className="portrait"><span>EXCLUSIVE</span><strong>Crafted without a shared template.</strong></div></div><a className="cta" href="#stories">Discover the story <ArrowRight/></a></section><section id="stories" className="stories">{features.map((x,i)=><article id={x.replace(/\\s/g,'-')} key={x}><span>0{i+1}</span><h2>{x}</h2><p>A bespoke chapter with its own content, interaction and visual rhythm.</p></article>)}</section><footer><strong>${title}</strong><span>Private consultation · By appointment</span></footer></main>}`
+  if (profile.layout === "dashboard") return `"use client"
+import { useState } from "react"
+import { ArrowUpRight, Menu } from "lucide-react"
+const modules=${featureJson}
+export default function Page(){const[active,setActive]=useState(0);const[open,setOpen]=useState(false);return <main className="site command"><aside className={open?"open":""}><div className="brand">${title}</div>{modules.map((x,i)=><button key={x} onClick={()=>setActive(i)} className={active===i?"active":""}><span>0{i+1}</span>{x}</button>)}</aside><section className="workspace"><header><button className="menu" onClick={()=>setOpen(!open)}><Menu/></button><span>LIVE SYSTEM</span><a href="#join">Join now <ArrowUpRight/></a></header><div className="dashboard-hero"><p>Interactive command experience</p><h1>{modules[active]}</h1><div className="progress"><i style={{width:(active+1)*25+'%'}}/></div></div><div className="bento">{modules.map((x,i)=><button key={x} onClick={()=>setActive(i)} className={active===i?"tile selected":"tile"}><span>{i+1}</span><h2>{x}</h2><p>Functional tools and polished states designed for ${title}.</p></button>)}</div><form id="join" onSubmit={e=>e.preventDefault()}><input placeholder="Your email" type="email" required/><button>Start the journey</button></form></section></main>}`
+  if (profile.layout === "centered") return `"use client"
+import { useState } from "react"
+import { ArrowRight, Sparkles } from "lucide-react"
+const features=${featureJson}
+export default function Page(){const[active,setActive]=useState(0);return <main className="site centered"><nav><strong>${title}</strong><div>{features.slice(0,3).map(x=><a key={x} href={'#'+x.replace(/\\s/g,'-')}>{x}</a>)}</div></nav><section className="center-hero"><Sparkles className="spark"/><p>ONE OF ONE DIGITAL EXPERIENCE</p><h1>${title}</h1><h3>${description}</h3><a href="#collection">Explore <ArrowRight/></a></section><section id="collection" className="carousel">{features.map((x,i)=><button id={x.replace(/\\s/g,'-')} key={x} onClick={()=>setActive(i)} className={active===i?"active":""}><span>0{i+1}</span><h2>{x}</h2></button>)}</section><section className="statement"><p>Selected experience</p><h2>{features[active]}</h2><div className="orb">786</div></section></main>}`
+  return `"use client"
+import { useState } from "react"
+import { ArrowRight, Menu, X } from "lucide-react"
+const features=${featureJson}
+export default function Page(){const[open,setOpen]=useState(false);return <main className="site split"><nav><strong>${title}</strong><button className="menu" onClick={()=>setOpen(!open)}>{open?<X/>:<Menu/>}</button><div className={open?"open":""}>{features.map(x=><a key={x} href={'#'+x.replace(/\\s/g,'-')}>{x}</a>)}</div></nav><section className="split-hero"><div><p>BUILT FOR A NEW STANDARD</p><h1>${title}</h1><h3>${description}</h3><a href="#features">Begin <ArrowRight/></a></div><div className="visual"><div className="glass"><span>LIVE</span><strong>${features[0]}</strong><small>Interactive · responsive · original</small></div></div></section><section id="features" className="cards">{features.map((x,i)=><article id={x.replace(/\\s/g,'-')} key={x}><span>0{i+1}</span><h2>{x}</h2><p>A purpose-built experience with premium interactions and unique composition.</p></article>)}</section></main>}`
 }
 
 function globalCss(profile: PremiumProfile) {
-  const light = profile.surface.startsWith("#f")
-  const card = light ? "rgba(255,255,255,.72)" : "rgba(255,255,255,.075)"
-  const muted = light ? "rgba(23,33,38,.68)" : "rgba(255,255,255,.66)"
-  return `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n:root{--primary:${profile.primary};--secondary:${profile.secondary};--surface:${profile.surface};--ink:${profile.ink};--card:${card};--muted:${muted};--radius:${profile.radius}}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--surface);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,sans-serif}.site{min-height:100vh;overflow:hidden;background:radial-gradient(circle at 10% 5%,color-mix(in srgb,var(--primary) 24%,transparent),transparent 28%),radial-gradient(circle at 90% 12%,color-mix(in srgb,var(--secondary) 20%,transparent),transparent 30%),var(--surface)}a{text-decoration:none;color:inherit}.top-nav,.editorial-header{position:relative;z-index:20;width:min(1180px,calc(100% - 32px));margin:18px auto;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 22px}.glass{background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:999px;backdrop-filter:blur(18px)}.capsule{border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);background:var(--card);box-shadow:0 20px 70px rgba(0,0,0,.22);border-radius:var(--radius)}.brand{font-weight:950;letter-spacing:-.045em}.links{display:flex;gap:24px;color:var(--muted);font-weight:750}.menu{display:none;border:0;background:none;color:var(--ink)}.eyebrow,.section-intro span,.contact-panel span,.royal-contact>span,.editorial-title>span,.editorial-contact span,.workspace-header span,.main-console>span,.activity>span,.command-contact span{text-transform:uppercase;letter-spacing:.2em;font-size:12px;font-weight:900;color:var(--primary)}h1,h2,h3,p{margin-top:0}p{color:var(--muted);line-height:1.75}.actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}.actions.center{justify-content:center}.primary,.ghost{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:15px 22px;border-radius:var(--radius);font-weight:900;border:0}.primary{background:var(--primary);color:${light ? "#fff" : "#041014"};box-shadow:0 18px 55px color-mix(in srgb,var(--primary) 34%,transparent)}.ghost{background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 16%,transparent)}input{width:100%;padding:16px;border-radius:var(--radius);border:1px solid color-mix(in srgb,var(--ink) 16%,transparent);background:var(--card);color:var(--ink)}form{display:grid;gap:12px}.split-hero{width:min(1180px,calc(100% - 32px));margin:auto;min-height:78vh;display:grid;grid-template-columns:1.05fr .95fr;gap:70px;align-items:center}.split-copy h1,.center-hero h1,.editorial-title h1{font-size:clamp(56px,9vw,124px);line-height:.88;letter-spacing:-.075em;margin:22px 0}.split-copy>p,.center-hero>p{font-size:clamp(17px,2vw,22px);max-width:680px}.scene{min-height:520px;position:relative;display:grid;place-items:center;perspective:1200px}.scene-ring{position:absolute;border:1px solid color-mix(in srgb,var(--primary) 50%,transparent);border-radius:50%;animation:spin 12s linear infinite}.scene-ring.one{width:92%;height:92%}.scene-ring.two{width:62%;height:62%;animation-direction:reverse}.floating-card{width:68%;padding:42px;background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:var(--radius);backdrop-filter:blur(20px);transform:rotateY(-13deg) rotateX(7deg);box-shadow:30px 35px 90px rgba(0,0,0,.32);animation:floatCard 6s ease-in-out infinite}.floating-card span,.floating-card small{display:block;color:var(--muted)}.floating-card strong{display:block;font-size:clamp(30px,4vw,56px);margin:16px 0}.feature-band,.contact-panel,.manifesto,.numbered-list,.royal-contact,.story-grid,.editorial-features,.editorial-contact{width:min(1180px,calc(100% - 32px));margin:auto;padding:90px 0}.section-intro h2,.contact-panel h2,.manifesto h2,.royal-contact h2,.editorial-contact h2,.command-contact h2{font-size:clamp(40px,6vw,78px);line-height:.98;letter-spacing:-.055em}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-top:40px}.card{min-height:250px;text-align:left;padding:26px;background:var(--card);color:var(--ink);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:var(--radius);transition:.35s}.card:hover,.card.active{transform:translateY(-10px) rotateX(3deg);border-color:var(--primary);box-shadow:0 24px 70px color-mix(in srgb,var(--primary) 24%,transparent)}.card>span{color:var(--primary);font-weight:950}.card h3{font-size:24px;margin:38px 0 12px}.contact-panel,.editorial-contact,.command-contact{display:grid;grid-template-columns:1fr minmax(280px,430px);gap:50px;align-items:end}.center-hero{width:min(1040px,calc(100% - 32px));margin:auto;text-align:center;min-height:88vh;padding:90px 0;position:relative}.crown{font-size:54px;color:var(--primary);animation:pulse 3s ease-in-out infinite}.halo{height:300px;position:relative;margin-top:50px}.halo:before{content:"";position:absolute;inset:15% 20%;border:1px solid color-mix(in srgb,var(--primary) 45%,transparent);border-radius:50%;animation:spin 14s linear infinite}.halo-card{position:absolute;left:16%;top:20%;padding:25px 32px;background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:var(--radius);transform:rotate(-5deg)}.halo-card.offset{left:auto;right:14%;top:46%;transform:rotate(6deg)}.halo-card strong,.halo-card span{display:block}.halo-card strong{font-size:42px;color:var(--primary)}.manifesto{display:grid;grid-template-columns:.45fr 1fr;gap:50px;border-top:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}.manifesto>p{font-weight:900;color:var(--primary)}.numbered-list article{display:grid;grid-template-columns:90px 1fr 30px;gap:24px;align-items:center;padding:30px 0;border-top:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}.numbered-list article>span{font-size:36px;color:var(--primary);font-weight:950}.numbered-list h3{font-size:32px;margin-bottom:8px}.royal-contact{text-align:center}.royal-contact form{max-width:500px;margin:35px auto 0}.editorial-header{border-bottom:2px solid var(--ink);padding-left:0;padding-right:0}.issue{font-size:12px;text-transform:uppercase;letter-spacing:.18em}.editorial-hero{width:min(1180px,calc(100% - 32px));margin:auto;min-height:78vh;display:grid;grid-template-columns:60px 1fr .7fr;gap:34px;align-items:center}.vertical-note{writing-mode:vertical-rl;transform:rotate(180deg);text-transform:uppercase;letter-spacing:.22em;font-size:11px}.poster{height:520px;background:var(--secondary);color:#fff;position:relative;overflow:hidden;padding:30px;display:flex;flex-direction:column;justify-content:space-between}.poster-shape{position:absolute;width:380px;height:380px;border-radius:50%;background:var(--primary);right:-120px;top:60px;mix-blend-mode:screen;animation:floatCard 7s ease-in-out infinite}.poster strong{font-size:140px;line-height:1;z-index:1}.poster span{z-index:1;text-transform:uppercase;letter-spacing:.2em}.story-grid{display:grid;grid-template-columns:120px 1fr 1fr;gap:40px;border-top:2px solid var(--ink)}.dropcap{font-family:Georgia,serif;font-size:130px;line-height:.8;color:var(--primary)}blockquote{font-family:Georgia,serif;font-size:30px;margin:0}.editorial-features{display:grid;grid-template-columns:repeat(2,1fr);gap:0}.editorial-features article{padding:35px;border-top:1px solid var(--ink);border-right:1px solid var(--ink)}.editorial-features article span{color:var(--primary);font-weight:950}.editorial-features h3{font-family:Georgia,serif;font-size:36px;margin:40px 0 12px}.dashboard-site{display:grid;grid-template-columns:280px 1fr;min-height:100vh}.side{padding:28px 20px;border-right:1px solid color-mix(in srgb,var(--ink) 15%,transparent);background:color-mix(in srgb,var(--surface) 90%,black);position:sticky;top:0;height:100vh}.side nav{display:grid;gap:8px;margin-top:50px}.side-link{display:flex;gap:16px;align-items:center;padding:15px;text-align:left;background:transparent;color:var(--muted);border:1px solid transparent}.side-link.active{color:var(--ink);border-color:var(--primary);background:var(--card);box-shadow:8px 8px 0 color-mix(in srgb,var(--primary) 20%,transparent)}.side-link span{color:var(--primary)}.status{position:absolute;bottom:28px;color:var(--muted);font-size:13px}.status i{display:inline-block;width:8px;height:8px;background:var(--primary);border-radius:50%;margin-right:8px;box-shadow:0 0 18px var(--primary)}.workspace{padding:28px}.workspace-header{display:flex;align-items:center;justify-content:space-between;gap:30px}.workspace-header h1{font-size:clamp(34px,5vw,66px);letter-spacing:-.055em;margin:8px 0}.dashboard-menu{display:none}.dashboard-grid{display:grid;grid-template-columns:1.35fr .65fr;gap:18px;margin-top:28px}.main-console,.metrics article,.activity{background:var(--card);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);padding:28px;border-radius:var(--radius)}.main-console{grid-row:span 2;min-height:540px}.main-console h2{font-size:clamp(42px,6vw,78px);margin:24px 0}.console-visual{height:230px;margin-top:30px;border:1px solid var(--primary);position:relative;display:grid;place-items:center;overflow:hidden}.console-visual strong{font-size:110px;color:var(--primary)}.scan{position:absolute;left:0;right:0;height:2px;background:var(--primary);box-shadow:0 0 20px var(--primary);animation:scan 3s linear infinite}.metrics{display:grid;gap:18px}.metrics strong{display:block;font-size:38px;color:var(--primary)}.metrics span{color:var(--muted)}.activity>div{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:13px 0;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent)}.activity i{width:7px;height:7px;background:var(--secondary);border-radius:50%}.activity p,.activity small{margin:0}.activity small{color:var(--muted)}.command-contact{margin-top:40px;padding:60px 0}.dashboard-site .menu{display:none}@keyframes spin{to{transform:rotate(360deg)}}@keyframes floatCard{50%{transform:translateY(-12px) rotateY(-9deg) rotateX(4deg)}}@keyframes pulse{50%{transform:scale(1.12);filter:drop-shadow(0 0 20px var(--primary))}}@keyframes scan{0%{top:0}100%{top:100%}}@media(max-width:900px){.split-hero,.manifesto,.story-grid,.contact-panel,.editorial-contact,.command-contact{grid-template-columns:1fr}.cards{grid-template-columns:repeat(2,1fr)}.editorial-hero{grid-template-columns:1fr}.vertical-note{writing-mode:initial;transform:none}.poster{height:360px}.dashboard-site{grid-template-columns:1fr}.side{position:fixed;z-index:50;left:-290px;width:280px;transition:.3s}.side.open{left:0}.dashboard-menu{display:block!important}.dashboard-grid{grid-template-columns:1fr}.main-console{grid-row:auto}.workspace{padding:18px}}@media(max-width:640px){.menu{display:block}.links{display:none;position:absolute;left:0;right:0;top:70px;flex-direction:column;padding:20px;background:var(--surface);border:1px solid color-mix(in srgb,var(--ink) 16%,transparent)}.links.open{display:flex}.cards,.editorial-features{grid-template-columns:1fr}.split-hero{padding:45px 0}.scene{min-height:350px}.floating-card{width:82%;padding:28px}.editorial-title h1,.split-copy h1,.center-hero h1{font-size:54px}.numbered-list article{grid-template-columns:55px 1fr}.numbered-list article>svg{display:none}.workspace-header .primary{display:none}.dashboard-grid{margin-top:12px}}@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}`
+  const light = /^#f|^#fff/i.test(profile.surface)
+  const card = light ? "rgba(255,255,255,.76)" : "rgba(255,255,255,.075)"
+  const muted = light ? "rgba(20,35,50,.66)" : "rgba(255,255,255,.66)"
+  const family = profile.font === "serif" ? "Georgia,Times New Roman,serif" : profile.font === "mono" ? "ui-monospace,SFMono-Regular,monospace" : profile.font === "rounded" ? "ui-rounded,Arial Rounded MT Bold,system-ui,sans-serif" : "Inter,system-ui,sans-serif"
+  return `@tailwind base;@tailwind components;@tailwind utilities;:root{--p:${profile.primary};--s:${profile.secondary};--bg:${profile.surface};--ink:${profile.ink};--card:${card};--muted:${muted};--r:${profile.radius}}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:${family}}a{color:inherit;text-decoration:none}.site{min-height:100vh;overflow:hidden;background:radial-gradient(circle at 12% 10%,color-mix(in srgb,var(--p) 23%,transparent),transparent 30%),radial-gradient(circle at 90% 15%,color-mix(in srgb,var(--s) 18%,transparent),transparent 28%),var(--bg)}nav,header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:24px;width:min(1220px,calc(100% - 32px));margin:auto;padding:22px 0}.brand,nav strong{font-weight:950;letter-spacing:-.03em}.menu{display:none;border:0;background:none;color:var(--ink)}nav>div,header nav{display:flex;gap:24px}nav a,header nav a{font-weight:800;color:var(--muted)}h1{font-size:clamp(56px,10vw,144px);line-height:.86;letter-spacing:-.07em;margin:22px 0}h2{font-size:clamp(28px,4vw,58px);line-height:.95}p,h3{color:var(--muted);line-height:1.7;font-weight:500}.split-hero,.editorial-hero,.center-hero,.dashboard-hero{width:min(1220px,calc(100% - 32px));margin:auto}.split-hero{min-height:78vh;display:grid;grid-template-columns:1fr .9fr;align-items:center;gap:8vw}.split-hero>div>p,.center-hero>p,.dashboard-hero>p,.issue{font-size:12px;letter-spacing:.24em;font-weight:950;color:var(--p)}.split-hero a,.center-hero a,.cta,.workspace header a,form button{display:inline-flex;align-items:center;gap:10px;margin-top:24px;background:var(--p);color:${light ? "#fff" : "#071014"};padding:16px 24px;border-radius:var(--r);font-weight:950}.visual{min-height:520px;display:grid;place-items:center;perspective:1200px}.glass{width:75%;padding:45px;border:1px solid color-mix(in srgb,var(--ink) 15%,transparent);border-radius:var(--r);background:var(--card);backdrop-filter:blur(20px);transform:rotateY(-13deg) rotateX(6deg);box-shadow:30px 45px 100px rgba(0,0,0,.28);animation:float 6s ease-in-out infinite}.glass span,.glass small{display:block;color:var(--muted)}.glass strong{display:block;font-size:42px;margin:18px 0}.cards,.stories,.carousel,.bento{width:min(1220px,calc(100% - 32px));margin:auto;display:grid;gap:18px;padding:70px 0}.cards{grid-template-columns:repeat(4,1fr)}.cards article,.stories article,.carousel button,.tile{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:var(--card);color:var(--ink);padding:28px;border-radius:var(--r);text-align:left;transition:.3s}.cards article:hover,.carousel button:hover,.tile:hover,.tile.selected,.carousel button.active{transform:translateY(-8px);border-color:var(--p);box-shadow:0 30px 70px color-mix(in srgb,var(--p) 20%,transparent)}.editorial header{border-bottom:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}.editorial-hero{padding:80px 0}.editorial-hero h1{font-family:Georgia,serif;max-width:1050px}.editorial-grid{display:grid;grid-template-columns:.7fr 1.3fr;gap:8vw;align-items:end}.portrait{min-height:360px;padding:45px;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(145deg,var(--p),var(--s));color:white;transform:rotate(2deg)}.portrait strong{font-size:clamp(30px,5vw,70px);line-height:.95}.stories{grid-template-columns:repeat(2,1fr)}.stories article:nth-child(even){transform:translateY(70px)}.editorial footer{width:min(1220px,calc(100% - 32px));margin:100px auto 0;padding:40px 0;border-top:1px solid color-mix(in srgb,var(--ink) 20%,transparent);display:flex;justify-content:space-between}.centered nav{border-bottom:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}.center-hero{text-align:center;min-height:76vh;display:flex;flex-direction:column;align-items:center;justify-content:center}.center-hero h3{max-width:760px}.spark{color:var(--p);width:45px;height:45px}.carousel{grid-template-columns:repeat(4,1fr)}.carousel button{min-height:260px}.statement{width:min(900px,calc(100% - 32px));margin:80px auto;text-align:center}.orb{width:220px;height:220px;margin:40px auto;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,var(--p),var(--s));font-size:60px;font-weight:950;animation:float 5s ease-in-out infinite}.command{display:grid;grid-template-columns:260px 1fr}.command aside{min-height:100vh;padding:28px;border-right:1px solid color-mix(in srgb,var(--ink) 15%,transparent);background:var(--card)}.command aside .brand{font-size:24px;margin-bottom:55px}.command aside button{display:flex;width:100%;gap:14px;border:0;background:transparent;color:var(--muted);padding:16px;margin:5px 0;border-radius:var(--r);text-align:left;font-weight:850}.command aside button.active{background:var(--p);color:${light ? "white" : "#071014"}}.workspace{min-width:0;padding:0 30px}.workspace header{width:100%;border-bottom:1px solid color-mix(in srgb,var(--ink) 15%,transparent)}.dashboard-hero{width:100%;padding:80px 0 35px}.dashboard-hero h1{font-size:clamp(58px,8vw,120px)}.progress{height:8px;background:var(--card);border-radius:10px;overflow:hidden}.progress i{display:block;height:100%;background:var(--p);transition:.4s}.bento{width:100%;grid-template-columns:repeat(2,1fr);padding-top:20px}.tile{min-height:220px}.workspace form{display:flex;gap:12px;padding:60px 0}.workspace input{flex:1;padding:16px;border:1px solid color-mix(in srgb,var(--ink) 15%,transparent);background:var(--card);color:var(--ink);border-radius:var(--r)}form button{border:0;margin:0}@keyframes float{50%{transform:translateY(-14px) rotateY(-9deg) rotateX(4deg)}}@media(max-width:900px){.split-hero,.editorial-grid{grid-template-columns:1fr}.cards,.carousel{grid-template-columns:repeat(2,1fr)}.command{grid-template-columns:1fr}.command aside{position:fixed;z-index:30;left:-280px;width:260px;transition:.3s}.command aside.open{left:0}.workspace .menu{display:block}.stories article:nth-child(even){transform:none}}@media(max-width:640px){.menu{display:block}nav>div,header nav{display:none;position:absolute;left:0;right:0;top:70px;padding:20px;flex-direction:column;background:var(--bg)}nav>div.open,header nav.open{display:flex}.cards,.stories,.carousel,.bento{grid-template-columns:1fr}.visual{min-height:350px}.glass{width:90%}.workspace{padding:0 16px}.workspace form{flex-direction:column}.editorial footer{flex-direction:column;gap:16px}h1{font-size:58px}}@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}`
 }
 
 export function createPremiumFallbackProject(prompt: string): SevenEightSixProject {
   const userPrompt = cleanPrompt(prompt)
-  const seedMatch = prompt.match(/UNIQUE_DESIGN_ID:\s*([^\n]+)/)
-  const seed = seedMatch?.[1]?.trim() || `${Date.now()}-${Math.random()}`
-  const hash = hashText(seed)
-  const profile = PROFILES[hash % PROFILES.length]
+  const seed = prompt.match(/UNIQUE_DESIGN_ID:\s*([^\n]+)/)?.[1]?.trim() || `${Date.now()}-${Math.random()}`
+  const profile = chooseProfile(userPrompt, seed)
   const title = titleFromPrompt(userPrompt)
   const description = `A premium, interactive and fully responsive experience created specifically for ${title}.`
   const features = featuresFromPrompt(userPrompt)
@@ -159,7 +128,7 @@ export function createPremiumFallbackProject(prompt: string): SevenEightSixProje
     "app/layout.tsx": `import type { Metadata } from "next"\nimport type { ReactNode } from "react"\nimport "./globals.css"\nexport const metadata: Metadata = { title: ${JSON.stringify(title)}, description: ${JSON.stringify(description)} }\nexport default function RootLayout({ children }: { children: ReactNode }) { return <html lang="en"><body>{children}</body></html> }\n`,
     "app/page.tsx": pageSource(title, description, profile, features),
     "app/globals.css": globalCss(profile),
-    "README.md": `# ${title}\n\n${description}\n\nDesign identity: ${profile.name}\nLayout system: ${profile.layout}\n\nOriginal prompt:\n${userPrompt}\n`,
+    "README.md": `# ${title}\n\n${description}\n\nDesign identity: ${profile.name}\nLayout: ${profile.layout}\n\nOriginal prompt:\n${userPrompt}\n`,
   }
   return { id, title, description, prompt: userPrompt, createdAt, updatedAt: createdAt, files }
 }
