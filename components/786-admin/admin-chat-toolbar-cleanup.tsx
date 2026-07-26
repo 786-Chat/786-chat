@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { usePathname } from "next/navigation"
 import { AdminChatAiEditReview } from "@/components/786-admin/admin-chat-ai-edit-review"
 import { AdminChatBuildStatus } from "@/components/786-admin/admin-chat-build-status"
 import { AdminChatCollaboration } from "@/components/786-admin/admin-chat-collaboration"
@@ -87,6 +88,12 @@ function AdminChatHeaderCleanup() {
 }
 
 export function AdminChatToolbarCleanup() {
+  const pathname = usePathname()
+
+  // These controls use privileged /api/786-admin endpoints and must never
+  // attach themselves to a customer's /dashboard workspace.
+  if (!pathname.startsWith(ADMIN_CHAT_PATH)) return null
+
   return (
     <>
       <AdminChatHeaderCleanup />
