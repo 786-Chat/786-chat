@@ -201,8 +201,19 @@ async function openDialog() {
   }
 }
 
+function findAdminChatHeader(): HTMLElement | null {
+  const headers = Array.from(document.querySelectorAll<HTMLElement>("main header"))
+  return headers.find((header) =>
+    Boolean(
+      header.querySelector('button[title="Preview"]') &&
+      header.querySelector('button[title="Code"]') &&
+      header.querySelector('button[title="Publish"]'),
+    ),
+  ) || null
+}
+
 function installButton() {
-  const header = document.querySelector<HTMLElement>("main > div > section:last-of-type > header")
+  const header = findAdminChatHeader()
   if (!header || document.getElementById(BUTTON_ID)) return
 
   const button = document.createElement("button")
@@ -211,17 +222,25 @@ function installButton() {
   button.textContent = "History"
   button.title = "Project history and restore"
   Object.assign(button.style, {
-    height: "42px",
-    padding: "0 14px",
-    borderRadius: "14px",
+    height: "40px",
+    padding: "0 12px",
+    flexShrink: "0",
+    borderRadius: "12px",
     border: "1px solid rgba(168,85,247,.34)",
     background: "rgba(88,28,135,.2)",
     color: "#f5f3ff",
+    fontSize: "12px",
     fontWeight: "800",
     cursor: "pointer",
   })
   button.onclick = () => void openDialog()
-  header.appendChild(button)
+
+  const publishButton = header.querySelector<HTMLElement>('button[title="Publish"]')
+  if (publishButton?.parentElement === header) {
+    publishButton.insertAdjacentElement("afterend", button)
+  } else {
+    header.appendChild(button)
+  }
 }
 
 export function AdminChatRevisionHistory() {
