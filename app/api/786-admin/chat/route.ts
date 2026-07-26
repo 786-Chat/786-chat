@@ -55,6 +55,21 @@ PREMIUM / VVIP PROJECT QUALITY — MANDATORY FOR NEW PROJECTS:
 - Use only existing permitted dependencies and keep the result fast and responsive.
 `
 
+const OPEN_ENDED_DESIGN_ENGINE_RULES = `
+OPEN-ENDED DESIGN ENGINE — APPLIES EQUALLY TO DEEPSEEK AND GEMINI:
+- Treat the user's requested colours, mood, industry, audience and visual references as the highest-priority design direction. Never replace requested yellow/cobalt, black/gold, medical white/blue, organic green, fashion monochrome or any other explicit palette with a default purple theme.
+- Generate a fresh design composition for every NEW PROJECT. Do not reproduce a previous project's component tree with different wording.
+- Compose the design independently across these dimensions: navigation position and geometry; hero structure; page density; section order; typography scale and pairing; card shape; spacing rhythm; border treatment; background system; CTA placement; icon treatment; media framing; motion language; footer structure; mobile navigation; light/dark balance.
+- Available navigation directions include floating pill, transparent overlay, editorial masthead, split sidebar, compact rail, centred minimal, boxed header, mega-menu, bottom mobile dock and dashboard shell. Select what fits the request instead of always using a top pill.
+- Available hero directions include full-bleed cinematic, asymmetric split, centred statement, editorial collage, bento introduction, product stage, dashboard command centre, image-led story, typographic poster and immersive layered 3D scene.
+- Available content systems include editorial stories, bento modules, horizontal showcase, alternating media rows, masonry gallery, data dashboard, timeline, catalogue, course map, booking journey, pricing theatre and interactive workspace.
+- Vary light and dark projects. Vary sharp, soft, circular and asymmetric geometry. Vary restrained and expressive motion. Do not reuse the same button label, generic headline, sample copy, feature descriptions or decorative objects.
+- Forbidden generic fallback wording in a new project unless the user explicitly asks for it: “AI Generated Project”, “Top-tier digital craftsmanship”, “Enter the experience”, “Designed uniquely”, “Live Preview”, “Premium Features”, “VIP consultation”, and “Everything feels custom-built”. Write industry-specific copy instead.
+- The selected DESIGN_PROFILE is only one creative input, not a fixed template. Honour explicit user instructions over the profile and create new variations within the same profile.
+- Before returning files, compare the result mentally against a generic centred purple landing page. If it has the same navigation, hero, button, cards or section sequence, redesign it before responding.
+- There is no fixed finite catalogue the user must choose from: combine the dimensions above to create an open-ended number of distinct outcomes while keeping code valid, responsive and performant.
+`
+
 const RESPONSIVE_SAFETY_CSS = `
 
 /* 786.Chat responsive safety layer */
@@ -90,8 +105,8 @@ function hashText(value: string) {
   return hash >>> 0
 }
 
-function designIdentity(projectId: string | null) {
-  const seed = projectId || crypto.randomUUID()
+function designIdentity(projectId: string | null, requestedSeed?: string | null) {
+  const seed = requestedSeed || projectId || crypto.randomUUID()
   return { seed, profile: DESIGN_PROFILES[hashText(seed) % DESIGN_PROFILES.length] }
 }
 
@@ -105,6 +120,7 @@ PROJECT DESIGN IDENTITY — MANDATORY FOR THIS PROJECT:
 - Do not reuse another project's palette, hero, navigation, cards, typography, section order, wording, content, background, animation sequence or component geometry.
 - Even two projects in the same business category must look clearly unrelated.
 - Keep this identity consistent across every generated page and component.
+${OPEN_ENDED_DESIGN_ENGINE_RULES}
 ${PREMIUM_PROJECT_RULES}
 `
 }
@@ -184,8 +200,11 @@ export async function POST(request: Request) {
     const projectId = typeof body.projectId === "string" && body.projectId.trim()
       ? body.projectId.trim().slice(0, 200)
       : null
+    const requestedSeed = typeof body.designSeed === "string" && body.designSeed.trim()
+      ? body.designSeed.trim().slice(0, 200)
+      : null
     const existing = safeExisting(body.existing)
-    const identity = designIdentity(projectId)
+    const identity = designIdentity(projectId, requestedSeed)
     const userRequest = message || "Inspect the attached file and update the existing project to match it."
     const identityPrompt = existing
       ? "Preserve this existing project's established visual identity, layout, palette, motion and component geometry unless the user explicitly requests a full redesign."
