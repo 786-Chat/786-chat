@@ -5,17 +5,18 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import {
-  FolderKanban,
-  Plus,
-  Search,
-  Code,
+  ArrowRight,
   Calendar,
   Clock,
-  ArrowRight,
+  Code,
+  FolderKanban,
+  Plus,
+  RotateCcw,
+  Search,
   ShieldCheck,
   Trash2,
-  RotateCcw,
 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 
 type Project = {
@@ -33,6 +34,78 @@ type Project = {
 
 type ViewMode = "active" | "recover"
 
+function ProjectThumbnail({ project }: { project: Project }) {
+  const projectText = `${project.name || ""} ${project.description || ""} ${project.template || ""}`.toLowerCase()
+  const isLogin = projectText.includes("login") || projectText.includes("sign in") || projectText.includes("authentication")
+  const isRestaurant = projectText.includes("restaurant") || projectText.includes("food") || projectText.includes("menu")
+
+  return (
+    <div className="relative h-48 overflow-hidden rounded-[22px] border border-white/10 bg-[#080b14] shadow-inner">
+      <div className="flex h-8 items-center gap-1.5 border-b border-white/10 bg-black/40 px-3">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+        <span className="ml-3 truncate text-[9px] font-semibold uppercase tracking-[0.16em] text-white/30">
+          {project.name || "786.Chat Project"}
+        </span>
+      </div>
+
+      {isLogin ? (
+        <div className="grid h-[calc(100%-2rem)] grid-cols-[1.05fr_.95fr]">
+          <div className="bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 p-5 text-slate-950">
+            <div className="h-2 w-16 rounded-full bg-slate-950/35" />
+            <div className="mt-5 h-5 w-28 rounded-md bg-slate-950/80" />
+            <div className="mt-2 h-3 w-20 rounded bg-slate-950/35" />
+            <div className="mt-8 grid grid-cols-2 gap-2">
+              <div className="h-10 rounded-xl bg-white/35" />
+              <div className="h-10 rounded-xl bg-white/20" />
+            </div>
+          </div>
+          <div className="bg-[#101522] p-5">
+            <div className="h-4 w-24 rounded bg-white/80" />
+            <div className="mt-2 h-2 w-20 rounded bg-white/20" />
+            <div className="mt-6 h-8 rounded-xl border border-white/10 bg-black/30" />
+            <div className="mt-3 h-8 rounded-xl border border-white/10 bg-black/30" />
+            <div className="mt-4 h-8 rounded-xl bg-cyan-300" />
+          </div>
+        </div>
+      ) : isRestaurant ? (
+        <div className="relative h-[calc(100%-2rem)] bg-gradient-to-br from-orange-500/80 via-rose-700/75 to-purple-900 p-5">
+          <div className="absolute inset-0 bg-black/25" />
+          <div className="relative">
+            <div className="h-2 w-20 rounded-full bg-amber-200/70" />
+            <div className="mt-5 h-6 w-48 rounded bg-white/90" />
+            <div className="mt-3 h-2.5 w-36 rounded bg-white/45" />
+            <div className="mt-7 flex gap-3">
+              <div className="h-14 flex-1 rounded-2xl bg-black/30 ring-1 ring-white/15" />
+              <div className="h-14 flex-1 rounded-2xl bg-black/30 ring-1 ring-white/15" />
+              <div className="h-14 flex-1 rounded-2xl bg-black/30 ring-1 ring-white/15" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="h-[calc(100%-2rem)] bg-gradient-to-br from-cyan-950 via-slate-900 to-purple-950 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="h-3 w-32 rounded bg-cyan-300/70" />
+              <div className="mt-2 h-2 w-20 rounded bg-white/20" />
+            </div>
+            <div className="h-8 w-8 rounded-xl bg-cyan-400/20 ring-1 ring-cyan-300/30" />
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="h-16 rounded-2xl border border-cyan-300/20 bg-cyan-300/10" />
+            <div className="h-16 rounded-2xl border border-purple-300/20 bg-purple-300/10" />
+            <div className="h-16 rounded-2xl border border-emerald-300/20 bg-emerald-300/10" />
+          </div>
+          <div className="mt-3 h-10 rounded-2xl border border-white/10 bg-black/25" />
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+    </div>
+  )
+}
+
 export default function DashboardProjectsPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
@@ -43,37 +116,8 @@ export default function DashboardProjectsPage() {
   const [errorMessage, setErrorMessage] = useState("")
 
   const isRecoverMode = viewMode === "recover"
-  const projectCacheKey = `mujeebproai_projects_cache_${isRecoverMode ? "recover" : "active"}`
 
-  const getFriendlyProjectError = (data: any, response?: Response) => {
-    const rawMessage = String(data?.message || data?.debug || data?.error || "")
-
-    if (response?.status === 402 || rawMessage.toLowerCase().includes("data transfer quota")) {
-      return "Database quota is temporarily exceeded in Neon. Your projects were not deleted. The app will show cached projects if available. Upgrade/reset Neon quota, then refresh."
-    }
-
-    return rawMessage || "Could not load projects."
-  }
-
-  const readCachedProjects = (): Project[] => {
-    try {
-      const raw = window.localStorage.getItem(projectCacheKey) || "[]"
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-
-  const writeCachedProjects = (nextProjects: Project[]) => {
-    try {
-      window.localStorage.setItem(projectCacheKey, JSON.stringify(nextProjects))
-    } catch {
-      // Browser storage may be unavailable. Keep UI working.
-    }
-  }
-
-  const loadProjects = async () => {
+  async function loadProjects() {
     setLoading(true)
     setErrorMessage("")
 
@@ -82,32 +126,15 @@ export default function DashboardProjectsPage() {
         credentials: "include",
         cache: "no-store",
       })
-
       const data = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        const cachedProjects = readCachedProjects()
-
-        if (cachedProjects.length > 0) {
-          setProjects(cachedProjects)
-        }
-
-        setErrorMessage(getFriendlyProjectError(data, response))
-        return
+        throw new Error(data?.message || data?.error || "Could not load projects")
       }
 
-      const nextProjects = Array.isArray(data.projects) ? data.projects : []
-      setProjects(nextProjects)
-      writeCachedProjects(nextProjects)
-    } catch {
-      const cachedProjects = readCachedProjects()
-
-      if (cachedProjects.length > 0) {
-        setProjects(cachedProjects)
-        setErrorMessage("Could not reach the database. Showing cached projects from this browser.")
-      } else {
-        setErrorMessage("Could not load projects. Your projects were not deleted; the database request failed.")
-      }
+      setProjects(Array.isArray(data.projects) ? data.projects : [])
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not load projects")
     } finally {
       setLoading(false)
     }
@@ -119,179 +146,75 @@ export default function DashboardProjectsPage() {
   }, [viewMode])
 
   const filteredProjects = useMemo(() => {
-    const cleanQuery = query.trim().toLowerCase()
-    if (!cleanQuery) return projects
-
+    const clean = query.trim().toLowerCase()
+    if (!clean) return projects
     return projects.filter((project) =>
       [project.name, project.description, project.template, project.status]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(cleanQuery)
+        .includes(clean)
     )
   }, [projects, query])
 
-  const getRecoverDaysLeft = (project: Project) => {
-    if (!project.delete_after) return 7
-
-    const end = new Date(project.delete_after).getTime()
-    const now = Date.now()
-    const diff = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-
-    return Math.max(diff, 0)
-  }
-
-  const clearWorkspacePreviewState = () => {
-    try {
-      for (const key of Object.keys(window.localStorage)) {
-        if (
-          key.startsWith("mujeebproai_last_preview_html") ||
-          key.includes("preview_history") ||
-          key.includes("_history")
-        ) {
-          window.localStorage.removeItem(key)
-        }
-      }
-    } catch {
-      // keep navigation working
-    }
-  }
-
-  const startNewProject = () => {
-    clearWorkspacePreviewState()
-
-    try {
-      window.dispatchEvent(
-        new CustomEvent("chat-selected", {
-          detail: { chatId: null, projectId: null },
-        })
-      )
-      window.dispatchEvent(
-        new CustomEvent("new-chat", {
-          detail: { fresh: true },
-        })
-      )
-      window.dispatchEvent(
-        new CustomEvent("preview-cleared", {
-          detail: { fresh: true },
-        })
-      )
-      window.dispatchEvent(new Event("preview-history-changed"))
-    } catch {
-      // keep navigation working
-    }
-  }
-
-  const openProjectChat = (projectId: string) => {
+  function openProject(projectId: string) {
     router.push(`/dashboard/chat?projectId=${encodeURIComponent(projectId)}`)
   }
 
-  const softDeleteProject = async (projectId: string) => {
+  function recoverDays(project: Project) {
+    if (!project.delete_after) return 7
+    return Math.max(Math.ceil((new Date(project.delete_after).getTime() - Date.now()) / 86_400_000), 0)
+  }
+
+  async function softDelete(projectId: string) {
     setBusyProjectId(projectId)
-    setErrorMessage("")
-
-    const previousProjects = projects
-    setProjects((current) => current.filter((project) => project.id !== projectId))
-
     try {
-      let response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: "DELETE",
         credentials: "include",
       })
-
-      if (!response.ok) {
-        response = await fetch(`/api/projects/${projectId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ action: "delete" }),
-        })
-      }
-
       const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        setProjects(previousProjects)
-        setErrorMessage(data?.debug || data?.error || "Delete failed. Please try again.")
-        return
-      }
-
+      if (!response.ok) throw new Error(data?.error || "Delete failed")
       await loadProjects()
-    } catch {
-      setProjects(previousProjects)
-      setErrorMessage("Delete failed. Please try again.")
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Delete failed")
     } finally {
       setBusyProjectId(null)
     }
   }
 
-  const recoverProject = async (projectId: string) => {
+  async function restoreProject(projectId: string) {
     setBusyProjectId(projectId)
-    setErrorMessage("")
-
     try {
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "restore" }),
       })
-
       const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        setErrorMessage(data?.debug || data?.error || "Recover failed. Please try again.")
-        return
-      }
-
+      if (!response.ok) throw new Error(data?.error || "Recover failed")
       setViewMode("active")
-    } catch {
-      setErrorMessage("Recover failed. Please try again.")
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Recover failed")
     } finally {
       setBusyProjectId(null)
     }
   }
 
-  const deleteForeverProject = async (projectId: string, projectName: string) => {
-    const confirmed = window.confirm(
-      `Delete "${projectName || "AI Project"}" forever?\n\nThis will permanently remove it from Recover Projects and cannot be undone.`
-    )
-
-    if (!confirmed) return
-
-    setBusyProjectId(projectId)
-    setErrorMessage("")
-
-    const previousProjects = projects
-    setProjects((current) => current.filter((project) => project.id !== projectId))
-
+  async function deleteForever(project: Project) {
+    if (!window.confirm(`Delete "${project.name || "AI Project"}" forever?`)) return
+    setBusyProjectId(project.id)
     try {
-      let response = await fetch(`/api/projects/${projectId}?permanent=true`, {
+      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}?permanent=true`, {
         method: "DELETE",
         credentials: "include",
       })
-
-      if (!response.ok) {
-        response = await fetch(`/api/projects/${projectId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ action: "deleteForever" }),
-        })
-      }
-
       const data = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        setProjects(previousProjects)
-        setErrorMessage(data?.debug || data?.error || "Delete forever failed. Please try again.")
-        return
-      }
-
+      if (!response.ok) throw new Error(data?.error || "Delete forever failed")
       await loadProjects()
-    } catch {
-      setProjects(previousProjects)
-      setErrorMessage("Delete forever failed. Please try again.")
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Delete forever failed")
     } finally {
       setBusyProjectId(null)
     }
@@ -306,39 +229,27 @@ export default function DashboardProjectsPage() {
               <ShieldCheck className="h-3.5 w-3.5" />
               Your private projects only
             </div>
-
             <h1 className="text-3xl font-black tracking-tight md:text-4xl">
               {isRecoverMode ? "Recover Projects" : "My Projects"}
             </h1>
-
             <p className="mt-2 max-w-2xl text-sm text-white/45">
               {isRecoverMode
-                ? "Search deleted projects, recover important work, or permanently delete test projects."
-                : "All projects created by your MujeebProAI chat are saved here. Each login can only see its own projects."}
+                ? "Recover an important project or permanently remove an old test project."
+                : "All projects created by your 786.Chat workspace are saved here and remain private to your login."}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
-              type="button"
               variant="outline"
-              onClick={() => {
-                setQuery("")
-                setErrorMessage("")
-                setViewMode(isRecoverMode ? "active" : "recover")
-              }}
-              className={
-                isRecoverMode
-                  ? "border-cyan-500/25 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
-                  : "border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
-              }
+              onClick={() => setViewMode(isRecoverMode ? "active" : "recover")}
+              className="border-white/10 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
             >
               <RotateCcw className="mr-2 h-4 w-4" />
               {isRecoverMode ? "My Projects" : "Recover Projects"}
             </Button>
-
-            <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
-              <Button className="bg-cyan-500 text-black hover:bg-cyan-400">
+            <Link href="/dashboard/chat?newProject=1">
+              <Button className="bg-cyan-400 text-slate-950 hover:bg-cyan-300">
                 <Plus className="mr-2 h-4 w-4" />
                 New Project
               </Button>
@@ -346,198 +257,133 @@ export default function DashboardProjectsPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <div className="relative w-full max-w-xl">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={isRecoverMode ? "Search deleted projects..." : "Search projects..."}
-              className="h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-cyan-500/40"
+              className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] pl-11 pr-4 text-sm outline-none placeholder:text-white/25 focus:border-cyan-400/40"
             />
           </div>
-
-          <div className="text-xs text-white/35">
-            {filteredProjects.length} {isRecoverMode ? "recoverable" : "project"}
-            {filteredProjects.length === 1 ? "" : "s"}
-          </div>
+          <span className="hidden text-xs text-white/35 sm:block">{filteredProjects.length} project{filteredProjects.length === 1 ? "" : "s"}</span>
         </div>
 
         {errorMessage && (
-          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100/80">
+          <div className="mt-5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-100">
             {errorMessage}
           </div>
         )}
 
-        {isRecoverMode && (
-          <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100/75">
-            Deleted projects stay here for 7 days. Use Recover for real projects or Delete Forever to clear test projects permanently.
-          </div>
-        )}
-
         {loading ? (
-          <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center text-sm text-white/45">
-            Loading projects...
-          </div>
+          <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-12 text-center text-white/45">Loading projects...</div>
         ) : filteredProjects.length === 0 ? (
           <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-12 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-cyan-500/10">
-              <FolderKanban className="h-8 w-8 text-cyan-300" />
-            </div>
-
-            <h2 className="text-xl font-bold">
-              {isRecoverMode ? "No deleted projects" : "No projects yet"}
-            </h2>
-
-            <p className="mx-auto mt-2 max-w-md text-sm text-white/45">
-              {isRecoverMode
-                ? "Deleted projects will appear here for 7 days after deletion."
-                : "Start a new project and ask MujeebProAI to create a website, SaaS app, school system, restaurant system, or custom software."}
-            </p>
-
-            {!isRecoverMode && (
-              <Link href="/dashboard/chat?newProject=1" onClick={startNewProject}>
-                <Button className="mt-6 bg-cyan-500 text-black hover:bg-cyan-400">
-                  New Project
-                </Button>
-              </Link>
-            )}
+            <FolderKanban className="mx-auto h-12 w-12 text-cyan-300" />
+            <h2 className="mt-4 text-xl font-bold">{isRecoverMode ? "No deleted projects" : "No projects yet"}</h2>
           </div>
         ) : (
-          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project, index) => {
-              const daysLeft = getRecoverDaysLeft(project)
               const projectName = project.name || "AI Project"
+              const daysLeft = recoverDays(project)
 
               return (
-                <motion.div
+                <motion.article
                   key={project.id}
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04 }}
-                  className={`group rounded-3xl border p-5 shadow-2xl shadow-black/20 transition ${
-                    isRecoverMode
-                      ? "border-cyan-500/20 bg-cyan-500/[0.045] hover:border-cyan-500/35"
-                      : "border-white/10 bg-white/[0.035] hover:border-cyan-500/35 hover:bg-white/[0.055]"
-                  }`}
+                  className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-black/30 transition hover:-translate-y-1 hover:border-cyan-400/35 hover:bg-white/[0.055]"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10">
-                      <FolderKanban className="h-6 w-6 text-cyan-300" />
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => !isRecoverMode && openProject(project.id)}
+                    className="block w-full text-left"
+                    disabled={isRecoverMode}
+                    title={isRecoverMode ? "Recover this project first" : "Open project"}
+                  >
+                    <ProjectThumbnail project={project} />
+                  </button>
 
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full border px-3 py-1 text-[11px] capitalize ${
-                        isRecoverMode
-                          ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-200"
-                          : "border-white/10 bg-black/20 text-white/50"
-                      }`}>
+                  <div className="px-1 pb-1 pt-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-xl font-black">{projectName}</h3>
+                        <p className="mt-2 line-clamp-2 min-h-[40px] text-sm leading-6 text-white/45">
+                          {isRecoverMode
+                            ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"}.`
+                            : project.description || `Real file-based project with ${project.fileCount || 0} saved files.`}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] capitalize text-white/45">
                         {isRecoverMode ? "recoverable" : project.status || "active"}
                       </span>
-
-                      {!isRecoverMode && (
-                        <button
-                          type="button"
-                          disabled={busyProjectId === project.id}
-                          onClick={() => softDeleteProject(project.id)}
-                          className="rounded-full border border-red-500/20 bg-red-500/10 p-2 text-red-300 opacity-80 transition hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40"
-                          title="Move to Recover Projects"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-
-                      {isRecoverMode && (
-                        <button
-                          type="button"
-                          disabled={busyProjectId === project.id}
-                          onClick={() => deleteForeverProject(project.id, projectName)}
-                          className="rounded-full border border-red-500/25 bg-red-500/10 p-2 text-red-300 opacity-90 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
-                          title="Delete Forever"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="mt-5 line-clamp-2 text-lg font-bold">
-                    {projectName}
-                  </h3>
-
-                  <p className="mt-2 line-clamp-2 min-h-[40px] text-sm text-white/42">
-                    {isRecoverMode
-                      ? `Recover within ${daysLeft} day${daysLeft === 1 ? "" : "s"} before permanent cleanup, or delete forever now.`
-                      : project.description ||
-                        `Real file-based project with ${project.fileCount || 0} saved file${project.fileCount === 1 ? "" : "s"}.`}
-                  </p>
-
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/40">
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="mb-1 flex items-center gap-1.5">
-                        <Code className="h-3.5 w-3.5" />
-                        Files
-                      </div>
-                      <div className="font-semibold text-white/70">{project.fileCount || 0}</div>
                     </div>
 
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="mb-1 flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
-                        {isRecoverMode ? "Recover" : "Updated"}
+                    <div className="mt-5 grid grid-cols-2 gap-3 text-xs text-white/45">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <span className="flex items-center gap-2"><Code className="h-3.5 w-3.5" /> Files</span>
+                        <strong className="mt-2 block text-white/80">{project.fileCount || 0}</strong>
                       </div>
-                      <div className="font-semibold text-white/70">
-                        {isRecoverMode
-                          ? `${daysLeft} day${daysLeft === 1 ? "" : "s"}`
-                          : project.updated_at
-                            ? new Date(project.updated_at).toLocaleDateString()
-                            : "-"}
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5" /> Updated</span>
+                        <strong className="mt-2 block text-white/80">{project.updated_at ? new Date(project.updated_at).toLocaleDateString("en-GB") : "-"}</strong>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-[11px] text-white/30">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {project.created_at
-                        ? new Date(project.created_at).toLocaleDateString()
-                        : "Created"}
-                    </span>
+                    <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4">
+                      <span className="flex items-center gap-2 text-[11px] text-white/30">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {project.created_at ? new Date(project.created_at).toLocaleDateString("en-GB") : "Created"}
+                      </span>
 
-                    {isRecoverMode ? (
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={busyProjectId === project.id}
-                          onClick={() => deleteForeverProject(project.id, projectName)}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition hover:bg-red-500/20 hover:text-red-100 disabled:opacity-40"
-                        >
-                          Delete Forever
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={busyProjectId === project.id}
-                          onClick={() => recoverProject(project.id)}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:opacity-40"
-                        >
-                          Recover
-                          <RotateCcw className="h-3.5 w-3.5" />
-                        </button>
+                        {isRecoverMode ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => deleteForever(project)}
+                              disabled={busyProjectId === project.id}
+                              className="grid h-9 w-9 place-items-center rounded-full border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                              title="Delete forever"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => restoreProject(project.id)}
+                              disabled={busyProjectId === project.id}
+                              className="inline-flex h-9 items-center gap-2 rounded-full bg-cyan-400 px-4 text-xs font-black text-slate-950 hover:bg-cyan-300 disabled:opacity-40"
+                            >
+                              Recover <RotateCcw className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => softDelete(project.id)}
+                              disabled={busyProjectId === project.id}
+                              className="grid h-9 w-9 place-items-center rounded-full border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                              title="Delete project"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openProject(project.id)}
+                              className="inline-flex h-9 items-center gap-2 rounded-full bg-cyan-400 px-4 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                            >
+                              Open Project <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openProjectChat(project.id)}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-                      >
-                        Open Chat
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    </div>
                   </div>
-                </motion.div>
+                </motion.article>
               )
             })}
           </div>
