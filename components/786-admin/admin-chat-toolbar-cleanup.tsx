@@ -92,7 +92,7 @@ export function AdminChatToolbarCleanup() {
 
   // These controls use privileged /api/786-admin endpoints and must never
   // attach themselves to a customer's /dashboard workspace.
-  if (!pathname.startsWith(ADMIN_CHAT_PATH)) return null
+  if (!pathname || !pathname.startsWith(ADMIN_CHAT_PATH)) return null
 
   return (
     <>
