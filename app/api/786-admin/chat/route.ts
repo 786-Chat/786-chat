@@ -26,43 +26,63 @@ const MAX_CONTEXT_FILE_LENGTH = 80_000
 const DESIGN_PROFILES = [
   {
     name: "editorial-sand",
-    instruction: "Use an asymmetric editorial composition with warm sand, ink and coral, strong serif display headings, thin rules, offset media and generous whitespace.",
-    css: "--project-primary:#e76f51;--project-secondary:#264653;--project-surface:#f4eadb;--project-ink:#172126;",
+    instruction: "Use an asymmetric editorial composition with warm sand, ink and coral, strong serif display headings, thin rules, offset media, layered magazine-style sections and generous whitespace.",
+    css: "--project-primary:#e76f51;--project-secondary:#264653;--project-surface:#f4eadb;--project-ink:#172126;--project-glow:rgba(231,111,81,.38);",
   },
   {
     name: "aurora-glass",
-    instruction: "Use a deep navy aurora interface with cyan and violet highlights, translucent layered cards, soft glows, rounded geometry and luminous gradients.",
-    css: "--project-primary:#22d3ee;--project-secondary:#8b5cf6;--project-surface:#071426;--project-ink:#eefcff;",
+    instruction: "Use a deep navy aurora interface with cyan and violet highlights, translucent layered cards, soft glows, rounded geometry, animated gradients and floating glass panels.",
+    css: "--project-primary:#22d3ee;--project-secondary:#8b5cf6;--project-surface:#071426;--project-ink:#eefcff;--project-glow:rgba(34,211,238,.42);",
   },
   {
     name: "industrial-grid",
-    instruction: "Use an industrial data-grid style with charcoal surfaces, lime and amber accents, condensed headings, sharp borders and modular dashboard blocks.",
-    css: "--project-primary:#a3e635;--project-secondary:#f59e0b;--project-surface:#121416;--project-ink:#f7fee7;",
+    instruction: "Use an industrial data-grid style with charcoal surfaces, lime and amber accents, condensed headings, sharp borders, technical labels and modular dashboard blocks.",
+    css: "--project-primary:#a3e635;--project-secondary:#f59e0b;--project-surface:#121416;--project-ink:#f7fee7;--project-glow:rgba(163,230,53,.36);",
   },
   {
     name: "monochrome-electric",
-    instruction: "Use a minimal monochrome system with white and near-black surfaces, one electric-blue accent, oversized typography, crisp spacing and restrained motion.",
-    css: "--project-primary:#2563eb;--project-secondary:#111827;--project-surface:#f8fafc;--project-ink:#050505;",
+    instruction: "Use a minimal monochrome system with white and near-black surfaces, one electric-blue accent, oversized typography, crisp spacing, kinetic lines and restrained premium motion.",
+    css: "--project-primary:#2563eb;--project-secondary:#111827;--project-surface:#f8fafc;--project-ink:#050505;--project-glow:rgba(37,99,235,.36);",
   },
   {
     name: "organic-premium",
-    instruction: "Use an organic premium composition with cream, forest green and terracotta, soft curves, tactile cards, botanical shapes and calm editorial typography.",
-    css: "--project-primary:#2f6b4f;--project-secondary:#c96f4a;--project-surface:#f7f0df;--project-ink:#173127;",
+    instruction: "Use an organic premium composition with cream, forest green and terracotta, soft curves, tactile cards, botanical shapes, layered depth and calm editorial typography.",
+    css: "--project-primary:#2f6b4f;--project-secondary:#c96f4a;--project-surface:#f7f0df;--project-ink:#173127;--project-glow:rgba(47,107,79,.32);",
   },
   {
     name: "luxury-burgundy",
-    instruction: "Use a cinematic luxury-dark composition with black and burgundy surfaces, muted gold accents, elegant serif headings, refined borders and dramatic spacing.",
-    css: "--project-primary:#c9a45c;--project-secondary:#7f1d1d;--project-surface:#10080b;--project-ink:#fff7e6;",
+    instruction: "Use a cinematic luxury-dark composition with black and burgundy surfaces, muted gold accents, elegant serif headings, refined borders, spotlight gradients and dramatic spacing.",
+    css: "--project-primary:#c9a45c;--project-secondary:#7f1d1d;--project-surface:#10080b;--project-ink:#fff7e6;--project-glow:rgba(201,164,92,.38);",
   },
   {
     name: "playful-modular",
-    instruction: "Use a playful modular design with cobalt, sunny yellow and pink, bold rounded typography, offset cards, sticker-like details and energetic interactions.",
-    css: "--project-primary:#2563eb;--project-secondary:#facc15;--project-surface:#fff8e7;--project-ink:#172554;",
+    instruction: "Use a playful modular design with cobalt, sunny yellow and pink, bold rounded typography, offset cards, sticker-like details, layered shadows and energetic interactions.",
+    css: "--project-primary:#2563eb;--project-secondary:#facc15;--project-surface:#fff8e7;--project-ink:#172554;--project-glow:rgba(236,72,153,.34);",
   },
   {
     name: "soft-professional",
-    instruction: "Use a soft professional workspace with slate and teal plus lavender accents, balanced grids, subtle shadows and clean humanist typography.",
-    css: "--project-primary:#0f766e;--project-secondary:#8b5cf6;--project-surface:#f1f5f9;--project-ink:#172033;",
+    instruction: "Use a soft professional workspace with slate and teal plus lavender accents, balanced grids, subtle shadows, clean humanist typography and polished product-dashboard motion.",
+    css: "--project-primary:#0f766e;--project-secondary:#8b5cf6;--project-surface:#f1f5f9;--project-ink:#172033;--project-glow:rgba(15,118,110,.3);",
+  },
+  {
+    name: "neon-cyber",
+    instruction: "Use an immersive cyber-premium interface with black, electric magenta and cyan, holographic borders, perspective grids, neon glass, scan-line accents and controlled 3D motion.",
+    css: "--project-primary:#22d3ee;--project-secondary:#ec4899;--project-surface:#04040b;--project-ink:#f5f3ff;--project-glow:rgba(236,72,153,.45);",
+  },
+  {
+    name: "royal-sapphire",
+    instruction: "Use a royal VVIP visual system with sapphire, deep indigo and champagne gold, polished panels, crest-like motifs, elegant typography and premium layered depth.",
+    css: "--project-primary:#2563eb;--project-secondary:#d4af37;--project-surface:#07112d;--project-ink:#fffaf0;--project-glow:rgba(212,175,55,.4);",
+  },
+  {
+    name: "sunset-future",
+    instruction: "Use a futuristic sunset composition with violet, hot coral, orange and midnight blue, fluid gradients, curved panels, floating 3D cards and luminous animated accents.",
+    css: "--project-primary:#fb7185;--project-secondary:#8b5cf6;--project-surface:#120a2a;--project-ink:#fff7ed;--project-glow:rgba(251,113,133,.42);",
+  },
+  {
+    name: "emerald-vip",
+    instruction: "Use an executive emerald VIP system with deep green, black, pearl and gold, strong architectural grids, premium cards, subtle reflections and confident motion.",
+    css: "--project-primary:#10b981;--project-secondary:#d4af37;--project-surface:#03120d;--project-ink:#f0fdf4;--project-glow:rgba(16,185,129,.38);",
   },
 ] as const
 
@@ -97,6 +117,19 @@ p, h1, h2, h3, h4, h5, h6, a, span, label, td, th { overflow-wrap: anywhere; }
   [class*="grid-cols-"] { grid-template-columns: minmax(0, 1fr); }
   [class*="min-w-["], [class*="w-["] { max-width: 100%; }
 }
+`
+
+const PREMIUM_PROJECT_RULES = `
+PREMIUM / VVIP PROJECT QUALITY — MANDATORY FOR NEW PROJECTS:
+- Produce a complete premium product, not a generic starter template or repeated demo.
+- Use intentional 3D depth with perspective, layered surfaces, hover tilt, floating cards, luminous shadows, embossed details or parallax-like composition where appropriate.
+- Add lightweight CSS-first animation: section reveals, ambient gradients, shimmer, hover lift, animated borders, moving highlights, floating decorative layers and refined button feedback.
+- Use a rich, project-specific colour system with accessible contrast. Do not default every project to purple/cyan or the same dark dashboard.
+- Build a distinctive hero, navigation, content rhythm, card geometry, typography pairing, background treatment and CTA composition for this project.
+- Include polished states for buttons, forms, menus, tabs, cards, filters, tables and mobile navigation when those controls exist.
+- Make every important interaction functional in React. No decorative fake controls, dead links or placeholder actions.
+- Use only dependencies already permitted by the generator. Prefer Tailwind, CSS and React state; do not add heavy animation or 3D packages.
+- The result must feel like a top-tier custom agency build suitable for a VIP client, while remaining fast and responsive.
 `
 
 function slugify(v: string) {
@@ -135,9 +168,11 @@ PROJECT DESIGN IDENTITY — MANDATORY FOR THIS PROJECT:
 - DESIGN_PROFILE: ${profile.name}
 - ${profile.instruction}
 - Build a project-specific visual system rather than a category starter template.
-- Do not reuse another project's colour palette, hero composition, navigation pattern, card style, typography pairing, section order, CTA wording, background treatment, component names, sample content or decorative motifs.
-- The layout must clearly differ from other restaurant, school, SaaS, dashboard, quiz, login and shop projects, even when the business category is the same.
+- Do not reuse another project's colour palette, hero composition, navigation pattern, card style, typography pairing, section order, CTA wording, background treatment, component names, sample content, animation sequence or decorative motifs.
+- The layout must clearly differ from other restaurant, school, SaaS, dashboard, quiz, login, shop, portfolio, booking and business projects, even when the category is the same.
+- Use the selected profile as a creative direction, not as a rigid template. Adapt it intelligently to the user's industry and request.
 - Keep this identity consistent across every generated page and component.
+${PREMIUM_PROJECT_RULES}
 `
 }
 
@@ -181,7 +216,7 @@ function addResponsiveSafety(
   }
 
   if (cssPath && profile && !next[cssPath].includes("786.Chat project design identity")) {
-    next[cssPath] = `${next[cssPath].trimEnd()}\n\n/* 786.Chat project design identity: ${profile.name} */\n:root { ${profile.css} }\n`
+    next[cssPath] = `${next[cssPath].trimEnd()}\n\n/* 786.Chat project design identity: ${profile.name} */\n:root { ${profile.css} }\n\n@keyframes projectAmbientFloat { 0%,100% { transform:translate3d(0,0,0) rotateX(0deg); } 50% { transform:translate3d(0,-8px,0) rotateX(1deg); } }\n@keyframes projectGlowPulse { 0%,100% { box-shadow:0 18px 55px rgba(0,0,0,.22); } 50% { box-shadow:0 22px 70px var(--project-glow); } }\n[data-premium-card], .premium-card { transform-style:preserve-3d; transition:transform .35s ease, box-shadow .35s ease, border-color .35s ease; }\n[data-premium-card]:hover, .premium-card:hover { transform:perspective(1000px) translateY(-6px) rotateX(2deg) rotateY(-2deg); box-shadow:0 24px 70px var(--project-glow); }\n[data-ambient-float], .ambient-float { animation:projectAmbientFloat 6s ease-in-out infinite; }\n[data-glow-pulse], .glow-pulse { animation:projectGlowPulse 4s ease-in-out infinite; }\n@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto!important; animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }\n`
   }
 
   return next
@@ -193,15 +228,16 @@ function localResponse(
   reason: string,
   profile: (typeof DESIGN_PROFILES)[number]
 ) {
-  const local = createSevenEightSixProjectFromPrompt(userRequest)
+  const local = createSevenEightSixProjectFromPrompt(`${userRequest}\n\n${uniqueDesignRules(projectId || crypto.randomUUID(), profile)}`)
   const now = new Date().toISOString()
   const id = projectId ?? local.id
 
   return NextResponse.json({
     success: true,
-    response: `${local.title} created with a separate ${profile.name} design identity, working files, interactive UI, responsive layout, demo data, and database schema. You can continue editing this project in chat.`,
+    response: `${local.title} created with a separate ${profile.name} premium design identity, 3D depth, animation-ready styling, working files, interactive UI, responsive layout, demo data, and database schema. You can continue editing this project in chat.`,
     model: "786-chat-safe-generator",
     reason,
+    designIdentity: profile.name,
     project: {
       id,
       title: local.title,
@@ -247,7 +283,7 @@ export async function POST(request: Request) {
 
     const userRequest = message || "Inspect the attached file and update the existing project to match it."
     const newProjectRules = existing
-      ? "Preserve the existing project's established visual identity. Do not replace it with a starter theme unless the user explicitly requests a full redesign."
+      ? "Preserve the existing project's established visual identity, colour system, layout language, animation style and component geometry. Do not replace it with a starter theme unless the user explicitly requests a full redesign."
       : uniqueDesignRules(identity.seed, identity.profile)
     const prompt = `${userRequest}\n\n${newProjectRules}\n\n${OPTIONAL_PROJECT_FEATURE_RULES}\n\n${RESPONSIVE_PROJECT_RULES}`
 
