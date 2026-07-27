@@ -6,7 +6,7 @@ import { AdminChatPreviewDocumentGuard } from "@/components/786-admin/admin-chat
 
 const FULL_REGEN_RE = /\b(?:regenerate|rebuild|redesign|replace|start over|from scratch)\b[\s\S]{0,80}\b(?:completely|entire|all files|from scratch|clean)\b|\b(?:full|complete)\s+(?:regeneration|redesign|rebuild)\b/i
 const CONTAMINATION_RE = /\/786-admin\/|SevenEightSixAdminChatPage|PremiumAdminBackground|Ask 786\.Chat|New Chat[\s\S]{0,200}(?:Preview|Publish)|admin-chat-/i
-const GENERIC_COPY_RE = /AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Crafted without a shared template|Analytics[\s\S]{0,120}Automation[\s\S]{0,120}Team Workspace[\s\S]{0,120}Integrations/i
+const GENERIC_COPY_RE = /AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Analytics[\s\S]{0,120}Automation[\s\S]{0,120}Team Workspace[\s\S]{0,120}Integrations/i
 
 type GeneratedSnapshot = {
   title?: string
