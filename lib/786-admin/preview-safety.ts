@@ -12,6 +12,7 @@ function sanitizeSource(source: string) {
   return source
     .replace(/href=(['"])(\/[^'"\s]*)\1/g, (_match, quote: string, href: string) => `href=${quote}${toSectionHref(href)}${quote}`)
     .replace(/href=\{(['"])(\/[^'"\s]*)\1\}/g, (_match, quote: string, href: string) => `href={${quote}${toSectionHref(href)}${quote}}`)
+    .replace(/(?:router|navigation)\.(?:push|replace)\(\s*(['"])(\/[^'"]*)\1\s*\)/g, (_match, quote: string, href: string) => `document.getElementById(${quote}${toSectionHref(href).slice(1)}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
 }
 
 export function sanitizeProjectFilesForPreview(files: SevenEightSixProjectFileMap | Record<string, string> | undefined) {
