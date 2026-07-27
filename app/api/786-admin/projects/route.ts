@@ -6,6 +6,7 @@ import {
   listProjects,
   persistProjectAtomic,
 } from "@/lib/786-admin/projects"
+import { sanitizeProjectFilesForPreview } from "@/lib/786-admin/preview-safety"
 import type {
   AdminMessageRole,
   AdminProjectMetadata,
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       : undefined
   const files =
     body.files && typeof body.files === "object"
-      ? (body.files as Record<string, string>)
+      ? sanitizeProjectFilesForPreview(body.files as Record<string, string>)
       : undefined
   const messages = Array.isArray(body.messages)
     ? (body.messages as Array<{
