@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation"
 import {
   Check,
   Copy,
-  ExternalLink,
   FolderKanban,
-  Image as ImageIcon,
   Loader2,
+  MoreVertical,
   Pencil,
   Plus,
   Sparkles,
-  Store,
   Trash2,
   X,
 } from "lucide-react"
@@ -30,11 +28,16 @@ function previewUrl(project: AdminProjectListItem) {
 
 function relativeDate(value: string) {
   const time = new Date(value).getTime()
-  if (!Number.isFinite(time)) return ""
-  const days = Math.max(0, Math.floor((Date.now() - time) / 86_400_000))
-  if (days === 0) return "today"
-  if (days === 1) return "1 day ago"
-  return `${days} days ago`
+  if (!Number.isFinite(time)) return "Recently"
+  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000))
+  if (minutes < 1) return "Just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`
+  const months = Math.floor(days / 30)
+  return `${months} month${months === 1 ? "" : "s"} ago`
 }
 
 export default function SevenEightSixProjectsPage() {
@@ -48,6 +51,7 @@ export default function SevenEightSixProjectsPage() {
   const [renaming, setRenaming] = useState("")
   const [renameValue, setRenameValue] = useState("")
   const [savingRename, setSavingRename] = useState(false)
+  const [openMenu, setOpenMenu] = useState("")
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase().trim() === ADMIN_EMAIL,
@@ -81,9 +85,15 @@ export default function SevenEightSixProjectsPage() {
     router.push("/786-admin/chat")
   }
 
+  function startNewProject() {
+    try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
+    router.push("/786-admin/chat")
+  }
+
   function beginRename(project: AdminProjectListItem) {
     setRenaming(project.id)
     setRenameValue(project.title)
+    setOpenMenu("")
     setError("")
   }
 
@@ -112,6 +122,7 @@ export default function SevenEightSixProjectsPage() {
 
   async function duplicateProject(project: AdminProjectListItem) {
     if (duplicating) return
+    setOpenMenu("")
     setDuplicating(project.id)
     setError("")
     try {
@@ -145,7 +156,8 @@ export default function SevenEightSixProjectsPage() {
   }
 
   async function deleteProject(id: string) {
-    if (!window.confirm("Delete this project?")) return
+    if (deleting) return
+    setOpenMenu("")
     setDeleting(id)
     setError("")
     try {
@@ -168,79 +180,86 @@ export default function SevenEightSixProjectsPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050713] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[#050713] text-white" onClick={() => openMenu && setOpenMenu("")}>
       <PremiumAdminBackground />
-      <div className="relative z-10 grid min-h-screen lg:grid-cols-[250px_1fr]">
-        <aside className="hidden border-r border-white/10 bg-black/25 p-5 backdrop-blur-2xl lg:flex lg:flex-col">
-          <button onClick={() => router.push("/786-admin/chat")} className="mb-8 grid h-14 w-14 place-items-center rounded-[20px] bg-gradient-to-br from-cyan-200 via-violet-300 to-fuchsia-300 text-lg font-black text-slate-950 shadow-[0_0_36px_rgba(139,92,246,.35)]">786</button>
-          <nav className="space-y-2">
-            <button className="flex w-full items-center gap-3 rounded-2xl border border-cyan-300/25 bg-cyan-300/12 px-4 py-3 text-sm font-bold text-cyan-100"><FolderKanban className="h-5 w-5" /> Projects</button>
-            <button onClick={() => router.push("/786-admin/marketplace")} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] px-4 py-3 text-sm font-bold text-slate-300 hover:bg-white/[.08]"><Store className="h-5 w-5" /> Marketplace</button>
-          </nav>
-        </aside>
-
-        <section className="px-5 py-8 sm:px-8 lg:px-12 xl:px-16">
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="mb-2 text-xs font-black uppercase tracking-[.28em] text-cyan-300/80">786 Chat AI</p>
-              <h1 className="text-4xl font-black tracking-tight">Projects</h1>
-              <p className="mt-2 text-sm text-slate-400">Open, rename, duplicate or remove your saved projects.</p>
+      <div className="relative z-10 mx-auto min-h-screen max-w-[1600px] px-5 py-8 sm:px-8 lg:px-12 xl:px-16">
+        <header className="mb-10 flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="mb-3 flex items-center gap-3 text-xs font-black uppercase tracking-[.28em] text-cyan-300/80">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-300 text-slate-950">786</span>
+              Project workspace
             </div>
-            <button onClick={() => { try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}; router.push("/786-admin/chat") }} className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-3 text-sm font-black shadow-[0_0_28px_rgba(139,92,246,.35)]"><Plus className="h-4 w-4" /> New project</button>
+            <h1 className="text-4xl font-black tracking-tight sm:text-5xl">Your projects</h1>
+            <p className="mt-3 max-w-2xl text-sm text-slate-400">Open a saved project to continue the chat, preview and code. Use the menu to rename, duplicate or delete.</p>
           </div>
+          <button onClick={startNewProject} className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-500 px-5 py-3 text-sm font-black shadow-[0_0_28px_rgba(139,92,246,.35)] transition hover:-translate-y-0.5"><Plus className="h-4 w-4" /> New project</button>
+        </header>
 
-          {error && <div className="mb-5 rounded-2xl border border-red-300/25 bg-red-500/10 p-4 text-sm font-bold text-red-100">{error}</div>}
+        {error && <div className="mb-6 rounded-2xl border border-red-300/25 bg-red-500/10 p-4 text-sm font-bold text-red-100">{error}</div>}
 
-          {loading ? (
-            <div className="flex min-h-[320px] items-center justify-center text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading projects…</div>
-          ) : projects.length ? (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {projects.map((project) => {
-                const livePreview = previewUrl(project)
-                const isRenaming = renaming === project.id
-                return (
-                  <article key={project.id} className="group overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#11182b]/95 via-[#0d1424]/95 to-[#15102a]/95 shadow-[0_24px_70px_rgba(0,0,0,.32)] transition hover:-translate-y-1 hover:border-cyan-300/35">
-                    <div className="relative aspect-[16/10] overflow-hidden border-b border-white/10 bg-[#080b14]">
-                      {livePreview ? (
-                        <iframe src={livePreview} title={`${project.title} preview`} className="pointer-events-none h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-white" sandbox="allow-scripts allow-same-origin" />
-                      ) : (
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(34,211,238,.35),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,.35),transparent_30%),linear-gradient(135deg,#0b1220,#17102d)]">
-                          <div className="absolute left-6 top-6 flex items-center gap-2 text-xs font-black tracking-[.2em] text-cyan-200/80"><Sparkles className="h-4 w-4" /> 786 CHAT AI</div>
-                          <div className="absolute inset-x-6 bottom-6 rounded-2xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl"><div className="mb-3 h-2 w-2/3 rounded-full bg-cyan-300/70" /><div className="mb-2 h-2 w-full rounded-full bg-white/20" /><div className="h-2 w-4/5 rounded-full bg-white/10" /></div>
-                          <ImageIcon className="absolute right-7 top-7 h-8 w-8 text-white/20" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0d1424] via-transparent to-transparent" />
-                      <span className="absolute bottom-4 left-4 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white/80 backdrop-blur-md">{project.kind || "Project"}</span>
-                    </div>
-
-                    <div className="p-5">
-                      {isRenaming ? (
-                        <div className="flex items-center gap-2">
-                          <input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveRename(project); if (event.key === "Escape") setRenaming("") }} maxLength={160} className="min-w-0 flex-1 rounded-xl border border-cyan-300/25 bg-black/35 px-3 py-2 text-sm font-black text-white outline-none focus:border-cyan-300" />
-                          <button onClick={() => void saveRename(project)} disabled={!renameValue.trim() || savingRename} className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/20 text-emerald-200 disabled:opacity-40" title="Save name">{savingRename ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
-                          <button onClick={() => setRenaming("")} className="grid h-10 w-10 place-items-center rounded-xl bg-white/5 text-slate-300" title="Cancel"><X className="h-4 w-4" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex items-start gap-2"><h2 className="line-clamp-1 min-w-0 flex-1 text-xl font-black">{project.title}</h2><button onClick={() => beginRename(project)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white" title="Rename project"><Pencil className="h-4 w-4" /></button></div>
-                      )}
-                      <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-slate-400">{project.description || project.prompt || "786 Chat AI project"}</p>
-                      <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-slate-300"><span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">{project.file_count} files</span><span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">{project.message_count} messages</span><span className="px-1 py-1 text-slate-500">Updated {relativeDate(project.updated_at)}</span></div>
-
-                      <div className="mt-5 flex items-center gap-2">
-                        <button onClick={() => openProject(project.id)} className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-100" title="Open project"><ExternalLink className="h-4 w-4" /> Open</button>
-                        <button onClick={() => void duplicateProject(project)} disabled={duplicating === project.id} className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-500/10 text-cyan-200 transition hover:bg-cyan-500/20 disabled:opacity-50" title="Duplicate project">{duplicating === project.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}</button>
-                        <button onClick={() => void deleteProject(project.id)} disabled={deleting === project.id} className="grid h-11 w-11 place-items-center rounded-xl border border-red-300/25 bg-red-500/10 text-red-200 transition hover:bg-red-500/20 disabled:opacity-50" title="Delete project" aria-label={`Delete ${project.title}`}>{deleting === project.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>
+        {loading ? (
+          <div className="flex min-h-[420px] items-center justify-center text-slate-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading projects…</div>
+        ) : projects.length ? (
+          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {projects.map((project, index) => {
+              const livePreview = previewUrl(project)
+              const isRenaming = renaming === project.id
+              const hue = (index * 67 + 205) % 360
+              return (
+                <article key={project.id} onClick={() => openProject(project.id)} className="group relative cursor-pointer overflow-hidden rounded-[24px] border border-white/10 bg-[#10131d] shadow-[0_24px_70px_rgba(0,0,0,.32)] transition duration-300 hover:-translate-y-1 hover:border-cyan-300/35">
+                  <div className="relative aspect-[16/9] overflow-hidden border-b border-white/10 bg-[#080b14]">
+                    {livePreview ? (
+                      <iframe src={livePreview} title={`${project.title} preview`} className="pointer-events-none h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-white" sandbox="allow-scripts" />
+                    ) : (
+                      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 72% 22%,hsla(${hue},90%,65%,.48),transparent 34%),linear-gradient(135deg,#070914,#15233c)` }}>
+                        <div className="absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(255,255,255,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.035)_1px,transparent_1px)] [background-size:22px_22px]" />
+                        <Sparkles className="absolute right-6 top-6 h-7 w-7 text-white/20" />
                       </div>
+                    )}
+                    <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/10 bg-black/45 p-4 backdrop-blur-xl">
+                      <h2 className="truncate text-lg font-black text-white">{project.title}</h2>
+                      <p className="mt-1 line-clamp-1 text-xs text-slate-300">{project.description || project.prompt || "Saved 786.Chat project"}</p>
                     </div>
-                  </article>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="flex min-h-[440px] items-center justify-center rounded-[28px] border border-white/10 bg-white/[.03] p-8 text-center backdrop-blur-xl"><div><FolderKanban className="mx-auto h-12 w-12 text-cyan-300/60" /><h2 className="mt-5 text-2xl font-black">No projects yet</h2><p className="mt-2 text-sm text-slate-400">Create your first project from the admin chat.</p><button onClick={() => router.push("/786-admin/chat")} className="mt-5 rounded-xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950">Open chat</button></div></div>
-          )}
-        </section>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 p-5">
+                    <div className="min-w-0 flex-1">
+                      {isRenaming ? (
+                        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                          <input autoFocus value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void saveRename(project); if (event.key === "Escape") setRenaming("") }} maxLength={160} className="min-w-0 flex-1 rounded-xl border border-cyan-300/25 bg-black/35 px-3 py-2 text-sm font-black text-white outline-none focus:border-cyan-300" />
+                          <button onClick={() => void saveRename(project)} disabled={!renameValue.trim() || savingRename} className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/20 text-emerald-200 disabled:opacity-40">{savingRename ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
+                          <button onClick={() => setRenaming("")} className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-slate-300"><X className="h-4 w-4" /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="truncate text-lg font-black">{project.title}</h3>
+                          <p className="mt-1 text-xs text-slate-400">{relativeDate(project.updated_at)} · {project.file_count || 0} files</p>
+                        </>
+                      )}
+                    </div>
+
+                    {!isRenaming && (
+                      <div className="relative" onClick={(event) => event.stopPropagation()}>
+                        <button onClick={() => setOpenMenu((current) => current === project.id ? "" : project.id)} className="grid h-10 w-10 place-items-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label={`Project menu for ${project.title}`}><MoreVertical className="h-5 w-5" /></button>
+                        {openMenu === project.id && (
+                          <div className="absolute bottom-12 right-0 z-30 w-40 rounded-2xl border border-white/10 bg-[#090b12] p-2 shadow-2xl">
+                            <button onClick={() => beginRename(project)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-slate-200 hover:bg-white/10"><Pencil className="h-4 w-4" /> Rename</button>
+                            <button onClick={() => void duplicateProject(project)} disabled={duplicating === project.id} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-50">{duplicating === project.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Duplicate</button>
+                            <button onClick={() => void deleteProject(project.id)} disabled={deleting === project.id} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-rose-300 hover:bg-rose-500/15 disabled:opacity-50">{deleting === project.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
+          </section>
+        ) : (
+          <div className="flex min-h-[460px] items-center justify-center rounded-[28px] border border-dashed border-white/15 bg-white/[.03] p-8 text-center backdrop-blur-xl">
+            <div><FolderKanban className="mx-auto h-12 w-12 text-cyan-300/60" /><h2 className="mt-5 text-2xl font-black">No projects yet</h2><p className="mt-2 text-sm text-slate-400">Create your first project from the admin chat.</p><button onClick={startNewProject} className="mt-5 rounded-xl bg-cyan-300 px-5 py-2.5 text-sm font-black text-slate-950">Open chat</button></div>
+          </div>
+        )}
       </div>
     </main>
   )
