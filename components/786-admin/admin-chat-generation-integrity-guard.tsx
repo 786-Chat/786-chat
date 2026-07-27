@@ -7,6 +7,12 @@ const FULL_REGEN_RE = /\b(?:regenerate|rebuild|redesign|replace|start over|from 
 const CONTAMINATION_RE = /\/786-admin\/|SevenEightSixAdminChatPage|PremiumAdminBackground|Ask 786\.Chat|New Chat[\s\S]{0,200}(?:Preview|Publish)|admin-chat-/i
 const GENERIC_COPY_RE = /AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Crafted without a shared template|Analytics[\s\S]{0,120}Automation[\s\S]{0,120}Team Workspace[\s\S]{0,120}Integrations/i
 
+type GeneratedSnapshot = {
+  title?: string
+  description?: string
+  files?: Record<string, string>
+}
+
 function extractProjectName(message: string): string {
   const patterns = [
     /(?:called|named)\s+[“"]?([^\n.!?,"”]{2,60})/i,
@@ -52,42 +58,86 @@ function cleanRegenerationBody(body: Record<string, unknown>): Record<string, un
   }
 }
 
+function parseBody(init?: RequestInit): Record<string, unknown> | null {
+  if (typeof init?.body !== "string") return null
+  try { return JSON.parse(init.body) as Record<string, unknown> } catch { return null }
+}
+
 export function AdminChatGenerationIntegrityGuard() {
   const pathname = usePathname()
 
   useEffect(() => {
     if (pathname !== "/786-admin/chat") return
     const originalFetch = window.fetch.bind(window)
+    let pendingGenerated: GeneratedSnapshot | null = null
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
-      const isChatRequest = url.includes("/api/786-admin/chat") && String(init?.method || "GET").toUpperCase() === "POST"
-      if (!isChatRequest || typeof init?.body !== "string") return originalFetch(input, init)
+      const method = String(init?.method || "GET").toUpperCase()
+      const body = parseBody(init)
 
-      let body: Record<string, unknown>
-      try { body = JSON.parse(init.body) as Record<string, unknown> } catch { return originalFetch(input, init) }
-      const message = String(body.message || "")
-      if (!FULL_REGEN_RE.test(message)) return originalFetch(input, init)
+      const isChatRequest = url.includes("/api/786-admin/chat") && method === "POST"
+      if (isChatRequest && body) {
+        const message = String(body.message || "")
+        let response: Response
 
-      const cleaned = cleanRegenerationBody(body)
-      const response = await originalFetch(input, { ...init, body: JSON.stringify(cleaned) })
-      let json: any
-      try { json = await response.clone().json() } catch { return response }
-      if (!response.ok || !json?.success || !violatesIntent(message, json.project)) return response
+        if (FULL_REGEN_RE.test(message)) {
+          const cleaned = cleanRegenerationBody(body)
+          response = await originalFetch(input, { ...init, body: JSON.stringify(cleaned) })
+          let json: any
+          try { json = await response.clone().json() } catch { return response }
 
-      if (!body.__integrityRetry) {
-        const retryBody = cleanRegenerationBody({ ...body, __integrityRetry: true, message: `${message}\n\nThe previous generated result was rejected because it contained unrelated or generic content. Rebuild it now with exact industry-specific sections and no reused files.` })
-        const retry = await originalFetch(input, { ...init, body: JSON.stringify(retryBody) })
+          if (response.ok && json?.success && violatesIntent(message, json.project) && !body.__integrityRetry) {
+            const retryBody = cleanRegenerationBody({
+              ...body,
+              __integrityRetry: true,
+              message: `${message}\n\nThe previous generated result was rejected because it contained unrelated or generic content. Rebuild it now with exact industry-specific sections and no reused files.`,
+            })
+            const retry = await originalFetch(input, { ...init, body: JSON.stringify(retryBody) })
+            try {
+              const retryJson = await retry.clone().json()
+              if (retry.ok && retryJson?.success && !violatesIntent(message, retryJson.project)) {
+                pendingGenerated = retryJson.project as GeneratedSnapshot
+                return retry
+              }
+            } catch {}
+          }
+
+          if (!response.ok || !json?.success || violatesIntent(message, json.project)) {
+            return new Response(JSON.stringify({ success: false, error: "Generated result was rejected because it did not follow your project instructions. The incorrect files were not saved." }), {
+              status: 422,
+              headers: { "Content-Type": "application/json" },
+            })
+          }
+          pendingGenerated = json.project as GeneratedSnapshot
+          return response
+        }
+
+        response = await originalFetch(input, init)
         try {
-          const retryJson = await retry.clone().json()
-          if (retry.ok && retryJson?.success && !violatesIntent(message, retryJson.project)) return retry
+          const json = await response.clone().json()
+          if (response.ok && json?.success && json?.project) pendingGenerated = json.project as GeneratedSnapshot
         } catch {}
+        return response
       }
 
-      return new Response(JSON.stringify({ success: false, error: "Generated result was rejected because it did not follow your project instructions. Please retry; the incorrect files were not saved." }), {
-        status: 422,
-        headers: { "Content-Type": "application/json" },
-      })
+      const isProjectSave = /\/api\/786-admin\/projects\/[^/?#]+/.test(url) && method === "PATCH"
+      if (isProjectSave && body && body.files && typeof body.files === "object") {
+        const nextBody: Record<string, unknown> = {
+          ...body,
+          replace_files: true,
+          revision_source: "ai-generation",
+          revision_label: "Before replacing generated project snapshot",
+        }
+        if (pendingGenerated?.title) nextBody.title = pendingGenerated.title
+        if (pendingGenerated?.description) nextBody.description = pendingGenerated.description
+
+        const response = await originalFetch(input, { ...init, body: JSON.stringify(nextBody) })
+        if (response.ok) pendingGenerated = null
+        return response
+      }
+
+      return originalFetch(input, init)
     }
 
     return () => { window.fetch = originalFetch }
