@@ -16,7 +16,10 @@ function activeProjectId(): string {
 }
 
 function selectedFilePath(container: Element): string {
-  const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+  const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).filter((button) => {
+    if (button.closest(`[${EDITOR_ATTRIBUTE}]`)) return false
+    return /\.(?:tsx?|jsx?|css|html|json|md)$/i.test((button.textContent || "").trim())
+  })
   const selected = buttons.find((button) =>
     button.className.includes("bg-[rgb(var(--accent))]"),
   )
@@ -30,6 +33,7 @@ export function AdminChatRealCodeEditor() {
     if (!pathname?.startsWith(ADMIN_CHAT_PATH)) return
 
     let disposed = false
+    let projectWatch: number | undefined
 
     const install = () => {
       const code = document.querySelector<HTMLElement>("main pre code")
@@ -67,6 +71,8 @@ export function AdminChatRealCodeEditor() {
       let currentPath = ""
       let original = ""
       let loading = false
+      let loadedProjectId = ""
+      let requestSequence = 0
 
       const setStatus = (message: string, tone: "normal" | "error" | "success" = "normal") => {
         status.textContent = message
@@ -76,40 +82,61 @@ export function AdminChatRealCodeEditor() {
       const load = async () => {
         if (loading || disposed) return
         const projectId = activeProjectId()
+        const sequence = ++requestSequence
         if (!projectId) {
+          loadedProjectId = ""
+          currentPath = ""
+          original = ""
+          textarea.value = ""
           setStatus("Open or create a project before editing code.", "error")
           return
         }
-        currentPath = selectedFilePath(grid)
-        pathLabel.textContent = currentPath
+
+        const nextPath = selectedFilePath(grid)
         loading = true
         textarea.disabled = true
         save.disabled = true
+        pathLabel.textContent = nextPath
         setStatus("Loading saved file…")
+
         try {
           const response = await fetch(`/api/786-admin/projects/${projectId}`, { cache: "no-store" })
           const json = await response.json()
           if (!response.ok || !json?.project) throw new Error(json?.error || "Could not load project")
+          if (disposed || sequence !== requestSequence || projectId !== activeProjectId()) return
+
+          loadedProjectId = projectId
+          currentPath = nextPath
           original = String(json.project.files?.[currentPath] || "")
           textarea.value = original
           setStatus("Ready. Press Ctrl+S or Save file.")
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : "Could not load file.", "error")
+          if (sequence === requestSequence) {
+            setStatus(error instanceof Error ? error.message : "Could not load file.", "error")
+          }
         } finally {
-          loading = false
-          textarea.disabled = false
-          save.disabled = false
+          if (sequence === requestSequence) {
+            loading = false
+            textarea.disabled = false
+            save.disabled = false
+          }
         }
       }
 
       const saveFile = async () => {
-        if (loading || !currentPath) return
-        const projectId = activeProjectId()
-        if (!projectId) return
+        if (loading || !currentPath || !loadedProjectId) return
+        if (loadedProjectId !== activeProjectId()) {
+          setStatus("The active project changed. Reload this editor before saving.", "error")
+          void load()
+          return
+        }
+
+        const projectId = loadedProjectId
         loading = true
         textarea.disabled = true
         save.disabled = true
         setStatus("Saving to Neon…")
+
         try {
           const response = await fetch(`/api/786-admin/projects/${projectId}`, {
             method: "PATCH",
@@ -123,6 +150,15 @@ export function AdminChatRealCodeEditor() {
           })
           const json = await response.json()
           if (!response.ok || !json?.project) throw new Error(json?.error || "Save failed")
+          if (projectId !== activeProjectId()) {
+            setStatus("Saved to the previous project. Loading the active project…", "success")
+            loading = false
+            textarea.disabled = false
+            save.disabled = false
+            void load()
+            return
+          }
+
           original = textarea.value
           setStatus("Saved. Reloading the project preview…", "success")
           window.setTimeout(() => window.location.reload(), 450)
@@ -152,6 +188,10 @@ export function AdminChatRealCodeEditor() {
         button.addEventListener("click", () => window.setTimeout(() => void load(), 30))
       }
 
+      projectWatch = window.setInterval(() => {
+        if (!loading && activeProjectId() !== loadedProjectId) void load()
+      }, 500)
+
       void load()
     }
 
@@ -161,6 +201,7 @@ export function AdminChatRealCodeEditor() {
 
     return () => {
       disposed = true
+      window.clearInterval(projectWatch)
       observer.disconnect()
       document.querySelectorAll(`[${EDITOR_ATTRIBUTE}]`).forEach((element) => {
         if (element.tagName === "PRE") element.removeAttribute(EDITOR_ATTRIBUTE)
