@@ -8,6 +8,7 @@ import {
 } from "@/lib/786-admin/projects"
 import { createProjectRevision } from "@/lib/786-admin/project-revisions"
 import { sanitizeProjectFilesForPreview } from "@/lib/786-admin/preview-safety"
+import { replaceProjectFiles } from "@/lib/786-admin/replace-project-files"
 import type {
   AdminMessageRole,
   AdminProjectMetadata,
@@ -68,6 +69,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     body.files && typeof body.files === "object"
       ? sanitizeProjectFilesForPreview(body.files as Record<string, string>)
       : undefined
+  const replaceFiles = body.replace_files === true && Boolean(files)
   const messages = Array.isArray(body.messages)
     ? (body.messages as Array<{
         role: AdminMessageRole
@@ -92,10 +94,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
         label: typeof body.revision_label === "string"
           ? body.revision_label
           : files
-            ? `Before editing ${Object.keys(files).length} file${Object.keys(files).length === 1 ? "" : "s"}`
+            ? `${replaceFiles ? "Before replacing" : "Before editing"} ${Object.keys(files).length} file${Object.keys(files).length === 1 ? "" : "s"}`
             : "Before project update",
         source: typeof body.revision_source === "string" ? body.revision_source : "auto-save",
       })
+    }
+
+    // Generated responses are complete project snapshots. Replacing the old set
+    // prevents deleted pages, old CSS and old menu data from leaking into preview.
+    if (replaceFiles && files) {
+      await replaceProjectFiles(id, files)
     }
 
     const project = await persistProjectAtomic(email, {
@@ -106,7 +114,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
       kind: typeof body.kind === "string" ? body.kind : undefined,
       preview_state_patch: previewStatePatch,
       metadata_patch: metadataPatch,
-      files,
+      files: replaceFiles ? undefined : files,
       messages,
     })
 
