@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { usePathname } from "next/navigation"
+import { AdminChatPreviewDocumentGuard } from "@/components/786-admin/admin-chat-preview-document-guard"
 
 const FULL_REGEN_RE = /\b(?:regenerate|rebuild|redesign|replace|start over|from scratch)\b[\s\S]{0,80}\b(?:completely|entire|all files|from scratch|clean)\b|\b(?:full|complete)\s+(?:regeneration|redesign|rebuild)\b/i
 const CONTAMINATION_RE = /\/786-admin\/|SevenEightSixAdminChatPage|PremiumAdminBackground|Ask 786\.Chat|New Chat[\s\S]{0,200}(?:Preview|Publish)|admin-chat-/i
@@ -143,5 +144,5 @@ export function AdminChatGenerationIntegrityGuard() {
     return () => { window.fetch = originalFetch }
   }, [pathname])
 
-  return null
+  return <AdminChatPreviewDocumentGuard />
 }
