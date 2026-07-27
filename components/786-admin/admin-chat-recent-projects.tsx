@@ -132,11 +132,13 @@ export function AdminChatRecentProjects() {
           button.addEventListener("click", async (event) => {
             event.stopPropagation()
             const id = button.dataset.delete
-            if (!id || !window.confirm("Delete this project permanently?")) return
+            if (!id) return
             button.textContent = "Deleting…"
-            const response = await fetch(`/api/786-admin/projects/${id}`, { method: "DELETE" })
+            button.setAttribute("disabled", "true")
+            const response = await fetch(`/api/786-admin/projects/${encodeURIComponent(id)}`, { method: "DELETE" })
             if (!response.ok) {
               button.textContent = "Delete failed"
+              button.removeAttribute("disabled")
               return
             }
             if (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) === id) localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
