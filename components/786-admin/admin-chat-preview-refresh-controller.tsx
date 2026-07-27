@@ -12,8 +12,13 @@ type SavedPreviewLocation = {
   view: string
 }
 
-const safeSrcDoc = new WeakMap<HTMLIFrameElement, string>()
-const completedInitialLoad = new WeakSet<HTMLIFrameElement>()
+type SafePreviewSnapshot = {
+  projectId: string
+  srcDoc: string
+}
+
+const safePreview = new WeakMap<HTMLIFrameElement, SafePreviewSnapshot>()
+const completedInitialLoad = new WeakMap<HTMLIFrameElement, string>()
 const resettingIframe = new WeakSet<HTMLIFrameElement>()
 
 function getActiveProjectId(): string {
@@ -53,39 +58,59 @@ function getPreviewIframe(): HTMLIFrameElement | null {
 
 function rememberPreview(frame: HTMLIFrameElement) {
   if (!isPreviewIframe(frame)) return
+  const projectId = getActiveProjectId()
   const srcDoc = frame.getAttribute("srcdoc") || frame.srcdoc || ""
-  if (!srcDoc) return
-  const previous = safeSrcDoc.get(frame)
-  if (previous !== srcDoc) {
-    safeSrcDoc.set(frame, srcDoc)
+  if (!projectId || !srcDoc) return
+
+  const previous = safePreview.get(frame)
+  if (!previous || previous.projectId !== projectId || previous.srcDoc !== srcDoc) {
+    safePreview.set(frame, { projectId, srcDoc })
     completedInitialLoad.delete(frame)
   }
 }
 
 function restoreProjectPreview(frame: HTMLIFrameElement) {
-  const srcDoc = safeSrcDoc.get(frame)
-  if (!srcDoc || resettingIframe.has(frame)) return
+  const snapshot = safePreview.get(frame)
+  const activeProjectId = getActiveProjectId()
+  if (
+    !snapshot ||
+    !activeProjectId ||
+    snapshot.projectId !== activeProjectId ||
+    resettingIframe.has(frame)
+  ) {
+    return
+  }
+
   resettingIframe.add(frame)
   frame.removeAttribute("src")
   frame.removeAttribute("srcdoc")
   frame.src = "about:blank"
   window.setTimeout(() => {
+    if (snapshot.projectId !== getActiveProjectId()) {
+      resettingIframe.delete(frame)
+      return
+    }
     frame.removeAttribute("src")
-    frame.srcdoc = srcDoc
+    frame.srcdoc = snapshot.srcDoc
     window.setTimeout(() => resettingIframe.delete(frame), 250)
   }, 20)
 }
 
 function handlePreviewLoad(frame: HTMLIFrameElement) {
   if (!isPreviewIframe(frame)) return
+  const activeProjectId = getActiveProjectId()
+  if (!activeProjectId) return
+
   rememberPreview(frame)
   if (resettingIframe.has(frame)) return
-  if (!completedInitialLoad.has(frame)) {
-    completedInitialLoad.add(frame)
+
+  if (completedInitialLoad.get(frame) !== activeProjectId) {
+    completedInitialLoad.set(frame, activeProjectId)
     return
   }
-  // A srcDoc preview should not perform a second document load. A later load means
-  // generated code escaped to a real route; restore the original isolated project.
+
+  // A srcDoc preview should not perform a later full document navigation.
+  // Restore only when the saved document belongs to the currently active project.
   restoreProjectPreview(frame)
 }
 
@@ -110,9 +135,22 @@ export function AdminChatPreviewRefreshController() {
     if (pathname !== "/786-admin/chat") return
 
     let refreshing = false
+    let lastProjectId = getActiveProjectId()
 
     const inspectFrames = () => {
-      for (const frame of Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"))) rememberPreview(frame)
+      const projectId = getActiveProjectId()
+      const projectChanged = projectId !== lastProjectId
+      if (projectChanged) lastProjectId = projectId
+
+      for (const frame of Array.from(document.querySelectorAll<HTMLIFrameElement>("iframe"))) {
+        if (!isPreviewIframe(frame)) continue
+        if (projectChanged) {
+          safePreview.delete(frame)
+          completedInitialLoad.delete(frame)
+          resettingIframe.delete(frame)
+        }
+        rememberPreview(frame)
+      }
     }
 
     const onFrameLoad = (event: Event) => {
@@ -126,18 +164,19 @@ export function AdminChatPreviewRefreshController() {
       const iframe = getPreviewIframe()
       if (!iframe) return
 
+      const projectId = getActiveProjectId()
       const srcDoc = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
-      if (!srcDoc) return
+      if (!projectId || !srcDoc) return
 
       event.preventDefault()
       event.stopPropagation()
       refreshing = true
-      safeSrcDoc.set(iframe, srcDoc)
+      safePreview.set(iframe, { projectId, srcDoc })
       completedInitialLoad.delete(iframe)
 
-      const projectId = getActiveProjectId()
       const location = getSavedLocation(projectId)
       const originalLabel = button.textContent || "↻"
+      let finished = false
 
       button.disabled = true
       button.setAttribute("aria-busy", "true")
@@ -148,12 +187,17 @@ export function AdminChatPreviewRefreshController() {
       button.style.opacity = "0.75"
 
       const finish = () => {
-        iframe.contentWindow?.postMessage({ type: "786-preview-navigate", path: location.path }, "*")
+        if (finished) return
+        finished = true
 
-        window.setTimeout(() => {
-          iframe.contentWindow?.postMessage({ type: "786-preview-apply-view", view: location.view }, "*")
-          iframe.contentWindow?.postMessage({ type: "786-preview-apply-category", category: location.category }, "*")
-        }, 120)
+        if (projectId === getActiveProjectId()) {
+          iframe.contentWindow?.postMessage({ type: "786-preview-navigate", path: location.path }, "*")
+          window.setTimeout(() => {
+            if (projectId !== getActiveProjectId()) return
+            iframe.contentWindow?.postMessage({ type: "786-preview-apply-view", view: location.view }, "*")
+            iframe.contentWindow?.postMessage({ type: "786-preview-apply-category", category: location.category }, "*")
+          }, 120)
+        }
 
         window.setTimeout(() => {
           refreshing = false
@@ -172,24 +216,33 @@ export function AdminChatPreviewRefreshController() {
       iframe.src = "about:blank"
 
       window.setTimeout(() => {
+        if (projectId !== getActiveProjectId()) {
+          resettingIframe.delete(iframe)
+          finish()
+          return
+        }
         iframe.removeAttribute("src")
         iframe.srcdoc = srcDoc
         resettingIframe.delete(iframe)
       }, 60)
 
-      window.setTimeout(() => {
-        if (!refreshing) return
-        finish()
-      }, 1800)
+      window.setTimeout(finish, 1800)
     }
 
     inspectFrames()
     document.addEventListener("click", onClick, true)
     document.addEventListener("load", onFrameLoad, true)
     const observer = new MutationObserver(inspectFrames)
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["srcdoc", "src"] })
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["srcdoc", "src"],
+    })
+    const interval = window.setInterval(inspectFrames, 500)
 
     return () => {
+      window.clearInterval(interval)
       observer.disconnect()
       document.removeEventListener("click", onClick, true)
       document.removeEventListener("load", onFrameLoad, true)
