@@ -2,17 +2,38 @@ import type { SevenEightSixProjectFileMap } from "@/lib/786-admin/local-project-
 
 const ROOT_PAGE_PATHS = ["app/page.tsx", "app/page.jsx", "src/app/page.tsx", "src/app/page.jsx"]
 const PAGE_FILE_RE = /^(?:src\/)?app\/(?:.*\/)?page\.(?:tsx?|jsx?)$/
+const SAFE_ASSET_ROUTE_RE = /^\/(?:api|_next|images?|assets?|icons?|fonts?|uploads?|public)(?:\/|$)/i
+const FILE_ROUTE_RE = /\.[a-z0-9]{2,8}(?:[?#].*)?$/i
 
 function toSectionHref(href: string) {
-  const clean = href.replace(/^\/+|\/+$/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
+  const clean = href
+    .replace(/[?#].*$/, "")
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
   return `#${clean || "top"}`
 }
 
+function shouldRewriteInternalRoute(value: string) {
+  if (!value.startsWith("/") || value.startsWith("//")) return false
+  if (SAFE_ASSET_ROUTE_RE.test(value) || FILE_ROUTE_RE.test(value)) return false
+  return true
+}
+
+function rewriteQuotedRouteLiterals(source: string) {
+  return source.replace(/(["'])(\/(?!\/)[^"'\n]*)\1/g, (match, quote: string, value: string) => {
+    if (!shouldRewriteInternalRoute(value)) return match
+    return `${quote}${toSectionHref(value)}${quote}`
+  })
+}
+
 function sanitizeSource(source: string) {
-  return source
-    .replace(/href=(['"])(\/[^'"\s]*)\1/g, (_match, quote: string, href: string) => `href=${quote}${toSectionHref(href)}${quote}`)
-    .replace(/href=\{(['"])(\/[^'"\s]*)\1\}/g, (_match, quote: string, href: string) => `href={${quote}${toSectionHref(href)}${quote}}`)
-    .replace(/(?:router|navigation)\.(?:push|replace)\(\s*(['"])(\/[^'"]*)\1\s*\)/g, (_match, quote: string, href: string) => `document.getElementById(${quote}${toSectionHref(href).slice(1)}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
+  const safe = rewriteQuotedRouteLiterals(source)
+  return safe
+    .replace(/(?:router|navigation)\.(?:push|replace)\(\s*(["'])(#[^"']*)\1\s*\)/g, (_match, quote: string, href: string) => `document.querySelector(${quote}${href}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
+    .replace(/(?:window\.)?location\.(?:assign|replace)\(\s*(["'])(#[^"']*)\1\s*\)/g, (_match, quote: string, href: string) => `document.querySelector(${quote}${href}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
+    .replace(/(?:window\.)?location\.href\s*=\s*(["'])(#[^"']*)\1/g, (_match, quote: string, href: string) => `document.querySelector(${quote}${href}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
 }
 
 function validPageSource(source: string | undefined) {
