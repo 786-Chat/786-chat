@@ -8,6 +8,7 @@ import { AdminChatCollaboration } from "@/components/786-admin/admin-chat-collab
 import { AdminChatDeploymentCenter } from "@/components/786-admin/admin-chat-deployment-center"
 import { AdminChatPreviewStyleIsolation } from "@/components/786-admin/admin-chat-preview-style-isolation"
 import { AdminChatProductionMonitoring } from "@/components/786-admin/admin-chat-production-monitoring"
+import { AdminChatProjectSwitchIsolation } from "@/components/786-admin/admin-chat-project-switch-isolation"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
 import { AdminChatRealCodeEditor } from "@/components/786-admin/admin-chat-real-code-editor"
@@ -93,6 +94,7 @@ export function AdminChatToolbarCleanup() {
   return (
     <>
       <AdminChatHeaderCleanup />
+      <AdminChatProjectSwitchIsolation />
       <AdminChatPreviewStyleIsolation />
       <AdminChatPublishController />
       <AdminChatPublishingOverviewLink />
