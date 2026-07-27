@@ -15,6 +15,11 @@ function sanitizeSource(source: string) {
     .replace(/(?:router|navigation)\.(?:push|replace)\(\s*(['"])(\/[^'"]*)\1\s*\)/g, (_match, quote: string, href: string) => `document.getElementById(${quote}${toSectionHref(href).slice(1)}${quote})?.scrollIntoView({ behavior: ${quote}smooth${quote} })`)
 }
 
+function validPageSource(source: string | undefined) {
+  if (!source || !source.trim()) return false
+  return /export\s+default\s+(?:async\s+)?(?:function|class|[A-Za-z_$][\w$]*)/.test(source)
+}
+
 export function sanitizeProjectFilesForPreview(files: SevenEightSixProjectFileMap | Record<string, string> | undefined) {
   const source = files && typeof files === "object" ? files : {}
   const next: SevenEightSixProjectFileMap = {}
@@ -23,9 +28,9 @@ export function sanitizeProjectFilesForPreview(files: SevenEightSixProjectFileMa
     next[path] = typeof content === "string" && /\.(?:tsx?|jsx?|html?)$/.test(path) ? sanitizeSource(content) : String(content ?? "")
   }
 
-  const hasRootPage = ROOT_PAGE_PATHS.some((path) => typeof next[path] === "string" && next[path].trim())
-  if (!hasRootPage) {
-    const firstPage = Object.entries(next).find(([path, content]) => PAGE_FILE_RE.test(path) && typeof content === "string" && content.trim())
+  const rootPath = ROOT_PAGE_PATHS.find((path) => validPageSource(next[path]))
+  if (!rootPath) {
+    const firstPage = Object.entries(next).find(([path, content]) => PAGE_FILE_RE.test(path) && validPageSource(content))
     if (firstPage) next["app/page.tsx"] = firstPage[1]
   }
 
