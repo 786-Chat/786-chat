@@ -11,6 +11,7 @@ import { AdminChatPublishController } from "@/components/786-admin/admin-chat-pu
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
 import { AdminChatRealCodeEditor } from "@/components/786-admin/admin-chat-real-code-editor"
 import { AdminChatTemplateGallery } from "@/components/786-admin/admin-chat-template-gallery"
+import { AdminChatVisualEditor } from "@/components/786-admin/admin-chat-visual-editor"
 
 const ADMIN_CHAT_PATH = "/786-admin/chat"
 const CLEANUP_ATTRIBUTE = "data-786-admin-cleanup"
@@ -96,6 +97,7 @@ export function AdminChatToolbarCleanup() {
       <AdminChatBuildStatus />
       <AdminChatAiEditReview />
       <AdminChatRealCodeEditor />
+      <AdminChatVisualEditor />
       <AdminChatTemplateGallery />
       <AdminChatCollaboration />
       <AdminChatDeploymentCenter />
