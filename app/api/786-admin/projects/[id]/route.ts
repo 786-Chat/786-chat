@@ -7,6 +7,7 @@ import {
   persistProjectAtomic,
 } from "@/lib/786-admin/projects"
 import { createProjectRevision } from "@/lib/786-admin/project-revisions"
+import { sanitizeProjectFilesForPreview } from "@/lib/786-admin/preview-safety"
 import type {
   AdminMessageRole,
   AdminProjectMetadata,
@@ -34,7 +35,16 @@ export async function GET(_request: Request, { params }: Ctx) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  return NextResponse.json({ project })
+  return NextResponse.json({
+    project: {
+      ...project,
+      files: sanitizeProjectFilesForPreview(project.files),
+      preview_state: {
+        ...(project.preview_state || {}),
+        entry_path: "app/page.tsx",
+      },
+    },
+  })
 }
 
 export async function PATCH(request: Request, { params }: Ctx) {
@@ -48,7 +58,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   const previewStatePatch =
     body.preview_state && typeof body.preview_state === "object"
-      ? (body.preview_state as AdminProjectPreviewState)
+      ? ({ ...(body.preview_state as AdminProjectPreviewState), entry_path: "app/page.tsx" } as AdminProjectPreviewState)
       : undefined
   const metadataPatch =
     body.metadata && typeof body.metadata === "object"
@@ -56,7 +66,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
       : undefined
   const files =
     body.files && typeof body.files === "object"
-      ? (body.files as Record<string, string>)
+      ? sanitizeProjectFilesForPreview(body.files as Record<string, string>)
       : undefined
   const messages = Array.isArray(body.messages)
     ? (body.messages as Array<{
@@ -100,7 +110,16 @@ export async function PATCH(request: Request, { params }: Ctx) {
       messages,
     })
 
-    return NextResponse.json({ project })
+    return NextResponse.json({
+      project: {
+        ...project,
+        files: sanitizeProjectFilesForPreview(project.files),
+        preview_state: {
+          ...(project.preview_state || {}),
+          entry_path: "app/page.tsx",
+        },
+      },
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Project update failed"
     const status = message.toLowerCase().includes("not found") ? 404 : 500

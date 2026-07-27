@@ -6,6 +6,7 @@ import {
   listProjects,
   persistProjectAtomic,
 } from "@/lib/786-admin/projects"
+import { sanitizeProjectFilesForPreview } from "@/lib/786-admin/preview-safety"
 import type {
   AdminMessageRole,
   AdminProjectMetadata,
@@ -41,15 +42,15 @@ export async function POST(request: Request) {
 
   const previewStatePatch =
     body.preview_state && typeof body.preview_state === "object"
-      ? (body.preview_state as AdminProjectPreviewState)
-      : undefined
+      ? ({ ...(body.preview_state as AdminProjectPreviewState), entry_path: "app/page.tsx" } as AdminProjectPreviewState)
+      : ({ entry_path: "app/page.tsx" } as AdminProjectPreviewState)
   const metadataPatch =
     body.metadata && typeof body.metadata === "object"
       ? (body.metadata as AdminProjectMetadata)
       : undefined
   const files =
     body.files && typeof body.files === "object"
-      ? (body.files as Record<string, string>)
+      ? sanitizeProjectFilesForPreview(body.files as Record<string, string>)
       : undefined
   const messages = Array.isArray(body.messages)
     ? (body.messages as Array<{
@@ -72,7 +73,13 @@ export async function POST(request: Request) {
         files,
         messages,
       })
-      return NextResponse.json({ project }, { status: 201 })
+      return NextResponse.json({
+        project: {
+          ...project,
+          files: sanitizeProjectFilesForPreview(project.files),
+          preview_state: { ...(project.preview_state || {}), entry_path: "app/page.tsx" },
+        },
+      }, { status: 201 })
     } catch (error) {
       return NextResponse.json(
         {
@@ -91,7 +98,7 @@ export async function POST(request: Request) {
     description: typeof body.description === "string" ? body.description : "",
     prompt: typeof body.prompt === "string" ? body.prompt : "",
     kind: typeof body.kind === "string" ? body.kind : undefined,
-    preview_state: previewStatePatch ?? {},
+    preview_state: previewStatePatch,
     metadata: metadataPatch ?? {},
   })
   return NextResponse.json({ project }, { status: 201 })
