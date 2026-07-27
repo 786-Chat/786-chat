@@ -64,6 +64,17 @@ function parseBody(init?: RequestInit): Record<string, unknown> | null {
   try { return JSON.parse(init.body) as Record<string, unknown> } catch { return null }
 }
 
+function sameGeneratedSnapshot(
+  pending: GeneratedSnapshot | null,
+  files: Record<string, unknown>,
+): boolean {
+  if (!pending?.files || !files) return false
+  const pendingPaths = Object.keys(pending.files).sort()
+  const savedPaths = Object.keys(files).sort()
+  if (pendingPaths.length === 0 || pendingPaths.length !== savedPaths.length) return false
+  return pendingPaths.every((path, index) => path === savedPaths[index])
+}
+
 export function AdminChatGenerationIntegrityGuard() {
   const pathname = usePathname()
 
@@ -79,6 +90,8 @@ export function AdminChatGenerationIntegrityGuard() {
 
       const isChatRequest = url.includes("/api/786-admin/chat") && method === "POST"
       if (isChatRequest && body) {
+        // Never let a result from an earlier request affect a later manual save.
+        pendingGenerated = null
         const message = String(body.message || "")
         let response: Response
 
@@ -124,18 +137,27 @@ export function AdminChatGenerationIntegrityGuard() {
 
       const isProjectSave = /\/api\/786-admin\/projects\/[^/?#]+/.test(url) && method === "PATCH"
       if (isProjectSave && body && body.files && typeof body.files === "object") {
-        const nextBody: Record<string, unknown> = {
-          ...body,
-          replace_files: true,
-          revision_source: "ai-generation",
-          revision_label: "Before replacing generated project snapshot",
-        }
-        if (pendingGenerated?.title) nextBody.title = pendingGenerated.title
-        if (pendingGenerated?.description) nextBody.description = pendingGenerated.description
+        const files = body.files as Record<string, unknown>
 
-        const response = await originalFetch(input, { ...init, body: JSON.stringify(nextBody) })
-        if (response.ok) pendingGenerated = null
-        return response
+        // Only the complete file set returned by the immediately preceding AI
+        // generation may replace the project snapshot. Manual code edits and
+        // other partial file updates must remain merge operations.
+        if (pendingGenerated && sameGeneratedSnapshot(pendingGenerated, files)) {
+          const nextBody: Record<string, unknown> = {
+            ...body,
+            replace_files: true,
+            revision_source: "ai-generation",
+            revision_label: "Before replacing generated project snapshot",
+          }
+          if (pendingGenerated.title) nextBody.title = pendingGenerated.title
+          if (pendingGenerated.description) nextBody.description = pendingGenerated.description
+
+          const response = await originalFetch(input, { ...init, body: JSON.stringify(nextBody) })
+          if (response.ok) pendingGenerated = null
+          return response
+        }
+
+        return originalFetch(input, init)
       }
 
       return originalFetch(input, init)
