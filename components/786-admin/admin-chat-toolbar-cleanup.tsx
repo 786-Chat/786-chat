@@ -9,6 +9,7 @@ import { AdminChatDeploymentCenter } from "@/components/786-admin/admin-chat-dep
 import { AdminChatProductionMonitoring } from "@/components/786-admin/admin-chat-production-monitoring"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
+import { AdminChatRealCodeEditor } from "@/components/786-admin/admin-chat-real-code-editor"
 import { AdminChatTemplateGallery } from "@/components/786-admin/admin-chat-template-gallery"
 
 const ADMIN_CHAT_PATH = "/786-admin/chat"
@@ -26,8 +27,6 @@ function AdminChatHeaderCleanup() {
     if (!window.location.pathname.startsWith(ADMIN_CHAT_PATH)) return
 
     const cleanWorkspace = () => {
-      // Revision snapshots remain available in the backend, but the approved
-      // toolbar does not show a separate History control.
       document.getElementById("admin-chat-revision-history-button")?.remove()
 
       const header = document.querySelector<HTMLElement>("main header")
@@ -38,7 +37,6 @@ function AdminChatHeaderCleanup() {
         sidebar?.querySelectorAll<HTMLButtonElement>('button[title="Chat"]') ?? [],
       )
 
-      // Keep the primary AI/chat icon and remove the old duplicate folder icon.
       chatButtons.slice(1).forEach(hideElement)
 
       const primaryChatButton = chatButtons[0]
@@ -55,8 +53,6 @@ function AdminChatHeaderCleanup() {
         )
       }
 
-      // Provider/database implementation details are internal and must not be
-      // shown in the production workspace.
       for (const paragraph of Array.from(document.querySelectorAll<HTMLParagraphElement>("main p"))) {
         const text = paragraph.textContent || ""
         if (
@@ -90,8 +86,6 @@ function AdminChatHeaderCleanup() {
 export function AdminChatToolbarCleanup() {
   const pathname = usePathname()
 
-  // These controls use privileged /api/786-admin endpoints and must never
-  // attach themselves to a customer's /dashboard workspace.
   if (!pathname || !pathname.startsWith(ADMIN_CHAT_PATH)) return null
 
   return (
@@ -101,6 +95,7 @@ export function AdminChatToolbarCleanup() {
       <AdminChatPublishingOverviewLink />
       <AdminChatBuildStatus />
       <AdminChatAiEditReview />
+      <AdminChatRealCodeEditor />
       <AdminChatTemplateGallery />
       <AdminChatCollaboration />
       <AdminChatDeploymentCenter />
