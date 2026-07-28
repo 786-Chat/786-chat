@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 
 const ACTIVE_PROJECT_ID_KEY = "786chat_admin_active_project_id_v1"
+const RECOVERY_RELOAD_KEY = "786chat_admin_stale_preview_reload_v1"
 
 const EMPTY_PREVIEW = `<!doctype html><html><body style="margin:0;min-height:100vh;background:#020617;color:#94a3b8;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center"><div style="text-align:center;padding:32px"><div style="font-size:44px;line-height:1">▣</div><h2 style="margin:18px 0 8px;color:#f8fafc;font-size:28px">No Preview Yet</h2><p style="margin:0;font-size:15px">Create or open a project to display its preview.</p></div></body></html>`
 
@@ -18,6 +19,22 @@ function resetFrames() {
     delete frame.dataset.previewProject
     delete frame.dataset.previewRoutePending
   }
+}
+
+function cleanChatUrl() {
+  const url = new URL(window.location.href)
+  url.searchParams.delete("projectId")
+  url.searchParams.delete("switch")
+  return url.toString()
+}
+
+function reloadCleanOnce(reason: string) {
+  try {
+    if (sessionStorage.getItem(RECOVERY_RELOAD_KEY) === reason) return false
+    sessionStorage.setItem(RECOVERY_RELOAD_KEY, reason)
+  } catch {}
+  window.location.replace(cleanChatUrl())
+  return true
 }
 
 export function AdminChatStalePreviewReset() {
@@ -37,7 +54,19 @@ export function AdminChatStalePreviewReset() {
       })()
 
       if (!projectId) {
+        const frames = previewFrames()
+        if (frames.length === 0) {
+          try { sessionStorage.removeItem(RECOVERY_RELOAD_KEY) } catch {}
+          lastProjectId = ""
+          return
+        }
+
+        // A preview iframe with no active project means React still has a deleted
+        // project in memory. Replace it immediately, then reload once so the page
+        // state is rebuilt from the now-empty project selection.
         resetFrames()
+        window.dispatchEvent(new CustomEvent("786-admin-project-cleared"))
+        if (reloadCleanOnce("missing-active-project")) return
         lastProjectId = ""
         return
       }
@@ -55,12 +84,12 @@ export function AdminChatStalePreviewReset() {
             localStorage.removeItem(`786chat_admin_preview_location_v2_${projectId}`)
           } catch {}
           resetFrames()
-          const url = new URL(window.location.href)
-          url.searchParams.delete("projectId")
-          url.searchParams.delete("switch")
-          window.history.replaceState({}, "", url.toString())
+          window.history.replaceState({}, "", cleanChatUrl())
           window.dispatchEvent(new CustomEvent("786-admin-project-cleared"))
+          if (reloadCleanOnce(`missing-project:${projectId}`)) return
           lastProjectId = ""
+        } else {
+          try { sessionStorage.removeItem(RECOVERY_RELOAD_KEY) } catch {}
         }
       } catch {
         lastProjectId = ""
