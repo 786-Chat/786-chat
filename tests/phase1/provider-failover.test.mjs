@@ -3,11 +3,13 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 
 const resilientRoute = await readFile("app/api/786-admin/chat-resilient/route.ts", "utf8")
-const proxy = await readFile("proxy.ts", "utf8")
+const fetchBridge = await readFile("components/786-admin/admin-chat-resilient-fetch-bridge.tsx", "utf8")
+const chatLayout = await readFile("app/786-admin/chat/layout.tsx", "utf8")
 
-test("chat generation is routed through the resilient provider wrapper", () => {
-  assert.match(proxy, /chat-resilient/)
-  assert.match(proxy, /x-786-resilient-attempt/)
+test("admin chat generation is routed through the resilient provider wrapper", () => {
+  assert.match(fetchBridge, /chat-resilient/)
+  assert.match(fetchBridge, /LEGACY_PATH/)
+  assert.match(chatLayout, /AdminChatResilientFetchBridge/)
 })
 
 test("resilient wrapper retries using an alternate provider mode", () => {
