@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { usePathname } from "next/navigation"
 
 const STORAGE_MARKER = 'data-786-preview-storage="true"'
-const SANDBOX_MARKER = "786StorageSandboxReady"
+const STORAGE_PATCH_KEY = "786StorageShimReady"
 const STORAGE_SHIM = `<script ${STORAGE_MARKER}>
 (function(){
   try {
@@ -41,26 +41,26 @@ function injectStorageShim(srcDoc: string): string {
   return `${STORAGE_SHIM}\n${srcDoc}`
 }
 
-function ensureSandboxStorageAccess(iframe: HTMLIFrameElement): boolean {
+function enforceOriginIsolation(iframe: HTMLIFrameElement): boolean {
   const current = (iframe.getAttribute("sandbox") || "").split(/\s+/).filter(Boolean)
-  if (current.includes("allow-same-origin")) return false
-
-  iframe.setAttribute("sandbox", [...current, "allow-same-origin"].join(" "))
+  const safe = current.filter((permission) => permission !== "allow-same-origin")
+  if (safe.length === current.length) return false
+  iframe.setAttribute("sandbox", safe.join(" "))
   return true
 }
 
 function patchIframe(iframe: HTMLIFrameElement) {
   if (!isPreviewIframe(iframe)) return
 
-  const sandboxChanged = ensureSandboxStorageAccess(iframe)
+  const sandboxChanged = enforceOriginIsolation(iframe)
   const current = iframe.getAttribute("srcdoc") || iframe.srcdoc || ""
   if (!current) return
 
   const patched = injectStorageShim(current)
   const needsReload = sandboxChanged || patched !== current
-  if (!needsReload || iframe.dataset[SANDBOX_MARKER] === patched) return
+  if (!needsReload || iframe.dataset[STORAGE_PATCH_KEY] === patched) return
 
-  iframe.dataset[SANDBOX_MARKER] = patched
+  iframe.dataset[STORAGE_PATCH_KEY] = patched
   const descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "srcdoc")
   if (descriptor?.set) descriptor.set.call(iframe, patched)
   else HTMLIFrameElement.prototype.setAttribute.call(iframe, "srcdoc", patched)
