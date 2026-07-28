@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/phase1/*.test.mjs",
+    "test:phase1": "node --test tests/phase1/*.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
