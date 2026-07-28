@@ -18,6 +18,7 @@ export function AdminChatUrlHeaderController() {
     let currentRoute = "/"
     let input: HTMLInputElement | null = null
     let stopped = false
+    let requestSequence = 0
     const history = ["/"]
     let historyIndex = 0
 
@@ -46,6 +47,11 @@ export function AdminChatUrlHeaderController() {
       const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
       const iframe = currentPreviewFrame()
       if (!projectId || !iframe) return
+      if (iframe.dataset.previewRoute === route && iframe.dataset.previewProject === projectId) return
+      if (iframe.dataset.previewRoutePending === `${projectId}:${route}`) return
+
+      const sequence = ++requestSequence
+      iframe.dataset.previewRoutePending = `${projectId}:${route}`
 
       try {
         const response = await fetch(`/api/786-admin/projects/${projectId}`, { cache: "no-store" })
@@ -55,13 +61,18 @@ export function AdminChatUrlHeaderController() {
         const expected = route === "/" ? "app/page.tsx" : `app/${route.replace(/^\//, "")}/page.tsx`
         const alternatives = route === "/" ? [expected, "app/page.jsx"] : [expected, expected.replace(/\.tsx$/, ".jsx")]
         if (!alternatives.some((path) => Boolean(files[path]))) throw new Error(`Page ${route} was not generated`)
+        if (stopped || sequence !== requestSequence || iframe !== currentPreviewFrame()) return
 
         const nextSrc = `/api/projects/${encodeURIComponent(projectId)}/preview?raw=1&path=${encodeURIComponent(route)}&v=${Date.now()}`
+        iframe.dataset.previewRoute = route
+        iframe.dataset.previewProject = projectId
+        delete iframe.dataset.previewRoutePending
         iframe.removeAttribute("srcdoc")
         iframe.src = nextSrc
-        iframe.dataset.previewRoute = route
         setRouteError()
       } catch (error) {
+        if (sequence !== requestSequence) return
+        delete iframe.dataset.previewRoutePending
         setRouteError(error instanceof Error ? error.message : "Route preview failed")
       }
     }
@@ -95,7 +106,15 @@ export function AdminChatUrlHeaderController() {
         historyIndex += 1
         void applyRoute(history[historyIndex], false)
       })
-      const refresh = button("↻", "Refresh preview", () => void applyRoute(currentRoute, false))
+      const refresh = button("↻", "Refresh preview", () => {
+        const iframe = currentPreviewFrame()
+        if (iframe) {
+          delete iframe.dataset.previewRoute
+          delete iframe.dataset.previewProject
+        }
+        void applyRoute(currentRoute, false)
+      })
+      refresh.dataset.routeRefresh = "true"
       const link = document.createElement("span")
       link.textContent = "↗"
       link.className = "ml-1 text-xs text-slate-500"
@@ -124,13 +143,18 @@ export function AdminChatUrlHeaderController() {
     const observer = new MutationObserver(() => {
       install()
       const iframe = currentPreviewFrame()
-      if (iframe && iframe.dataset.previewRoute !== currentRoute) void applyRoute(currentRoute, false)
+      if (!iframe) return
+      const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || ""
+      const applied = iframe.dataset.previewRoute === currentRoute && iframe.dataset.previewProject === projectId
+      const pending = iframe.dataset.previewRoutePending === `${projectId}:${currentRoute}`
+      if (!applied && !pending) void applyRoute(currentRoute, false)
     })
     observer.observe(document.body, { childList: true, subtree: true })
     install()
 
     return () => {
       stopped = true
+      requestSequence += 1
       observer.disconnect()
       window.removeEventListener("message", onMessage)
     }
