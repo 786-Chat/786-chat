@@ -1,3 +1,5 @@
+import { MULTI_PLATFORM_GENERATOR_RULES } from "@/lib/786-admin/multi-platform-generator-rules"
+
 export const OPTIONAL_PROJECT_FEATURE_RULES = `
 USER-REQUEST-ONLY PROJECT SCOPE — MANDATORY:
 - Build only the pages, sections, features, actions, and navigation explicitly requested by the user.
@@ -89,4 +91,6 @@ Real pages:
 - When requested, create real App Router files such as app/booking/page.tsx, app/checkout/page.tsx, app/payment-method/page.tsx, app/language/page.tsx, and app/currency/page.tsx.
 - Navigation must point to matching real routes.
 - Do not substitute fake sections inside app/page.tsx for requested pages.
+
+${MULTI_PLATFORM_GENERATOR_RULES}
 `
