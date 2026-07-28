@@ -11,7 +11,6 @@ import { AdminChatProductionMonitoring } from "@/components/786-admin/admin-chat
 import { AdminChatProjectSwitchIsolation } from "@/components/786-admin/admin-chat-project-switch-isolation"
 import { AdminChatPublishController } from "@/components/786-admin/admin-chat-publish-controller"
 import { AdminChatPublishingOverviewLink } from "@/components/786-admin/admin-chat-publishing-overview-link"
-import { AdminChatRealCodeEditor } from "@/components/786-admin/admin-chat-real-code-editor"
 import { AdminChatTemplateGallery } from "@/components/786-admin/admin-chat-template-gallery"
 import { AdminChatVisualEditor } from "@/components/786-admin/admin-chat-visual-editor"
 
@@ -31,52 +30,34 @@ function AdminChatHeaderCleanup() {
 
     const cleanWorkspace = () => {
       document.getElementById("admin-chat-revision-history-button")?.remove()
+      document.querySelectorAll('[data-786-real-code-editor]').forEach((element) => element.remove())
 
       const header = document.querySelector<HTMLElement>("main header")
       hideElement(header?.querySelector<HTMLButtonElement>('button[title="Preview"]') ?? null)
 
       const sidebar = document.querySelector<HTMLElement>("main aside")
-      const chatButtons = Array.from(
-        sidebar?.querySelectorAll<HTMLButtonElement>('button[title="Chat"]') ?? [],
-      )
-
+      const chatButtons = Array.from(sidebar?.querySelectorAll<HTMLButtonElement>('button[title="Chat"]') ?? [])
       chatButtons.slice(1).forEach(hideElement)
 
       const primaryChatButton = chatButtons[0]
       if (primaryChatButton && !primaryChatButton.hasAttribute(CLEANUP_ATTRIBUTE)) {
         primaryChatButton.setAttribute(CLEANUP_ATTRIBUTE, "true")
-        primaryChatButton.addEventListener(
-          "click",
-          (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            window.location.assign(ADMIN_CHAT_PATH)
-          },
-          { capture: true },
-        )
+        primaryChatButton.addEventListener("click", (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          window.location.assign(ADMIN_CHAT_PATH)
+        }, { capture: true })
       }
 
       for (const paragraph of Array.from(document.querySelectorAll<HTMLParagraphElement>("main p"))) {
         const text = paragraph.textContent || ""
-        if (
-          text.includes("Text uses DeepSeek") ||
-          text.includes("Gemini multimodal") ||
-          text.includes("Projects save to Neon") ||
-          text.includes("auto-save on")
-        ) {
-          hideElement(paragraph)
-        }
+        if (text.includes("Text uses DeepSeek") || text.includes("Gemini multimodal") || text.includes("Projects save to Neon") || text.includes("auto-save on")) hideElement(paragraph)
       }
     }
 
     cleanWorkspace()
     const observer = new MutationObserver(cleanWorkspace)
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    })
-
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
     return () => {
       observer.disconnect()
       document.getElementById("admin-chat-revision-history-button")?.remove()
@@ -88,7 +69,6 @@ function AdminChatHeaderCleanup() {
 
 export function AdminChatToolbarCleanup() {
   const pathname = usePathname()
-
   if (!pathname || !pathname.startsWith(ADMIN_CHAT_PATH)) return null
 
   return (
@@ -100,7 +80,6 @@ export function AdminChatToolbarCleanup() {
       <AdminChatPublishingOverviewLink />
       <AdminChatBuildStatus />
       <AdminChatAiEditReview />
-      <AdminChatRealCodeEditor />
       <AdminChatVisualEditor />
       <AdminChatTemplateGallery />
       <AdminChatCollaboration />
