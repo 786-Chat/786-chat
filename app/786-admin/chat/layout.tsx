@@ -3,11 +3,13 @@ import { AdminChatLogoutController } from "@/components/786-admin/admin-chat-log
 import { AdminChatSafeThemeController } from "@/components/786-admin/admin-chat-safe-theme-controller"
 import { AdminChatUrlHeaderController } from "@/components/786-admin/admin-chat-url-header-controller"
 import { AdminChatSidebarCleanup } from "@/components/786-admin/admin-chat-sidebar-cleanup"
+import { AdminChatResilientFetchBridge } from "@/components/786-admin/admin-chat-resilient-fetch-bridge"
 
 export default function AdminChatLayout({ children }: { children: ReactNode }) {
   return (
     <div className="admin-chat-route contents">
       {children}
+      <AdminChatResilientFetchBridge />
       <AdminChatLogoutController />
       <AdminChatSafeThemeController />
       <AdminChatUrlHeaderController />
