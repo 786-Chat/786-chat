@@ -19,6 +19,7 @@ export function AdminChatUrlHeaderController() {
     let input: HTMLInputElement | null = null
     let stopped = false
     let requestSequence = 0
+    let recoveringStaleProject = false
     const history = ["/"]
     let historyIndex = 0
 
@@ -31,6 +32,41 @@ export function AdminChatUrlHeaderController() {
       input.classList.toggle("ring-2", Boolean(message))
       input.classList.toggle("ring-rose-400", Boolean(message))
       input.title = message || `Preview route ${currentRoute}`
+    }
+
+    function recoverFromMissingProject(projectId: string) {
+      if (recoveringStaleProject) return
+      recoveringStaleProject = true
+      requestSequence += 1
+
+      try {
+        if (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) === projectId) {
+          localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+        }
+        localStorage.removeItem(`786chat_admin_preview_location_v2_${projectId}`)
+      } catch {}
+
+      const iframe = currentPreviewFrame()
+      if (iframe) {
+        iframe.removeAttribute("src")
+        iframe.removeAttribute("srcdoc")
+        delete iframe.dataset.previewRoute
+        delete iframe.dataset.previewProject
+        delete iframe.dataset.previewRoutePending
+      }
+
+      currentRoute = "/"
+      history.splice(0, history.length, "/")
+      historyIndex = 0
+      if (input) input.value = "/"
+      setRouteError("")
+
+      const url = new URL(window.location.href)
+      url.pathname = "/786-admin/chat"
+      url.searchParams.delete("projectId")
+      url.searchParams.delete("switch")
+      url.searchParams.set("new", Date.now().toString(36))
+      window.location.replace(url.toString())
     }
 
     async function applyRoute(routeValue: string, pushHistory = true) {
@@ -46,7 +82,7 @@ export function AdminChatUrlHeaderController() {
 
       const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
       const iframe = currentPreviewFrame()
-      if (!projectId || !iframe) return
+      if (!projectId || !iframe || recoveringStaleProject) return
       if (iframe.dataset.previewRoute === route && iframe.dataset.previewProject === projectId) return
       if (iframe.dataset.previewRoutePending === `${projectId}:${route}`) return
 
@@ -55,6 +91,10 @@ export function AdminChatUrlHeaderController() {
 
       try {
         const response = await fetch(`/api/786-admin/projects/${projectId}`, { cache: "no-store" })
+        if (response.status === 404) {
+          recoverFromMissingProject(projectId)
+          return
+        }
         if (!response.ok) throw new Error("Project could not be loaded")
         const json = await response.json()
         const files = (json.project?.files || {}) as Record<string, string>
@@ -71,7 +111,7 @@ export function AdminChatUrlHeaderController() {
         iframe.src = nextSrc
         setRouteError()
       } catch (error) {
-        if (sequence !== requestSequence) return
+        if (sequence !== requestSequence || recoveringStaleProject) return
         delete iframe.dataset.previewRoutePending
         setRouteError(error instanceof Error ? error.message : "Route preview failed")
       }
@@ -142,6 +182,7 @@ export function AdminChatUrlHeaderController() {
 
     const observer = new MutationObserver(() => {
       install()
+      if (recoveringStaleProject) return
       const iframe = currentPreviewFrame()
       if (!iframe) return
       const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || ""
