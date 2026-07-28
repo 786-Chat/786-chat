@@ -4,7 +4,7 @@ import { AdminChatSafeThemeController } from "@/components/786-admin/admin-chat-
 import { AdminChatUrlHeaderController } from "@/components/786-admin/admin-chat-url-header-controller"
 import { AdminChatSidebarCleanup } from "@/components/786-admin/admin-chat-sidebar-cleanup"
 import { AdminChatResilientFetchBridge } from "@/components/786-admin/admin-chat-resilient-fetch-bridge"
-import { AdminChatStalePreviewReset } from "@/components/786-admin/admin-chat-stale-preview-reset"
+import { AdminChatStalePreviewResetV2 } from "@/components/786-admin/admin-chat-stale-preview-reset-v2"
 
 export default function AdminChatLayout({ children }: { children: ReactNode }) {
   return (
@@ -13,7 +13,7 @@ export default function AdminChatLayout({ children }: { children: ReactNode }) {
       <AdminChatResilientFetchBridge />
       <AdminChatLogoutController />
       <AdminChatSafeThemeController />
-      <AdminChatStalePreviewReset />
+      <AdminChatStalePreviewResetV2 />
       <AdminChatUrlHeaderController />
       <AdminChatSidebarCleanup />
       <style>{`
