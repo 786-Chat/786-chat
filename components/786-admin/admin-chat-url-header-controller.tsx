@@ -20,6 +20,7 @@ export function AdminChatUrlHeaderController() {
     let stopped = false
     let requestSequence = 0
     let recoveringStaleProject = false
+    let validatedProjectId = ""
     const history = ["/"]
     let historyIndex = 0
 
@@ -38,6 +39,7 @@ export function AdminChatUrlHeaderController() {
       if (recoveringStaleProject) return
       recoveringStaleProject = true
       requestSequence += 1
+      validatedProjectId = ""
 
       try {
         if (localStorage.getItem(ACTIVE_PROJECT_ID_KEY) === projectId) {
@@ -69,7 +71,7 @@ export function AdminChatUrlHeaderController() {
       window.location.replace(url.toString())
     }
 
-    async function applyRoute(routeValue: string, pushHistory = true) {
+    async function applyRoute(routeValue: string, pushHistory = true, forceValidation = false) {
       const route = normalizeRoute(routeValue)
       currentRoute = route
       if (input) input.value = route
@@ -83,7 +85,7 @@ export function AdminChatUrlHeaderController() {
       const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
       const iframe = currentPreviewFrame()
       if (!projectId || !iframe || recoveringStaleProject) return
-      if (iframe.dataset.previewRoute === route && iframe.dataset.previewProject === projectId) return
+      if (!forceValidation && iframe.dataset.previewRoute === route && iframe.dataset.previewProject === projectId) return
       if (iframe.dataset.previewRoutePending === `${projectId}:${route}`) return
 
       const sequence = ++requestSequence
@@ -97,7 +99,12 @@ export function AdminChatUrlHeaderController() {
         }
         if (!response.ok) throw new Error("Project could not be loaded")
         const json = await response.json()
-        const files = (json.project?.files || {}) as Record<string, string>
+        if (!json.project) {
+          recoverFromMissingProject(projectId)
+          return
+        }
+        validatedProjectId = projectId
+        const files = (json.project.files || {}) as Record<string, string>
         const expected = route === "/" ? "app/page.tsx" : `app/${route.replace(/^\//, "")}/page.tsx`
         const alternatives = route === "/" ? [expected, "app/page.jsx"] : [expected, expected.replace(/\.tsx$/, ".jsx")]
         if (!alternatives.some((path) => Boolean(files[path]))) throw new Error(`Page ${route} was not generated`)
@@ -152,7 +159,7 @@ export function AdminChatUrlHeaderController() {
           delete iframe.dataset.previewRoute
           delete iframe.dataset.previewProject
         }
-        void applyRoute(currentRoute, false)
+        void applyRoute(currentRoute, false, true)
       })
       refresh.dataset.routeRefresh = "true"
       const link = document.createElement("span")
@@ -172,6 +179,12 @@ export function AdminChatUrlHeaderController() {
       })
       input.addEventListener("blur", () => void applyRoute(input?.value || "/"))
       target.append(back, forward, refresh, link, host, input)
+
+      window.setTimeout(() => {
+        if (!stopped && localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
+          void applyRoute(currentRoute, false, true)
+        }
+      }, 0)
     }
 
     const onMessage = (event: MessageEvent) => {
@@ -186,6 +199,10 @@ export function AdminChatUrlHeaderController() {
       const iframe = currentPreviewFrame()
       if (!iframe) return
       const projectId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY) || ""
+      if (projectId && validatedProjectId !== projectId) {
+        void applyRoute(currentRoute, false, true)
+        return
+      }
       const applied = iframe.dataset.previewRoute === currentRoute && iframe.dataset.previewProject === projectId
       const pending = iframe.dataset.previewRoutePending === `${projectId}:${currentRoute}`
       if (!applied && !pending) void applyRoute(currentRoute, false)
