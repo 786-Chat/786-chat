@@ -29,6 +29,15 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "").slice(0, 48)
 }
 
+function escapeJsxText(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\{/g, "&#123;")
+    .replace(/\}/g, "&#125;")
+}
+
 function cleanPrompt(prompt: string) {
   return prompt.split("PROJECT DESIGN IDENTITY")[0].trim()
 }
@@ -55,7 +64,7 @@ function inferIndustry(prompt: string): Industry {
   if (/factory|manufactur|industrial|production|warehouse|machinery|engineering|robot/.test(text)) return "industrial"
   if (/school|academy|course|student|learning|college|university/.test(text)) return "education"
   if (/medical|clinic|health|doctor|patient|dentist|hospital/.test(text)) return "medical"
-  if (/aviation|aircraft|private jet|airline|flight/.test(text)) return "aviation"
+  if (/aviation|aircraft|private jet|airline|flight|travel|hotel|destination|trip/.test(text)) return "aviation"
   if (/shop|store|fashion|retail|product|commerce/.test(text)) return "retail"
   if (/software|saas|app|technology|cyber|cloud|ai\b/.test(text)) return "technology"
   return "general"
@@ -78,7 +87,7 @@ function essentialFeatures(industry: Industry) {
     industrial: ["Capabilities", "Production systems", "Quality standards", "Operations"],
     education: ["Learning programmes", "Student experience", "Teaching approach", "Admissions"],
     medical: ["Clinical services", "Patient care", "Specialists", "Appointments"],
-    aviation: ["Aircraft fleet", "Destinations", "Membership", "Concierge"],
+    aviation: ["Destinations", "Trip planning", "Hotels and stays", "Customer support"],
     retail: ["Featured collection", "New arrivals", "Customer favourites", "Store experience"],
     technology: ["Product platform", "Core capabilities", "Workflow", "Security"],
     general: ["Overview", "Services", "Why choose us", "Contact"],
@@ -92,7 +101,7 @@ function copyFor(industry: Industry, title: string) {
     industrial: { eyebrow: "Engineered for dependable output", headline: `${title}, built for production`, description: "A precise industrial experience focused on capability, control, quality and measurable performance.", cta: "Explore capabilities" },
     education: { eyebrow: "Learning with purpose", headline: `Grow with ${title}`, description: "A clear, welcoming learning experience for students, families and educators.", cta: "Discover programmes" },
     medical: { eyebrow: "Care with clarity", headline: `Trusted care at ${title}`, description: "A calm, accessible patient experience designed around expertise, reassurance and simple next steps.", cta: "View services" },
-    aviation: { eyebrow: "Private travel, precisely arranged", headline: `Fly beyond ordinary with ${title}`, description: "A refined aviation experience for aircraft, destinations, membership and personal service.", cta: "Discover the fleet" },
+    aviation: { eyebrow: "Travel, intelligently arranged", headline: `Go further with ${title}`, description: "A polished travel experience for destinations, planning, stays and personalised service.", cta: "Plan your journey" },
     retail: { eyebrow: "Selected with intention", headline: `Find your next favourite at ${title}`, description: "A distinctive retail experience with curated products, confident presentation and easy discovery.", cta: "Shop the collection" },
     technology: { eyebrow: "Technology without friction", headline: `${title} makes complex work feel simple`, description: "A focused product experience that explains capability, value and workflow without generic SaaS filler.", cta: "Explore the platform" },
     general: { eyebrow: "A project with its own identity", headline: title, description: `A responsive customer experience created specifically for ${title}.`, cta: "Explore" },
@@ -111,38 +120,39 @@ function chooseDesign(seed: string, industry: Industry) {
 }
 
 function pageSource(title: string, industry: Industry, features: string[], layout: Layout, copy: ReturnType<typeof copyFor>) {
-  const data = JSON.stringify(features)
-  const titleJson = JSON.stringify(title)
-  const copyJson = JSON.stringify(copy)
-  const visualWord = industry === "food" ? "HOT" : industry === "industrial" ? "BUILD" : "786"
+  const visualWord = industry === "food" ? "HOT" : industry === "industrial" ? "BUILD" : industry === "aviation" ? "GO" : "786"
   const descriptions = industry === "food"
     ? ["Stone-baked favourites made with fresh ingredients.", "Simple choices, bold flavour and generous portions.", "Eat in, collect or order exactly how you like.", "A welcoming local shop made for repeat visits."]
-    : ["Designed around the real needs of this project.", "Clear information with purposeful interaction.", "Responsive structure for every screen size.", "A distinct section with its own visual rhythm."]
+    : industry === "aviation"
+      ? ["Discover destinations matched to your interests.", "Build a clear itinerary with useful planning tools.", "Explore distinctive hotels and premium stays.", "Get support before, during and after every journey."]
+      : ["Designed around the real needs of this project.", "Clear information with purposeful interaction.", "Responsive structure for every screen size.", "A distinct section with its own visual rhythm."]
 
-  return `"use client"
-import { useState } from "react"
-const sections=${data}
-const projectTitle=${titleJson}
-const copy=${copyJson}
-const sectionDescriptions=${JSON.stringify(descriptions)}
-const id=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"")
-export default function Page(){
- const[active,setActive]=useState(0)
- const[open,setOpen]=useState(false)
+  const navigation = features.map((item) => `<a href="#${slugify(item)}">${escapeJsxText(item)}</a>`).join("\n     ")
+  const cards = features.map((item, index) => {
+    const description = descriptions[index] || `Created specifically for ${title}`
+    return `<article id="${slugify(item)}"><span className="number">${String(index + 1).padStart(2, "0")}</span><h2>${escapeJsxText(item)}</h2><p>${escapeJsxText(description)}</p></article>`
+  }).join("\n    ")
+
+  return `export default function Page(){
  return (
   <main className="site layout-${layout} industry-${industry}">
    <header className="topbar">
-    <a className="brand" href="#top">{projectTitle}</a>
-    <button className="menuButton" type="button" onClick={()=>setOpen((value)=>!value)}>Menu</button>
-    <nav className={open?"open":""}>{sections.map((item,index)=><a key={item} href={"#"+id(item)} onClick={()=>{setActive(index);setOpen(false)}}>{item}</a>)}</nav>
+    <a className="brand" href="#top">${escapeJsxText(title)}</a>
+    <nav>
+     ${navigation}
+    </nav>
    </header>
    <section className="hero" id="top">
-    <div className="heroCopy"><p className="eyebrow">{copy.eyebrow}</p><h1>{copy.headline}</h1><p className="lead">{copy.description}</p><a className="cta" href={"#"+id(sections[0])}>{copy.cta}</a></div>
+    <div className="heroCopy"><p className="eyebrow">${escapeJsxText(copy.eyebrow)}</p><h1>${escapeJsxText(copy.headline)}</h1><p className="lead">${escapeJsxText(copy.description)}</p><a className="cta" href="#${slugify(features[0])}">${escapeJsxText(copy.cta)}</a></div>
     <div className="heroVisual"><span className="visualWord">${visualWord}</span><div className="orb one"></div><div className="orb two"></div></div>
    </section>
-   <section className="sectionIndex">{sections.map((item,index)=><button type="button" key={item} className={active===index?"active":""} onClick={()=>{setActive(index);document.getElementById(id(item))?.scrollIntoView({behavior:"smooth"})}}><span>{String(index+1).padStart(2,"0")}</span>{item}</button>)}</section>
-   <section className="contentGrid">{sections.map((item,index)=><article id={id(item)} key={item} className={active===index?"activeCard":""}><span className="number">{String(index+1).padStart(2,"0")}</span><h2>{item}</h2><p>{sectionDescriptions[index]||("Created specifically for "+projectTitle)}</p></article>)}</section>
-   <footer><strong>{projectTitle}</strong><span>Original customer project · 786.Chat</span></footer>
+   <section className="sectionIndex">
+    ${navigation}
+   </section>
+   <section className="contentGrid">
+    ${cards}
+   </section>
+   <footer><strong>${escapeJsxText(title)}</strong><span>Original customer project · 786.Chat</span></footer>
   </main>
  )
 }`
@@ -152,7 +162,7 @@ function globalCss(p: Palette, layout: Layout, rotation: number, accentPosition:
   const accent = ["15% 10%", "85% 12%", "20% 85%", "90% 80%"][accentPosition]
   return `@tailwind base;@tailwind components;@tailwind utilities;
 :root{--bg:${p.bg};--surface:${p.surface};--ink:${p.ink};--muted:${p.muted};--primary:${p.primary};--secondary:${p.secondary};--radius:${p.radius};--rotate:${rotation}deg}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:${p.font}}button,a{font:inherit}.site{min-height:100vh;overflow:hidden;background:radial-gradient(circle at ${accent},color-mix(in srgb,var(--secondary) 24%,transparent),transparent 32%),var(--bg)}a{color:inherit;text-decoration:none}.topbar,.hero,.sectionIndex,.contentGrid,footer{width:min(1240px,calc(100% - 32px));margin-left:auto;margin-right:auto}.topbar{padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:28px;border-bottom:1px solid color-mix(in srgb,var(--ink) 16%,transparent)}.brand{font-size:20px;font-weight:900}.topbar nav{display:flex;gap:22px;flex-wrap:wrap}.topbar nav a{font-size:13px;font-weight:800;color:var(--muted)}.menuButton{display:none}.hero{min-height:68vh;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:7vw}.eyebrow{font-size:12px;font-weight:950;letter-spacing:.22em;text-transform:uppercase;color:var(--primary)}h1{font-size:clamp(54px,8vw,122px);line-height:.88;letter-spacing:-.065em;margin:20px 0 28px;max-width:920px}.lead{max-width:680px;font-size:clamp(18px,2.1vw,28px);line-height:1.45;color:var(--muted)}.cta{display:inline-flex;margin-top:28px;padding:15px 22px;background:var(--primary);color:white;border-radius:999px;font-weight:900}.heroVisual{position:relative;min-height:430px;border-radius:var(--radius);background:linear-gradient(145deg,var(--primary),var(--secondary));transform:rotate(var(--rotate));box-shadow:30px 36px 90px rgba(0,0,0,.24);overflow:hidden}.visualWord{position:absolute;inset:auto 24px 16px;font-size:clamp(70px,12vw,180px);font-weight:950;letter-spacing:-.09em;color:rgba(255,255,255,.2)}.orb{position:absolute;border-radius:50%;background:rgba(255,255,255,.28)}.orb.one{width:180px;height:180px;right:-35px;top:-25px}.orb.two{width:90px;height:90px;left:15%;bottom:12%}.sectionIndex{display:flex;gap:10px;overflow:auto;padding:0 0 42px}.sectionIndex button{white-space:nowrap;border:1px solid color-mix(in srgb,var(--ink) 15%,transparent);background:transparent;color:var(--muted);padding:12px 16px;border-radius:999px;font-weight:800}.sectionIndex button.active{background:var(--ink);color:var(--bg)}.contentGrid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px;padding:30px 0 100px}.contentGrid article{grid-column:span 6;min-height:260px;padding:30px;border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:var(--radius);background:color-mix(in srgb,var(--surface) 88%,transparent);transition:.25s}.contentGrid article:nth-child(3n+1){grid-column:span 7}.contentGrid article:nth-child(3n+2){grid-column:span 5}.contentGrid article:hover,.contentGrid article.activeCard{transform:translateY(-6px);border-color:var(--primary)}.number{font-weight:950;color:var(--primary)}h2{font-size:clamp(30px,4vw,54px);letter-spacing:-.04em;margin:55px 0 12px}.contentGrid p{color:var(--muted);font-size:17px;line-height:1.6}footer{padding:28px 0 45px;border-top:1px solid color-mix(in srgb,var(--ink) 16%,transparent);display:flex;justify-content:space-between;color:var(--muted)}.layout-poster .hero{grid-template-columns:1fr}.layout-editorial .hero{grid-template-columns:1.2fr .55fr}.layout-mosaic .heroVisual{border-radius:45% 12% 38% 16%}.layout-storefront .heroVisual{border-radius:50% 50% 8% 8%}.layout-catalogue .contentGrid article{grid-column:span 3}.layout-story .contentGrid{display:block}.layout-story .contentGrid article{margin-bottom:24px}.layout-command{display:grid;grid-template-columns:250px 1fr}.layout-command .topbar{position:sticky;top:0;width:auto;height:100vh;margin:0;padding:28px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;background:var(--surface);z-index:5}.layout-command .topbar nav{display:flex;flex-direction:column}.layout-command .hero,.layout-command .sectionIndex,.layout-command .contentGrid,.layout-command footer{grid-column:2}.layout-command .sectionIndex{display:none}@media(max-width:800px){.topbar{align-items:flex-start}.menuButton{display:block;border:0;background:var(--ink);color:var(--bg);padding:9px 13px;border-radius:999px}.topbar nav{display:none;position:absolute;z-index:20;top:72px;left:16px;right:16px;padding:18px;background:var(--surface);border-radius:var(--radius);box-shadow:0 20px 50px rgba(0,0,0,.2)}.topbar nav.open{display:grid}.hero{grid-template-columns:1fr;min-height:auto;padding:70px 0}.heroVisual{min-height:260px}.contentGrid article,.contentGrid article:nth-child(n){grid-column:1/-1}.layout-command{display:block}.layout-command .topbar{position:relative;width:min(100% - 32px,1240px);height:auto;margin:auto;flex-direction:row;justify-content:space-between;background:transparent}footer{gap:20px;flex-direction:column}}`
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:${p.font}}a{color:inherit;text-decoration:none}.site{min-height:100vh;overflow:hidden;background:radial-gradient(circle at ${accent},color-mix(in srgb,var(--secondary) 24%,transparent),transparent 32%),var(--bg)}.topbar,.hero,.sectionIndex,.contentGrid,footer{width:min(1240px,calc(100% - 32px));margin-left:auto;margin-right:auto}.topbar{padding:24px 0;display:flex;align-items:center;justify-content:space-between;gap:28px;border-bottom:1px solid color-mix(in srgb,var(--ink) 16%,transparent)}.brand{font-size:20px;font-weight:900}.topbar nav{display:flex;gap:22px;flex-wrap:wrap}.topbar nav a{font-size:13px;font-weight:800;color:var(--muted)}.hero{min-height:68vh;display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:7vw}.eyebrow{font-size:12px;font-weight:950;letter-spacing:.22em;text-transform:uppercase;color:var(--primary)}h1{font-size:clamp(54px,8vw,122px);line-height:.88;letter-spacing:-.065em;margin:20px 0 28px;max-width:920px}.lead{max-width:680px;font-size:clamp(18px,2.1vw,28px);line-height:1.45;color:var(--muted)}.cta{display:inline-flex;margin-top:28px;padding:15px 22px;background:var(--primary);color:white;border-radius:999px;font-weight:900}.heroVisual{position:relative;min-height:430px;border-radius:var(--radius);background:linear-gradient(145deg,var(--primary),var(--secondary));transform:rotate(var(--rotate));box-shadow:30px 36px 90px rgba(0,0,0,.24);overflow:hidden}.visualWord{position:absolute;inset:auto 24px 16px;font-size:clamp(70px,12vw,180px);font-weight:950;letter-spacing:-.09em;color:rgba(255,255,255,.2)}.orb{position:absolute;border-radius:50%;background:rgba(255,255,255,.28)}.orb.one{width:180px;height:180px;right:-35px;top:-25px}.orb.two{width:90px;height:90px;left:15%;bottom:12%}.sectionIndex{display:flex;gap:10px;overflow:auto;padding:0 0 42px}.sectionIndex a{white-space:nowrap;border:1px solid color-mix(in srgb,var(--ink) 15%,transparent);color:var(--muted);padding:12px 16px;border-radius:999px;font-weight:800}.contentGrid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px;padding:30px 0 100px}.contentGrid article{grid-column:span 6;min-height:260px;padding:30px;border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);border-radius:var(--radius);background:color-mix(in srgb,var(--surface) 88%,transparent);transition:.25s}.contentGrid article:nth-child(3n+1){grid-column:span 7}.contentGrid article:nth-child(3n+2){grid-column:span 5}.contentGrid article:hover{transform:translateY(-6px);border-color:var(--primary)}.number{font-weight:950;color:var(--primary)}h2{font-size:clamp(30px,4vw,54px);letter-spacing:-.04em;margin:55px 0 12px}.contentGrid p{color:var(--muted);font-size:17px;line-height:1.6}footer{padding:28px 0 45px;border-top:1px solid color-mix(in srgb,var(--ink) 16%,transparent);display:flex;justify-content:space-between;color:var(--muted)}.layout-poster .hero{grid-template-columns:1fr}.layout-editorial .hero{grid-template-columns:1.2fr .55fr}.layout-mosaic .heroVisual{border-radius:45% 12% 38% 16%}.layout-storefront .heroVisual{border-radius:50% 50% 8% 8%}.layout-catalogue .contentGrid article{grid-column:span 3}.layout-story .contentGrid{display:block}.layout-story .contentGrid article{margin-bottom:24px}.layout-command{display:grid;grid-template-columns:250px 1fr}.layout-command .topbar{position:sticky;top:0;width:auto;height:100vh;margin:0;padding:28px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;background:var(--surface);z-index:5}.layout-command .topbar nav{display:flex;flex-direction:column}.layout-command .hero,.layout-command .sectionIndex,.layout-command .contentGrid,.layout-command footer{grid-column:2}.layout-command .sectionIndex{display:none}@media(max-width:800px){.topbar{align-items:flex-start;flex-direction:column}.topbar nav{gap:12px}.hero{grid-template-columns:1fr;min-height:auto;padding:70px 0}.heroVisual{min-height:260px}.contentGrid article,.contentGrid article:nth-child(n){grid-column:1/-1}.layout-command{display:block}.layout-command .topbar{position:relative;width:min(100% - 32px,1240px);height:auto;margin:auto;background:transparent}footer{gap:20px;flex-direction:column}}`
 }
 
 export function createPremiumFallbackProject(prompt: string): SevenEightSixProject {
