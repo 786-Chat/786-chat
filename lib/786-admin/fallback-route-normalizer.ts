@@ -1,4 +1,4 @@
-const PAGE_SECTION = /^(?:pages?|routes?|screens?|create|generate|build|include)\s*:?[\s]*$/i
+const PAGE_SECTION = /^(?:pages?|routes?|screens?|create|generate|build|include)\s*:?\s*$/i
 const STOP_SECTION = /^(?:do not|don't|never|avoid|exclude|forbidden|use|design|colou?r|typography|layout|features?|modules?|sections?)\b/i
 
 function slugifyPageName(value: string) {
@@ -21,7 +21,7 @@ function slugifyPageName(value: string) {
   return slug ? `/${slug}` : null
 }
 
-export function normalizeFallbackPromptRoutes(prompt: string) {
+export function requestedFallbackRoutes(prompt: string) {
   const explicitRoutes = Array.from(prompt.matchAll(/^\s*[-•*]\s*(\/[a-z0-9/_-]*)\s*$/gim), (match) => match[1])
   const namedRoutes: string[] = []
   let acceptingPages = false
@@ -45,9 +45,53 @@ export function normalizeFallbackPromptRoutes(prompt: string) {
     if (route) namedRoutes.push(route)
   }
 
-  const routes = Array.from(new Set(["/", ...explicitRoutes, ...namedRoutes])).slice(0, 16)
+  return Array.from(new Set(["/", ...explicitRoutes, ...namedRoutes])).slice(0, 16)
+}
+
+export function normalizeFallbackPromptRoutes(prompt: string) {
+  const routes = requestedFallbackRoutes(prompt)
   if (routes.length <= 1) return prompt
 
   const routeBlock = routes.map((route) => `- ${route}`).join("\n")
   return `${prompt.trim()}\n\nFALLBACK ROUTES:\n${routeBlock}`
+}
+
+function routeLabel(route: string) {
+  if (route === "/") return "Home"
+  return route
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()))
+    .join(" · ")
+}
+
+export function repairFallbackRouteFiles(files: Record<string, string>, prompt: string) {
+  const routes = requestedFallbackRoutes(prompt)
+  if (routes.length <= 1) return files
+
+  const repaired = { ...files }
+  const home = repaired["app/page.tsx"]
+  if (!home) return repaired
+
+  const navigation = routes.map((route) => `<a href="${route}">${routeLabel(route)}</a>`).join("")
+
+  for (const [path, source] of Object.entries(repaired)) {
+    if (!/^app\/(?:.+\/)?page\.tsx$/.test(path)) continue
+    repaired[path] = source.replace(/<nav>[\s\S]*?<\/nav>/, `<nav>${navigation}</nav>`)
+  }
+
+  for (const route of routes) {
+    if (route === "/") continue
+    const path = `app/${route.replace(/^\//, "")}/page.tsx`
+    if (repaired[path]) continue
+
+    const label = routeLabel(route)
+    repaired[path] = home
+      .replace(/<nav>[\s\S]*?<\/nav>/, `<nav>${navigation}</nav>`)
+      .replace(/<p className="eyebrow">[\s\S]*?<\/p>/, `<p className="eyebrow">${label}</p>`)
+      .replace(/<h1>[\s\S]*?<\/h1>/, `<h1>${label}</h1>`)
+      .replace(/<p className="lead">[\s\S]*?<\/p>/, `<p className="lead">Explore ${label.toLowerCase()} information and services.</p>`)
+  }
+
+  return repaired
 }
