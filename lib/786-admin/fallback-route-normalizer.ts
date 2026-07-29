@@ -1,5 +1,5 @@
 const PAGE_SECTION = /^(?:pages?|routes?|screens?|create|generate|build|include)\s*:?\s*$/i
-const STOP_SECTION = /^(?:do not|don't|never|avoid|exclude|forbidden|use|design|colou?r|typography|layout|features?|modules?|sections?)\b/i
+const STOP_SECTION = /^(?:requirements?|instructions?|notes?|details?|constraints?|must have|do not|don't|never|avoid|exclude|forbidden|use|design|colou?r|typography|layout|features?|modules?|sections?)\b/i
 
 function slugifyPageName(value: string) {
   const cleaned = value
@@ -22,7 +22,10 @@ function slugifyPageName(value: string) {
 }
 
 export function requestedFallbackRoutes(prompt: string) {
-  const explicitRoutes = Array.from(prompt.matchAll(/^\s*[-•*]\s*(\/[a-z0-9/_-]*)\s*$/gim), (match) => match[1])
+  const explicitRoutes = Array.from(
+    prompt.matchAll(/^\s*[-•*]\s*(\/[a-z0-9/_-]*)\s*$/gim),
+    (match) => match[1]
+  )
   const namedRoutes: string[] = []
   let acceptingPages = false
 
@@ -73,7 +76,9 @@ export function repairFallbackRouteFiles(files: Record<string, string>, prompt: 
   const home = repaired["app/page.tsx"]
   if (!home) return repaired
 
-  const navigation = routes.map((route) => `<a href="${route}">${routeLabel(route)}</a>`).join("")
+  const navigation = routes
+    .map((route) => `<a href="${route}">${routeLabel(route)}</a>`)
+    .join("")
 
   for (const [path, source] of Object.entries(repaired)) {
     if (!/^app\/(?:.+\/)?page\.tsx$/.test(path)) continue
@@ -90,7 +95,10 @@ export function repairFallbackRouteFiles(files: Record<string, string>, prompt: 
       .replace(/<nav>[\s\S]*?<\/nav>/, `<nav>${navigation}</nav>`)
       .replace(/<p className="eyebrow">[\s\S]*?<\/p>/, `<p className="eyebrow">${label}</p>`)
       .replace(/<h1>[\s\S]*?<\/h1>/, `<h1>${label}</h1>`)
-      .replace(/<p className="lead">[\s\S]*?<\/p>/, `<p className="lead">Explore ${label.toLowerCase()} information and services.</p>`)
+      .replace(
+        /<p className="lead">[\s\S]*?<\/p>/,
+        `<p className="lead">Explore ${label.toLowerCase()} information and services.</p>`
+      )
   }
 
   return repaired
