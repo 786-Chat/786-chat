@@ -6,6 +6,7 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8
 
 test("canonical generation analyses, plans and validates before acceptance", async () => {
   const route = await read("app/api/786-chat/generate/route.ts")
+  const planner = await read("lib/786-chat/planner.ts")
 
   assert.match(route, /analyseProjectPrompt/)
   assert.match(route, /createProjectPlan/)
@@ -39,6 +40,9 @@ test("explicit slash routes are preserved and sent in the generation brief", asy
   assert.match(analyser, /requestedRoutes/)
   assert.match(route, /MANDATORY STRUCTURED REQUIREMENTS/)
   assert.match(route, /Planned files:/)
+  assert.match(planner, /package\.json/)
+  assert.match(planner, /tsconfig\.json/)
+  assert.match(planner, /next\.config\.ts/)
 })
 
 test("generic fallback wording cannot pass verification", async () => {
