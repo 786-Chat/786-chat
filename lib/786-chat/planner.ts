@@ -12,6 +12,9 @@ function routeFile(route: string) {
 
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
   const files = [
+    { path: "package.json", purpose: "Allowed dependencies and build scripts" },
+    { path: "tsconfig.json", purpose: "TypeScript compiler configuration" },
+    { path: "next.config.ts", purpose: "Next.js runtime configuration" },
     { path: "app/layout.tsx", purpose: "Application shell and metadata" },
     { path: "app/globals.css", purpose: "Project-specific design system and responsive styles" },
     ...specification.routes.map((route) => ({
