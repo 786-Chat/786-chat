@@ -27,6 +27,17 @@ test("repair uses exact logs, snapshots a revision, validates, and rebuilds", as
   assert.match(repair, /dispatchGeneratedProjectBuild/)
 })
 
+test("repair deterministically migrates unsupported TypeScript Next config", async () => {
+  const repair = await read("lib/786-chat/build-repair.ts")
+
+  assert.match(repair, /deterministicCompatibilityRepair/)
+  assert.match(repair, /"next\.config\.mjs"/)
+  assert.match(repair, /removedPaths: \["next\.config\.ts"\]/)
+  assert.match(repair, /DELETE FROM admin_project_files/)
+  assert.match(repair, /context\.buildId\}::text/)
+  assert.match(repair, /model\}::text/)
+})
+
 test("migration records parent builds and safe repair state", async () => {
   const migration = await read("lib/786-admin/migrations/004-build-repair-loop.sql")
 
