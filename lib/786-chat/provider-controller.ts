@@ -7,7 +7,8 @@ import {
 
 export const runtime = "nodejs"
 export const maxDuration = 60
-const AI_ATTEMPT_TIMEOUT_MS = 25_000
+const GEMINI_ATTEMPT_TIMEOUT_MS = 25_000
+const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string }
@@ -24,6 +25,12 @@ function providerForMode(mode: CodegenMode): "deepseek" | "gemini" {
 function modeConfigured(mode: CodegenMode): boolean {
   if (providerForMode(mode) === "deepseek") return configured("DEEPSEEK_API_KEY")
   return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY")
+}
+
+function attemptTimeout(mode: CodegenMode) {
+  return providerForMode(mode) === "deepseek"
+    ? DEEPSEEK_ATTEMPT_TIMEOUT_MS
+    : GEMINI_ATTEMPT_TIMEOUT_MS
 }
 
 function missingConfigurationReason(mode: CodegenMode): string {
@@ -104,6 +111,7 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
       })
     : []
   let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutMs = attemptTimeout(mode)
   const generated = await Promise.race([
     generateProjectCode({
       prompt: `${message}${compactRules}`,
@@ -113,8 +121,8 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
     }),
     new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error(`${mode} timed out after ${AI_ATTEMPT_TIMEOUT_MS}ms`)),
-        AI_ATTEMPT_TIMEOUT_MS,
+        () => reject(new Error(`${mode} timed out after ${timeoutMs}ms`)),
+        timeoutMs,
       )
     }),
   ]).finally(() => {
