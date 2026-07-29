@@ -119,6 +119,14 @@ export function validateGeneratedProject(
     })
   }
 
+  if (files["next.config.ts"]) {
+    errors.push({
+      code: "UNSUPPORTED_NEXT_CONFIG_TS",
+      path: "next.config.ts",
+      message: "Use next.config.mjs or next.config.js; next.config.ts is not portable across allowed Next.js versions.",
+    })
+  }
+
   const packageSource = files["package.json"]
   const packageJson = packageSource ? parsePackageJson(packageSource) : null
   if (!packageSource) {
