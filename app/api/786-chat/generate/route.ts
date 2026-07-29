@@ -9,7 +9,7 @@ import { validateGeneratedProject } from "@/lib/786-chat/validation"
 import { designFamilyBrief } from "@/lib/786-chat/design-system"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 180
 
 export async function POST(request: Request) {
   const session = await getSession()
