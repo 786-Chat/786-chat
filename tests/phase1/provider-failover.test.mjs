@@ -41,3 +41,10 @@ test("DeepSeek code generation disables slow thinking mode", () => {
   assert.match(codegen, /providerOptions/)
   assert.match(codegen, /deepseek:\s*\{\s*thinking:\s*\{\s*type:\s*"disabled"/)
 })
+
+
+test("compact websites prefer DeepSeek Flash while complex apps keep normal selection", () => {
+  assert.match(providerController, /compactEligible && configured\("DEEPSEEK_API_KEY"\)/)
+  assert.match(providerController, /\? "deepseek-flash"/)
+  assert.match(providerController, /: resolvedPrimaryMode\(requestedMode, hasAttachments\)/)
+})
