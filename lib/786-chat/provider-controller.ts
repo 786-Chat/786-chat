@@ -177,7 +177,9 @@ export async function POST(request: Request) {
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const compactEligible = isSimpleWebsiteRequest(payload, hasAttachments)
-  const primaryMode = resolvedPrimaryMode(requestedMode, hasAttachments)
+  const primaryMode = requestedMode === "auto" && compactEligible && configured("DEEPSEEK_API_KEY")
+    ? "deepseek-flash"
+    : resolvedPrimaryMode(requestedMode, hasAttachments)
   const secondaryMode = alternateMode(primaryMode, hasAttachments)
   const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode]))
   const configuredModes = candidateModes.filter(modeConfigured)
