@@ -52,28 +52,121 @@ function getPageCode(files: Record<string, string>, route: string) {
   return ""
 }
 
-function extractReturnJsx(code: string) {
-  const returnIndex = code.indexOf("return")
-  if (returnIndex === -1) return ""
-  const firstParen = code.indexOf("(", returnIndex)
-  if (firstParen === -1) return ""
+function pageComponentSource(code: string) {
+  const named = code.match(/export\s+default\s+(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{/)
+  if (named?.index !== undefined) return code.slice(named.index)
+
+  const anonymous = code.match(/export\s+default\s+(?:async\s+)?function\s*\([^)]*\)\s*\{/)
+  if (anonymous?.index !== undefined) return code.slice(anonymous.index)
+
+  const assigned = code.match(/export\s+default\s+[A-Za-z_$][\w$]*\s*;?/)
+  if (assigned) {
+    const name = assigned[0].replace(/export\s+default\s+/, "").replace(/;$/, "").trim()
+    const declaration = new RegExp(`(?:const|let|var|function)\\s+${name}\\b`)
+    const match = declaration.exec(code)
+    if (match?.index !== undefined) return code.slice(match.index)
+  }
+
+  const arrow = code.match(/export\s+default\s*(?:async\s*)?\([^)]*\)\s*=>/)
+  if (arrow?.index !== undefined) return code.slice(arrow.index)
+
+  return code
+}
+
+function readBalanced(code: string, start: number, open: string, close: string) {
   let depth = 0
   let quote = ""
-  for (let index = firstParen; index < code.length; index += 1) {
+  let templateExpressionDepth = 0
+
+  for (let index = start; index < code.length; index += 1) {
     const char = code[index]
     const previous = code[index - 1]
+
     if (quote) {
-      if (char === quote && previous !== "\\") quote = ""
+      if (quote === "`" && char === "$" && code[index + 1] === "{") {
+        templateExpressionDepth += 1
+        index += 1
+        continue
+      }
+      if (quote === "`" && char === "}" && templateExpressionDepth > 0) {
+        templateExpressionDepth -= 1
+        continue
+      }
+      if (char === quote && previous !== "\\" && templateExpressionDepth === 0) quote = ""
       continue
     }
+
     if (char === '"' || char === "'" || char === "`") {
       quote = char
       continue
     }
-    if (char === "(") depth += 1
-    if (char === ")") depth -= 1
-    if (depth === 0) return code.slice(firstParen + 1, index).trim()
+
+    if (char === open) depth += 1
+    if (char === close) depth -= 1
+    if (depth === 0) return code.slice(start + 1, index).trim()
   }
+
+  return ""
+}
+
+function extractDirectJsx(code: string, start: number) {
+  const source = code.slice(start).trimStart()
+  if (!source.startsWith("<")) return ""
+
+  let depth = 0
+  let quote = ""
+  let expressionDepth = 0
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+    const previous = source[index - 1]
+
+    if (quote) {
+      if (char === quote && previous !== "\\") quote = ""
+      continue
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char
+      continue
+    }
+
+    if (char === "{") expressionDepth += 1
+    if (char === "}") expressionDepth = Math.max(0, expressionDepth - 1)
+    if (expressionDepth > 0) continue
+
+    if (source.startsWith("</", index)) depth -= 1
+    else if (char === "<" && !source.startsWith("<!--", index) && !source.startsWith("<!", index) && !source.startsWith("<?", index)) depth += 1
+
+    const closeIndex = source.indexOf(">", index)
+    if (char === "<" && closeIndex !== -1 && source[closeIndex - 1] === "/") depth -= 1
+
+    if (char === ">" && depth === 0) return source.slice(0, index + 1).trim()
+  }
+
+  return source.replace(/;\s*$/, "").trim()
+}
+
+function extractReturnJsx(code: string) {
+  const source = pageComponentSource(code)
+  const returnMatch = /\breturn\b/.exec(source)
+
+  if (returnMatch?.index !== undefined) {
+    let cursor = returnMatch.index + returnMatch[0].length
+    while (/\s/.test(source[cursor] || "")) cursor += 1
+
+    if (source[cursor] === "(") return readBalanced(source, cursor, "(", ")")
+    if (source[cursor] === "<") return extractDirectJsx(source, cursor)
+  }
+
+  const arrowIndex = source.indexOf("=>")
+  if (arrowIndex !== -1) {
+    let cursor = arrowIndex + 2
+    while (/\s/.test(source[cursor] || "")) cursor += 1
+    if (source[cursor] === "(") return readBalanced(source, cursor, "(", ")")
+    if (source[cursor] === "<") return extractDirectJsx(source, cursor)
+  }
+
   return ""
 }
 
@@ -109,11 +202,16 @@ function staticHtml(files: Record<string, string>, projectName: string, route: s
       `The project does not contain a page for ${route}. Expected ${routeFileCandidates(route)[0]}.`
     )
   }
+
   const jsx = extractReturnJsx(pageCode)
   const body = jsxToHtml(jsx)
-  if (!body.trim() || body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().length < 4) {
-    return errorHtml(`The ${route} page did not produce visible preview content.`)
+  const visibleText = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+  const hasMarkup = /<[a-z][\s\S]*?>/i.test(body)
+
+  if (!body.trim() || (!hasMarkup && visibleText.length < 4)) {
+    return errorHtml(`The ${route} page could not be converted into a static preview. Open Code to inspect app/page.tsx.`)
   }
+
   const css = files["app/globals.css"] || files["src/app/globals.css"] || files["styles/globals.css"] || ""
   return `<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(projectName)} · ${escapeHtml(route)}</title><script src="https://cdn.tailwindcss.com"></script><style>html,body{margin:0;min-height:100%}${css}</style></head><body>${body}<script>(function(){document.addEventListener('click',function(event){var link=event.target.closest('a[href]');if(!link)return;var href=link.getAttribute('href')||'';if(href.startsWith('/')&&!href.startsWith('//')){event.preventDefault();parent.postMessage({type:'786-preview-route',path:href},'*')}})})();</script></body></html>`
 }
@@ -135,10 +233,6 @@ export async function GET(
     const rawHtml = url.searchParams.get("raw") === "1"
     const route = normalizeRoute(url.searchParams.get("path"))
 
-    // 786-admin projects are stored in admin_projects/admin_project_files and
-    // are owned by email. The previous implementation only queried the legacy
-    // projects table by user_id, so every successfully saved admin project was
-    // incorrectly reported as missing.
     const email = String(session.email || "").toLowerCase().trim()
     if (email && isAdminUser(email)) {
       const adminProject = await getProjectWithData(projectId, email)
@@ -162,7 +256,6 @@ export async function GET(
       }
     }
 
-    // Keep legacy customer projects working for non-admin preview callers.
     const rows = await sql`
       SELECT id, name, files
       FROM projects
