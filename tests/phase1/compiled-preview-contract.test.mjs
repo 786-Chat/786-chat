@@ -46,6 +46,8 @@ test("generated Vercel deployment uses a valid target and must become ready", as
   assert.match(deployer, /target: "preview"/)
   assert.doesNotMatch(deployer, /target: null/)
   assert.match(deployer, /waitForReadyDeployment/)
+  assert.match(deployer, /allowEmbeddedRuntimePreview/)
+  assert.match(deployer, /ssoProtection: null/)
   assert.match(deployer, /state === "READY"/)
   assert.match(deployer, /Vercel deployment did not become ready/)
 })
