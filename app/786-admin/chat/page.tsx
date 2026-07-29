@@ -244,6 +244,7 @@ export default function SevenEightSixAdminChatPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const endRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const hydrationVersionRef = useRef(0)
 
   const isAdmin = useMemo(() => user?.email?.toLowerCase().trim() === ADMIN_EMAIL, [user])
   const fileNames = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
@@ -254,26 +255,80 @@ export default function SevenEightSixAdminChatPage() {
   useEffect(() => { if (!isLoading && !isAdmin) router.replace("/786-admin/login") }, [isLoading, isAdmin, router])
   useEffect(() => {
     if (!isAdmin) return
-    try { localStorage.removeItem(OLD_PROJECT_KEY); localStorage.removeItem(LEGACY_PROJECTS_KEY) } catch {}
+
+    try {
+      localStorage.removeItem(OLD_PROJECT_KEY)
+      localStorage.removeItem(LEGACY_PROJECTS_KEY)
+    } catch {}
+
+    const hydrationVersion = ++hydrationVersionRef.current
     let cancelled = false
+
     async function hydrate() {
       let activeId: string | null = null
-      try { activeId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY) } catch {}
+      try {
+        activeId = localStorage.getItem(ACTIVE_PROJECT_ID_KEY)
+      } catch {}
+
       if (!activeId) return
+
       try {
         const res = await fetch(`/api/786-admin/projects/${activeId}`, { cache: "no-store" })
-        if (!res.ok) { if (res.status === 404) localStorage.removeItem(ACTIVE_PROJECT_ID_KEY); return }
+
+        if (
+          cancelled ||
+          hydrationVersion !== hydrationVersionRef.current
+        ) {
+          return
+        }
+
+        if (!res.ok) {
+          if (res.status === 404) {
+            try {
+              localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+            } catch {}
+          }
+          return
+        }
+
         const json = (await res.json()) as { project: AdminProjectWithData }
-        if (cancelled || !json.project) return
+
+        if (
+          cancelled ||
+          hydrationVersion !== hydrationVersionRef.current ||
+          !json.project
+        ) {
+          return
+        }
+
         const p = json.project
-        setProject({ id: p.id, title: p.title, description: p.description, prompt: p.prompt, files: p.files || {}, preview_state: p.preview_state || {} })
+        setProject({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          prompt: p.prompt,
+          files: p.files || {},
+          preview_state: p.preview_state || {},
+        })
         setMessages((p.messages || []).map(uiFromAdminMessage))
-        setSelectedFile((p.preview_state?.active_file as string | undefined) || (p.files && p.files["app/page.tsx"] ? "app/page.tsx" : Object.keys(p.files || {})[0]) || "app/page.tsx")
+        setSelectedFile(
+          (p.preview_state?.active_file as string | undefined) ||
+            (p.files && p.files["app/page.tsx"]
+              ? "app/page.tsx"
+              : Object.keys(p.files || {})[0]) ||
+            "app/page.tsx"
+        )
       } catch {}
     }
-    hydrate()
-    return () => { cancelled = true }
+
+    void hydrate()
+
+    return () => {
+      cancelled = true
+      hydrationVersionRef.current += 1
+    }
   }, [isAdmin])
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages.length, sending])
   useEffect(() => {
     try {
@@ -283,8 +338,30 @@ export default function SevenEightSixAdminChatPage() {
   }, [])
 
   function newChat() {
-    setMessages([]); setProject(null); setSelectedFile("app/page.tsx"); setInput(""); setAttachments([]); setAttachmentError(null); setPanel("preview"); setRefreshKey((v) => v + 1)
-    try { localStorage.removeItem(ACTIVE_PROJECT_ID_KEY) } catch {}
+    hydrationVersionRef.current += 1
+
+    try {
+      localStorage.removeItem(ACTIVE_PROJECT_ID_KEY)
+      localStorage.removeItem(OLD_PROJECT_KEY)
+      localStorage.removeItem(LEGACY_PROJECTS_KEY)
+    } catch {}
+
+    setSending(false)
+    setPublishing(false)
+    setMessages([])
+    setProject(null)
+    setSelectedFile("app/page.tsx")
+    setInput("")
+    setAttachments([])
+    setAttachmentError(null)
+    setPanel("preview")
+    setThemeOpen(false)
+    setDeviceOpen(false)
+    setRefreshKey((value) => value + 1)
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }
 
   async function persistAfterGeneration(generated: SevenEightSixProject, userText: string, assistantText: string, assistantModel: string | null, assistantReason: string | null): Promise<ActiveProject | null> {
