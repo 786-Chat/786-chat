@@ -17,6 +17,50 @@ function safeProjectName(projectId: string): string {
   return `786-generated-${suffix || "project"}`
 }
 
+async function deploymentState(
+  endpoint: URL,
+  token: string,
+): Promise<{ readyState?: unknown; error?: { message?: unknown } }> {
+  const response = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  })
+  const payload = (await response.json().catch(() => null)) as null | {
+    readyState?: unknown
+    error?: { message?: unknown }
+  }
+  if (!response.ok || !payload) {
+    const detail = typeof payload?.error?.message === "string"
+      ? payload.error.message
+      : `Vercel deployment status failed with ${response.status}`
+    throw new Error(detail.slice(0, 500))
+  }
+  return payload
+}
+
+async function waitForReadyDeployment(input: {
+  id: string
+  token: string
+  teamId?: string
+}): Promise<string> {
+  const deadline = Date.now() + 45_000
+  const endpoint = new URL(`https://api.vercel.com/v13/deployments/${input.id}`)
+  if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+
+  while (Date.now() < deadline) {
+    const payload = await deploymentState(endpoint, input.token)
+    const state = typeof payload.readyState === "string"
+      ? payload.readyState.toUpperCase()
+      : "UNKNOWN"
+    if (state === "READY") return state
+    if (["ERROR", "CANCELED"].includes(state)) {
+      throw new Error(`Vercel deployment finished with state ${state}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+  }
+  throw new Error("Vercel deployment did not become ready within 45 seconds")
+}
+
 export async function deployGeneratedProjectToVercel(input: {
   projectId: string
   branch: string
@@ -37,7 +81,7 @@ export async function deployGeneratedProjectToVercel(input: {
     },
     body: JSON.stringify({
       name: safeProjectName(input.projectId),
-      target: null,
+      target: "preview",
       gitSource: {
         type: "github",
         repoId: repositoryId,
@@ -72,9 +116,15 @@ export async function deployGeneratedProjectToVercel(input: {
     throw new Error("Vercel returned an untrusted deployment URL")
   }
 
+  const readyState = await waitForReadyDeployment({
+    id: payload.id,
+    token,
+    teamId,
+  })
+
   return {
     id: payload.id,
     url,
-    readyState: typeof payload.readyState === "string" ? payload.readyState : "QUEUED",
+    readyState,
   }
 }
