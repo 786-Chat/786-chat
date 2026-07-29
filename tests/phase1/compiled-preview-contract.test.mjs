@@ -13,6 +13,8 @@ test("workspace queues an isolated build after persistence", async () => {
   assert.match(workspace, /loadBuilderBuild/)
   assert.match(workspace, /async function retryBuild/)
   assert.match(workspace, /Retry build/)
+  assert.match(workspace, /Rebuild/)
+  assert.match(workspace, /Install, type-check and Next\.js build completed successfully\./)
   assert.match(workspace, /queueBuilderBuild\(project\.id\)/)
 })
 
