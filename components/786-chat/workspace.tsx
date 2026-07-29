@@ -326,7 +326,14 @@ export function SevenEightSixWorkspace() {
           </div>
           <div className="mx-auto flex items-center gap-2">
             <span className="rounded-lg border border-violet-400/15 bg-violet-500/10 px-3 py-1.5 text-[13px] font-semibold text-violet-200">
-              ✦ {project ? "Design generated" : "Ready to analyse"}
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Thinking &amp; analysing
+                </span>
+              ) : (
+                <>✦ {project ? "Design generated" : "Ready to analyse"}</>
+              )}
             </span>
             <span className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
               {build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
@@ -345,14 +352,25 @@ export function SevenEightSixWorkspace() {
             <div className="flex w-[180px] shrink-0 flex-col border-r border-[#1b2940] px-4 py-5">
               <p className="mb-8 flex items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
               <div className="relative flex-1">
-                <div className="absolute bottom-12 left-[23px] top-5 w-px bg-gradient-to-b from-cyan-400 via-violet-500 to-amber-300" />
+                <div className="absolute left-[22px] top-6 h-[320px] w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                  <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
+                </div>
                 {stages.map((stage, index) => {
                   const Icon = stage.icon
                   const active = index < currentStage || (busy && index === 0)
+                  const isCurrent =
+                    (busy && index === 0) ||
+                    (!busy &&
+                      currentStage > 0 &&
+                      index === Math.min(currentStage - 1, stages.length - 1))
                   return (
                     <div key={stage.label} className="relative mb-8 flex gap-3">
-                      <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full border bg-[#0a1221] ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
-                        {busy && index === 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                      <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
+                        {isCurrent && (
+                          <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
+                        )}
+                        <span className="absolute inset-0 rounded-full border border-current bg-[#0a1221] shadow-[inset_0_0_18px_rgba(255,255,255,.035)]" />
+                        {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
                       <div className="pt-2">
                         <p className={`text-[14px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
@@ -487,6 +505,28 @@ export function SevenEightSixWorkspace() {
           </button>
         </section>
       </div>
+      <style jsx>{`
+        @keyframes stage-flow {
+          0% {
+            transform: translateY(-90px);
+            opacity: 0;
+          }
+          15% {
+            opacity: 1;
+          }
+          85% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(330px);
+            opacity: 0;
+          }
+        }
+
+        .stage-flow {
+          animation: stage-flow 2.8s ease-in-out infinite;
+        }
+      `}</style>
     </main>
   )
 }

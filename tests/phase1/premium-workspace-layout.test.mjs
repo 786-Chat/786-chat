@@ -25,6 +25,10 @@ test("canonical builder implements the approved premium workspace structure", as
   assert.match(workspace, /aria-label="Resize AI panel"/)
   assert.match(workspace, /BUILDER_DEVICES/)
   assert.match(workspace, /setShowCode/)
+  assert.match(workspace, /Thinking &amp; analysing/)
+  assert.match(workspace, /stage-flow/)
+  assert.match(workspace, /h-\[320px\]/)
+  assert.doesNotMatch(workspace, /bottom-12 left-\[23px\] top-5/)
 })
 
 test("workspace reports real state and contains no Atlas demo project", async () => {
