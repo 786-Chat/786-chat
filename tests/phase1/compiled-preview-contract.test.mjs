@@ -11,6 +11,9 @@ test("workspace queues an isolated build after persistence", async () => {
   assert.match(api, /\/api\/786-chat\/projects\/\$\{projectId\}\/build/)
   assert.match(workspace, /queueBuilderBuild/)
   assert.match(workspace, /loadBuilderBuild/)
+  assert.match(workspace, /async function retryBuild/)
+  assert.match(workspace, /Retry build/)
+  assert.match(workspace, /queueBuilderBuild\(project\.id\)/)
 })
 
 test("runtime preview is displayed only from a passed deployment URL", async () => {
