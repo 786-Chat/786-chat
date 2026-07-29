@@ -250,6 +250,9 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
       prompt,
+      providerOptions: picked.provider === "deepseek"
+        ? { deepseek: { thinking: { type: "disabled" } } }
+        : undefined,
     }
 
     if (attachments.length > 0) {
