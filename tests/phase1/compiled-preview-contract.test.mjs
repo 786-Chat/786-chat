@@ -23,3 +23,11 @@ test("runtime preview is displayed only from a passed deployment URL", async () 
   assert.match(workspace, /src=\{build\.deployment_url\}/)
   assert.doesNotMatch(workspace, /srcDoc|Babel\.transform|regex.*jsx/i)
 })
+
+test("build runner APIs authenticate before the admin session middleware", async () => {
+  const middleware = await read("middleware.ts")
+
+  assert.match(middleware, /pathname\.startsWith\("\/api\/786-admin\/build-runner\/"\)/)
+  assert.match(middleware, /request\.headers\.get\("authorization"\) !== `Bearer \$\{runnerSecret\}`/)
+  assert.match(middleware, /if \(isBuildRunnerApi\)[\s\S]*return NextResponse\.next\(\)/)
+})
