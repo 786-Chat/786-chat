@@ -146,10 +146,32 @@ async function generateRepair(context: RepairContext, logs: string) {
   throw new Error(`Repair providers failed: ${failures.join(" | ")}`.slice(0, 2000))
 }
 
+function deterministicCompatibilityRepair(context: RepairContext, logs: string) {
+  const source = context.files["next.config.ts"]
+  if (
+    !source ||
+    !/next\.config\.ts[^]*not supported|configuring next\.js via ['"]next\.config\.ts['"] is not supported/i.test(logs)
+  ) {
+    return null
+  }
+
+  const content = source
+    .replace(/^\s*import\s+type\s+\{\s*NextConfig\s*\}\s+from\s+["']next["'];?\s*$/gm, "")
+    .replace(/(:\s*NextConfig|satisfies\s+NextConfig)(?=\s*[=;])/g, "")
+    .trimStart()
+
+  return {
+    files: { "next.config.mjs": content },
+    removedPaths: ["next.config.ts"],
+    model: "deterministic-next-config-compatibility",
+  }
+}
+
 async function persistRepair(
   context: RepairContext,
   repairedFiles: Record<string, string>,
   model: string,
+  removedPaths: string[] = [],
 ) {
   const revisionId = randomUUID()
   const queries: unknown[] = [
@@ -168,13 +190,24 @@ async function persistRepair(
           '{}'::jsonb
         ),
         p.preview_state,
-        jsonb_build_object('parent_build_id', ${context.buildId}, 'repair_model', ${model}),
+        jsonb_build_object(
+          'parent_build_id', ${context.buildId}::text,
+          'repair_model', ${model}::text
+        ),
         NOW()
       FROM admin_projects p
       WHERE p.id = ${context.projectId}
         AND p.owner_email = ${context.ownerEmail}
     `,
   ]
+
+  for (const path of removedPaths) {
+    queries.push(sql`
+      DELETE FROM admin_project_files
+      WHERE project_id = ${context.projectId}
+        AND path = ${path}
+    `)
+  }
 
   for (const [path, content] of Object.entries(repairedFiles)) {
     queries.push(sql`
@@ -222,14 +255,16 @@ export async function repairFailedBuild(input: {
   `
 
   try {
-    const repair = await generateRepair(context, input.logs)
+    const repair = deterministicCompatibilityRepair(context, input.logs)
+      ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }
     const merged = { ...context.files, ...repair.files }
+    for (const path of repair.removedPaths) delete merged[path]
     const validation = validateGeneratedProject(merged)
     if (!validation.valid) {
       throw new Error(`Repair failed static validation: ${validation.errors.join(" | ")}`)
     }
 
-    await persistRepair(context, repair.files, repair.model)
+    await persistRepair(context, repair.files, repair.model, repair.removedPaths)
     const nextBuild = await createBuildJob({
       projectId: context.projectId,
       ownerEmail: context.ownerEmail,
