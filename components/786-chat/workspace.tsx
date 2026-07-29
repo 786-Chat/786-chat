@@ -352,10 +352,6 @@ export function SevenEightSixWorkspace() {
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : "Generation failed."
       setError(message)
-      setMessages((current) => [
-        ...current,
-        { id: `e-${Date.now()}`, role: "assistant", content: message },
-      ])
     } finally {
       setBusy(false)
     }

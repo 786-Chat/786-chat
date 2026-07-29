@@ -150,6 +150,18 @@ function providerSummary(attempts: ProviderAttempt[]) {
   return summary
 }
 
+function compactFailure(attempts: ProviderAttempt[], preserved: boolean) {
+  const statuses = providerSummary(attempts)
+  const parts = [
+    statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : "",
+    statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "",
+  ].filter(Boolean)
+  const summary = parts.length > 0 ? parts.join("; ") : "The configured AI providers are unavailable"
+  return preserved
+    ? `${summary}. Your existing project was kept unchanged. Retry when a provider is available.`
+    : `${summary}. No project was created. Retry when a provider is available.`
+}
+
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as GeneratorPayload
   const requested = String(payload.mode || "auto") as CodegenMode
@@ -226,11 +238,12 @@ export async function POST(request: Request) {
   const diagnostic = attempts
     .map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason || attempt.model || "failed")}`)
     .join(" | ")
+  console.error(`[786.Chat provider failure] ${diagnostic}`)
 
   if (isExistingEdit) {
     return NextResponse.json({
       success: false,
-      error: `Both AI providers were unavailable. Your existing project was kept unchanged. Provider diagnostic: ${diagnostic}`,
+      error: compactFailure(attempts, true),
       warning: "EDIT_NOT_APPLIED_PROJECT_PRESERVED",
       providerAttempts: attempts,
       providerStatus: providerSummary(attempts),
@@ -241,7 +254,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: false,
-    error: `All configured AI providers failed before a project could be generated. Provider diagnostic: ${diagnostic}`,
+    error: compactFailure(attempts, false),
     warning: "ALL_AI_PROVIDERS_FAILED",
     providerAttempts: attempts,
     providerStatus: providerSummary(attempts),

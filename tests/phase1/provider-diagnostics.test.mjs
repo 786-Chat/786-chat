@@ -19,6 +19,7 @@ test('configured AI providers start concurrently instead of using two 25 second 
 })
 
 test('failed provider response includes a safe diagnostic', () => {
-  assert.match(source, /Provider diagnostic:/)
+  assert.match(source, /compactFailure/)
+  assert.match(source, /console\.error\(`\[786\.Chat provider failure\]/)
   assert.match(source, /safeReason/)
 })
