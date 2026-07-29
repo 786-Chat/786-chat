@@ -39,3 +39,13 @@ test("build runner APIs authenticate before the admin session middleware", async
   assert.match(dispatcher, /process\.env\.VERCEL_GIT_COMMIT_REF/)
   assert.doesNotMatch(dispatcher, /agent\/phase-3-publishing-v2/)
 })
+
+test("generated Vercel deployment uses a valid target and must become ready", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+
+  assert.match(deployer, /target: "preview"/)
+  assert.doesNotMatch(deployer, /target: null/)
+  assert.match(deployer, /waitForReadyDeployment/)
+  assert.match(deployer, /state === "READY"/)
+  assert.match(deployer, /Vercel deployment did not become ready/)
+})
