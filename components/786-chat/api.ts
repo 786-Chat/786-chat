@@ -164,7 +164,13 @@ export async function queueBuilderBuild(projectId: string) {
     error?: string
   }
   if (!response.ok || !payload.build) {
-    throw new Error(payload.error || "Project could not be queued for build.")
+    const validation = payload.validation as { errors?: Array<{ message?: string; path?: string }> } | undefined
+    const detail = validation?.errors?.length
+      ? ` Missing: ${validation.errors.slice(0, 4).map((issue) =>
+          `${issue.path ? `${issue.path}: ` : ""}${issue.message || "Invalid build input"}`,
+        ).join("; ")}`
+      : ""
+    throw new Error(`${payload.error || "Project could not be queued for build."}${detail}`)
   }
   return payload.build
 }
