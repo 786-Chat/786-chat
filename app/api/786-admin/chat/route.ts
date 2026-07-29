@@ -5,6 +5,10 @@ import { generateProjectCode, type CodegenMode } from "@/lib/786-admin/codegen"
 import { parseAttachments } from "@/lib/786-admin/attachment-validation"
 import { createPremiumFallbackProject } from "@/lib/786-admin/premium-fallback-generator"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
+import {
+  normalizeFallbackPromptRoutes,
+  repairFallbackRouteFiles,
+} from "@/lib/786-admin/fallback-route-normalizer"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -154,15 +158,37 @@ function addResponsiveSafety(files: Record<string, string>) {
   return next
 }
 
-function localResponse(userRequest: string, projectId: string | null, reason: string, identityPrompt: string, preserveExisting: boolean) {
-  const local = createPremiumFallbackProject(preserveExisting ? userRequest : `${userRequest}\n\n${identityPrompt}`)
+function localResponse(
+  userRequest: string,
+  projectId: string | null,
+  reason: string,
+  identityPrompt: string,
+  preserveExisting: boolean
+) {
+  const fallbackPrompt = preserveExisting
+    ? userRequest
+    : normalizeFallbackPromptRoutes(
+        `${userRequest}\n\n${identityPrompt}`
+      )
+
+  const local = createPremiumFallbackProject(fallbackPrompt)
+
+  const repairedFiles = preserveExisting
+    ? local.files
+    : repairFallbackRouteFiles(local.files, userRequest)
+
   const now = new Date().toISOString()
   const id = projectId ?? local.id
+
+  const pageCount = Object.keys(repairedFiles).filter((path) =>
+    /^app\/(?:.+\/)?page\.tsx$/.test(path)
+  ).length
+
   return NextResponse.json({
     success: true,
     response: preserveExisting
       ? `${local.title} updated with working files and responsive layout.`
-      : `${local.title} created with a genuinely separate premium design, 3D depth, animation and a unique layout system.`,
+      : `${local.title} created with ${pageCount} working pages using the local fallback generator.`,
     model: "786-chat-premium-fallback",
     reason,
     project: {
@@ -172,7 +198,7 @@ function localResponse(userRequest: string, projectId: string | null, reason: st
       prompt: userRequest,
       createdAt: now,
       updatedAt: now,
-      files: addResponsiveSafety(local.files),
+      files: addResponsiveSafety(repairedFiles),
     },
     fellBackToLocal: true,
   })
