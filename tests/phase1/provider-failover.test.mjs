@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises"
 
 const canonicalRoute = await readFile("app/api/786-chat/generate/route.ts", "utf8")
 const providerController = await readFile("lib/786-chat/provider-controller.ts", "utf8")
+const codegen = await readFile("lib/786-admin/codegen.ts", "utf8")
 const workspaceApi = await readFile("components/786-chat/api.ts", "utf8")
 
 test("the workspace uses one canonical provider entry point", () => {
@@ -34,4 +35,9 @@ test("parallel provider attempts are bounded inside the Vercel window", () => {
   assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000/)
   assert.match(providerController, /maxDuration = 60/)
   assert.match(providerController, /Promise\.race/)
+})
+
+test("DeepSeek code generation disables slow thinking mode", () => {
+  assert.match(codegen, /providerOptions/)
+  assert.match(codegen, /deepseek:\s*\{\s*thinking:\s*\{\s*type:\s*"disabled"/)
 })
