@@ -22,12 +22,54 @@ function timeout<T>(ms: number): Promise<T> {
   })
 }
 
+function fallbackPromptWithRoutes(message: string) {
+  const routes = new Set<string>()
+  let acceptingPages = false
+
+  for (const raw of message.split(/\n+/)) {
+    const line = raw.trim()
+    if (!line) continue
+
+    if (/^(?:create|create these pages|pages|routes)\s*:?$/i.test(line)) {
+      acceptingPages = true
+      continue
+    }
+
+    if (/^(?:include|features|sections|use|design|colou?r|typography|do not|don't|never|avoid|exclude|generate)\b/i.test(line)) {
+      acceptingPages = false
+      continue
+    }
+
+    const bullet = line.match(/^[-•*]\s+(.+?)\s*$/)?.[1]?.replace(/[.;]+$/, "").trim()
+    if (!bullet) continue
+
+    if (bullet.startsWith("/")) {
+      const route = bullet.replace(/\s+/g, "").replace(/\/+$/, "") || "/"
+      routes.add(route)
+      continue
+    }
+
+    if (!acceptingPages || bullet.length > 50) continue
+    if (/^(?:home|homepage)$/i.test(bullet)) {
+      routes.add("/")
+      continue
+    }
+
+    const slug = slugify(bullet)
+    if (slug) routes.add(`/${slug}`)
+  }
+
+  if (routes.size === 0) return message
+  routes.add("/")
+  return `${message}\n\nFALLBACK ROUTES — CREATE REAL PAGE FILES:\n${Array.from(routes).map((route) => `- ${route}`).join("\n")}`
+}
+
 function fallbackResponse(message: string, projectId: string | null, reason: string) {
-  const local = createPremiumFallbackProject(message)
+  const local = createPremiumFallbackProject(fallbackPromptWithRoutes(message))
   const now = new Date().toISOString()
   return NextResponse.json({
     success: true,
-    response: "A limited local fallback was used because the compact DeepSeek request could not finish.",
+    response: "A complete multi-page local fallback was used because the compact DeepSeek request could not finish.",
     model: "786-chat-premium-fallback",
     reason,
     project: {
