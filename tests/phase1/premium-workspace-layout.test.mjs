@@ -27,7 +27,9 @@ test("canonical builder implements the approved premium workspace structure", as
   assert.match(workspace, /setShowCode/)
   assert.match(workspace, /Thinking &amp; analysing/)
   assert.match(workspace, /stage-flow/)
-  assert.match(workspace, /h-\[320px\]/)
+  assert.match(workspace, /bottom-6 left-\[22px\] top-6/)
+  assert.match(workspace, /last:mb-0/)
+  assert.doesNotMatch(workspace, /h-\[320px\]/)
   assert.doesNotMatch(workspace, /bottom-12 left-\[23px\] top-5/)
 })
 
