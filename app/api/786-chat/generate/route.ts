@@ -6,6 +6,7 @@ import { POST as generateWithProviderFailover } from "@/lib/786-chat/provider-co
 import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
 import { validateGeneratedProject } from "@/lib/786-chat/validation"
+import { designFamilyBrief } from "@/lib/786-chat/design-system"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -18,7 +19,10 @@ export async function POST(request: Request) {
 
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
-  const specification = analyseProjectPrompt(prompt)
+  const analysisSeed = typeof payload.projectId === "string" && payload.projectId.trim()
+    ? payload.projectId.trim()
+    : crypto.randomUUID()
+  const specification = analyseProjectPrompt(prompt, analysisSeed)
   const plan = createProjectPlan(specification)
   const generationBrief = [
     prompt,
@@ -28,6 +32,11 @@ export async function POST(request: Request) {
     `- Required controls/components: ${specification.requiredComponents.join(", ") || "none"}`,
     `- Required interactions: ${specification.requiredInteractions.join(", ") || "none"}`,
     `- Planned files: ${plan.files.map((file) => file.path).join(", ")}`,
+    "",
+    "COMPOSABLE DESIGN SYSTEM (do not treat this as a fixed template):",
+    ...designFamilyBrief(specification.designFamily).map((line) => `- ${line}`),
+    "- Adapt these design rules to the requested brand, industry, content and functionality.",
+    "- Do not reuse generic product names, copy, metrics, people or imagery.",
     "- Return every planned file with complete content.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
