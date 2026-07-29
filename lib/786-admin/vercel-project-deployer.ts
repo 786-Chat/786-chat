@@ -111,7 +111,7 @@ export async function deployGeneratedProjectToVercel(input: {
     },
     body: JSON.stringify({
       name: projectName,
-      target: "preview",
+      target: "staging",
       gitSource: {
         type: "github",
         repoId: repositoryId,
