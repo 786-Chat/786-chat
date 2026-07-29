@@ -11,10 +11,12 @@ test('provider failover checks configured keys before attempting generation', ()
   assert.match(source, /configuredModes/)
 })
 
-test('configured AI providers start concurrently instead of using two 25 second windows', () => {
+test('configured AI providers start concurrently with provider-specific limits', () => {
   assert.match(source, /Promise\.race/)
   assert.match(source, /attemptsByMode/)
-  assert.match(source, /AI_ATTEMPT_TIMEOUT_MS\s*=\s*25_000/)
+  assert.match(source, /GEMINI_ATTEMPT_TIMEOUT_MS\s*=\s*25_000/)
+  assert.match(source, /DEEPSEEK_ATTEMPT_TIMEOUT_MS\s*=\s*45_000/)
+  assert.match(source, /attemptTimeout\(mode/)
   assert.doesNotMatch(source, /for\s*\([^)]*modesToRun[^)]*\)\s*\{\s*await runAttempt/)
 })
 
