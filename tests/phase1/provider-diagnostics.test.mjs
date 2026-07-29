@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const source = await readFile(new URL('../../app/api/786-admin/chat-resilient/route.ts', import.meta.url), 'utf8')
+const source = await readFile(new URL('../../lib/786-chat/provider-controller.ts', import.meta.url), 'utf8')
 
 test('provider failover checks configured keys before attempting generation', () => {
   assert.match(source, /DEEPSEEK_API_KEY/)
@@ -14,10 +14,11 @@ test('provider failover checks configured keys before attempting generation', ()
 test('configured AI providers start concurrently instead of using two 25 second windows', () => {
   assert.match(source, /Promise\.race/)
   assert.match(source, /attemptsByMode/)
-  assert.doesNotMatch(source, /AI_ATTEMPT_TIMEOUT_MS\s*=\s*25_000/)
+  assert.match(source, /AI_ATTEMPT_TIMEOUT_MS\s*=\s*25_000/)
+  assert.doesNotMatch(source, /for\s*\([^)]*modesToRun[^)]*\)\s*\{\s*await runAttempt/)
 })
 
-test('fallback response includes a safe provider diagnostic', () => {
+test('failed provider response includes a safe diagnostic', () => {
   assert.match(source, /Provider diagnostic:/)
   assert.match(source, /safeReason/)
 })

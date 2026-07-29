@@ -1,0 +1,22 @@
+import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
+import test from "node:test"
+
+const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8")
+
+test("workspace queues an isolated build after persistence", async () => {
+  const api = await read("components/786-chat/api.ts")
+  const workspace = await read("components/786-chat/workspace.tsx")
+
+  assert.match(api, /\/api\/786-chat\/projects\/\$\{projectId\}\/build/)
+  assert.match(workspace, /queueBuilderBuild/)
+  assert.match(workspace, /loadBuilderBuild/)
+})
+
+test("runtime preview is displayed only from a passed deployment URL", async () => {
+  const workspace = await read("components/786-chat/workspace.tsx")
+
+  assert.match(workspace, /build\?\.status === "passed" && build\.deployment_url/)
+  assert.match(workspace, /src=\{build\.deployment_url\}/)
+  assert.doesNotMatch(workspace, /srcDoc|Babel\.transform|regex.*jsx/i)
+})

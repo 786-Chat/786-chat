@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { completeRunnerBuild, getRunnerBuildBundle } from "@/lib/786-admin/build-runner-store"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
+import { repairFailedBuild } from "@/lib/786-chat/build-repair"
+
+export const runtime = "nodejs"
+export const maxDuration = 60
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
@@ -30,6 +34,7 @@ export async function POST(request: Request) {
   }
 
   let status: "passed" | "failed" | "cancelled" = body.status
+  const runnerBuildFailed = body.status === "failed"
   let errorMessage = typeof body.errorMessage === "string" ? body.errorMessage : null
   let githubBranch: string | null = null
   let githubCommitSha: string | null = null
@@ -93,13 +98,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Build not found or already completed" }, { status: 409 })
   }
 
+  const repair = runnerBuildFailed
+    ? await repairFailedBuild({
+        buildId: body.buildId,
+        logs,
+        baseUrl: new URL(request.url).origin,
+      })
+    : null
+
   return NextResponse.json({
-    success: status === "passed",
+    success: status === "passed" || repair?.queued === true,
     status,
     github: githubPrUrl
       ? { branch: githubBranch, commitSha: githubCommitSha, pullRequestUrl: githubPrUrl }
       : null,
     deployment: deploymentUrl ? { url: deploymentUrl } : null,
+    repair,
     error: status === "failed" ? errorMessage : null,
   })
 }

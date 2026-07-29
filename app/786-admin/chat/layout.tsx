@@ -1,26 +1,5 @@
 import type { ReactNode } from "react"
-import { AdminChatLogoutController } from "@/components/786-admin/admin-chat-logout-controller"
-import { AdminChatSafeThemeController } from "@/components/786-admin/admin-chat-safe-theme-controller"
-import { AdminChatUrlHeaderController } from "@/components/786-admin/admin-chat-url-header-controller"
-import { AdminChatSidebarCleanup } from "@/components/786-admin/admin-chat-sidebar-cleanup"
-import { AdminChatResilientFetchBridge } from "@/components/786-admin/admin-chat-resilient-fetch-bridge"
-import { AdminChatStalePreviewResetV2 } from "@/components/786-admin/admin-chat-stale-preview-reset-v2"
 
-export default function AdminChatLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="admin-chat-route contents">
-      {children}
-      <AdminChatResilientFetchBridge />
-      <AdminChatLogoutController />
-      <AdminChatSafeThemeController />
-      <AdminChatStalePreviewResetV2 />
-      <AdminChatUrlHeaderController />
-      <AdminChatSidebarCleanup />
-      <style>{`
-        .admin-chat-route section > div.absolute.bottom-0 > p.mt-3 {
-          display: none !important;
-        }
-      `}</style>
-    </div>
-  )
+export default function LegacyChatRedirectLayout({ children }: { children: ReactNode }) {
+  return children
 }

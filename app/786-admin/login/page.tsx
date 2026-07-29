@@ -29,7 +29,7 @@ export default function SevenEightSixAdminLoginPage() {
 
   useEffect(() => {
     if (!authLoading && user?.email?.toLowerCase().trim() === ADMIN_EMAIL) {
-      router.push("/786-admin/chat")
+      router.push("/786.chat")
     }
   }, [authLoading, router, user])
 
@@ -52,7 +52,7 @@ export default function SevenEightSixAdminLoginPage() {
         return
       }
 
-      router.push("/786-admin/chat")
+      router.push("/786.chat")
     } catch (loginError) {
       setError(
         loginError instanceof Error

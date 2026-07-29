@@ -20,6 +20,9 @@ export type AdminProjectBuild = {
   github_commit_sha: string | null
   github_pr_url: string | null
   deployment_url: string | null
+  parent_build_id: string | null
+  repair_attempt: number
+  repair_status: "not_needed" | "pending" | "running" | "repaired" | "exhausted"
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -47,6 +50,10 @@ export async function ensureBuildJobsSchema(): Promise<void> {
       github_commit_sha  TEXT,
       github_pr_url      TEXT,
       deployment_url     TEXT,
+      parent_build_id    UUID REFERENCES admin_project_builds(id) ON DELETE SET NULL,
+      repair_attempt     INTEGER NOT NULL DEFAULT 0 CHECK (repair_attempt BETWEEN 0 AND 2),
+      repair_status      TEXT NOT NULL DEFAULT 'not_needed'
+                         CHECK (repair_status IN ('not_needed','pending','running','repaired','exhausted')),
       created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       started_at         TIMESTAMPTZ,
       completed_at       TIMESTAMPTZ,
@@ -63,6 +70,13 @@ export async function ensureBuildJobsSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_admin_project_builds_status
       ON admin_project_builds (status, created_at ASC)
   `
+
+  await sql`
+    ALTER TABLE admin_project_builds
+      ADD COLUMN IF NOT EXISTS parent_build_id UUID REFERENCES admin_project_builds(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS repair_attempt INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS repair_status TEXT NOT NULL DEFAULT 'not_needed'
+  `
 }
 
 export async function createBuildJob(input: {
@@ -71,6 +85,8 @@ export async function createBuildJob(input: {
   packageManager: "npm" | "pnpm" | "yarn"
   commands: string[]
   sourceVersion: string
+  parentBuildId?: string | null
+  repairAttempt?: number
 }): Promise<AdminProjectBuild> {
   await ensureBuildJobsSchema()
 
@@ -81,6 +97,9 @@ export async function createBuildJob(input: {
       package_manager,
       commands,
       source_version,
+      parent_build_id,
+      repair_attempt,
+      repair_status,
       created_at,
       updated_at
     )
@@ -90,6 +109,9 @@ export async function createBuildJob(input: {
       ${input.packageManager},
       ${JSON.stringify(input.commands)}::jsonb,
       ${input.sourceVersion},
+      ${input.parentBuildId ?? null}::uuid,
+      ${input.repairAttempt ?? 0},
+      ${input.parentBuildId ? "pending" : "not_needed"},
       NOW(),
       NOW()
     FROM admin_projects p
