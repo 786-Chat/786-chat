@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/phase1/*.test.mjs",
-    "test:phase1": "node --test tests/phase1/*.test.mjs"
+    "test": "node --test tests/phase1/*.test.mjs tests/phase2/*.test.mjs",
+    "test:phase1": "node --test tests/phase1/*.test.mjs",
+    "test:phase2": "node --test tests/phase2/*.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
