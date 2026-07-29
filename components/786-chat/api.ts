@@ -1,7 +1,10 @@
 import type {
   BuilderBuild,
+  BuilderDeploymentResult,
   BuilderMessage,
   BuilderProject,
+  BuilderProjectSummary,
+  BuilderRevision,
   GenerationRequest,
   GenerationResult,
 } from "./contracts"
@@ -171,4 +174,81 @@ export async function loadBuilderBuild(projectId: string) {
   }
   if (!response.ok) throw new Error(payload.error || "Build status could not be loaded.")
   return payload.build || null
+}
+
+export async function listBuilderProjects(): Promise<BuilderProjectSummary[]> {
+  const response = await fetch("/api/786-chat/projects", { cache: "no-store" })
+  const payload = (await response.json().catch(() => ({}))) as {
+    projects?: BuilderProjectSummary[]
+    error?: string
+  }
+  if (!response.ok) throw new Error(payload.error || "Projects could not be loaded.")
+  return payload.projects || []
+}
+
+export async function listBuilderRevisions(projectId: string): Promise<BuilderRevision[]> {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions`, {
+    cache: "no-store",
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    revisions?: BuilderRevision[]
+    error?: string
+  }
+  if (!response.ok) throw new Error(payload.error || "Revisions could not be loaded.")
+  return payload.revisions || []
+}
+
+export async function createBuilderRevision(projectId: string, label = "Manual checkpoint") {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ label, source: "manual" }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    revision?: BuilderRevision
+    error?: string
+  }
+  if (!response.ok || !payload.revision) {
+    throw new Error(payload.error || "Revision could not be created.")
+  }
+  return payload.revision
+}
+
+export async function restoreBuilderRevision(projectId: string, revisionId: string) {
+  const response = await fetch(
+    `/api/786-chat/projects/${projectId}/revisions/${revisionId}/restore`,
+    { method: "POST" },
+  )
+  const payload = (await response.json().catch(() => ({}))) as {
+    project?: StoredProject
+    error?: string
+  }
+  if (!response.ok || !payload.project) {
+    throw new Error(payload.error || "Revision could not be restored.")
+  }
+  return {
+    project: toProject(payload.project),
+    messages: (payload.project.messages || []).map(toMessage),
+  }
+}
+
+export async function deployBuilderProject(input: {
+  projectId: string
+  addressType: "path" | "subdomain" | "custom"
+  addressValue: string
+}): Promise<BuilderDeploymentResult> {
+  const response = await fetch(`/api/786-chat/projects/${input.projectId}/deploy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      addressType: input.addressType,
+      addressValue: input.addressValue,
+    }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as
+    Partial<BuilderDeploymentResult> & { error?: string }
+  if (!response.ok || !payload.url || !payload.domain) {
+    throw new Error(payload.error || "Verified deployment could not be created.")
+  }
+  return payload as BuilderDeploymentResult
 }

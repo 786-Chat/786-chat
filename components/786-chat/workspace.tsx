@@ -7,8 +7,11 @@ import {
   ChevronRight,
   Circle,
   Code2,
+  Copy,
   Database,
+  ExternalLink,
   FileCode2,
+  FolderOpen,
   History,
   KeyRound,
   LayoutDashboard,
@@ -24,12 +27,14 @@ import {
   Plug,
   Rocket,
   RotateCw,
+  Save,
   Send,
   Settings,
   Sparkles,
   TerminalSquare,
   WandSparkles,
   Waves,
+  X,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -37,17 +42,25 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import {
   generateBuilderProject,
+  createBuilderRevision,
+  deployBuilderProject,
   loadBuilderBuild,
   loadBuilderProject,
+  listBuilderProjects,
+  listBuilderRevisions,
   queueBuilderBuild,
+  restoreBuilderRevision,
   saveBuilderProject,
 } from "./api"
 import {
   BUILDER_DEVICES,
   type BuilderBuild,
+  type BuilderDeploymentResult,
   type BuilderDevice,
   type BuilderMessage,
   type BuilderProject,
+  type BuilderProjectSummary,
+  type BuilderRevision,
 } from "./contracts"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
@@ -55,6 +68,7 @@ const OWNER_EMAIL = "mujeeb@job4u.com"
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard },
+  { label: "Projects", icon: FolderOpen },
   { label: "Agent Flow", icon: Network, active: true },
   { label: "Tasks", icon: ListChecks },
   { label: "Knowledge", icon: BookOpen },
@@ -114,6 +128,14 @@ export function SevenEightSixWorkspace() {
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
   const [error, setError] = useState("")
+  const [projectsOpen, setProjectsOpen] = useState(false)
+  const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
+  const [revisions, setRevisions] = useState<BuilderRevision[]>([])
+  const [panelBusy, setPanelBusy] = useState(false)
+  const [deployOpen, setDeployOpen] = useState(false)
+  const [deployType, setDeployType] = useState<"path" | "subdomain" | "custom">("path")
+  const [deployValue, setDeployValue] = useState("")
+  const [deployResult, setDeployResult] = useState<BuilderDeploymentResult | null>(null)
   const drag = useRef<{ x: number; width: number } | null>(null)
 
   const isOwner = user?.email?.toLowerCase().trim() === OWNER_EMAIL
@@ -138,6 +160,8 @@ export function SevenEightSixWorkspace() {
             Object.keys(saved.files)[0] ||
             "app/page.tsx",
         )
+        void loadBuilderBuild(saved.id).then(setBuild).catch(() => undefined)
+        void listBuilderRevisions(saved.id).then(setRevisions).catch(() => undefined)
       })
       .catch(() => localStorage.removeItem(ACTIVE_PROJECT_KEY))
   }, [isOwner])
@@ -177,6 +201,101 @@ export function SevenEightSixWorkspace() {
     setError("")
     setShowCode(false)
     setBuild(null)
+    setRevisions([])
+  }
+
+  async function openProjects() {
+    setError("")
+    setPanelBusy(true)
+    setProjectsOpen(true)
+    try {
+      setProjects(await listBuilderProjects())
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Projects could not be loaded.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function openProject(projectId: string) {
+    setPanelBusy(true)
+    setError("")
+    try {
+      const loaded = await loadBuilderProject(projectId)
+      localStorage.setItem(ACTIVE_PROJECT_KEY, projectId)
+      setProject(loaded.project)
+      setMessages(loaded.messages)
+      setSelectedFile(
+        String(loaded.project.previewState.active_file || "") ||
+          Object.keys(loaded.project.files)[0] ||
+          "app/page.tsx",
+      )
+      const [latestBuild, savedRevisions] = await Promise.all([
+        loadBuilderBuild(projectId),
+        listBuilderRevisions(projectId),
+      ])
+      setBuild(latestBuild)
+      setRevisions(savedRevisions)
+      setProjectsOpen(false)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Project could not be opened.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function saveCheckpoint() {
+    if (!project || panelBusy) return
+    setPanelBusy(true)
+    setError("")
+    try {
+      await createBuilderRevision(project.id)
+      setRevisions(await listBuilderRevisions(project.id))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Checkpoint could not be saved.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function restoreCheckpoint(revisionId: string) {
+    if (!project || panelBusy) return
+    setPanelBusy(true)
+    setError("")
+    try {
+      const restored = await restoreBuilderRevision(project.id, revisionId)
+      setProject(restored.project)
+      setMessages(restored.messages)
+      setSelectedFile(
+        String(restored.project.previewState.active_file || "") ||
+          Object.keys(restored.project.files)[0] ||
+          "app/page.tsx",
+      )
+      setBuild(null)
+      setRevisions(await listBuilderRevisions(project.id))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Revision could not be restored.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function deployVerifiedProject() {
+    if (!project || build?.status !== "passed" || panelBusy) return
+    setPanelBusy(true)
+    setError("")
+    setDeployResult(null)
+    try {
+      setDeployResult(await deployBuilderProject({
+        projectId: project.id,
+        addressType: deployType,
+        addressValue: deployValue,
+      }))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Deployment failed.")
+    } finally {
+      setPanelBusy(false)
+    }
   }
 
   async function send() {
@@ -276,12 +395,15 @@ export function SevenEightSixWorkspace() {
             const Icon = item.icon
             return (
               <div key={item.label}>
-                {index === 1 && !sidebarCollapsed && (
+                {index === 2 && !sidebarCollapsed && (
                   <p className="mb-2 mt-5 px-2 text-[13px] font-bold uppercase tracking-[.16em] text-slate-600">Project</p>
                 )}
                 <button
                   type="button"
-                  onClick={() => item.label === "Overview" && router.push("/786.chat")}
+                  onClick={() => {
+                    if (item.label === "Overview") router.push("/786.chat")
+                    if (item.label === "Projects") void openProjects()
+                  }}
                   className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[13px] transition ${
                     sidebarCollapsed ? "justify-center" : "gap-3 px-2"
                   } ${item.active ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
@@ -342,7 +464,7 @@ export function SevenEightSixWorkspace() {
           <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" disabled={!project || build?.status !== "passed"} className="inline-flex h-9 items-center gap-3 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-5 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40">
+          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed"} className="inline-flex h-9 items-center gap-3 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-5 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40">
             <Rocket className="h-3.5 w-3.5" /> Deploy <ChevronDown className="h-3 w-3" />
           </button>
         </header>
@@ -491,11 +613,40 @@ export function SevenEightSixWorkspace() {
                   <div><b className="text-[13px]">{build ? `Build ${build.status}` : "No build has run"}</b><p className="mt-1 text-[12px] text-slate-600">{build?.error_message || "The isolated build sandbox starts after validated files are saved."}</p></div>
                 </div>
               </article>
-              <article className="rounded-lg border border-[#263550] bg-[#0a1120] p-3">
-                <div className="flex items-center"><b className="text-[12px]">Revisions</b><span className="ml-auto rounded bg-white/[.04] px-2 py-1 text-[12px] text-slate-500">{project ? "Revision history enabled" : "No project"}</span></div>
-                <div className="mt-3 flex h-[112px] items-center rounded-lg border border-dashed border-[#263550] px-4">
-                  <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-violet-300"><History className="h-4 w-4" /></span>
-                  <div><b className="text-[13px]">{project ? "Project revisions are saved automatically" : "No saved revisions"}</b><p className="mt-1 text-[12px] text-slate-600">{project ? "A restore point is created before generated edits and automatic repairs." : "Create a project to begin revision history."}</p></div>
+              <article className="min-w-0 rounded-lg border border-[#263550] bg-[#0a1120] p-3">
+                <div className="flex items-center gap-2">
+                  <b className="text-[12px]">Revisions</b>
+                  <span className="rounded bg-white/[.04] px-2 py-1 text-[12px] text-slate-500">
+                    {project ? `${revisions.length} saved` : "No project"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void saveCheckpoint()}
+                    disabled={!project || panelBusy}
+                    className="ml-auto inline-flex items-center gap-2 rounded-md border border-violet-300/20 bg-violet-400/10 px-3 py-1.5 text-[12px] font-bold text-violet-100 disabled:opacity-40"
+                  >
+                    {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                    Save checkpoint
+                  </button>
+                </div>
+                <div className="mt-3 h-[112px] overflow-y-auto rounded-lg border border-[#263550]">
+                  {!project || revisions.length === 0 ? (
+                    <div className="flex h-full items-center px-4">
+                      <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-violet-300"><History className="h-4 w-4" /></span>
+                      <div><b className="text-[13px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[12px] text-slate-600">Manual checkpoints and automatic repair snapshots appear here.</p></div>
+                    </div>
+                  ) : (
+                    revisions.map((revision) => (
+                      <div key={revision.id} className="flex items-center gap-3 border-b border-[#1d2a41] px-3 py-2 last:border-0">
+                        <History className="h-3.5 w-3.5 text-violet-300" />
+                        <span className="min-w-0 flex-1">
+                          <b className="block truncate text-[12px]">{revision.label}</b>
+                          <span className="text-[12px] text-slate-600">{new Date(revision.created_at).toLocaleString()} · {revision.source}</span>
+                        </span>
+                        <button type="button" onClick={() => void restoreCheckpoint(revision.id)} disabled={panelBusy} className="rounded border border-[#345078] px-2 py-1 text-[12px] font-bold text-cyan-200 disabled:opacity-40">Restore</button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </article>
             </div>
@@ -505,6 +656,104 @@ export function SevenEightSixWorkspace() {
           </button>
         </section>
       </div>
+      {projectsOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-5 backdrop-blur-md">
+          <section className="w-full max-w-3xl overflow-hidden rounded-3xl border border-violet-300/25 bg-[#09101f] shadow-[0_40px_120px_rgba(0,0,0,.75)]">
+            <header className="flex items-center border-b border-[#263550] p-5">
+              <div>
+                <h2 className="text-xl font-black">Projects</h2>
+                <p className="mt-1 text-[13px] text-slate-400">Open a saved application with its files, messages, revisions and latest build.</p>
+              </div>
+              <button type="button" onClick={() => setProjectsOpen(false)} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10" aria-label="Close projects"><X className="h-4 w-4" /></button>
+            </header>
+            <div className="max-h-[65vh] overflow-y-auto p-4">
+              {panelBusy && projects.length === 0 ? (
+                <div className="grid h-40 place-items-center"><Loader2 className="h-7 w-7 animate-spin text-cyan-300" /></div>
+              ) : projects.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#345078] p-8 text-center text-[13px] text-slate-400">No saved projects yet.</div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {projects.map((saved) => (
+                    <button key={saved.id} type="button" onClick={() => void openProject(saved.id)} disabled={panelBusy} className="rounded-2xl border border-[#263550] bg-[#10182b] p-4 text-left transition hover:border-cyan-300/40 hover:bg-[#131e35] disabled:opacity-40">
+                      <span className="block truncate text-[14px] font-black">{saved.title}</span>
+                      <span className="mt-2 line-clamp-2 block min-h-10 text-[12px] leading-5 text-slate-400">{saved.description || "No description"}</span>
+                      <span className="mt-3 flex gap-3 text-[12px] text-slate-500"><span>{saved.file_count} files</span><span>{saved.message_count} messages</span><span className="ml-auto">{new Date(saved.updated_at).toLocaleDateString()}</span></span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+      {deployOpen && project && (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/85 p-5 backdrop-blur-md">
+          <section className="my-5 w-full max-w-2xl overflow-hidden rounded-3xl border border-amber-300/25 bg-gradient-to-br from-[#09101f] via-[#11102b] to-[#21103b] shadow-[0_40px_120px_rgba(0,0,0,.8)]">
+            <header className="flex items-start border-b border-white/10 p-6">
+              <div>
+                <p className="text-[12px] font-black uppercase tracking-[.18em] text-emerald-300">Verified build ready</p>
+                <h2 className="mt-2 text-2xl font-black">Deploy {project.title}</h2>
+                <p className="mt-2 text-[13px] leading-6 text-slate-400">Every address below points to the exact compiled build that passed validation.</p>
+              </div>
+              <button type="button" onClick={() => setDeployOpen(false)} disabled={panelBusy} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10 disabled:opacity-40" aria-label="Close deployment"><X className="h-4 w-4" /></button>
+            </header>
+            <div className="p-6">
+              {!deployResult ? (
+                <>
+                  <div className="grid gap-3">
+                    {([
+                      ["path", "786.Chat project link", `786.chat/p/${project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, "Immediate · no DNS"],
+                      ["subdomain", "786.Chat subdomain", `${deployValue || "customer-app"}.786.chat`, "Free SSL"],
+                      ["custom", "Customer-owned domain", deployValue || "app.customer.com", "DNS verification"],
+                    ] as const).map(([value, title, example, detail]) => (
+                      <button key={value} type="button" onClick={() => { setDeployType(value); setDeployValue("") }} className={`rounded-2xl border p-4 text-left transition ${deployType === value ? "border-cyan-300/60 bg-cyan-400/10" : "border-white/10 bg-white/[.035] hover:border-white/20"}`}>
+                        <span className="flex items-center"><b className="text-[14px]">{title}</b><span className="ml-auto text-[12px] text-slate-500">{detail}</span></span>
+                        <span className="mt-2 block text-[13px] font-bold text-cyan-200">{example}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {deployType !== "path" && (
+                    <label className="mt-4 block">
+                      <span className="mb-2 block text-[12px] font-bold text-slate-300">{deployType === "subdomain" ? "Subdomain name" : "Complete customer domain"}</span>
+                      <div className="flex rounded-xl border border-white/10 bg-slate-950/50 focus-within:border-cyan-300/50">
+                        <input value={deployValue} onChange={(event) => setDeployValue(event.target.value)} placeholder={deployType === "subdomain" ? "customer-app" : "app.customer.com"} className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[13px] outline-none" />
+                        {deployType === "subdomain" && <span className="self-center pr-4 text-[13px] text-slate-400">.786.chat</span>}
+                      </div>
+                    </label>
+                  )}
+                  {error && <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
+                  <button type="button" onClick={() => void deployVerifiedProject()} disabled={panelBusy || (deployType !== "path" && !deployValue.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-200 to-amber-400 px-5 py-3 text-[14px] font-black text-slate-950 disabled:opacity-40">
+                    {panelBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                    Deploy verified build
+                  </button>
+                </>
+              ) : (
+                <div>
+                  <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-400/15 text-emerald-200"><Check className="h-7 w-7" /></div>
+                  <h3 className="mt-4 text-xl font-black">Deployment recorded</h3>
+                  <p className="mt-2 break-all text-[13px] font-bold text-cyan-200">{deployResult.requestedUrl}</p>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[12px]">
+                    <span className="rounded-lg bg-white/5 p-2">DNS: {deployResult.domain.dns_status}</span>
+                    <span className="rounded-lg bg-white/5 p-2">SSL: {deployResult.domain.ssl_status}</span>
+                    <span className="rounded-lg bg-white/5 p-2">App: {deployResult.domain.status}</span>
+                  </div>
+                  {deployResult.domain.dns_records?.map((record, index) => (
+                    <div key={`${record.type}-${index}`} className="mt-2 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[12px]">
+                      <b className="text-violet-200">{record.type}</b>
+                      <span className="min-w-0 flex-1 break-all">{record.name} → {record.value}</span>
+                      <button type="button" onClick={() => void navigator.clipboard.writeText(record.value)} aria-label="Copy DNS value"><Copy className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button type="button" onClick={() => setDeployOpen(false)} className="rounded-xl border border-white/10 px-4 py-3 text-[13px] font-bold">Close</button>
+                    <a href={deployResult.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-[13px] font-black text-slate-950">Open deployment <ExternalLink className="h-4 w-4" /></a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       <style jsx>{`
         @keyframes stage-flow {
           0% {

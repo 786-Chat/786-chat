@@ -24,6 +24,35 @@ export type BuilderProject = {
   previewState: AdminProjectPreviewState
 }
 
+export type BuilderProjectSummary = {
+  id: string
+  title: string
+  description: string
+  updated_at: string
+  file_count: number
+  message_count: number
+}
+
+export type BuilderRevision = {
+  id: string
+  label: string
+  source: string
+  created_at: string
+}
+
+export type BuilderDeploymentResult = {
+  url: string
+  requestedUrl: string
+  fallbackUrl: string
+  domain: {
+    address_type: "path" | "subdomain" | "custom"
+    status: string
+    dns_status: string
+    ssl_status: string
+    dns_records?: Array<{ type: string; name: string; value: string }>
+  }
+}
+
 export type BuilderBuild = {
   id: string
   project_id: string

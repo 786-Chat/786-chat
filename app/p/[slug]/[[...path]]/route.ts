@@ -1,9 +1,10 @@
+import { NextResponse } from "next/server"
 import { getLiveDeploymentBySlug } from "@/lib/786-admin/publishing"
 
 type Ctx = { params: Promise<{ slug: string; path?: string[] }> }
 
-export async function GET(_request: Request, { params }: Ctx) {
-  const { slug } = await params
+export async function GET(request: Request, { params }: Ctx) {
+  const { slug, path = [] } = await params
   const deployment = await getLiveDeploymentBySlug(slug)
 
   if (!deployment) {
@@ -18,6 +19,13 @@ export async function GET(_request: Request, { params }: Ctx) {
         },
       },
     )
+  }
+
+  if (deployment.runtime_url) {
+    const runtime = new URL(deployment.runtime_url)
+    runtime.pathname = `/${path.join("/")}`
+    runtime.search = new URL(request.url).search
+    return NextResponse.redirect(runtime, 307)
   }
 
   return new Response(deployment.published_html, {
