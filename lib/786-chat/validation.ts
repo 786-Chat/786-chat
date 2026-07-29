@@ -43,7 +43,7 @@ export function validateGeneratedProject(
 
   const requirements: Record<string, RegExp> = {
     "email-input": /type\s*=\s*["']email["']|name\s*=\s*["']email["']/i,
-    "password-input": /type\s*=\s*["']password["']|name\s*=\s*["']password["']/i,
+    "password-input": /type\s*=\s*(?:["']password["']|\{[^}]*["']password["'][^}]*\})|name\s*=\s*["']password["']/i,
     "remember-me": /remember[\s_-]*me/i,
     "forgot-password-link": /forgot[\s_-]*(?:your[\s_-]*)?password/i,
     "submit-button": /<button[^>]*type\s*=\s*["']submit["']|<button[^>]*>[^<]*(?:sign in|log in|submit)/i,
