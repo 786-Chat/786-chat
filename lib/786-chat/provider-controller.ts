@@ -6,9 +6,9 @@ import {
 } from "@/lib/786-admin/codegen"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 180
 const GEMINI_ATTEMPT_TIMEOUT_MS = 25_000
-const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000
+const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string }
@@ -112,21 +112,29 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
     : []
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeoutMs = attemptTimeout(mode)
+  const controller = new AbortController()
+  const abortFromClient = () => controller.abort(request.signal.reason)
+  request.signal.addEventListener("abort", abortFromClient, { once: true })
   const generated = await Promise.race([
     generateProjectCode({
       prompt: `${message}${compactRules}`,
       mode,
+      abortSignal: controller.signal,
       attachments,
       existing,
     }),
     new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error(`${mode} timed out after ${timeoutMs}ms`)),
+        () => {
+          controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`))
+          reject(new Error(`${mode} timed out after ${timeoutMs}ms`))
+        },
         timeoutMs,
       )
     }),
   ]).finally(() => {
     if (timer) clearTimeout(timer)
+    request.signal.removeEventListener("abort", abortFromClient)
   })
   const now = new Date().toISOString()
   return {
