@@ -41,3 +41,11 @@ test("legacy generation endpoints only re-export the canonical route", async () 
     assert.doesNotMatch(route, /generateProjectCode|premium-fallback-generator/)
   }
 })
+
+test("root layout does not inject legacy preview controllers or Babel", async () => {
+  const layout = await read("app/layout.tsx")
+
+  assert.doesNotMatch(layout, /AdminChat|srcdoc|Babel|unpkg|cdn\.tailwindcss/)
+  assert.doesNotMatch(layout, /dangerouslySetInnerHTML/)
+  assert.match(layout, /786\.Chat – Build production applications with AI/)
+})
