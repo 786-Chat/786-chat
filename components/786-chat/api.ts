@@ -80,9 +80,14 @@ export async function generateBuilderProject(request: GenerationRequest) {
   })
   const payload = (await response.json().catch(() => ({}))) as Partial<GenerationResult> & {
     success?: boolean
+    validation?: { errors?: string[] }
   }
   if (!response.ok || !payload.success || !payload.project) {
-    throw new Error(errorMessage(payload, "Project generation failed."))
+    const validationErrors = payload.validation?.errors?.filter(Boolean) || []
+    const detail = validationErrors.length
+      ? ` Missing: ${validationErrors.slice(0, 4).join("; ")}`
+      : ""
+    throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
   }
   return {
     response: payload.response || `Created ${payload.project.title}`,
