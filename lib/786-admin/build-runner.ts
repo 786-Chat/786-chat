@@ -31,7 +31,10 @@ export async function dispatchGeneratedProjectBuild(input: {
 
   const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
   const workflow = process.env.GITHUB_BUILD_WORKFLOW?.trim() || DEFAULT_WORKFLOW
-  const ref = process.env.GITHUB_BUILD_REF?.trim() || "agent/phase-3-publishing-v2"
+  const ref =
+    process.env.GITHUB_BUILD_REF?.trim() ||
+    process.env.VERCEL_GIT_COMMIT_REF?.trim() ||
+    "main"
   const baseUrl = trustedBaseUrl(input.baseUrl)
 
   const response = await fetch(
