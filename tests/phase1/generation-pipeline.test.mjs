@@ -42,7 +42,7 @@ test("explicit slash routes are preserved and sent in the generation brief", asy
   assert.match(route, /Planned files:/)
   assert.match(planner, /package\.json/)
   assert.match(planner, /tsconfig\.json/)
-  assert.match(planner, /next\.config\.ts/)
+  assert.match(planner, /next\.config\.mjs/)
 })
 
 test("generic fallback wording cannot pass verification", async () => {
