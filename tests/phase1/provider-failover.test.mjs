@@ -30,7 +30,8 @@ test("canonical generation rejects local fallback output", () => {
 })
 
 test("parallel provider attempts are bounded inside the Vercel window", () => {
-  assert.match(providerController, /AI_ATTEMPT_TIMEOUT_MS = 25_000/)
+  assert.match(providerController, /GEMINI_ATTEMPT_TIMEOUT_MS = 25_000/)
+  assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000/)
   assert.match(providerController, /maxDuration = 60/)
   assert.match(providerController, /Promise\.race/)
 })
