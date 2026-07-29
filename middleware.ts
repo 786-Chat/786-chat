@@ -41,6 +41,27 @@ function rewriteCustomerWorkspace(request: NextRequest) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
+  const isInternalAsset =
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_sites/") ||
+    pathname === "/favicon.ico" ||
+    /\.[a-z0-9]{2,8}$/i.test(pathname)
+  const isPlatformHost =
+    !hostname ||
+    hostname === "786.chat" ||
+    hostname === "www.786.chat" ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".vercel.app")
+
+  if (!isInternalAsset && !isPlatformHost) {
+    const target = request.nextUrl.clone()
+    target.pathname = `/_sites/${encodeURIComponent(hostname)}${pathname === "/" ? "" : pathname}`
+    return NextResponse.rewrite(target)
+  }
+
   const secret = process.env.JWT_SECRET
   const token = getAuthToken(request)
 
@@ -100,5 +121,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/customer-workspace", "/786-admin/:path*", "/api/786-admin/:path*"],
+  matcher: ["/:path*"],
 }
