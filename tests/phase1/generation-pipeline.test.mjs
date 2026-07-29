@@ -27,6 +27,8 @@ test("login validation requires all requested controls", async () => {
     assert.match(analyser, new RegExp(control))
     assert.match(validator, new RegExp(control))
   }
+  assert.match(validator, /type\\s\*=/)
+  assert.match(validator, /password/)
 })
 
 test("explicit slash routes are preserved and sent in the generation brief", async () => {
