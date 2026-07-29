@@ -618,10 +618,10 @@ export function SevenEightSixWorkspace() {
               <article className="rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center">
                   <b className="text-[12px]">Build sandbox</b>
-                  {project && build?.status === "failed" ? (
+                  {project && build && !["queued", "running"].includes(build.status) ? (
                     <button type="button" onClick={() => void retryBuild()} disabled={panelBusy || busy} className="ml-auto inline-flex items-center gap-1.5 rounded border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-1 text-[12px] font-bold text-cyan-100 disabled:opacity-40">
                       {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
-                      Retry build
+                      {build.status === "passed" ? "Rebuild" : "Retry build"}
                     </button>
                   ) : (
                     <span className="ml-auto rounded border border-[#263550] px-2 py-1 text-[12px] text-slate-500">Isolated environment</span>
@@ -629,7 +629,16 @@ export function SevenEightSixWorkspace() {
                 </div>
                 <div className="mt-3 flex h-[112px] items-center rounded-lg border border-dashed border-[#263550] px-4">
                   <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-cyan-300"><TerminalSquare className="h-4 w-4" /></span>
-                  <div><b className="text-[13px]">{build ? `Build ${build.status}` : "No build has run"}</b><p className="mt-1 text-[12px] text-slate-600">{build?.error_message || "The isolated build sandbox starts after validated files are saved."}</p></div>
+                  <div>
+                    <b className="text-[13px]">{build ? `Build ${build.status}` : "No build has run"}</b>
+                    <p className="mt-1 text-[12px] text-slate-600">
+                      {build?.status === "failed"
+                        ? build.error_message || "The isolated build failed. Review the captured logs and retry."
+                        : build?.status === "passed"
+                          ? "Install, type-check and Next.js build completed successfully."
+                          : "The isolated build sandbox starts after validated files are saved."}
+                    </p>
+                  </div>
                 </div>
               </article>
               <article className="min-w-0 rounded-lg border border-[#263550] bg-[#0a1120] p-3">
