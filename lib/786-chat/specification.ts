@@ -29,6 +29,13 @@ function unique(values: string[]) {
   return Array.from(new Set(values))
 }
 
+function explicitRoutes(prompt: string) {
+  return Array.from(
+    prompt.matchAll(/(?:^|\s)(\/[a-z0-9][a-z0-9/_-]*)/gi),
+    (match) => match[1].replace(/\/+$/, "") || "/",
+  )
+}
+
 function matches(prompt: string, candidates: Array<[RegExp, string]>) {
   return candidates.filter(([pattern]) => pattern.test(prompt)).map(([, value]) => value)
 }
@@ -36,8 +43,23 @@ function matches(prompt: string, candidates: Array<[RegExp, string]>) {
 export function analyseProjectPrompt(prompt: string): ProjectSpecification {
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(prompt))
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(prompt)
-  const pages = pageMatches.length ? pageMatches.map(([, page]) => page) : ["Home"]
-  const routes = pageMatches.length ? pageMatches.map(([, , route]) => route) : ["/"]
+  const requestedRoutes = explicitRoutes(prompt)
+  const routes = unique([
+    ...pageMatches.map(([, , route]) => route),
+    ...requestedRoutes,
+  ])
+  if (routes.length === 0) routes.push("/")
+  const pages = unique([
+    ...pageMatches.map(([, page]) => page),
+    ...requestedRoutes.map((route) =>
+      route
+        .split("/")
+        .filter(Boolean)
+        .map((part) => part.replaceAll("-", " "))
+        .join(" / "),
+    ),
+  ]).filter(Boolean)
+  if (pages.length === 0) pages.push("Home")
 
   const requiredComponents = matches(prompt, [
     [/\bnav(?:igation)?|header\b/i, "navigation"],
@@ -66,8 +88,8 @@ export function analyseProjectPrompt(prompt: string): ProjectSpecification {
       [/\beducation|school|course\b/i, "education"],
       [/\becommerce|shop|store\b/i, "commerce"],
     ])[0] || null,
-    pages: unique(pages),
-    routes: unique(routes),
+    pages,
+    routes,
     requiredComponents: unique(requiredComponents),
     requiredInteractions: unique(matches(prompt, [
       [/\blog[ -]?in|sign[ -]?in\b/i, "submit-login"],
