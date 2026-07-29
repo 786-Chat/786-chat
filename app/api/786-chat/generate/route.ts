@@ -20,10 +20,22 @@ export async function POST(request: Request) {
   const prompt = String(payload.message || "").trim()
   const specification = analyseProjectPrompt(prompt)
   const plan = createProjectPlan(specification)
+  const generationBrief = [
+    prompt,
+    "",
+    "MANDATORY STRUCTURED REQUIREMENTS:",
+    `- Exact routes: ${specification.routes.join(", ")}`,
+    `- Required controls/components: ${specification.requiredComponents.join(", ") || "none"}`,
+    `- Required interactions: ${specification.requiredInteractions.join(", ") || "none"}`,
+    `- Planned files: ${plan.files.map((file) => file.path).join(", ")}`,
+    "- Return every planned file with complete content.",
+    "- Navigation links must point only to routes included above.",
+    "- Do not replace this request with a generic homepage.",
+  ].join("\n")
   const delegatedRequest = new Request(request.url, {
     method: "POST",
     headers: request.headers,
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, message: generationBrief }),
   })
   const response = await generateWithProviderFailover(delegatedRequest)
   const result = (await response.json().catch(() => ({}))) as Record<string, unknown>
@@ -70,6 +82,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ...result,
+    project: project ? { ...project, prompt } : project,
     specification,
     plan,
     validation,
