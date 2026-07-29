@@ -21,3 +21,17 @@ test("isolated build validation rejects unsupported next.config.ts", async () =>
   assert.match(validation, /UNSUPPORTED_NEXT_CONFIG_TS/)
   assert.match(validation, /next\.config\.mjs or next\.config\.js/)
 })
+
+test("confirmed builds migrate an existing TypeScript Next config transactionally", async () => {
+  const [route, compatibility] = await Promise.all([
+    read("app/api/786-admin/projects/[id]/build/route.ts"),
+    read("lib/786-chat/project-compatibility.ts"),
+  ])
+
+  assert.match(route, /migrateUnsupportedNextConfig/)
+  assert.match(route, /body\.confirm === true/)
+  assert.match(compatibility, /transaction\(\[/)
+  assert.match(compatibility, /admin_project_revisions/)
+  assert.match(compatibility, /DELETE FROM admin_project_files/)
+  assert.match(compatibility, /next\.config\.mjs/)
+})
