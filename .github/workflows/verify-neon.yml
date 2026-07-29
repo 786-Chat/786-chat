@@ -23,6 +23,66 @@ permissions:
   contents: read
 
 jobs:
+  migration-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: admin_builder_migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d admin_builder_migration_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/admin_builder_migration_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply base schema and deployment-domain migration
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/schema.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/migrations/002-deployment-domains.sql
+
+      - name: Verify deployment-domain contract
+        shell: bash
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF to_regclass('public.admin_project_domains') IS NULL THEN
+              RAISE EXCEPTION 'admin_project_domains was not created';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'admin_project_domains'
+                AND column_name = 'dns_status'
+            ) THEN
+              RAISE EXCEPTION 'admin_project_domains.dns_status is missing';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'admin_project_domains'
+                AND column_name = 'ssl_status'
+            ) THEN
+              RAISE EXCEPTION 'admin_project_domains.ssl_status is missing';
+            END IF;
+          END $$;
+          SQL
+
   verify-neon:
     runs-on: ubuntu-latest
     timeout-minutes: 5
