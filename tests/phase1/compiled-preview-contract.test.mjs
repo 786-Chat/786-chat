@@ -27,6 +27,7 @@ test("runtime preview is displayed only from a passed deployment URL", async () 
 test("build runner APIs authenticate before the admin session middleware", async () => {
   const middleware = await read("middleware.ts")
   const workflow = await read(".github/workflows/generated-project-build.yml")
+  const dispatcher = await read("lib/786-admin/build-runner.ts")
 
   assert.match(middleware, /pathname\.startsWith\("\/api\/786-admin\/build-runner\/"\)/)
   assert.match(middleware, /request\.headers\.get\("authorization"\) !== `Bearer \$\{runnerSecret\}`/)
@@ -35,4 +36,6 @@ test("build runner APIs authenticate before the admin session middleware", async
     workflow.match(/x-vercel-protection-bypass: \$\{RUNNER_SECRET:32:32\}/g)?.length,
     2,
   )
+  assert.match(dispatcher, /process\.env\.VERCEL_GIT_COMMIT_REF/)
+  assert.doesNotMatch(dispatcher, /agent\/phase-3-publishing-v2/)
 })
