@@ -11,6 +11,18 @@ function routeFile(route: string) {
 }
 
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
+  const systemFiles = specification.systemBlueprint
+    ? [
+        { path: "shared/contracts.ts", purpose: "Shared typed system and API contracts" },
+        { path: "lib/server/tenant.ts", purpose: "Authenticated tenant and role enforcement" },
+        { path: "lib/server/validation.ts", purpose: "Server-side input validation" },
+        { path: "sql/schema.sql", purpose: "Neon/PostgreSQL relational schema and tenant indexes" },
+        ...specification.systemBlueprint.apiResources.map((resource) => ({
+          path: `app/api/${resource}/route.ts`,
+          purpose: `Tenant-scoped ${resource} API`,
+        })),
+      ]
+    : []
   const files = [
     { path: "package.json", purpose: "Allowed dependencies and build scripts" },
     { path: "tsconfig.json", purpose: "TypeScript compiler configuration" },
@@ -21,6 +33,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       path: routeFile(route),
       purpose: `${route} route`,
     })),
+    ...systemFiles,
   ]
 
   return {
@@ -32,6 +45,13 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       "Connect navigation only to existing routes",
       "Validate syntax, imports, requirements and project specificity",
       "Build the project in the isolated runner",
+      ...(specification.systemBlueprint
+        ? [
+            "Create the tenant-safe relational schema and contracts",
+            "Implement each core workflow through UI, API and persistence boundaries",
+            "Document external provider and hardware adapters without pretending they are connected",
+          ]
+        : []),
     ],
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`),
@@ -39,6 +59,13 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
       "Project content is specific to the request",
       "No generic fallback homepage is accepted as a verified build",
+      ...(specification.systemBlueprint
+        ? [
+            "Tenant-owned records and APIs enforce company_id",
+            "Operational modules are implemented as application pages, not marketing sections",
+            "Database schema, shared contracts and core API resources exist",
+          ]
+        : []),
     ],
   }
 }
