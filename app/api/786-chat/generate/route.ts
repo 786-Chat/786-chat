@@ -11,6 +11,7 @@ import {
   validateGeneratedProject,
 } from "@/lib/786-chat/validation"
 import { designFamilyBrief } from "@/lib/786-chat/design-system"
+import { injectVisualEditorFiles } from "@/lib/786-chat/visual-editor"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
@@ -86,12 +87,15 @@ export async function POST(request: Request) {
     typeof (payload.existing as Record<string, unknown>).keyFiles === "object"
       ? (payload.existing as { keyFiles: Record<string, string> }).keyFiles
       : {}
-  const files = normalizeGeneratedAuthLinks(
-    specification,
-    normalizeGeneratedImports({
-      ...existingFiles,
-      ...generatedFiles,
-    }),
+  const files = injectVisualEditorFiles(
+    normalizeGeneratedAuthLinks(
+      specification,
+      normalizeGeneratedImports({
+        ...existingFiles,
+        ...generatedFiles,
+      }),
+    ),
+    payload.visualEditorState,
   )
   const validation = validateGeneratedProject(specification, files)
 

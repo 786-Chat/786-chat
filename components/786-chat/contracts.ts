@@ -1,4 +1,5 @@
 import type { AdminProjectPreviewState } from "@/lib/786-admin/types"
+import type { VisualEditorState } from "@/lib/786-chat/visual-editor"
 
 export type BuilderDevice =
   | "desktop"
@@ -22,6 +23,8 @@ export type BuilderProject = {
   prompt: string
   files: Record<string, string>
   previewState: AdminProjectPreviewState
+  metadata: Record<string, unknown>
+  visualEditor: VisualEditorState
 }
 
 export type BuilderProjectSummary = {

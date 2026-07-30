@@ -19,6 +19,9 @@ export type SaveGeneratedProjectInput = {
     model?: string | null
     reason?: string | null
   }>
+  revisionLabel?: string
+  revisionSource?: string
+  recordGenerationJob?: boolean
 }
 
 function normalizedEmail(email: string) {
@@ -36,6 +39,8 @@ export async function saveGeneratedProjectAtomic(
   const previewJson = JSON.stringify(input.previewState)
   const metadataJson = JSON.stringify(input.metadata)
   const filesJson = JSON.stringify(input.files)
+  const revisionLabel = (input.revisionLabel || "Before AI generation").slice(0, 160)
+  const revisionSource = (input.revisionSource || "generation").slice(0, 40)
   const queries: unknown[] = []
 
   if (creating) {
@@ -56,8 +61,8 @@ export async function saveGeneratedProjectAtomic(
         preview_state, metadata, created_at
       )
       SELECT
-        ${revisionId}, p.id, p.owner_email, 'Before AI generation',
-        'generation', COALESCE(
+        ${revisionId}, p.id, p.owner_email, ${revisionLabel},
+        ${revisionSource}, COALESCE(
           (
             SELECT jsonb_object_agg(f.path, f.content)
             FROM admin_project_files f
@@ -115,18 +120,20 @@ export async function saveGeneratedProjectAtomic(
     `)
   }
 
-  queries.push(sql`
-    INSERT INTO builder_generation_jobs (
-      id, project_id, owner_email, status, prompt, specification,
-      implementation_plan, validation, provider, created_at, completed_at
-    ) VALUES (
-      ${generationJobId}, ${projectId}, ${owner}, 'validated', ${input.prompt},
-      ${JSON.stringify(input.metadata.specification || {})}::jsonb,
-      ${JSON.stringify(input.metadata.plan || {})}::jsonb,
-      ${JSON.stringify(input.metadata.validation || {})}::jsonb,
-      ${String(input.metadata.model || "") || null}, NOW(), NOW()
-    )
-  `)
+  if (input.recordGenerationJob !== false) {
+    queries.push(sql`
+      INSERT INTO builder_generation_jobs (
+        id, project_id, owner_email, status, prompt, specification,
+        implementation_plan, validation, provider, created_at, completed_at
+      ) VALUES (
+        ${generationJobId}, ${projectId}, ${owner}, 'validated', ${input.prompt},
+        ${JSON.stringify(input.metadata.specification || {})}::jsonb,
+        ${JSON.stringify(input.metadata.plan || {})}::jsonb,
+        ${JSON.stringify(input.metadata.validation || {})}::jsonb,
+        ${String(input.metadata.model || "") || null}, NOW(), NOW()
+      )
+    `)
+  }
 
   await transaction(queries)
   const saved = await getProjectWithData(projectId, owner)
