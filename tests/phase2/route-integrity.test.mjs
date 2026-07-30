@@ -17,6 +17,12 @@ test("common requested page names become mandatory routes", () => {
   }
 })
 
+test("negated page names are excluded before route analysis", () => {
+  assert.match(specification, /withoutNegativeRequirements/)
+  assert.match(specification, /const positivePrompt = withoutNegativeRequirements\(prompt\)/)
+  assert.match(specification, /PAGE_ALIASES\.filter\(\(\[pattern\]\) => pattern\.test\(positivePrompt\)\)/)
+})
+
 test("authentication links are normalized onto the requested login route", () => {
   assert.match(validation, /normalizeGeneratedAuthLinks/)
   assert.match(validation, /"\/forgot-password": "\/login\?mode=forgot-password"/)
