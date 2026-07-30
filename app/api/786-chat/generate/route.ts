@@ -5,7 +5,11 @@ import { isAdminUser } from "@/lib/admin-config"
 import { POST as generateWithProviderFailover } from "@/lib/786-chat/provider-controller"
 import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
-import { normalizeGeneratedImports, validateGeneratedProject } from "@/lib/786-chat/validation"
+import {
+  normalizeGeneratedAuthLinks,
+  normalizeGeneratedImports,
+  validateGeneratedProject,
+} from "@/lib/786-chat/validation"
 import { designFamilyBrief } from "@/lib/786-chat/design-system"
 
 export const runtime = "nodejs"
@@ -73,7 +77,10 @@ export async function POST(request: Request) {
     ? result.project as Record<string, unknown>
     : null
   const files = project?.files && typeof project.files === "object"
-    ? normalizeGeneratedImports(project.files as Record<string, string>)
+    ? normalizeGeneratedAuthLinks(
+        specification,
+        normalizeGeneratedImports(project.files as Record<string, string>),
+      )
     : {}
   const validation = validateGeneratedProject(specification, files)
 
