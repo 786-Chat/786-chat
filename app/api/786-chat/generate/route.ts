@@ -76,12 +76,23 @@ export async function POST(request: Request) {
   const project = result.project && typeof result.project === "object"
     ? result.project as Record<string, unknown>
     : null
-  const files = project?.files && typeof project.files === "object"
-    ? normalizeGeneratedAuthLinks(
-        specification,
-        normalizeGeneratedImports(project.files as Record<string, string>),
-      )
+  const generatedFiles = project?.files && typeof project.files === "object"
+    ? project.files as Record<string, string>
     : {}
+  const existingFiles =
+    payload.existing &&
+    typeof payload.existing === "object" &&
+    (payload.existing as Record<string, unknown>).keyFiles &&
+    typeof (payload.existing as Record<string, unknown>).keyFiles === "object"
+      ? (payload.existing as { keyFiles: Record<string, string> }).keyFiles
+      : {}
+  const files = normalizeGeneratedAuthLinks(
+    specification,
+    normalizeGeneratedImports({
+      ...existingFiles,
+      ...generatedFiles,
+    }),
+  )
   const validation = validateGeneratedProject(specification, files)
 
   if (!validation.valid) {
