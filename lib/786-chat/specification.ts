@@ -48,9 +48,17 @@ function matches(prompt: string, candidates: Array<[RegExp, string]>) {
   return candidates.filter(([pattern]) => pattern.test(prompt)).map(([, value]) => value)
 }
 
+function withoutNegativeRequirements(prompt: string) {
+  return prompt.replace(
+    /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?)[^.!?\n]*/gi,
+    " ",
+  )
+}
+
 export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpecification {
-  const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(prompt))
-  const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(prompt)
+  const positivePrompt = withoutNegativeRequirements(prompt)
+  const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
+  const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
   const routes = unique([
     ...pageMatches.map(([, , route]) => route),
