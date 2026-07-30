@@ -6,6 +6,35 @@ export type ProjectValidation = {
   warnings: string[]
 }
 
+const LUCIDE_COMPATIBILITY_ALIASES: Record<string, string> = {
+  Tooth: "Smile",
+  Ambulance: "HeartPulse",
+}
+
+export function normalizeGeneratedImports(files: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (!/\.(?:tsx?|jsx?)$/.test(path) || !/from\s+["']lucide-react["']/.test(content)) {
+        return [path, content]
+      }
+      const normalized = content.replace(
+        /import\s*\{([^}]+)\}\s*from\s*["']lucide-react["']/g,
+        (statement, names: string) => {
+          let normalizedNames = names
+          for (const [unsupported, supported] of Object.entries(LUCIDE_COMPATIBILITY_ALIASES)) {
+            normalizedNames = normalizedNames.replace(
+              new RegExp(`\\b${unsupported}\\b(?!\\s+as\\b)`, "g"),
+              `${supported} as ${unsupported}`,
+            )
+          }
+          return statement.replace(names, normalizedNames)
+        },
+      )
+      return [path, normalized]
+    }),
+  )
+}
+
 function routeFileCandidates(route: string) {
   const suffix = route === "/" ? "page" : `${route.slice(1)}/page`
   return [
