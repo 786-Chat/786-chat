@@ -17,9 +17,10 @@ test("common requested page names become mandatory routes", () => {
   }
 })
 
-test("login requests also plan a real forgot-password destination", () => {
-  assert.match(specification, /loginRequested \? \["\/forgot-password"\] : \[\]/)
-  assert.match(specification, /loginRequested \? \["Forgot Password"\] : \[\]/)
+test("authentication links are normalized onto the requested login route", () => {
+  assert.match(validation, /normalizeGeneratedAuthLinks/)
+  assert.match(validation, /"\/forgot-password": "\/login\?mode=forgot-password"/)
+  assert.match(validation, /"\/register": "\/login\?mode=register"/)
 })
 
 test("validation rejects literal internal links without real page files", () => {
