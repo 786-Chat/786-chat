@@ -20,6 +20,7 @@ export type CodegenAttachment = {
 export type CodegenInput = {
   prompt: string
   mode?: CodegenMode
+  abortSignal?: AbortSignal
   attachments?: CodegenAttachment[]
   existing?: {
     title: string
@@ -250,6 +251,9 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       schema: ProjectSchema,
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
+      maxOutputTokens: 24_000,
+      maxRetries: 0,
+      abortSignal: input.abortSignal,
       prompt,
       providerOptions: picked.provider === "deepseek"
         ? { deepseek: { thinking: { type: "disabled" } } }

@@ -15,7 +15,7 @@ test('configured AI providers start concurrently with provider-specific limits',
   assert.match(source, /Promise\.race/)
   assert.match(source, /attemptsByMode/)
   assert.match(source, /GEMINI_ATTEMPT_TIMEOUT_MS\s*=\s*25_000/)
-  assert.match(source, /DEEPSEEK_ATTEMPT_TIMEOUT_MS\s*=\s*45_000/)
+  assert.match(source, /DEEPSEEK_ATTEMPT_TIMEOUT_MS\s*=\s*150_000/)
   assert.match(source, /attemptTimeout\(mode/)
   assert.doesNotMatch(source, /for\s*\([^)]*modesToRun[^)]*\)\s*\{\s*await runAttempt/)
 })

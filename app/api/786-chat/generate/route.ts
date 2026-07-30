@@ -5,10 +5,15 @@ import { isAdminUser } from "@/lib/admin-config"
 import { POST as generateWithProviderFailover } from "@/lib/786-chat/provider-controller"
 import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
-import { validateGeneratedProject } from "@/lib/786-chat/validation"
+import {
+  normalizeGeneratedAuthLinks,
+  normalizeGeneratedImports,
+  validateGeneratedProject,
+} from "@/lib/786-chat/validation"
+import { designFamilyBrief } from "@/lib/786-chat/design-system"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 180
 
 export async function POST(request: Request) {
   const session = await getSession()
@@ -18,7 +23,10 @@ export async function POST(request: Request) {
 
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
-  const specification = analyseProjectPrompt(prompt)
+  const analysisSeed = typeof payload.projectId === "string" && payload.projectId.trim()
+    ? payload.projectId.trim()
+    : crypto.randomUUID()
+  const specification = analyseProjectPrompt(prompt, analysisSeed)
   const plan = createProjectPlan(specification)
   const generationBrief = [
     prompt,
@@ -28,6 +36,11 @@ export async function POST(request: Request) {
     `- Required controls/components: ${specification.requiredComponents.join(", ") || "none"}`,
     `- Required interactions: ${specification.requiredInteractions.join(", ") || "none"}`,
     `- Planned files: ${plan.files.map((file) => file.path).join(", ")}`,
+    "",
+    "COMPOSABLE DESIGN SYSTEM (do not treat this as a fixed template):",
+    ...designFamilyBrief(specification.designFamily).map((line) => `- ${line}`),
+    "- Adapt these design rules to the requested brand, industry, content and functionality.",
+    "- Do not reuse generic product names, copy, metrics, people or imagery.",
     "- Return every planned file with complete content.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
@@ -63,9 +76,23 @@ export async function POST(request: Request) {
   const project = result.project && typeof result.project === "object"
     ? result.project as Record<string, unknown>
     : null
-  const files = project?.files && typeof project.files === "object"
+  const generatedFiles = project?.files && typeof project.files === "object"
     ? project.files as Record<string, string>
     : {}
+  const existingFiles =
+    payload.existing &&
+    typeof payload.existing === "object" &&
+    (payload.existing as Record<string, unknown>).keyFiles &&
+    typeof (payload.existing as Record<string, unknown>).keyFiles === "object"
+      ? (payload.existing as { keyFiles: Record<string, string> }).keyFiles
+      : {}
+  const files = normalizeGeneratedAuthLinks(
+    specification,
+    normalizeGeneratedImports({
+      ...existingFiles,
+      ...generatedFiles,
+    }),
+  )
   const validation = validateGeneratedProject(specification, files)
 
   if (!validation.valid) {
@@ -82,7 +109,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ...result,
-    project: project ? { ...project, prompt } : project,
+    project: project ? { ...project, prompt, files } : project,
     specification,
     plan,
     validation,

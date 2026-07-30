@@ -1,3 +1,5 @@
+import { selectDesignFamily, type DesignFamily } from "./design-system"
+
 export type ProjectSpecification = {
   projectType: string
   brand: string | null
@@ -10,6 +12,7 @@ export type ProjectSpecification = {
   colours: string[]
   contentRequirements: string[]
   backendRequirements: string[]
+  designFamily: DesignFamily
 }
 
 const PAGE_ALIASES: Array<[RegExp, string, string]> = [
@@ -18,8 +21,13 @@ const PAGE_ALIASES: Array<[RegExp, string, string]> = [
   [/\bregister|sign[ -]?up\b/i, "Register", "/register"],
   [/\bdashboard\b/i, "Dashboard", "/dashboard"],
   [/\bpricing\b/i, "Pricing", "/pricing"],
+  [/\bservices?\b/i, "Services", "/services"],
   [/\babout\b/i, "About", "/about"],
   [/\bcontact\b/i, "Contact", "/contact"],
+  [/\bbooking|appointment\b/i, "Booking", "/booking"],
+  [/\bgallery\b/i, "Gallery", "/gallery"],
+  [/\bfaq(?:s)?\b/i, "FAQ", "/faq"],
+  [/\bblog\b/i, "Blog", "/blog"],
   [/\bsettings\b/i, "Settings", "/settings"],
   [/\bprofile\b/i, "Profile", "/profile"],
   [/\bcheckout\b/i, "Checkout", "/checkout"],
@@ -40,9 +48,17 @@ function matches(prompt: string, candidates: Array<[RegExp, string]>) {
   return candidates.filter(([pattern]) => pattern.test(prompt)).map(([, value]) => value)
 }
 
-export function analyseProjectPrompt(prompt: string): ProjectSpecification {
-  const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(prompt))
-  const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(prompt)
+function withoutNegativeRequirements(prompt: string) {
+  return prompt.replace(
+    /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?)[^.!?\n]*/gi,
+    " ",
+  )
+}
+
+export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpecification {
+  const positivePrompt = withoutNegativeRequirements(prompt)
+  const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
+  const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
   const routes = unique([
     ...pageMatches.map(([, , route]) => route),
@@ -73,6 +89,16 @@ export function analyseProjectPrompt(prompt: string): ProjectSpecification {
     requiredComponents.push("email-input", "password-input", "remember-me", "forgot-password-link", "submit-button")
   }
 
+  const designDirection = unique(matches(prompt, [
+    [/\bmodern\b/i, "modern"],
+    [/\bpremium|luxury|vvip\b/i, "premium"],
+    [/\b3d\b/i, "3d-depth"],
+    [/\bminimal\b/i, "minimal"],
+    [/\banimat/i, "motion"],
+    [/\bdark\b/i, "dark"],
+    [/\blight\b/i, "light"],
+  ]))
+
   return {
     projectType: /\bdashboard|portal|saas|crm|erp\b/i.test(prompt)
       ? "web-application"
@@ -99,15 +125,7 @@ export function analyseProjectPrompt(prompt: string): ProjectSpecification {
       [/\bdropdown\b/i, "dropdown"],
       [/\bupload|attachment\b/i, "file-upload"],
     ])),
-    designDirection: unique(matches(prompt, [
-      [/\bmodern\b/i, "modern"],
-      [/\bpremium|luxury|vvip\b/i, "premium"],
-      [/\b3d\b/i, "3d-depth"],
-      [/\bminimal\b/i, "minimal"],
-      [/\banimat/i, "motion"],
-      [/\bdark\b/i, "dark"],
-      [/\blight\b/i, "light"],
-    ])),
+    designDirection,
     colours: unique(Array.from(prompt.matchAll(/\b(?:red|orange|yellow|green|emerald|blue|cyan|purple|violet|pink|black|white|gold|silver|navy|teal)\b/gi), (match) => match[0].toLowerCase())),
     contentRequirements: unique(matches(prompt, [
       [/\bimage|photo|gallery\b/i, "project-specific-images"],
@@ -122,5 +140,6 @@ export function analyseProjectPrompt(prompt: string): ProjectSpecification {
       [/\bpayment|stripe\b/i, "payments"],
       [/\bemail\b/i, "email"],
     ])),
+    designFamily: selectDesignFamily(seed, designDirection),
   }
 }

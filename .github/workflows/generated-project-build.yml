@@ -126,7 +126,7 @@ jobs:
           curl --fail --silent --show-error \
             --retry 3 \
             --connect-timeout 15 \
-            --max-time 90 \
+            --max-time 115 \
             -X POST \
             -H "Authorization: Bearer $RUNNER_SECRET" \
             -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \

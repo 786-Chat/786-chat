@@ -6,6 +6,67 @@ export type ProjectValidation = {
   warnings: string[]
 }
 
+const LUCIDE_COMPATIBILITY_ALIASES: Record<string, string> = {
+  Tooth: "Smile",
+  Ambulance: "HeartPulse",
+}
+
+export function normalizeGeneratedImports(files: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (!/\.(?:tsx?|jsx?)$/.test(path) || !/from\s+["']lucide-react["']/.test(content)) {
+        return [path, content]
+      }
+      const normalized = content.replace(
+        /import\s*\{([^}]+)\}\s*from\s*["']lucide-react["']/g,
+        (statement, names: string) => {
+          let normalizedNames = names
+          for (const [unsupported, supported] of Object.entries(LUCIDE_COMPATIBILITY_ALIASES)) {
+            normalizedNames = normalizedNames.replace(
+              new RegExp(`\\b${unsupported}\\b(?!\\s+as\\b)`, "g"),
+              `${supported} as ${unsupported}`,
+            )
+          }
+          return statement.replace(names, normalizedNames)
+        },
+      )
+      return [path, normalized]
+    }),
+  )
+}
+
+export function normalizeGeneratedAuthLinks(
+  specification: ProjectSpecification,
+  files: Record<string, string>,
+) {
+  if (!specification.routes.includes("/login")) return files
+
+  const replacements: Record<string, string> = {
+    "/forgot-password": "/login?mode=forgot-password",
+    "/register": "/login?mode=register",
+    "/signup": "/login?mode=register",
+    "/sign-up": "/login?mode=register",
+  }
+
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (!/\.(?:tsx?|jsx?)$/.test(path)) return [path, content]
+      const normalized = content
+        .replace(
+          /(\bhref\s*=\s*(?:\{\s*)?)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2((?:\s*\})?)/gi,
+          (_match, prefix: string, quote: string, route: string, suffix: string) =>
+            `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}${suffix}`,
+        )
+        .replace(
+          /(\b(?:href|to)\s*:\s*)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2/gi,
+          (_match, prefix: string, quote: string, route: string) =>
+            `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}`,
+        )
+      return [path, normalized]
+    }),
+  )
+}
+
 function routeFileCandidates(route: string) {
   const suffix = route === "/" ? "page" : `${route.slice(1)}/page`
   return [
@@ -27,6 +88,28 @@ function source(files: Record<string, string>) {
     .join("\n")
 }
 
+function internalHrefRoutes(files: Record<string, string>) {
+  const routes = new Set<string>()
+  for (const [path, content] of Object.entries(files)) {
+    if (!/\.(?:tsx?|jsx?)$/.test(path)) continue
+    const routePatterns = [
+      /\bhref\s*=\s*(?:\{\s*)?["'`]([^"'`]+)["'`](?:\s*\})?/gi,
+      /\b(?:href|to)\s*:\s*["'`]([^"'`]+)["'`]/gi,
+      /\b(?:router\.)?(?:push|replace)\(\s*["'`]([^"'`]+)["'`]/gi,
+    ]
+    for (const pattern of routePatterns) {
+      for (const match of content.matchAll(pattern)) {
+        const href = match[1].trim()
+        if (!href.startsWith("/") || href.startsWith("//")) continue
+        const route = href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
+        if (/\.[a-z0-9]{2,8}$/i.test(route)) continue
+        routes.add(route)
+      }
+    }
+  }
+  return routes
+}
+
 export function validateGeneratedProject(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -38,6 +121,12 @@ export function validateGeneratedProject(
   for (const route of specification.routes) {
     if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
       errors.push(`Missing requested route: ${route}`)
+    }
+  }
+
+  for (const route of internalHrefRoutes(files)) {
+    if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
+      errors.push(`Internal navigation points to missing route: ${route}`)
     }
   }
 

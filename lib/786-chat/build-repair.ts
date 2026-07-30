@@ -9,7 +9,7 @@ import { generateProjectCode, type CodegenMode } from "@/lib/786-admin/codegen"
 import { sql, transaction } from "@/lib/786-admin/db"
 
 const MAX_REPAIR_ATTEMPTS = 2
-const REPAIR_PROVIDER_TIMEOUT_MS = 20_000
+const REPAIR_PROVIDER_TIMEOUT_MS = 65_000
 
 type RepairContext = {
   buildId: string
@@ -167,6 +167,49 @@ function deterministicCompatibilityRepair(context: RepairContext, logs: string) 
   }
 }
 
+function deterministicLucideImportRepair(context: RepairContext, logs: string) {
+  const unsupported = Array.from(
+    logs.matchAll(/lucide-react[^\n]{0,24}has no exported member ['"]([^'"]+)['"]/gi),
+    (match) => match[1],
+  )
+  if (!unsupported.length) return null
+
+  const aliases: Record<string, string> = {
+    Tooth: "Smile",
+    Ambulance: "HeartPulse",
+  }
+  const replacements = unsupported
+    .map((name) => [name, aliases[name]] as const)
+    .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+  if (!replacements.length) return null
+
+  const files: Record<string, string> = {}
+  for (const [path, content] of Object.entries(context.files)) {
+    if (!logs.includes(path) || !/from\s+["']lucide-react["']/.test(content)) continue
+    const repaired = content.replace(
+      /import\s*\{([^}]+)\}\s*from\s*["']lucide-react["']/g,
+      (statement, names: string) => {
+        let repairedNames = names
+        for (const [unsupportedName, supportedName] of replacements) {
+          repairedNames = repairedNames.replace(
+            new RegExp(`\\b${unsupportedName}\\b(?!\\s+as\\b)`, "g"),
+            `${supportedName} as ${unsupportedName}`,
+          )
+        }
+        return statement.replace(names, repairedNames)
+      },
+    )
+    if (repaired !== content) files[path] = repaired
+  }
+  if (!Object.keys(files).length) return null
+
+  return {
+    files,
+    removedPaths: [],
+    model: "deterministic-lucide-import-compatibility",
+  }
+}
+
 async function persistRepair(
   context: RepairContext,
   repairedFiles: Record<string, string>,
@@ -256,6 +299,7 @@ export async function repairFailedBuild(input: {
 
   try {
     const repair = deterministicCompatibilityRepair(context, input.logs)
+      ?? deterministicLucideImportRepair(context, input.logs)
       ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }
     const merged = { ...context.files, ...repair.files }
     for (const path of repair.removedPaths) delete merged[path]

@@ -32,16 +32,18 @@ test("canonical generation rejects local fallback output", () => {
 
 test("parallel provider attempts are bounded inside the Vercel window", () => {
   assert.match(providerController, /GEMINI_ATTEMPT_TIMEOUT_MS = 25_000/)
-  assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000/)
-  assert.match(providerController, /maxDuration = 60/)
+  assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000/)
+  assert.match(providerController, /maxDuration = 180/)
   assert.match(providerController, /Promise\.race/)
+  assert.match(providerController, /controller\.abort/)
 })
 
 test("DeepSeek code generation disables slow thinking mode", () => {
   assert.match(codegen, /providerOptions/)
   assert.match(codegen, /deepseek:\s*\{\s*thinking:\s*\{\s*type:\s*"disabled"/)
+  assert.match(codegen, /maxOutputTokens:\s*24_000/)
+  assert.match(codegen, /maxRetries:\s*0/)
 })
-
 
 test("compact websites prefer DeepSeek Flash while complex apps keep normal selection", () => {
   assert.match(providerController, /compactEligible && configured\("DEEPSEEK_API_KEY"\)/)

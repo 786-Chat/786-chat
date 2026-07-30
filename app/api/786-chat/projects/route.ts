@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth"
 import { isAdminUser } from "@/lib/admin-config"
 import { listProjects } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
+import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
 
 async function ownerEmail() {
   const session = await getSession()
@@ -27,6 +28,16 @@ export async function POST(request: Request) {
   if (!title || Object.keys(files).length === 0) {
     return NextResponse.json({ error: "A title and generated files are required." }, { status: 400 })
   }
+  const metadata = body.metadata && typeof body.metadata === "object"
+    ? body.metadata as Record<string, unknown>
+    : {}
+  const validation = validatePersistedGeneration(metadata, files)
+  if (validation && !validation.valid) {
+    return NextResponse.json({
+      error: "Generated files no longer match the analysed project specification.",
+      validation,
+    }, { status: 422 })
+  }
   try {
     const project = await saveGeneratedProjectAtomic({
       ownerEmail: owner,
@@ -37,9 +48,7 @@ export async function POST(request: Request) {
       previewState: body.preview_state && typeof body.preview_state === "object"
         ? body.preview_state as Record<string, unknown>
         : {},
-      metadata: body.metadata && typeof body.metadata === "object"
-        ? body.metadata as Record<string, unknown>
-        : {},
+      metadata,
       messages: Array.isArray(body.messages)
         ? body.messages as Array<{ role: "user" | "assistant" | "system"; content: string; model?: string | null; reason?: string | null }>
         : [],
