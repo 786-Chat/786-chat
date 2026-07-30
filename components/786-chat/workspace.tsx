@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   Check,
   ChevronDown,
@@ -22,16 +24,20 @@ import {
   Monitor,
   Network,
   Paperclip,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
   Rocket,
   RotateCw,
+  Redo2,
   Save,
   Send,
   Settings,
   Sparkles,
   TerminalSquare,
+  Trash2,
+  Undo2,
   WandSparkles,
   Waves,
   X,
@@ -51,6 +57,7 @@ import {
   queueBuilderBuild,
   restoreBuilderRevision,
   saveBuilderProject,
+  saveVisualEditorState,
 } from "./api"
 import {
   BUILDER_DEVICES,
@@ -62,9 +69,21 @@ import {
   type BuilderProjectSummary,
   type BuilderRevision,
 } from "./contracts"
+import {
+  EMPTY_VISUAL_EDITOR_STATE,
+  normalizeVisualEditorState,
+  type VisualEditorState,
+  type VisualEditorStyle,
+} from "@/lib/786-chat/visual-editor"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
 const OWNER_EMAIL = "mujeeb@job4u.com"
+
+type EditorSection = { id: string; label: string; hidden: boolean }
+
+function copyEditorState(state: VisualEditorState): VisualEditorState {
+  return JSON.parse(JSON.stringify(state)) as VisualEditorState
+}
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard },
@@ -136,12 +155,34 @@ export function SevenEightSixWorkspace() {
   const [deployType, setDeployType] = useState<"path" | "subdomain" | "custom">("path")
   const [deployValue, setDeployValue] = useState("")
   const [deployResult, setDeployResult] = useState<BuilderDeploymentResult | null>(null)
+  const [designOpen, setDesignOpen] = useState(false)
+  const [editorSections, setEditorSections] = useState<EditorSection[]>([])
+  const [selectedSection, setSelectedSection] = useState("")
+  const [visualState, setVisualState] = useState<VisualEditorState>(EMPTY_VISUAL_EDITOR_STATE)
+  const [undoStack, setUndoStack] = useState<VisualEditorState[]>([])
+  const [redoStack, setRedoStack] = useState<VisualEditorState[]>([])
+  const [visualDirty, setVisualDirty] = useState(false)
+  const [editorSaving, setEditorSaving] = useState(false)
   const drag = useRef<{ x: number; width: number } | null>(null)
+  const sectionDrag = useRef<string | null>(null)
+  const previewIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const isOwner = user?.email?.toLowerCase().trim() === OWNER_EMAIL
   const files = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
   const deviceSpec = BUILDER_DEVICES[device]
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
+  const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
+  const orderedSections = useMemo(() => {
+    const map = new Map(editorSections.map((section) => [section.id, section]))
+    const ordered = visualState.order.flatMap((id) => {
+      const section = map.get(id)
+      return section ? [section] : []
+    })
+    for (const section of editorSections) {
+      if (!visualState.order.includes(section.id)) ordered.push(section)
+    }
+    return ordered
+  }, [editorSections, visualState.order])
 
   useEffect(() => {
     if (!isLoading && !isOwner) router.replace("/786-admin/login")
@@ -154,6 +195,7 @@ export function SevenEightSixWorkspace() {
     void loadBuilderProject(id)
       .then(({ project: saved, messages: history }) => {
         setProject(saved)
+        setVisualState(saved.visualEditor)
         setMessages(history)
         setSelectedFile(
           String(saved.previewState.active_file || "") ||
@@ -188,10 +230,190 @@ export function SevenEightSixWorkspace() {
   useEffect(() => {
     if (!project?.id || !build || !["queued", "running"].includes(build.status)) return
     const timer = window.setInterval(() => {
-      void loadBuilderBuild(project.id).then(setBuild).catch(() => undefined)
+      void loadBuilderBuild(project.id).then((next) => {
+        setBuild(next)
+        if (next?.status === "passed") setVisualDirty(false)
+      }).catch(() => undefined)
     }, 5_000)
     return () => window.clearInterval(timer)
   }, [project?.id, build])
+
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      const frame = previewIframeRef.current
+      if (!frame || event.source !== frame.contentWindow || !build?.deployment_url) return
+      let expectedOrigin = ""
+      try {
+        expectedOrigin = new URL(build.deployment_url).origin
+      } catch {
+        return
+      }
+      if (event.origin !== expectedOrigin || !event.data || typeof event.data !== "object") return
+      if (event.data.type === "786-editor:ready" || event.data.type === "786-editor:sections") {
+        const sections = Array.isArray(event.data.sections)
+          ? event.data.sections.filter((item: unknown): item is EditorSection => {
+              if (!item || typeof item !== "object") return false
+              const section = item as Record<string, unknown>
+              return typeof section.id === "string" &&
+                typeof section.label === "string" &&
+                typeof section.hidden === "boolean"
+            })
+          : []
+        setEditorSections(sections)
+        setSelectedSection((current) => current || sections[0]?.id || "")
+      }
+      if (event.data.type === "786-editor:selected" && typeof event.data.id === "string") {
+        setSelectedSection(event.data.id)
+      }
+    }
+    window.addEventListener("message", receive)
+    return () => window.removeEventListener("message", receive)
+  }, [build?.deployment_url])
+
+  useEffect(() => {
+    if (!designOpen) return
+    postVisualMessage({ type: "786-editor:enable", enabled: true })
+    postVisualMessage({ type: "786-editor:apply", state: visualState })
+    return () => postVisualMessage({ type: "786-editor:enable", enabled: false })
+  }, [designOpen, build?.deployment_url])
+
+  function postVisualMessage(message: Record<string, unknown>) {
+    if (!previewIframeRef.current?.contentWindow || !build?.deployment_url) return
+    try {
+      previewIframeRef.current.contentWindow.postMessage(
+        message,
+        new URL(build.deployment_url).origin,
+      )
+    } catch {
+      // The preview may be rebuilding; the iframe load handler will replay state.
+    }
+  }
+
+  async function persistVisualState(next: VisualEditorState, label: string) {
+    if (!project) return
+    setEditorSaving(true)
+    try {
+      const saved = await saveVisualEditorState({
+        projectId: project.id,
+        state: next,
+        label,
+      })
+      setProject(saved)
+      setRevisions(await listBuilderRevisions(project.id))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Visual edit could not be saved.")
+    } finally {
+      setEditorSaving(false)
+    }
+  }
+
+  function commitVisualState(nextValue: VisualEditorState, label: string) {
+    const next = normalizeVisualEditorState(nextValue)
+    setUndoStack((current) => [...current.slice(-49), copyEditorState(visualState)])
+    setRedoStack([])
+    setVisualState(next)
+    setVisualDirty(true)
+    postVisualMessage({ type: "786-editor:apply", state: next })
+    void persistVisualState(next, label)
+  }
+
+  function undoVisualEdit() {
+    const previous = undoStack.at(-1)
+    if (!previous) return
+    setUndoStack((current) => current.slice(0, -1))
+    setRedoStack((current) => [...current.slice(-49), copyEditorState(visualState)])
+    setVisualState(previous)
+    setVisualDirty(true)
+    postVisualMessage({ type: "786-editor:apply", state: previous })
+    void persistVisualState(previous, "Undo visual edit")
+  }
+
+  function redoVisualEdit() {
+    const next = redoStack.at(-1)
+    if (!next) return
+    setRedoStack((current) => current.slice(0, -1))
+    setUndoStack((current) => [...current.slice(-49), copyEditorState(visualState)])
+    setVisualState(next)
+    setVisualDirty(true)
+    postVisualMessage({ type: "786-editor:apply", state: next })
+    void persistVisualState(next, "Redo visual edit")
+  }
+
+  function updateSelectedStyle(patch: Partial<VisualEditorStyle>, label: string) {
+    if (!selectedSection) return
+    commitVisualState({
+      ...visualState,
+      styles: {
+        ...visualState.styles,
+        [selectedSection]: { ...selectedStyle, ...patch },
+      },
+    }, label)
+  }
+
+  function moveSection(id: string, offset: number) {
+    const order = orderedSections.map((section) => section.id)
+    const index = order.indexOf(id)
+    const target = index + offset
+    if (index < 0 || target < 0 || target >= order.length) return
+    ;[order[index], order[target]] = [order[target], order[index]]
+    commitVisualState({ ...visualState, order }, "Move section")
+  }
+
+  function dropSection(targetId: string) {
+    const sourceId = sectionDrag.current
+    sectionDrag.current = null
+    if (!sourceId || sourceId === targetId) return
+    const order = orderedSections.map((section) => section.id)
+    const sourceIndex = order.indexOf(sourceId)
+    const targetIndex = order.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0) return
+    order.splice(targetIndex, 0, order.splice(sourceIndex, 1)[0])
+    commitVisualState({ ...visualState, order }, "Drag section")
+  }
+
+  function duplicateSection(id: string) {
+    const duplicateId = `${id}-copy-${Date.now()}`
+    const order = orderedSections.map((section) => section.id)
+    order.splice(order.indexOf(id) + 1, 0, duplicateId)
+    commitVisualState({
+      ...visualState,
+      order,
+      duplicates: [...visualState.duplicates, { sourceId: id, id: duplicateId }],
+    }, "Duplicate section")
+    setSelectedSection(duplicateId)
+  }
+
+  function toggleSection(id: string) {
+    const hidden = visualState.hidden.includes(id)
+      ? visualState.hidden.filter((item) => item !== id)
+      : [...visualState.hidden, id]
+    commitVisualState({ ...visualState, hidden }, hidden.includes(id) ? "Delete section" : "Restore section")
+  }
+
+  async function openDesignEditor() {
+    if (!project) return
+    const nextOpen = !designOpen
+    setDesignOpen(nextOpen)
+    setShowCode(false)
+    setDesignOpen(false)
+    setVisualState(EMPTY_VISUAL_EDITOR_STATE)
+    setUndoStack([])
+    setRedoStack([])
+    setVisualDirty(false)
+    if (!nextOpen) return
+    setVisualState(project.visualEditor)
+    setUndoStack([])
+    setRedoStack([])
+    if (!project.files["public/786-visual-editor.js"]) {
+      await persistVisualState(project.visualEditor, "Enable visual editor")
+      setVisualDirty(true)
+      try {
+        setBuild(await queueBuilderBuild(project.id))
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : "Editor bridge build could not be queued.")
+      }
+    }
+  }
 
   function startNewProject() {
     localStorage.removeItem(ACTIVE_PROJECT_KEY)
@@ -224,6 +446,10 @@ export function SevenEightSixWorkspace() {
       const loaded = await loadBuilderProject(projectId)
       localStorage.setItem(ACTIVE_PROJECT_KEY, projectId)
       setProject(loaded.project)
+      setVisualState(loaded.project.visualEditor)
+      setUndoStack([])
+      setRedoStack([])
+      setVisualDirty(false)
       setMessages(loaded.messages)
       setSelectedFile(
         String(loaded.project.previewState.active_file || "") ||
@@ -265,6 +491,10 @@ export function SevenEightSixWorkspace() {
     try {
       const restored = await restoreBuilderRevision(project.id, revisionId)
       setProject(restored.project)
+      setVisualState(restored.project.visualEditor)
+      setUndoStack([])
+      setRedoStack([])
+      setVisualDirty(true)
       setMessages(restored.messages)
       setSelectedFile(
         String(restored.project.previewState.active_file || "") ||
@@ -281,7 +511,7 @@ export function SevenEightSixWorkspace() {
   }
 
   async function deployVerifiedProject() {
-    if (!project || build?.status !== "passed" || panelBusy) return
+    if (!project || build?.status !== "passed" || panelBusy || visualDirty) return
     setPanelBusy(true)
     setError("")
     setDeployResult(null)
@@ -342,6 +572,10 @@ export function SevenEightSixWorkspace() {
       })
       localStorage.setItem(ACTIVE_PROJECT_KEY, saved.id)
       setProject(saved)
+      setVisualState(saved.visualEditor)
+      setUndoStack([])
+      setRedoStack([])
+      setVisualDirty(false)
       setSelectedFile(
         String(saved.previewState.active_file || "") ||
           Object.keys(saved.files)[0] ||
@@ -467,13 +701,16 @@ export function SevenEightSixWorkspace() {
               )}
             </span>
             <span className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
-              {build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
+              {visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
             </span>
           </div>
+          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold disabled:opacity-40 ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
+            <Palette className="h-3.5 w-3.5 text-fuchsia-300" /> Design
+          </button>
           <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed"} className="inline-flex h-9 items-center gap-3 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-5 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40">
+          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed" || visualDirty} className="inline-flex h-9 items-center gap-3 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-5 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40">
             <Rocket className="h-3.5 w-3.5" /> Deploy <ChevronDown className="h-3 w-3" />
           </button>
         </header>
@@ -596,7 +833,11 @@ export function SevenEightSixWorkspace() {
               ) : (
                 <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2">
                   {build?.status === "passed" && build.deployment_url ? (
-                    <iframe src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="min-h-full rounded-md border-0 bg-white" />
+                    <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
+                      if (!designOpen) return
+                      postVisualMessage({ type: "786-editor:enable", enabled: true })
+                      postVisualMessage({ type: "786-editor:apply", state: visualState })
+                    }} style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="min-h-full rounded-md border-0 bg-white" />
                   ) : (
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="grid min-h-full place-items-center rounded-md border border-[#1f2d45] bg-[radial-gradient(circle_at_50%_30%,rgba(30,64,175,.10),transparent_38%),#08111f] px-6 text-center">
                       <div>
@@ -611,6 +852,98 @@ export function SevenEightSixWorkspace() {
             </div>
           </section>
         </div>
+
+        {designOpen && (
+          <aside className="absolute bottom-[184px] right-0 top-[58px] z-50 flex w-[340px] flex-col border-l border-fuchsia-300/20 bg-[#080d19]/[.98] shadow-[-24px_0_60px_rgba(0,0,0,.45)]">
+            <div className="flex h-12 shrink-0 items-center border-b border-[#263550] px-3">
+              <Palette className="mr-2 h-4 w-4 text-fuchsia-300" />
+              <b className="text-[13px]">VVIP Visual Editor</b>
+              {editorSaving && <Loader2 className="ml-2 h-3.5 w-3.5 animate-spin text-cyan-300" />}
+              <button type="button" onClick={undoVisualEdit} disabled={!undoStack.length || editorSaving} aria-label="Undo visual edit" className="ml-auto rounded p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30"><Undo2 className="h-4 w-4" /></button>
+              <button type="button" onClick={redoVisualEdit} disabled={!redoStack.length || editorSaving} aria-label="Redo visual edit" className="rounded p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30"><Redo2 className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setDesignOpen(false)} aria-label="Close visual editor" className="rounded p-2 text-slate-400 hover:bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <p className="mb-2 text-[13px] font-bold uppercase tracking-[.15em] text-slate-500">Page sections</p>
+              {orderedSections.length ? (
+                <div className="space-y-1">
+                  {orderedSections.map((section, index) => (
+                    <div
+                      key={section.id}
+                      draggable
+                      onDragStart={() => { sectionDrag.current = section.id }}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => dropSection(section.id)}
+                      onClick={() => setSelectedSection(section.id)}
+                      className={`flex cursor-grab items-center gap-1 rounded-lg border px-2 py-2 ${selectedSection === section.id ? "border-fuchsia-300/40 bg-fuchsia-400/10" : "border-[#263550] bg-[#0d1526]"}`}
+                    >
+                      <span className="mr-1 min-w-0 flex-1 truncate text-[12px] font-semibold">{section.label}</span>
+                      <button type="button" aria-label="Move section up" onClick={(event) => { event.stopPropagation(); moveSection(section.id, -1) }} disabled={index === 0} className="p-1 text-slate-400 disabled:opacity-25"><ArrowUp className="h-3 w-3" /></button>
+                      <button type="button" aria-label="Move section down" onClick={(event) => { event.stopPropagation(); moveSection(section.id, 1) }} disabled={index === orderedSections.length - 1} className="p-1 text-slate-400 disabled:opacity-25"><ArrowDown className="h-3 w-3" /></button>
+                      <button type="button" aria-label="Duplicate section" onClick={(event) => { event.stopPropagation(); duplicateSection(section.id) }} className="p-1 text-cyan-300"><Copy className="h-3 w-3" /></button>
+                      <button type="button" aria-label={visualState.hidden.includes(section.id) ? "Restore section" : "Delete section"} onClick={(event) => { event.stopPropagation(); toggleSection(section.id) }} className={`p-1 ${visualState.hidden.includes(section.id) ? "text-emerald-300" : "text-rose-300"}`}><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-[#263550] p-3 text-[12px] leading-5 text-slate-500">Click inside the preview or wait for its editable sections to load.</p>
+              )}
+
+              <div className="my-4 h-px bg-[#263550]" />
+              <p className="mb-3 text-[13px] font-bold uppercase tracking-[.15em] text-slate-500">Style selected section</p>
+              {!selectedSection ? (
+                <p className="text-[12px] text-slate-500">Select a section to edit its design.</p>
+              ) : (
+                <div className="space-y-3">
+                  {([
+                    ["Background", "backgroundColor", selectedStyle.backgroundColor || "#ffffff"],
+                    ["Text", "color", selectedStyle.color || "#111827"],
+                    ["Border", "borderColor", selectedStyle.borderColor || "#d1d5db"],
+                  ] as const).map(([label, key, value]) => (
+                    <label key={key} className="flex items-center justify-between text-[12px] text-slate-300">
+                      {label} colour
+                      <span className="flex items-center gap-2">
+                        <code className="text-[13px] text-slate-500">{value}</code>
+                        <input type="color" value={value.startsWith("#") ? value.slice(0, 7) : "#ffffff"} onChange={(event) => updateSelectedStyle({ [key]: event.target.value }, `Change ${label.toLowerCase()} colour`)} className="h-8 w-10 cursor-pointer rounded border border-[#263550] bg-transparent p-0.5" />
+                      </span>
+                    </label>
+                  ))}
+                  <label className="block text-[12px] text-slate-300">Typography
+                    <select value={selectedStyle.fontFamily || ""} onChange={(event) => updateSelectedStyle({ fontFamily: event.target.value || undefined }, "Change typography")} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[12px]">
+                      <option value="">Project default</option>
+                      <option value="Inter, sans-serif">Inter modern</option>
+                      <option value="Georgia, serif">Editorial serif</option>
+                      <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
+                      <option value="'DM Sans', sans-serif">DM Sans</option>
+                      <option value="'Playfair Display', serif">Luxury Playfair</option>
+                    </select>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ["Border width", "borderWidth", 0, 20],
+                      ["Corner radius", "borderRadius", 0, 160],
+                      ["Padding", "padding", 0, 240],
+                      ["Margin", "margin", 0, 240],
+                      ["Font size", "fontSize", 8, 160],
+                    ] as const).map(([label, key, min, max]) => (
+                      <label key={key} className="text-[13px] text-slate-400">{label}
+                        <input type="number" min={min} max={max} value={selectedStyle[key] ?? ""} placeholder="Default" onChange={(event) => updateSelectedStyle({ [key]: event.target.value === "" ? undefined : Number(event.target.value) }, `Change ${label.toLowerCase()}`)} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[12px] text-white outline-none focus:border-fuchsia-300/50" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-[#263550] p-3">
+              <p className="mb-2 text-[13px] text-slate-500">Changes save automatically and update the preview instantly. Rebuild before publishing.</p>
+              <button type="button" onClick={() => void retryBuild()} disabled={!visualDirty || panelBusy || editorSaving} className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-violet-500 text-[12px] font-black text-white disabled:opacity-40">
+                <RotateCw className="h-3.5 w-3.5" /> Save &amp; rebuild verified preview
+              </button>
+            </div>
+          </aside>
+        )}
 
         <section className={`relative shrink-0 border-t border-[#1b2940] bg-[#070c18] transition-[height] ${bottomCollapsed ? "h-0 overflow-visible" : "h-[184px]"}`}>
           {!bottomCollapsed && (

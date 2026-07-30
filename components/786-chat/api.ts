@@ -8,6 +8,10 @@ import type {
   GenerationRequest,
   GenerationResult,
 } from "./contracts"
+import {
+  normalizeVisualEditorState,
+  type VisualEditorState,
+} from "@/lib/786-chat/visual-editor"
 
 type StoredMessage = {
   id: string
@@ -24,6 +28,7 @@ type StoredProject = {
   prompt: string
   files?: Record<string, string>
   preview_state?: Record<string, unknown>
+  metadata?: Record<string, unknown>
   messages?: StoredMessage[]
 }
 
@@ -53,7 +58,33 @@ function toProject(project: StoredProject): BuilderProject {
     prompt: project.prompt,
     files: project.files || {},
     previewState: project.preview_state || {},
+    metadata: project.metadata || {},
+    visualEditor: normalizeVisualEditorState(project.metadata?.visual_editor),
   }
+}
+
+export async function saveVisualEditorState(input: {
+  projectId: string
+  state: VisualEditorState
+  label: string
+}) {
+  const response = await fetch(
+    `/api/786-chat/projects/${input.projectId}/visual-editor`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state: input.state, label: input.label }),
+    },
+  )
+  const payload = (await response.json().catch(() => ({}))) as {
+    project?: StoredProject
+    state?: VisualEditorState
+    error?: string
+  }
+  if (!response.ok || !payload.project) {
+    throw new Error(payload.error || "Visual edit could not be saved.")
+  }
+  return toProject(payload.project)
 }
 
 export async function loadBuilderProject(projectId: string) {
