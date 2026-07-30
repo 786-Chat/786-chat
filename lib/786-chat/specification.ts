@@ -55,10 +55,12 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
   const routes = unique([
     ...pageMatches.map(([, , route]) => route),
     ...requestedRoutes,
+    ...(loginRequested ? ["/forgot-password"] : []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
     ...pageMatches.map(([, page]) => page),
+    ...(loginRequested ? ["Forgot Password"] : []),
     ...requestedRoutes.map((route) =>
       route
         .split("/")
