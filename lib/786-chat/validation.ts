@@ -35,6 +35,32 @@ export function normalizeGeneratedImports(files: Record<string, string>) {
   )
 }
 
+export function normalizeGeneratedAuthLinks(
+  specification: ProjectSpecification,
+  files: Record<string, string>,
+) {
+  if (!specification.routes.includes("/login")) return files
+
+  const replacements: Record<string, string> = {
+    "/forgot-password": "/login?mode=forgot-password",
+    "/register": "/login?mode=register",
+    "/signup": "/login?mode=register",
+    "/sign-up": "/login?mode=register",
+  }
+
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (!/\.(?:tsx?|jsx?)$/.test(path)) return [path, content]
+      const normalized = content.replace(
+        /(\bhref\s*=\s*(?:\{\s*)?)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2((?:\s*\})?)/gi,
+        (_match, prefix: string, quote: string, route: string, suffix: string) =>
+          `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}${suffix}`,
+      )
+      return [path, normalized]
+    }),
+  )
+}
+
 function routeFileCandidates(route: string) {
   const suffix = route === "/" ? "page" : `${route.slice(1)}/page`
   return [
