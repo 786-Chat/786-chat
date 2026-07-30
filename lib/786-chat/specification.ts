@@ -99,6 +99,17 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
     [/\blight\b/i, "light"],
   ]))
 
+  const industry = matches(prompt, [
+    [/\brestaurant|food|cafe|takeaway\b/i, "food-and-hospitality"],
+    [/\bproperty|real estate|estate agent\b/i, "property"],
+    [/\bmedical|clinic|health\b/i, "healthcare"],
+    [/\bfinance|bank|accounting\b/i, "finance"],
+    [/\beducation|school|course\b/i, "education"],
+    [/\becommerce|shop|store\b/i, "commerce"],
+    [/\bmanufactur|factory|production line\b/i, "manufacturing"],
+    [/\biot|sensor|device|telemetry\b/i, "iot"],
+  ])[0] || null
+
   return {
     projectType: /\bdashboard|portal|saas|crm|erp\b/i.test(prompt)
       ? "web-application"
@@ -106,14 +117,7 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
         ? "mobile-application"
         : "website",
     brand: prompt.match(/\b(?:called|named|brand(?:ed)?)\s+["']?([A-Z][\w -]{1,40})/i)?.[1]?.trim() || null,
-    industry: matches(prompt, [
-      [/\brestaurant|food|cafe|takeaway\b/i, "food-and-hospitality"],
-      [/\bproperty|real estate|estate agent\b/i, "property"],
-      [/\bmedical|clinic|health\b/i, "healthcare"],
-      [/\bfinance|bank|accounting\b/i, "finance"],
-      [/\beducation|school|course\b/i, "education"],
-      [/\becommerce|shop|store\b/i, "commerce"],
-    ])[0] || null,
+    industry,
     pages,
     routes,
     requiredComponents: unique(requiredComponents),
@@ -140,6 +144,6 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
       [/\bpayment|stripe\b/i, "payments"],
       [/\bemail\b/i, "email"],
     ])),
-    designFamily: selectDesignFamily(seed, designDirection),
+    designFamily: selectDesignFamily(seed, designDirection, `${prompt} ${industry || ""}`),
   }
 }
