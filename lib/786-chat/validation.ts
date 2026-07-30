@@ -51,11 +51,17 @@ export function normalizeGeneratedAuthLinks(
   return Object.fromEntries(
     Object.entries(files).map(([path, content]) => {
       if (!/\.(?:tsx?|jsx?)$/.test(path)) return [path, content]
-      const normalized = content.replace(
-        /(\bhref\s*=\s*(?:\{\s*)?)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2((?:\s*\})?)/gi,
-        (_match, prefix: string, quote: string, route: string, suffix: string) =>
-          `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}${suffix}`,
-      )
+      const normalized = content
+        .replace(
+          /(\bhref\s*=\s*(?:\{\s*)?)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2((?:\s*\})?)/gi,
+          (_match, prefix: string, quote: string, route: string, suffix: string) =>
+            `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}${suffix}`,
+        )
+        .replace(
+          /(\b(?:href|to)\s*:\s*)(["'`])(\/(?:forgot-password|register|signup|sign-up))\2/gi,
+          (_match, prefix: string, quote: string, route: string) =>
+            `${prefix}${quote}${replacements[route.toLowerCase()]}${quote}`,
+        )
       return [path, normalized]
     }),
   )
@@ -86,12 +92,19 @@ function internalHrefRoutes(files: Record<string, string>) {
   const routes = new Set<string>()
   for (const [path, content] of Object.entries(files)) {
     if (!/\.(?:tsx?|jsx?)$/.test(path)) continue
-    for (const match of content.matchAll(/\bhref\s*=\s*(?:\{\s*)?["'`]([^"'`]+)["'`](?:\s*\})?/gi)) {
-      const href = match[1].trim()
-      if (!href.startsWith("/") || href.startsWith("//")) continue
-      const route = href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
-      if (/\.[a-z0-9]{2,8}$/i.test(route)) continue
-      routes.add(route)
+    const routePatterns = [
+      /\bhref\s*=\s*(?:\{\s*)?["'`]([^"'`]+)["'`](?:\s*\})?/gi,
+      /\b(?:href|to)\s*:\s*["'`]([^"'`]+)["'`]/gi,
+      /\b(?:router\.)?(?:push|replace)\(\s*["'`]([^"'`]+)["'`]/gi,
+    ]
+    for (const pattern of routePatterns) {
+      for (const match of content.matchAll(pattern)) {
+        const href = match[1].trim()
+        if (!href.startsWith("/") || href.startsWith("//")) continue
+        const route = href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
+        if (/\.[a-z0-9]{2,8}$/i.test(route)) continue
+        routes.add(route)
+      }
     }
   }
   return routes
