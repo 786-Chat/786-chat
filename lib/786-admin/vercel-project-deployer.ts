@@ -1,9 +1,18 @@
 const DEFAULT_REPOSITORY_ID = "1250394192"
+const GIT_REF_RETRY_ATTEMPTS = 5
+const GIT_REF_RETRY_DELAY_MS = 2_000
 
 export type GeneratedProjectDeployment = {
   id: string
   url: string
   readyState: string
+}
+
+type VercelDeploymentPayload = {
+  id?: unknown
+  url?: unknown
+  readyState?: unknown
+  error?: { message?: unknown }
 }
 
 function requiredEnv(name: string): string {
@@ -15,6 +24,18 @@ function requiredEnv(name: string): string {
 function safeProjectName(projectId: string): string {
   const suffix = projectId.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)
   return `786-generated-${suffix || "project"}`
+}
+
+function isTransientGitRefError(message: string): boolean {
+  return (
+    /\bref\b.+\bdoes not exist\b/i.test(message) ||
+    /\bgit (?:reference|ref)\b.+\bnot found\b/i.test(message) ||
+    /\bcommit\b.+\bnot found\b/i.test(message)
+  )
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
 async function deploymentState(
@@ -103,42 +124,54 @@ export async function deployGeneratedProjectToVercel(input: {
   const endpoint = new URL("https://api.vercel.com/v13/deployments")
   if (teamId) endpoint.searchParams.set("teamId", teamId)
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      name: projectName,
-      target: "staging",
-      gitSource: {
-        type: "github",
-        repoId: repositoryId,
-        ref: input.branch,
-        sha: input.commitSha,
-      },
-      projectSettings: {
-        framework: "nextjs",
-        rootDirectory,
-      },
-    }),
-    cache: "no-store",
-  })
+  let payload: VercelDeploymentPayload | null = null
 
-  const payload = (await response.json().catch(() => null)) as null | {
-    id?: unknown
-    url?: unknown
-    readyState?: unknown
-    error?: { message?: unknown }
-  }
+  for (let attempt = 1; attempt <= GIT_REF_RETRY_ATTEMPTS; attempt += 1) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: projectName,
+        target: "staging",
+        gitSource: {
+          type: "github",
+          repoId: repositoryId,
+          ref: input.branch,
+          sha: input.commitSha,
+        },
+        projectSettings: {
+          framework: "nextjs",
+          rootDirectory,
+        },
+      }),
+      cache: "no-store",
+    })
 
-  if (!response.ok || !payload || typeof payload.id !== "string" || typeof payload.url !== "string") {
+    payload = (await response.json().catch(() => null)) as VercelDeploymentPayload | null
+    if (
+      response.ok &&
+      payload &&
+      typeof payload.id === "string" &&
+      typeof payload.url === "string"
+    ) {
+      break
+    }
+
     const detail =
       payload?.error && typeof payload.error.message === "string"
         ? payload.error.message
         : `Vercel deployment request failed with status ${response.status}`
-    throw new Error(detail.slice(0, 500))
+    if (attempt === GIT_REF_RETRY_ATTEMPTS || !isTransientGitRefError(detail)) {
+      throw new Error(detail.slice(0, 500))
+    }
+    await wait(GIT_REF_RETRY_DELAY_MS)
+  }
+
+  if (!payload || typeof payload.id !== "string" || typeof payload.url !== "string") {
+    throw new Error("Vercel deployment request did not return a deployment")
   }
 
   const url = payload.url.startsWith("https://") ? payload.url : `https://${payload.url}`

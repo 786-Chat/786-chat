@@ -5,7 +5,7 @@ import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-d
 import { repairFailedBuild } from "@/lib/786-chat/build-repair"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 120
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
