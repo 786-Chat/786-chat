@@ -35,6 +35,7 @@ test("login validation requires all requested controls", async () => {
 test("explicit slash routes are preserved and sent in the generation brief", async () => {
   const analyser = await read("lib/786-chat/specification.ts")
   const route = await read("app/api/786-chat/generate/route.ts")
+  const planner = await read("lib/786-chat/planner.ts")
 
   assert.match(analyser, /explicitRoutes/)
   assert.match(analyser, /requestedRoutes/)
