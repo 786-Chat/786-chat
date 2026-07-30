@@ -41,3 +41,12 @@ test("route validation ignores external, fragment and static asset destinations"
   assert.match(validation, /split\(\/\[\?#\]\//)
   assert.match(validation, /\\\.\[a-z0-9\]\{2,8\}/i)
 })
+
+test("validation covers routes stored in navigation objects and router calls", () => {
+  assert.match(validation, /\(\?:href\|to\)\\s\*:\\s\*/)
+  assert.match(validation, /\(\?:push\|replace\)/)
+})
+
+test("authentication normalization covers object-based navigation", () => {
+  assert.match(validation, /\(\?:href\|to\)\\s\*:\\s\*/)
+})
