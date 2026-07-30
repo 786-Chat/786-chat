@@ -27,6 +27,21 @@ function source(files: Record<string, string>) {
     .join("\n")
 }
 
+function internalHrefRoutes(files: Record<string, string>) {
+  const routes = new Set<string>()
+  for (const [path, content] of Object.entries(files)) {
+    if (!/\.(?:tsx?|jsx?)$/.test(path)) continue
+    for (const match of content.matchAll(/\bhref\s*=\s*(?:\{\s*)?["'`]([^"'`]+)["'`](?:\s*\})?/gi)) {
+      const href = match[1].trim()
+      if (!href.startsWith("/") || href.startsWith("//")) continue
+      const route = href.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
+      if (/\.[a-z0-9]{2,8}$/i.test(route)) continue
+      routes.add(route)
+    }
+  }
+  return routes
+}
+
 export function validateGeneratedProject(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -38,6 +53,12 @@ export function validateGeneratedProject(
   for (const route of specification.routes) {
     if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
       errors.push(`Missing requested route: ${route}`)
+    }
+  }
+
+  for (const route of internalHrefRoutes(files)) {
+    if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
+      errors.push(`Internal navigation points to missing route: ${route}`)
     }
   }
 
