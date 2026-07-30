@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth"
 import { isAdminUser } from "@/lib/admin-config"
 import { getProjectWithData } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
+import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -35,6 +36,16 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!files || Object.keys(files).length === 0) {
     return NextResponse.json({ error: "A complete generated file set is required." }, { status: 400 })
   }
+  const metadata = body.metadata && typeof body.metadata === "object"
+    ? body.metadata as Record<string, unknown>
+    : current.metadata
+  const validation = validatePersistedGeneration(metadata, files)
+  if (validation && !validation.valid) {
+    return NextResponse.json({
+      error: "Generated files no longer match the analysed project specification.",
+      validation,
+    }, { status: 422 })
+  }
   try {
     const project = await saveGeneratedProjectAtomic({
       projectId: id,
@@ -46,9 +57,7 @@ export async function PATCH(request: Request, { params }: Context) {
       previewState: body.preview_state && typeof body.preview_state === "object"
         ? body.preview_state as Record<string, unknown>
         : current.preview_state,
-      metadata: body.metadata && typeof body.metadata === "object"
-        ? body.metadata as Record<string, unknown>
-        : current.metadata,
+      metadata,
       messages: Array.isArray(body.messages)
         ? body.messages as Array<{ role: "user" | "assistant" | "system"; content: string; model?: string | null; reason?: string | null }>
         : [],
