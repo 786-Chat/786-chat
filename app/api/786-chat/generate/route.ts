@@ -12,6 +12,8 @@ import {
 } from "@/lib/786-chat/validation"
 import { designFamilyBrief } from "@/lib/786-chat/design-system"
 import { injectVisualEditorFiles } from "@/lib/786-chat/visual-editor"
+import { systemBlueprintBrief } from "@/lib/786-chat/system-blueprints"
+import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
@@ -45,6 +47,15 @@ export async function POST(request: Request) {
     "- Return every planned file with complete content.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
+    ...(specification.systemBlueprint
+      ? [
+          "",
+          "COMPLETE OPERATIONAL SYSTEM — MANDATORY:",
+          ...systemBlueprintBrief(specification.systemBlueprint).map((line) => `- ${line}`),
+          "",
+          OPTIONAL_PROJECT_FEATURE_RULES,
+        ]
+      : []),
   ].join("\n")
   const delegatedRequest = new Request(request.url, {
     method: "POST",

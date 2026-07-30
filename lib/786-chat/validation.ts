@@ -143,6 +143,43 @@ export function validateGeneratedProject(
     if (pattern && !pattern.test(combined)) errors.push(`Missing required control: ${component}`)
   }
 
+  if (specification.systemBlueprint) {
+    const requiredSystemFiles = [
+      "shared/contracts.ts",
+      "lib/server/tenant.ts",
+      "lib/server/validation.ts",
+      "sql/schema.sql",
+      ...specification.systemBlueprint.apiResources.map((resource) =>
+        `app/api/${resource}/route.ts`
+      ),
+    ]
+    for (const path of requiredSystemFiles) {
+      if (typeof files[path] !== "string" || !files[path].trim()) {
+        errors.push(`Missing required system file: ${path}`)
+      }
+    }
+    const schema = files["sql/schema.sql"] || ""
+    const tenantGuard = files["lib/server/tenant.ts"] || ""
+    if (specification.systemBlueprint.tenantScoped) {
+      if (!/\bcompany_id\b/i.test(schema)) {
+        errors.push("Tenant-scoped schema is missing company_id.")
+      }
+      if (!/company[_A-Z]?id|company_id/i.test(tenantGuard) ||
+          !/unauthor|forbidden|access|permission|role/i.test(tenantGuard)) {
+        errors.push("Server tenant guard does not enforce company ownership.")
+      }
+    }
+    if (!/CREATE\s+TABLE/i.test(schema) || !/audit/i.test(schema)) {
+      errors.push("Operational PostgreSQL schema or audit storage is incomplete.")
+    }
+    for (const resource of specification.systemBlueprint.apiResources) {
+      const api = files[`app/api/${resource}/route.ts`] || ""
+      if (!/export\s+async\s+function\s+(?:GET|POST|PATCH|DELETE)/.test(api)) {
+        errors.push(`System API is not implemented: ${resource}`)
+      }
+    }
+  }
+
   if (/AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Everything feels custom-built/i.test(combined)) {
     errors.push("Generic fallback content was detected.")
   }

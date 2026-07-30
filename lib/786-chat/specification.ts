@@ -1,4 +1,5 @@
 import { selectDesignFamily, type DesignFamily } from "./design-system"
+import { selectSystemBlueprint, type SystemBlueprint } from "./system-blueprints"
 
 export type ProjectSpecification = {
   projectType: string
@@ -13,6 +14,7 @@ export type ProjectSpecification = {
   contentRequirements: string[]
   backendRequirements: string[]
   designFamily: DesignFamily
+  systemBlueprint: SystemBlueprint | null
 }
 
 const PAGE_ALIASES: Array<[RegExp, string, string]> = [
@@ -57,12 +59,14 @@ function withoutNegativeRequirements(prompt: string) {
 
 export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpecification {
   const positivePrompt = withoutNegativeRequirements(prompt)
+  const systemBlueprint = selectSystemBlueprint(positivePrompt)
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
   const routes = unique([
     ...pageMatches.map(([, , route]) => route),
     ...requestedRoutes,
+    ...(systemBlueprint?.routes || []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
@@ -145,5 +149,6 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
       [/\bemail\b/i, "email"],
     ])),
     designFamily: selectDesignFamily(seed, designDirection, `${prompt} ${industry || ""}`),
+    systemBlueprint,
   }
 }
