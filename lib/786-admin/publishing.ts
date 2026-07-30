@@ -171,3 +171,24 @@ export async function getLiveDeploymentBySlug(slug: string): Promise<AdminProjec
 
   return rows[0] ?? null
 }
+
+export async function getLiveDeploymentByHostname(
+  hostname: string,
+): Promise<AdminProjectDeployment | null> {
+  await ensurePublishingSchema()
+
+  const rows = (await sql`
+    SELECT p.id, p.project_id, p.slug, p.title, p.status, p.published_html,
+           p.files, p.version, p.published_at, p.updated_at
+    FROM admin_project_deployments p
+    INNER JOIN admin_project_domains d ON d.deployment_id = p.id
+    WHERE LOWER(d.hostname) = ${hostname.toLowerCase().trim()}
+      AND d.status = 'active'
+      AND d.dns_status = 'verified'
+      AND d.ssl_status = 'active'
+      AND p.status = 'live'
+    LIMIT 1
+  `) as unknown as AdminProjectDeployment[]
+
+  return rows[0] ?? null
+}

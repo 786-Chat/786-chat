@@ -8,6 +8,7 @@ import {
   Code2,
   FileText,
   FolderKanban,
+  Globe2,
   Laptop,
   Loader2,
   Monitor,
@@ -469,6 +470,7 @@ export default function SevenEightSixAdminChatPage() {
             <div className="space-y-5">
               <button onClick={() => router.push('/chat')} className="grid h-10 w-10 place-items-center rounded-xl bg-[rgb(var(--accent))] text-white" title="Chat"><FolderKanban className="h-4 w-4" /></button>
               <button onClick={() => router.push('/786-admin/projects')} className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Projects"><FolderKanban className="h-4 w-4" /></button>
+              <button onClick={() => router.push('/786-admin/domains')} className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Domains"><Globe2 className="h-4 w-4" /></button>
             </div>
           </div>
           <div className="space-y-5"><button className="grid h-10 w-10 place-items-center rounded-xl text-slate-300 hover:bg-white/10" title="Settings"><Settings className="h-4 w-4" /></button><div className="grid h-9 w-9 place-items-center rounded-full bg-[rgb(var(--accent))] text-xs font-black">M</div></div>
@@ -487,7 +489,7 @@ export default function SevenEightSixAdminChatPage() {
               </div>}
             </div>
             <button onClick={() => setRefreshKey((v) => v + 1)} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Refresh"><RotateCw className="h-4 w-4" /></button>
-            <button onClick={publish} disabled={!project || publishing} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10 disabled:opacity-40" title="Publish"><Rocket className="h-4 w-4" /></button>
+            <button data-admin-publish type="button" disabled={!project || publishing} className="grid h-10 w-12 place-items-center rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10 disabled:opacity-40" title="Deploy"><Rocket className="h-4 w-4" /><span className="sr-only">Deploy</span></button>
             <div className="relative">
               <button onClick={() => setThemeOpen((v) => !v)} className="inline-flex h-10 w-12 items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/25 text-slate-200 hover:bg-white/10" title="Theme"><Palette className="h-4 w-4" /><ChevronDown className="h-3 w-3" /></button>
               {themeOpen && <div className="absolute right-0 top-12 z-50 w-[222px] rounded-xl border border-white/10 bg-[#100821]/95 p-3 shadow-2xl backdrop-blur-2xl">
