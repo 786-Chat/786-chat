@@ -36,6 +36,7 @@ jobs:
         shell: bash
         run: |
           test -n "$RUNNER_SECRET" || { echo "BUILD_RUNNER_SECRET is missing"; exit 1; }
+          test "${#RUNNER_SECRET}" -ge 64 || { echo "BUILD_RUNNER_SECRET is invalid"; exit 1; }
           case "$BASE_URL" in
             https://786.chat|https://*.vercel.app) ;;
             *) echo "Untrusted base URL"; exit 1 ;;
@@ -50,6 +51,7 @@ jobs:
             --connect-timeout 15 \
             --max-time 90 \
             -H "Authorization: Bearer $RUNNER_SECRET" \
+            -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
             "$BASE_URL/api/786-admin/build-runner/source?build_id=$BUILD_ID" \
             -o "$RUNNER_TEMP/bundle.json"
 
@@ -127,6 +129,7 @@ jobs:
             --max-time 90 \
             -X POST \
             -H "Authorization: Bearer $RUNNER_SECRET" \
+            -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
             -H "Content-Type: application/json" \
             --data-binary "@$RUNNER_TEMP/callback.json" \
             "$BASE_URL/api/786-admin/build-runner/callback"

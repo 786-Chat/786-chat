@@ -6,6 +6,7 @@ import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-adm
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData } from "@/lib/786-admin/projects"
+import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -55,12 +56,25 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const { id } = await params
-  const project = await getProjectWithData(id, email)
+  let project = await getProjectWithData(id, email)
   if (!project) {
     return NextResponse.json({ success: false, error: "Project not found" }, { status: 404 })
   }
 
   const body = (await request.json().catch(() => ({}))) as { confirm?: unknown }
+  if (body.confirm === true) {
+    const migrated = await migrateUnsupportedNextConfig({
+      projectId: id,
+      ownerEmail: email,
+      files: project.files || {},
+    })
+    if (migrated) {
+      project = await getProjectWithData(id, email)
+      if (!project) {
+        return NextResponse.json({ success: false, error: "Project not found after migration" }, { status: 404 })
+      }
+    }
+  }
   const validation = validateGeneratedProject(project.files || {})
 
   if (!validation.valid) {

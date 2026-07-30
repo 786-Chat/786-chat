@@ -66,12 +66,22 @@ export async function middleware(request: NextRequest) {
   const token = getAuthToken(request)
 
   const isAdminApi = pathname.startsWith("/api/786-admin")
+  const isBuildRunnerApi = pathname.startsWith("/api/786-admin/build-runner/")
   const isAdminPage = pathname.startsWith("/786-admin")
   const isCustomerWorkspace = pathname === "/customer-workspace"
   const isCustomerDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/")
   const isMainCustomerWorkspaceRoute = pathname === "/dashboard" || pathname === "/dashboard/chat"
 
   if (pathname === "/786-admin/login") return NextResponse.next()
+
+  if (isBuildRunnerApi) {
+    const runnerSecret = process.env.BUILD_RUNNER_SECRET?.trim()
+    if (!runnerSecret) return apiError("Build runner authentication is not configured", 503)
+    if (request.headers.get("authorization") !== `Bearer ${runnerSecret}`) {
+      return apiError("Unauthorized", 401)
+    }
+    return NextResponse.next()
+  }
 
   if (!secret) {
     console.error("[786 Chat AI] JWT_SECRET is not configured")

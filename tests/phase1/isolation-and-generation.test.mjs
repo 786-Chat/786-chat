@@ -27,11 +27,9 @@ test("recent project cards are not injected into the customer preview workspace"
   assert.doesNotMatch(file, /AdminChatRecentProjects/)
 })
 
-test("local fallback has multiple layouts and industry-specific pizza content", async () => {
-  const file = await source("lib/786-admin/premium-fallback-generator.ts")
-  const layouts = file.match(/"(?:storefront|poster|mosaic|split|editorial|catalogue|story|command)"/g) || []
-  assert.ok(new Set(layouts).size >= 8, "expected at least eight distinct fallback layouts")
-  assert.match(file, /pizza\|restaurant\|cafe\|bakery/)
-  assert.match(file, /Signature pizzas/)
-  assert.match(file, /Explore the menu/)
+test("canonical generation rejects local fallback projects", async () => {
+  const file = await source("app/api/786-chat/generate/route.ts")
+  assert.match(file, /fellBackToLocal === true/)
+  assert.match(file, /No generic fallback project was accepted or saved/)
+  assert.match(file, /status:\s*503/)
 })

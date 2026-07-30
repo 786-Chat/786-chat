@@ -45,11 +45,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply base schema and deployment-domain migration
+      - name: Apply builder migrations
         shell: bash
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/schema.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/migrations/002-deployment-domains.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/migrations/003-generation-persistence.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f lib/786-admin/migrations/004-build-repair-loop.sql
 
       - name: Verify deployment-domain contract
         shell: bash
@@ -79,6 +81,28 @@ jobs:
                 AND column_name = 'ssl_status'
             ) THEN
               RAISE EXCEPTION 'admin_project_domains.ssl_status is missing';
+            END IF;
+
+            IF to_regclass('public.builder_generation_jobs') IS NULL THEN
+              RAISE EXCEPTION 'builder_generation_jobs was not created';
+            END IF;
+
+            IF to_regclass('public.admin_project_revisions') IS NULL THEN
+              RAISE EXCEPTION 'admin_project_revisions was not created';
+            END IF;
+
+            IF to_regclass('public.admin_project_builds') IS NULL THEN
+              RAISE EXCEPTION 'admin_project_builds was not created';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'admin_project_builds'
+                AND column_name = 'repair_attempt'
+            ) THEN
+              RAISE EXCEPTION 'admin_project_builds.repair_attempt is missing';
             END IF;
           END $$;
           SQL

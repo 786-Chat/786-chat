@@ -146,6 +146,7 @@ ABSOLUTE RULES:
 13. Never claim an image-driven change was made unless the returned files actually implement it.
 14. Never add fake success text; only say what the returned files actually changed.
 15. Never leave duplicate imports, mid-file imports, or imports with comments after executable code.
+16. If a Next.js config file is needed, use next.config.mjs. Never create next.config.ts because supported generated-project Next.js versions may reject it.
 
 ${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
@@ -250,6 +251,9 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
       prompt,
+      providerOptions: picked.provider === "deepseek"
+        ? { deepseek: { thinking: { type: "disabled" } } }
+        : undefined,
     }
 
     if (attachments.length > 0) {
