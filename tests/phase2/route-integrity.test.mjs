@@ -17,6 +17,11 @@ test("common requested page names become mandatory routes", () => {
   }
 })
 
+test("login requests also plan a real forgot-password destination", () => {
+  assert.match(specification, /loginRequested \? \["\/forgot-password"\] : \[\]/)
+  assert.match(specification, /loginRequested \? \["Forgot Password"\] : \[\]/)
+})
+
 test("validation rejects literal internal links without real page files", () => {
   assert.match(validation, /internalHrefRoutes/)
   assert.match(validation, /href\\s\*=|href\\s\*=/)
