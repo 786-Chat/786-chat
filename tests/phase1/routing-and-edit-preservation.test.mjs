@@ -28,3 +28,9 @@ test("code is hidden until the user opens code view", () => {
   assert.match(workspace, /showCode/)
   assert.match(workspace, /setShowCode/)
 })
+
+test("edit validation merges proposed files with the complete existing project", () => {
+  assert.match(canonical, /const existingFiles/)
+  assert.match(canonical, /\.\.\.existingFiles,\s*\.\.\.generatedFiles/s)
+  assert.match(canonical, /keyFiles/)
+})
