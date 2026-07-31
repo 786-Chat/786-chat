@@ -50,6 +50,13 @@ test("active generation receives system rules, schemas, APIs and workflows", asy
   assert.match(planner, /app\/api\/\$\{resource\}\/route\.ts/)
 })
 
+test("system briefs require operational pages and explicit tenant API enforcement", async () => {
+  const source = await read("lib/786-chat/system-blueprints.ts")
+  assert.match(source, /collection and item API route must reference companyId/)
+  assert.match(source, /persists a tenant-scoped audit_logs event/)
+  assert.match(source, /operational page contains a real form, table or state-changing interactive control/)
+})
+
 test("system validation rejects decorative or cross-tenant output", async () => {
   const validation = await read("lib/786-chat/validation.ts")
 
