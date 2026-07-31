@@ -57,7 +57,9 @@ test("system validation rejects decorative or cross-tenant output", async () => 
   assert.match(validation, /Tenant-scoped schema is missing company_id/)
   assert.match(validation, /Server tenant guard does not enforce company ownership/)
   assert.match(validation, /Operational PostgreSQL schema or audit storage is incomplete/)
-  assert.match(validation, /System API is not implemented/)
+  assert.match(validation, /System CRUD API is not implemented/)
+  assert.match(validation, /CREATE\\s\+\(\?:UNIQUE/)
+  assert.match(validation, /TIMESTAMPTZ/)
 })
 
 test("manufacturing and pest control retain traceable domain architecture", async () => {

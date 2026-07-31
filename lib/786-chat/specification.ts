@@ -1,5 +1,11 @@
-import { selectDesignFamily, type DesignFamily } from "./design-system"
+import {
+  designVariantNumber,
+  selectDesignFamily,
+  type DesignFamily,
+} from "./design-system"
 import { selectSystemBlueprint, type SystemBlueprint } from "./system-blueprints"
+
+export type ProjectPlatform = "web" | "mobile" | "backend" | "database" | "iot"
 
 export type ProjectSpecification = {
   projectType: string
@@ -14,6 +20,8 @@ export type ProjectSpecification = {
   contentRequirements: string[]
   backendRequirements: string[]
   designFamily: DesignFamily
+  designVariant: number
+  platforms: ProjectPlatform[]
   systemBlueprint: SystemBlueprint | null
 }
 
@@ -57,7 +65,11 @@ function withoutNegativeRequirements(prompt: string) {
   )
 }
 
-export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpecification {
+export function analyseProjectPrompt(
+  prompt: string,
+  seed = prompt,
+  familyHistory: readonly string[] = [],
+): ProjectSpecification {
   const positivePrompt = withoutNegativeRequirements(prompt)
   const systemBlueprint = selectSystemBlueprint(positivePrompt)
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
@@ -113,6 +125,19 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
     [/\bmanufactur|factory|production line\b/i, "manufacturing"],
     [/\biot|sensor|device|telemetry\b/i, "iot"],
   ])[0] || null
+  const designFamily = selectDesignFamily(
+    seed,
+    designDirection,
+    `${prompt} ${industry || ""}`,
+    familyHistory,
+  )
+  const platforms = unique([
+    "web",
+    ...(/\bmobile app|android|iphone|ipad|ios|expo|react native\b/i.test(positivePrompt) ? ["mobile"] : []),
+    ...(/\bapi|backend|server|saas|crm|erp\b/i.test(positivePrompt) || systemBlueprint ? ["backend"] : []),
+    ...(/\bdatabase|postgres|neon|relational\b/i.test(positivePrompt) || systemBlueprint ? ["database"] : []),
+    ...(/\biot|sensor|device|telemetry|mqtt|bluetooth|firmware\b/i.test(positivePrompt) ? ["iot"] : []),
+  ]) as ProjectPlatform[]
 
   return {
     projectType: /\bdashboard|portal|saas|crm|erp\b/i.test(prompt)
@@ -148,7 +173,9 @@ export function analyseProjectPrompt(prompt: string, seed = prompt): ProjectSpec
       [/\bpayment|stripe\b/i, "payments"],
       [/\bemail\b/i, "email"],
     ])),
-    designFamily: selectDesignFamily(seed, designDirection, `${prompt} ${industry || ""}`),
+    designFamily,
+    designVariant: designVariantNumber(designFamily.id, familyHistory),
+    platforms,
     systemBlueprint,
   }
 }

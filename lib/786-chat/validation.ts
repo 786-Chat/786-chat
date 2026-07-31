@@ -152,6 +152,9 @@ export function validateGeneratedProject(
       ...specification.systemBlueprint.apiResources.map((resource) =>
         `app/api/${resource}/route.ts`
       ),
+      ...specification.systemBlueprint.apiResources.map((resource) =>
+        `app/api/${resource}/[id]/route.ts`
+      ),
     ]
     for (const path of requiredSystemFiles) {
       if (typeof files[path] !== "string" || !files[path].trim()) {
@@ -169,13 +172,34 @@ export function validateGeneratedProject(
         errors.push("Server tenant guard does not enforce company ownership.")
       }
     }
-    if (!/CREATE\s+TABLE/i.test(schema) || !/audit/i.test(schema)) {
+    if (!/CREATE\s+TABLE/i.test(schema) ||
+        !/audit/i.test(schema) ||
+        !/\bREFERENCES\b/i.test(schema) ||
+        !/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/i.test(schema) ||
+        !/\bTIMESTAMPTZ\b/i.test(schema)) {
       errors.push("Operational PostgreSQL schema or audit storage is incomplete.")
     }
     for (const resource of specification.systemBlueprint.apiResources) {
-      const api = files[`app/api/${resource}/route.ts`] || ""
-      if (!/export\s+async\s+function\s+(?:GET|POST|PATCH|DELETE)/.test(api)) {
-        errors.push(`System API is not implemented: ${resource}`)
+      const collectionApi = files[`app/api/${resource}/route.ts`] || ""
+      const itemApi = files[`app/api/${resource}/[id]/route.ts`] || ""
+      if (!/export\s+async\s+function\s+GET/.test(collectionApi) ||
+          !/export\s+async\s+function\s+POST/.test(collectionApi) ||
+          !/export\s+async\s+function\s+GET/.test(itemApi) ||
+          !/export\s+async\s+function\s+PATCH/.test(itemApi) ||
+          !/export\s+async\s+function\s+DELETE/.test(itemApi)) {
+        errors.push(`System CRUD API is not implemented: ${resource}`)
+      }
+    }
+  }
+  if (specification.platforms.includes("mobile")) {
+    for (const path of [
+      "mobile/package.json",
+      "mobile/app.json",
+      "mobile/app/index.tsx",
+      "mobile/services/api.ts",
+    ]) {
+      if (typeof files[path] !== "string" || !files[path].trim()) {
+        errors.push(`Missing required mobile file: ${path}`)
       }
     }
   }

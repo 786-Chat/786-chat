@@ -14,6 +14,8 @@ import { designFamilyBrief } from "@/lib/786-chat/design-system"
 import { injectVisualEditorFiles } from "@/lib/786-chat/visual-editor"
 import { systemBlueprintBrief } from "@/lib/786-chat/system-blueprints"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
+import { listProjects } from "@/lib/786-admin/projects"
+import { systemArchitectureBrief } from "@/lib/786-chat/system-architecture"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
@@ -26,10 +28,21 @@ export async function POST(request: Request) {
 
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
+  const ownerEmail = session!.email!.toLowerCase().trim()
+  const familyHistory = payload.projectId
+    ? []
+    : (await listProjects(ownerEmail)).flatMap((project) => {
+        const specification = project.metadata?.specification
+        if (!specification || typeof specification !== "object") return []
+        const family = (specification as Record<string, unknown>).designFamily
+        if (!family || typeof family !== "object") return []
+        const id = (family as Record<string, unknown>).id
+        return typeof id === "string" ? [id] : []
+      })
   const analysisSeed = typeof payload.projectId === "string" && payload.projectId.trim()
     ? payload.projectId.trim()
     : crypto.randomUUID()
-  const specification = analyseProjectPrompt(prompt, analysisSeed)
+  const specification = analyseProjectPrompt(prompt, analysisSeed, familyHistory)
   const plan = createProjectPlan(specification)
   const generationBrief = [
     prompt,
@@ -41,19 +54,21 @@ export async function POST(request: Request) {
     `- Planned files: ${plan.files.map((file) => file.path).join(", ")}`,
     "",
     "COMPOSABLE DESIGN SYSTEM (do not treat this as a fixed template):",
-    ...designFamilyBrief(specification.designFamily).map((line) => `- ${line}`),
+    ...designFamilyBrief(specification.designFamily, specification.designVariant).map((line) => `- ${line}`),
     "- Adapt these design rules to the requested brand, industry, content and functionality.",
     "- Do not reuse generic product names, copy, metrics, people or imagery.",
     "- Return every planned file with complete content.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
+    "",
+    "ACTIVE APPLICATION AND PLATFORM RULES:",
+    ...systemArchitectureBrief(specification).map((line) => `- ${line}`),
+    OPTIONAL_PROJECT_FEATURE_RULES,
     ...(specification.systemBlueprint
       ? [
           "",
           "COMPLETE OPERATIONAL SYSTEM — MANDATORY:",
           ...systemBlueprintBrief(specification.systemBlueprint).map((line) => `- ${line}`),
-          "",
-          OPTIONAL_PROJECT_FEATURE_RULES,
         ]
       : []),
   ].join("\n")
