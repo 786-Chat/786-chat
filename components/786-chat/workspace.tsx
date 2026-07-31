@@ -736,9 +736,9 @@ export function SevenEightSixWorkspace() {
 
         <div className="flex min-h-0 flex-1">
           <section style={{ width: agentWidth }} className="relative flex shrink-0 border-r border-[#1b2940] bg-[#080e1c]/90">
-            <div className="flex min-h-0 w-[210px] shrink-0 flex-col overflow-y-auto border-r border-[#1b2940] px-4 py-5 pb-6">
-              <p className="mb-8 flex items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
-              <div className="relative">
+            <div className="flex min-h-0 w-[210px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] px-4 py-4">
+              <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
+              <div className="relative min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
                 <div className="absolute bottom-6 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                   <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                 </div>
@@ -761,7 +761,7 @@ export function SevenEightSixWorkspace() {
                       </span>
                       <div className="min-w-0 flex-1 pt-1.5">
                         <p className={`text-[14px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
-                        <p className="mt-1 break-words text-[14px] leading-4 text-slate-600">{stage.detail}</p>
+                        <p className="mt-1 break-words text-[12px] leading-[14px] text-slate-600">{stage.detail}</p>
                       </div>
                     </div>
                   )
