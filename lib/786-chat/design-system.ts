@@ -485,6 +485,7 @@ export function selectDesignFamily(
   seed: string,
   requestedDirection: string[],
   requestedText = "",
+  familyHistory: readonly string[] = [],
 ): DesignFamily {
   const request = normalized(`${requestedText} ${requestedDirection.join(" ")}`)
   const explicit = DESIGN_FAMILIES
@@ -495,12 +496,44 @@ export function selectDesignFamily(
     .filter(({ alias }) => request.includes(alias))
     .sort((left, right) => right.alias.length - left.alias.length)[0]
   if (explicit) return explicit.candidate
-  return DESIGN_FAMILIES[hash(`${seed}|${request}`) % DESIGN_FAMILIES.length]
+  const counts = new Map(DESIGN_FAMILIES.map((candidate) => [
+    candidate.id,
+    familyHistory.filter((id) => id === candidate.id).length,
+  ]))
+  const minimumUse = Math.min(...counts.values())
+  let candidates = DESIGN_FAMILIES.filter((candidate) =>
+    counts.get(candidate.id) === minimumUse
+  )
+  const lastFamily = familyHistory.at(0)
+  if (candidates.length > 1 && lastFamily) {
+    candidates = candidates.filter((candidate) => candidate.id !== lastFamily)
+  }
+  return candidates[hash(`${seed}|${request}|${familyHistory.length}`) % candidates.length]
 }
 
-export function designFamilyBrief(value: DesignFamily): string[] {
+export function designVariantNumber(
+  familyId: string,
+  familyHistory: readonly string[] = [],
+) {
+  return familyHistory.filter((id) => id === familyId).length + 1
+}
+
+export function designStructuralSignature(value: DesignFamily) {
+  return [
+    value.navigation,
+    value.hero,
+    value.composition,
+    value.sectionOrder,
+    value.cards,
+    value.mobile,
+    value.interactions,
+  ].join("|")
+}
+
+export function designFamilyBrief(value: DesignFamily, variant = 1): string[] {
   return [
     `Design engine: ${value.name} (${value.id})`,
+    `Design variant: ${variant}; preserve this variant during edits and create a new structural interpretation when this family is reused`,
     `Navigation: ${value.navigation}`,
     `Hero: ${value.hero}`,
     `Page composition: ${value.composition}`,
