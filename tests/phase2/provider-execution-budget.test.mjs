@@ -43,6 +43,7 @@ test("invalid full systems receive one strict validation-guided repair pass", ()
   assert.match(canonicalGenerator, /keyFiles: repairKeyFiles/)
   assert.match(canonicalGenerator, /persist an audit_logs event/)
   assert.match(canonicalGenerator, /operational page must contain a real form/)
+  assert.match(canonicalGenerator, /sales follow-up task and notification/)
   assert.match(canonicalGenerator, /repairAttempted/)
   assert.match(canonicalGenerator, /validation\.valid && repairedProject/)
 })
@@ -53,6 +54,7 @@ test("the active code generator requires tenant ownership rejection and real aud
   assert.match(codegen, /comments do not count/)
   assert.match(codegen, /collection and item API route must reference companyId/)
   assert.match(codegen, /Static marketing cards do not count/)
+  assert.match(codegen, /CRM must include a sales follow-up task and notification/)
 })
 
 test("large file generation has an explicit output and retry budget", () => {

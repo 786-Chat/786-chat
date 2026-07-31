@@ -153,6 +153,7 @@ ABSOLUTE RULES:
 19. Keep audit writes in the same database transaction as the business mutation whenever the generated database helper supports transactions.
 20. Every tenant-scoped collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard, or assertTenant before reading or mutating data.
 21. Every required operational page must implement a real form, table, state-changing button, onSubmit, onClick, useState, or data mutation action. Static marketing cards do not count as an operational system.
+22. Implement every requested workflow as functional page, API, contract or schema code using the explicit domain terms. CRM must include a sales follow-up task and notification, not merely a generic activity.
 
 ${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
