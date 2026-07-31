@@ -11,6 +11,14 @@ function routeFile(route: string) {
 }
 
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
+  const mobileFiles = specification.platforms.includes("mobile")
+    ? [
+        { path: "mobile/package.json", purpose: "Expo mobile dependencies and scripts" },
+        { path: "mobile/app.json", purpose: "Expo application configuration" },
+        { path: "mobile/app/index.tsx", purpose: "Touch-first mobile application entry screen" },
+        { path: "mobile/services/api.ts", purpose: "Shared authenticated API client boundary" },
+      ]
+    : []
   const systemFiles = specification.systemBlueprint
     ? [
         { path: "shared/contracts.ts", purpose: "Shared typed system and API contracts" },
@@ -19,7 +27,11 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
         { path: "sql/schema.sql", purpose: "Neon/PostgreSQL relational schema and tenant indexes" },
         ...specification.systemBlueprint.apiResources.map((resource) => ({
           path: `app/api/${resource}/route.ts`,
-          purpose: `Tenant-scoped ${resource} API`,
+          purpose: `Tenant-scoped ${resource} collection API (GET and POST)`,
+        })),
+        ...specification.systemBlueprint.apiResources.map((resource) => ({
+          path: `app/api/${resource}/[id]/route.ts`,
+          purpose: `Tenant-scoped ${resource} item API (GET, PATCH and DELETE)`,
         })),
       ]
     : []
@@ -34,6 +46,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       purpose: `${route} route`,
     })),
     ...systemFiles,
+    ...mobileFiles,
   ]
 
   return {
@@ -52,6 +65,9 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
             "Document external provider and hardware adapters without pretending they are connected",
           ]
         : []),
+      ...(specification.platforms.includes("mobile")
+        ? ["Generate the Expo mobile client against shared authenticated API contracts"]
+        : []),
     ],
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`),
@@ -65,6 +81,9 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
             "Operational modules are implemented as application pages, not marketing sections",
             "Database schema, shared contracts and core API resources exist",
           ]
+        : []),
+      ...(specification.platforms.includes("mobile")
+        ? ["Expo app, configuration and mobile API service exist with touch-first navigation"]
         : []),
     ],
   }
