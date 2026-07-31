@@ -228,6 +228,19 @@ export async function listBuilderProjects(): Promise<BuilderProjectSummary[]> {
   return payload.projects || []
 }
 
+export async function deleteBuilderProject(projectId: string) {
+  const response = await fetch(`/api/786-chat/projects/${projectId}`, {
+    method: "DELETE",
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    success?: boolean
+    error?: string
+  }
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error || "Project could not be deleted.")
+  }
+}
+
 export async function listBuilderRevisions(projectId: string): Promise<BuilderRevision[]> {
   const response = await fetch(`/api/786-chat/projects/${projectId}/revisions`, {
     cache: "no-store",
