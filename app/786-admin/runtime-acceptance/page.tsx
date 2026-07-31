@@ -22,6 +22,20 @@ type RunState = {
   result?: Record<string, unknown>
 }
 
+function failureMessage(result: Record<string, any>, status: number) {
+  const generation = result?.generation && typeof result.generation === "object"
+    ? result.generation
+    : result
+  const errors = Array.isArray(generation?.validation?.errors)
+    ? generation.validation.errors.map((error: unknown) => String(error)).filter(Boolean)
+    : []
+  if (errors.length > 0) {
+    const repair = generation?.repairAttempted === true ? "Repair attempted. " : ""
+    return `${repair}${errors.join(" | ")}`
+  }
+  return generation?.error || result?.error || `Runtime acceptance failed (${status}).`
+}
+
 export default function RuntimeAcceptancePage() {
   const router = useRouter()
   const { user, isLoading } = useAuth()
@@ -93,7 +107,11 @@ export default function RuntimeAcceptancePage() {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.projectId) {
-        throw new Error(result?.generation?.error || result?.error || `Runtime acceptance failed (${response.status}).`)
+        setRuns((current) => ({
+          ...current,
+          [caseId]: { state: "failed", message: failureMessage(result, response.status), result },
+        }))
+        return
       }
       const projectId = String(result.projectId)
       setRuns((current) => ({

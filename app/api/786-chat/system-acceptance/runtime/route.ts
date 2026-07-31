@@ -78,6 +78,18 @@ export async function POST(request: Request) {
   ))
   const generated = (await generatedResponse.json().catch(() => ({}))) as Record<string, unknown>
   if (!generatedResponse.ok || generated.success !== true) {
+    const validation = generated.validation && typeof generated.validation === "object"
+      ? generated.validation as Record<string, unknown>
+      : null
+    const validationErrors = Array.isArray(validation?.errors)
+      ? validation.errors.map((error) => String(error)).slice(0, 30)
+      : []
+    console.warn("[Phase 3 runtime acceptance] generation rejected", {
+      caseId: acceptanceCase.id,
+      status: generatedResponse.status,
+      repairAttempted: generated.repairAttempted === true,
+      validationErrors,
+    })
     return NextResponse.json({
       passed: false,
       caseId: acceptanceCase.id,

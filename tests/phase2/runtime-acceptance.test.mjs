@@ -46,6 +46,8 @@ test("runtime endpoint uses canonical generation, persistence and isolated build
   assert.match(route, /expectedBlueprintId/)
   assert.match(route, /RUN_PHASE_3_RUNTIME_ACCEPTANCE/)
   assert.match(route, /isAdminUser/)
+  assert.match(route, /validationErrors/)
+  assert.match(route, /generation rejected/)
 })
 
 test("runtime status verifies a passed compiled HTTPS preview", async () => {
@@ -82,4 +84,7 @@ test("owner-only runtime page can launch and monitor each matrix case", async ()
   assert.match(page, /projectId/)
   assert.match(page, /result\.passed === true/)
   assert.match(page, /Build .*queued/)
+  assert.match(page, /failureMessage/)
+  assert.match(page, /validation\.errors/)
+  assert.match(page, /Repair attempted/)
 })
