@@ -129,7 +129,7 @@ export async function POST(request: Request) {
   if (!validation.valid && project) {
     repairAttempted = true
     const focusedSystemRepair = validation.errors.every((error) =>
-      /tenant guard|tenant ownership|API mutations|operational pages/i.test(error)
+      /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence/i.test(error)
     )
     const repairKeyFiles = focusedSystemRepair
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
@@ -154,6 +154,7 @@ export async function POST(request: Request) {
       "For every mutating POST, PATCH and DELETE handler, validate input and persist an audit_logs event in the same tenant scope.",
       "Both collection and item API files must import or call the audit implementation; a comment or label is not enough.",
       "Every required operational page must contain a real form, table or interactive control with onSubmit, onClick, useState or a data mutation action. Static marketing cards do not count.",
+      "Implement every missing workflow evidence term in functional page, API or schema code. For CRM this includes an explicit sales follow-up task and notification.",
       "Emit only files that must change, but return their full replacement contents.",
       "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
     ].join("\n")
