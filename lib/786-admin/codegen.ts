@@ -151,6 +151,8 @@ ABSOLUTE RULES:
 17. For multi-company systems, lib/server/tenant.ts must explicitly reject missing or mismatched company ownership with a forbidden/unauthorized error.
 18. Every POST, PATCH and DELETE API mutation must validate input and persist a tenant-scoped audit_logs event. Collection and item route files must call the real audit implementation; comments do not count.
 19. Keep audit writes in the same database transaction as the business mutation whenever the generated database helper supports transactions.
+20. Every tenant-scoped collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard, or assertTenant before reading or mutating data.
+21. Every required operational page must implement a real form, table, state-changing button, onSubmit, onClick, useState, or data mutation action. Static marketing cards do not count as an operational system.
 
 ${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
