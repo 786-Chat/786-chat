@@ -1,4 +1,5 @@
 import type { ProjectSpecification } from "./specification"
+import { assessGeneratedSystem } from "./system-acceptance"
 
 export type ProjectValidation = {
   valid: boolean
@@ -190,6 +191,14 @@ export function validateGeneratedProject(
         errors.push(`System CRUD API is not implemented: ${resource}`)
       }
     }
+    const acceptance = assessGeneratedSystem({
+      entities: specification.systemBlueprint.entities,
+      apiResources: specification.systemBlueprint.apiResources,
+      workflows: specification.systemBlueprint.workflows,
+      tenantScoped: specification.systemBlueprint.tenantScoped,
+      platforms: specification.platforms,
+    }, files)
+    errors.push(...acceptance.errors)
   }
   if (specification.platforms.includes("mobile")) {
     for (const path of [
