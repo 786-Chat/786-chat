@@ -777,7 +777,7 @@ export function SevenEightSixWorkspace() {
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
                 <div className="relative grid min-h-[340px] grid-rows-5">
-                  <div className="absolute bottom-6 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                  <div className="absolute bottom-[calc(20%-24px)] left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                   </div>
                   {stages.map((stage, index) => {
