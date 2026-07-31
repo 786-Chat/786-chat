@@ -49,6 +49,7 @@ import { useAuth } from "@/contexts/auth-context"
 import {
   generateBuilderProject,
   createBuilderRevision,
+  deleteBuilderProject,
   deployBuilderProject,
   loadBuilderBuild,
   loadBuilderProject,
@@ -149,6 +150,7 @@ export function SevenEightSixWorkspace() {
   const [error, setError] = useState("")
   const [projectsOpen, setProjectsOpen] = useState(false)
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
+  const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
   const [revisions, setRevisions] = useState<BuilderRevision[]>([])
   const [panelBusy, setPanelBusy] = useState(false)
   const [deployOpen, setDeployOpen] = useState(false)
@@ -470,6 +472,23 @@ export function SevenEightSixWorkspace() {
     }
   }
 
+  async function confirmProjectDelete() {
+    if (!projectToDelete || panelBusy) return
+    const deletedId = projectToDelete.id
+    setPanelBusy(true)
+    setError("")
+    try {
+      await deleteBuilderProject(deletedId)
+      setProjects((current) => current.filter((saved) => saved.id !== deletedId))
+      if (project?.id === deletedId) startNewProject()
+      setProjectToDelete(null)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Project could not be deleted.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
   async function saveCheckpoint() {
     if (!project || panelBusy) return
     setPanelBusy(true)
@@ -717,9 +736,9 @@ export function SevenEightSixWorkspace() {
 
         <div className="flex min-h-0 flex-1">
           <section style={{ width: agentWidth }} className="relative flex shrink-0 border-r border-[#1b2940] bg-[#080e1c]/90">
-            <div className="flex w-[180px] shrink-0 flex-col border-r border-[#1b2940] px-4 py-5">
-              <p className="mb-8 flex items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
-              <div className="relative">
+            <div className="flex min-h-0 w-[210px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] px-4 py-4">
+              <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
+              <div className="relative min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
                 <div className="absolute bottom-6 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                   <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                 </div>
@@ -732,7 +751,7 @@ export function SevenEightSixWorkspace() {
                       currentStage > 0 &&
                       index === Math.min(currentStage - 1, stages.length - 1))
                   return (
-                    <div key={stage.label} className="relative mb-8 flex gap-3 last:mb-0">
+                    <div key={stage.label} className="relative mb-5 flex gap-3 last:mb-0">
                       <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
                         {isCurrent && (
                           <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
@@ -740,9 +759,9 @@ export function SevenEightSixWorkspace() {
                         <span className="absolute inset-0 rounded-full border border-current bg-[#0a1221] shadow-[inset_0_0_18px_rgba(255,255,255,.035)]" />
                         {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
-                      <div className="pt-2">
+                      <div className="min-w-0 flex-1 pt-1.5">
                         <p className={`text-[14px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
-                        <p className="mt-1 text-[14px] leading-3 text-slate-600">{stage.detail}</p>
+                        <p className="mt-1 break-words text-[12px] leading-[14px] text-slate-600">{stage.detail}</p>
                       </div>
                     </div>
                   )
@@ -1035,14 +1054,49 @@ export function SevenEightSixWorkspace() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {projects.map((saved) => (
-                    <button key={saved.id} type="button" onClick={() => void openProject(saved.id)} disabled={panelBusy} className="rounded-2xl border border-[#263550] bg-[#10182b] p-4 text-left transition hover:border-cyan-300/40 hover:bg-[#131e35] disabled:opacity-40">
-                      <span className="block truncate text-[14px] font-black">{saved.title}</span>
-                      <span className="mt-2 line-clamp-2 block min-h-10 text-[12px] leading-5 text-slate-400">{saved.description || "No description"}</span>
-                      <span className="mt-3 flex gap-3 text-[12px] text-slate-500"><span>{saved.file_count} files</span><span>{saved.message_count} messages</span><span className="ml-auto">{new Date(saved.updated_at).toLocaleDateString()}</span></span>
-                    </button>
+                    <article key={saved.id} className="group relative overflow-hidden rounded-2xl border border-[#263550] bg-[#10182b] transition hover:border-cyan-300/40 hover:bg-[#131e35]">
+                      <button type="button" onClick={() => void openProject(saved.id)} disabled={panelBusy} className="block w-full p-4 pr-12 text-left disabled:opacity-40">
+                        <span className="block truncate text-[14px] font-black">{saved.title}</span>
+                        <span className="mt-2 line-clamp-2 block min-h-10 text-[12px] leading-5 text-slate-400">{saved.description || "No description"}</span>
+                        <span className="mt-3 flex gap-3 text-[12px] text-slate-500"><span>{saved.file_count} files</span><span>{saved.message_count} messages</span><span className="ml-auto">{new Date(saved.updated_at).toLocaleDateString()}</span></span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProjectToDelete(saved)}
+                        disabled={panelBusy}
+                        className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg border border-rose-300/15 bg-rose-500/5 text-slate-500 transition hover:border-rose-300/40 hover:bg-rose-500/15 hover:text-rose-200 disabled:opacity-40"
+                        aria-label={`Delete ${saved.title}`}
+                        title="Delete project"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </article>
                   ))}
                 </div>
               )}
+            </div>
+          </section>
+        </div>
+      )}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/85 p-5 backdrop-blur-md">
+          <section role="dialog" aria-modal="true" aria-labelledby="delete-project-title" className="w-full max-w-md overflow-hidden rounded-3xl border border-rose-300/25 bg-gradient-to-br from-[#0a1020] to-[#180d1c] shadow-[0_40px_120px_rgba(0,0,0,.8)]">
+            <div className="p-6">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-rose-300/20 bg-rose-500/10 text-rose-200">
+                <Trash2 className="h-5 w-5" />
+              </span>
+              <h2 id="delete-project-title" className="mt-5 text-xl font-black">Delete {projectToDelete.title}?</h2>
+              <p className="mt-3 text-[14px] leading-6 text-slate-400">
+                This permanently removes this project and its files, messages, builds, revisions, deployments and visual-editor data from Neon. Other projects are not affected.
+              </p>
+              {error && <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
+              <div className="mt-6 flex justify-end gap-3">
+                <button type="button" onClick={() => { setProjectToDelete(null); setError("") }} disabled={panelBusy} className="rounded-xl border border-white/10 px-4 py-2.5 text-[14px] font-bold text-slate-300 transition hover:bg-white/5 disabled:opacity-40">Cancel</button>
+                <button type="button" onClick={() => void confirmProjectDelete()} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-[14px] font-black text-white transition hover:bg-rose-400 disabled:opacity-40">
+                  {panelBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  Delete permanently
+                </button>
+              </div>
             </div>
           </section>
         </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getSession } from "@/lib/auth"
 import { isAdminUser } from "@/lib/admin-config"
-import { getProjectWithData } from "@/lib/786-admin/projects"
+import { deleteProject, getProjectWithData } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
 import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
 
@@ -68,4 +68,14 @@ export async function PATCH(request: Request, { params }: Context) {
       error: error instanceof Error ? error.message : "Project transaction failed; nothing was saved.",
     }, { status: 500 })
   }
+}
+
+export async function DELETE(_request: Request, { params }: Context) {
+  const owner = await ownerEmail()
+  if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { id } = await params
+  const deleted = await deleteProject(id, owner)
+  return deleted
+    ? NextResponse.json({ success: true })
+    : NextResponse.json({ error: "Project not found." }, { status: 404 })
 }
