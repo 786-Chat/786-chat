@@ -9,6 +9,7 @@ export const runtime = "nodejs"
 export const maxDuration = 180
 const GEMINI_ATTEMPT_TIMEOUT_MS = 25_000
 const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000
+const DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS = 120_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string }
@@ -28,6 +29,7 @@ function modeConfigured(mode: CodegenMode): boolean {
 }
 
 function attemptTimeout(mode: CodegenMode) {
+  if (mode === "deepseek-flash") return DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS
   return providerForMode(mode) === "deepseek"
     ? DEEPSEEK_ATTEMPT_TIMEOUT_MS
     : GEMINI_ATTEMPT_TIMEOUT_MS
@@ -83,7 +85,13 @@ function isSimpleWebsiteRequest(payload: GeneratorPayload, hasAttachments: boole
   return !complexTerms.some((term) => message.includes(term))
 }
 
-async function runAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, useCompactProfile: boolean): Promise<GeneratorResult> {
+async function runAttempt(
+  request: Request,
+  payload: GeneratorPayload,
+  mode: CodegenMode,
+  useCompactProfile: boolean,
+  coordinatorSignal: AbortSignal,
+): Promise<GeneratorResult> {
   const message = String(payload.message || "").trim()
   const compactRules = useCompactProfile
     ? [
@@ -114,7 +122,9 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const timeoutMs = attemptTimeout(mode)
   const controller = new AbortController()
   const abortFromClient = () => controller.abort(request.signal.reason)
+  const abortFromCoordinator = () => controller.abort(coordinatorSignal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
+  coordinatorSignal.addEventListener("abort", abortFromCoordinator, { once: true })
   const generated = await Promise.race([
     generateProjectCode({
       prompt: `${message}${compactRules}`,
@@ -135,6 +145,7 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   ]).finally(() => {
     if (timer) clearTimeout(timer)
     request.signal.removeEventListener("abort", abortFromClient)
+    coordinatorSignal.removeEventListener("abort", abortFromCoordinator)
   })
   const now = new Date().toISOString()
   return {
@@ -189,7 +200,8 @@ export async function POST(request: Request) {
     ? "deepseek-flash"
     : resolvedPrimaryMode(requestedMode, hasAttachments)
   const secondaryMode = alternateMode(primaryMode, hasAttachments)
-  const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode]))
+  const rescueModes: CodegenMode[] = hasAttachments ? [] : ["deepseek-flash", "gemini-flash"]
+  const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode, ...rescueModes]))
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
@@ -199,12 +211,13 @@ export async function POST(request: Request) {
   // truthful provider error. A static project is never substituted.
   const modesToRun = configuredModes.length > 0 ? configuredModes : [primaryMode]
   const attemptsByMode = new Map<CodegenMode, Promise<{ mode: CodegenMode; result?: GeneratorResult; error?: unknown; compact: boolean }>>()
+  const coordinator = new AbortController()
 
   for (const mode of modesToRun) {
     const compact = compactEligible && providerForMode(mode) === "deepseek"
     attemptsByMode.set(
       mode,
-      runAttempt(request, payload, mode, compact)
+      runAttempt(request, payload, mode, compact, coordinator.signal)
         .then((result) => ({ mode, result, compact }))
         .catch((error) => ({ mode, error, compact })),
     )
@@ -240,6 +253,7 @@ export async function POST(request: Request) {
     })
 
     if (result.success && !result.fellBackToLocal) {
+      coordinator.abort(new Error(`Provider winner selected: ${settled.mode}`))
       return NextResponse.json({
         ...result,
         response: settled.mode === primaryMode
@@ -252,6 +266,7 @@ export async function POST(request: Request) {
     }
 
   }
+  coordinator.abort(new Error("All provider attempts completed."))
 
   const diagnostic = attempts
     .map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason || attempt.model || "failed")}`)
