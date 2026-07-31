@@ -967,7 +967,7 @@ export function SevenEightSixWorkspace() {
         <section className={`relative shrink-0 border-t border-[#1b2940] bg-[#070c18] transition-[height] ${bottomCollapsed ? "h-0 overflow-visible" : "h-[184px]"}`}>
           {!bottomCollapsed && (
             <div className="grid h-full grid-cols-[.86fr_1.14fr] gap-2 p-2">
-              <article className="rounded-lg border border-[#263550] bg-[#0a1120] p-3">
+              <article className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center">
                   <b className="text-[12px]">Build sandbox</b>
                   {project && build && !["queued", "running"].includes(build.status) ? (
@@ -979,7 +979,7 @@ export function SevenEightSixWorkspace() {
                     <span className="ml-auto rounded border border-[#263550] px-2 py-1 text-[12px] text-slate-500">Isolated environment</span>
                   )}
                 </div>
-                <div className="mt-3 flex h-[112px] items-center rounded-lg border border-dashed border-[#263550] px-4">
+                <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden rounded-lg border border-dashed border-[#263550] px-4">
                   <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-cyan-300"><TerminalSquare className="h-4 w-4" /></span>
                   <div>
                     <b className="text-[13px]">{build ? `Build ${build.status}` : "No build has run"}</b>
@@ -993,7 +993,7 @@ export function SevenEightSixWorkspace() {
                   </div>
                 </div>
               </article>
-              <article className="min-w-0 rounded-lg border border-[#263550] bg-[#0a1120] p-3">
+              <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center gap-2">
                   <b className="text-[12px]">Revisions</b>
                   <span className="rounded bg-white/[.04] px-2 py-1 text-[12px] text-slate-500">
@@ -1009,7 +1009,7 @@ export function SevenEightSixWorkspace() {
                     Save checkpoint
                   </button>
                 </div>
-                <div className="mt-3 h-[112px] overflow-y-auto rounded-lg border border-[#263550]">
+                <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[#263550]">
                   {!project || revisions.length === 0 ? (
                     <div className="flex h-full items-center px-4">
                       <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-violet-300"><History className="h-4 w-4" /></span>
