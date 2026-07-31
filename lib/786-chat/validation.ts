@@ -1,5 +1,6 @@
 import type { ProjectSpecification } from "./specification"
 import { assessGeneratedSystem } from "./system-acceptance"
+import { assessDomainAcceptance } from "./domain-acceptance"
 
 export type ProjectValidation = {
   valid: boolean
@@ -199,6 +200,11 @@ export function validateGeneratedProject(
       platforms: specification.platforms,
     }, files)
     errors.push(...acceptance.errors)
+    const domainAcceptance = assessDomainAcceptance(
+      specification.systemBlueprint.id,
+      files,
+    )
+    errors.push(...domainAcceptance.errors)
   }
   if (specification.platforms.includes("mobile")) {
     for (const path of [

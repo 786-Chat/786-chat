@@ -68,12 +68,27 @@ test("manufacturing and pest control retain traceable domain architecture", asyn
   for (const value of [
     "supplier-receipt-to-batch",
     "quality-release-or-hold",
+    "temperature-hygiene-allergen-check",
+    "downtime-maintenance-and-wastage",
     "recall-trace",
-    "device-registration-and-pairing",
-    "telemetry-to-alert",
-    "technician-dispatch",
+    "device-registration-and-qr-pairing",
+    "mqtt-or-https-telemetry-to-alert",
+    "technician-work-order-dispatch",
+    "site-building-floor-room-location",
     "mqtt-adapter",
     "https-ingestion",
+  ]) {
+    assert.match(source, new RegExp(value))
+  }
+})
+
+test("CRM blueprint includes the complete lead-to-conversion lifecycle", async () => {
+  const source = await read("lib/786-chat/system-blueprints.ts")
+  for (const value of [
+    "lead-capture-to-customer",
+    "sales-follow-up-notification",
+    "booking-to-sale",
+    "campaign-conversion-attribution",
   ]) {
     assert.match(source, new RegExp(value))
   }
