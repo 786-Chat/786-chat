@@ -148,6 +148,9 @@ ABSOLUTE RULES:
 14. Never add fake success text; only say what the returned files actually changed.
 15. Never leave duplicate imports, mid-file imports, or imports with comments after executable code.
 16. If a Next.js config file is needed, use next.config.mjs. Never create next.config.ts because supported generated-project Next.js versions may reject it.
+17. For multi-company systems, lib/server/tenant.ts must explicitly reject missing or mismatched company ownership with a forbidden/unauthorized error.
+18. Every POST, PATCH and DELETE API mutation must validate input and persist a tenant-scoped audit_logs event. Collection and item route files must call the real audit implementation; comments do not count.
+19. Keep audit writes in the same database transaction as the business mutation whenever the generated database helper supports transactions.
 
 ${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`

@@ -128,15 +128,30 @@ export async function POST(request: Request) {
 
   if (!validation.valid && project) {
     repairAttempted = true
+    const securityOnlyRepair = validation.errors.every((error) =>
+      /tenant guard|tenant ownership|API mutations/i.test(error)
+    )
+    const repairKeyFiles = securityOnlyRepair
+      ? Object.fromEntries(Object.entries(files).filter(([path]) =>
+          path === "lib/server/tenant.ts" ||
+          path === "lib/server/validation.ts" ||
+          path === "shared/contracts.ts" ||
+          path === "sql/schema.sql" ||
+          /^app\/api\/.+\/route\.ts$/.test(path)
+        ))
+      : files
     const repairBrief = [
       prompt,
       "",
-      "VALIDATION-GUIDED REPAIR — RETURN THE COMPLETE PROJECT:",
+      "VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE:",
       "The previous generated project was rejected. Correct every error below without removing working features.",
       ...validation.errors.map((error) => `- ${error}`),
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
-      "Return complete replacement files, including every operational page, tenant-scoped API route and sql/schema.sql.",
+      "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
+      "For every mutating POST, PATCH and DELETE handler, validate input and persist an audit_logs event in the same tenant scope.",
+      "Both collection and item API files must import or call the audit implementation; a comment or label is not enough.",
+      "Emit only files that must change, but return their full replacement contents.",
       "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
     ].join("\n")
     const repairResponse = await generateWithProviderFailover(new Request(request.url, {
@@ -150,7 +165,7 @@ export async function POST(request: Request) {
           title: String(project.title || "Generated application"),
           description: String(project.description || ""),
           fileTree: Object.keys(files),
-          keyFiles: files,
+          keyFiles: repairKeyFiles,
         },
       }),
     }))

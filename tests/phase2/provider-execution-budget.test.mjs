@@ -37,11 +37,19 @@ test("the first successful provider cancels other in-flight attempts", () => {
 })
 
 test("invalid full systems receive one strict validation-guided repair pass", () => {
-  assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR/)
+  assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE/)
   assert.match(canonicalGenerator, /validation\.errors\.map/)
-  assert.match(canonicalGenerator, /keyFiles: files/)
+  assert.match(canonicalGenerator, /securityOnlyRepair/)
+  assert.match(canonicalGenerator, /keyFiles: repairKeyFiles/)
+  assert.match(canonicalGenerator, /persist an audit_logs event/)
   assert.match(canonicalGenerator, /repairAttempted/)
   assert.match(canonicalGenerator, /validation\.valid && repairedProject/)
+})
+
+test("the active code generator requires tenant ownership rejection and real audit writes", () => {
+  assert.match(codegen, /explicitly reject missing or mismatched company ownership/)
+  assert.match(codegen, /persist a tenant-scoped audit_logs event/)
+  assert.match(codegen, /comments do not count/)
 })
 
 test("large file generation has an explicit output and retry budget", () => {
