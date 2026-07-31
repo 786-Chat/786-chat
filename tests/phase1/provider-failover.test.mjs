@@ -33,9 +33,17 @@ test("canonical generation rejects local fallback output", () => {
 test("parallel provider attempts are bounded inside the Vercel window", () => {
   assert.match(providerController, /GEMINI_ATTEMPT_TIMEOUT_MS = 25_000/)
   assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000/)
+  assert.match(providerController, /DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS = 120_000/)
   assert.match(providerController, /maxDuration = 180/)
   assert.match(providerController, /Promise\.race/)
   assert.match(providerController, /controller\.abort/)
+})
+
+test("complex generation includes bounded flash rescue providers and cancels losers", () => {
+  assert.match(providerController, /rescueModes/)
+  assert.match(providerController, /\["deepseek-flash", "gemini-flash"\]/)
+  assert.match(providerController, /Provider winner selected/)
+  assert.match(providerController, /abortFromCoordinator/)
 })
 
 test("DeepSeek code generation disables slow thinking mode", () => {
