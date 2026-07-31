@@ -70,3 +70,16 @@ test("domain Neon probe performs state, audit, delete and tenant-isolation check
   assert.match(source, /crossTenantIsolation/)
   assert.doesNotMatch(source, /DROP TABLE/)
 })
+
+test("owner-only runtime page can launch and monitor each matrix case", async () => {
+  const page = await read("app/786-admin/runtime-acceptance/page.tsx")
+  assert.match(page, /mujeeb@job4u\.com/)
+  assert.match(page, /RUN_PHASE_3_RUNTIME_ACCEPTANCE/)
+  assert.match(page, /caseId/)
+  assert.match(page, /crm/)
+  assert.match(page, /manufacturing/)
+  assert.match(page, /pest-iot/)
+  assert.match(page, /projectId/)
+  assert.match(page, /result\.passed === true/)
+  assert.match(page, /Build .*queued/)
+})
