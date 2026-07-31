@@ -22,6 +22,20 @@ test("project deletion does not use a blocking browser confirmation", async () =
   assert.doesNotMatch(file, /window\.confirm\s*\(/)
 })
 
+test("canonical workspace uses explicit confirmation for project deletion", async () => {
+  const [workspace, route, schema] = await Promise.all([
+    source("components/786-chat/workspace.tsx"),
+    source("app/api/786-chat/projects/[id]/route.ts"),
+    source("lib/786-admin/schema.sql"),
+  ])
+  assert.match(workspace, /Delete permanently/)
+  assert.match(workspace, /deleteBuilderProject/)
+  assert.doesNotMatch(workspace, /window\.confirm\s*\(/)
+  assert.match(route, /export async function DELETE/)
+  assert.match(route, /deleteProject\(id, owner\)/)
+  assert.match(schema, /REFERENCES admin_projects\(id\) ON DELETE CASCADE/)
+})
+
 test("recent project cards are not injected into the customer preview workspace", async () => {
   const file = await source("app/786-admin/chat/layout.tsx")
   assert.doesNotMatch(file, /AdminChatRecentProjects/)
