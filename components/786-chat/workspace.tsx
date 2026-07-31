@@ -140,6 +140,7 @@ export function SevenEightSixWorkspace() {
   const [prompt, setPrompt] = useState("")
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
   const [showCode, setShowCode] = useState(false)
+  const [mobileView, setMobileView] = useState<"agent" | "preview">("agent")
   const [device, setDevice] = useState<BuilderDevice>("desktop")
   const [deviceOpen, setDeviceOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -152,6 +153,8 @@ export function SevenEightSixWorkspace() {
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
   const [revisions, setRevisions] = useState<BuilderRevision[]>([])
+  const [revisionAction, setRevisionAction] = useState<"saving" | string | null>(null)
+  const [actionNotice, setActionNotice] = useState("")
   const [panelBusy, setPanelBusy] = useState(false)
   const [deployOpen, setDeployOpen] = useState(false)
   const [deployType, setDeployType] = useState<"path" | "subdomain" | "custom">("path")
@@ -239,6 +242,12 @@ export function SevenEightSixWorkspace() {
     }, 5_000)
     return () => window.clearInterval(timer)
   }, [project?.id, build])
+
+  useEffect(() => {
+    if (!actionNotice) return
+    const timer = window.setTimeout(() => setActionNotice(""), 3200)
+    return () => window.clearTimeout(timer)
+  }, [actionNotice])
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -491,20 +500,24 @@ export function SevenEightSixWorkspace() {
 
   async function saveCheckpoint() {
     if (!project || panelBusy) return
+    setRevisionAction("saving")
     setPanelBusy(true)
     setError("")
     try {
       await createBuilderRevision(project.id)
       setRevisions(await listBuilderRevisions(project.id))
+      setActionNotice("Checkpoint saved.")
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Checkpoint could not be saved.")
     } finally {
+      setRevisionAction(null)
       setPanelBusy(false)
     }
   }
 
   async function restoreCheckpoint(revisionId: string) {
     if (!project || panelBusy) return
+    setRevisionAction(revisionId)
     setPanelBusy(true)
     setError("")
     try {
@@ -520,11 +533,21 @@ export function SevenEightSixWorkspace() {
           Object.keys(restored.project.files)[0] ||
           "app/page.tsx",
       )
-      setBuild(null)
       setRevisions(await listBuilderRevisions(project.id))
+      setActionNotice("Revision restored. Rebuilding preview…")
+      try {
+        const queuedBuild = await queueBuilderBuild(restored.project.id)
+        setBuild(queuedBuild)
+        setVisualDirty(false)
+      } catch (buildFailure) {
+        setBuild(null)
+        setVisualDirty(true)
+        setError(buildFailure instanceof Error ? buildFailure.message : "Revision restored, but the rebuild could not be queued.")
+      }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Revision could not be restored.")
     } finally {
+      setRevisionAction(null)
       setPanelBusy(false)
     }
   }
@@ -632,10 +655,10 @@ export function SevenEightSixWorkspace() {
   }
 
   return (
-    <main className="relative flex h-screen min-w-[1000px] overflow-hidden bg-[#050813] text-slate-100">
+    <main className="relative flex h-screen min-w-0 overflow-hidden bg-[#050813] text-slate-100">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_4%,rgba(124,58,237,.12),transparent_26%),radial-gradient(circle_at_75%_0%,rgba(14,165,233,.08),transparent_28%)]" />
 
-      <aside className={`relative z-20 flex shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18] transition-[width] ${sidebarCollapsed ? "w-[70px]" : "w-[176px]"}`}>
+      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18] transition-[width] lg:flex ${sidebarCollapsed ? "w-[70px]" : "w-[176px]"}`}>
         <div className="flex h-[58px] items-center gap-3 border-b border-[#1b2940] px-4">
           <button
             type="button"
@@ -702,13 +725,14 @@ export function SevenEightSixWorkspace() {
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <header className="flex h-[58px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
+          <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 lg:hidden" aria-label="786.Chat home">786</button>
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-5 w-5 place-items-center rounded border border-slate-600"><Circle className="h-2 w-2 fill-slate-300" /></span>
             <p className="truncate text-[13px] font-bold">{project?.title || "Untitled application"}</p>
-            {project && <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[14px] uppercase text-violet-300">Live project</span>}
+            {project && <span className="hidden rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[14px] uppercase text-violet-300 sm:inline">Live project</span>}
             <ChevronDown className="h-3 w-3 text-slate-500" />
           </div>
-          <div className="mx-auto flex items-center gap-2">
+          <div className="mx-auto hidden items-center gap-2 md:flex">
             <span className="rounded-lg border border-violet-400/15 bg-violet-500/10 px-3 py-1.5 text-[13px] font-semibold text-violet-200">
               {busy ? (
                 <span className="inline-flex items-center gap-2">
@@ -723,26 +747,31 @@ export function SevenEightSixWorkspace() {
               {visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
             </span>
           </div>
-          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold disabled:opacity-40 ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
+          <div className="ml-auto flex items-center gap-1 lg:hidden">
+            <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
+            <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
+          </div>
+          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold disabled:opacity-40 lg:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
             <Palette className="h-3.5 w-3.5 text-fuchsia-300" /> Design
           </button>
-          <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed" || visualDirty} className="inline-flex h-9 items-center gap-3 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-5 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40">
-            <Rocket className="h-3.5 w-3.5" /> Deploy <ChevronDown className="h-3 w-3" />
+          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed" || visualDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
+            <Rocket className="h-3.5 w-3.5" /><span className="hidden sm:inline">Deploy</span><ChevronDown className="hidden h-3 w-3 sm:block" />
           </button>
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <section style={{ width: agentWidth }} className="relative flex shrink-0 border-r border-[#1b2940] bg-[#080e1c]/90">
-            <div className="flex min-h-0 w-[210px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] px-4 py-4">
+          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 border-r border-[#1b2940] bg-[#080e1c]/90 max-lg:!w-full ${mobileView === "agent" ? "flex" : "hidden"} lg:flex`}>
+            <div className="hidden min-h-0 w-[210px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] px-4 py-4 sm:flex">
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
-              <div className="relative min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
-                <div className="absolute bottom-6 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
-                  <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
-                </div>
-                {stages.map((stage, index) => {
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
+                <div className="relative">
+                  <div className="absolute bottom-6 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                    <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
+                  </div>
+                  {stages.map((stage, index) => {
                   const Icon = stage.icon
                   const active = index < currentStage || (busy && index === 0)
                   const isCurrent =
@@ -765,7 +794,8 @@ export function SevenEightSixWorkspace() {
                       </div>
                     </div>
                   )
-                })}
+                  })}
+                </div>
               </div>
             </div>
 
@@ -816,7 +846,7 @@ export function SevenEightSixWorkspace() {
             <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => { drag.current = { x: event.clientX, width: agentWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none" }} className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize hover:bg-cyan-300/25" />
           </section>
 
-          <section className="flex min-w-0 flex-1 flex-col bg-[#060b16]">
+          <section className={`min-w-0 flex-1 flex-col bg-[#060b16] ${mobileView === "preview" ? "flex" : "hidden"} lg:flex`}>
             <div className="flex h-10 items-center border-b border-[#1b2940] px-3">
               <span className="text-[14px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
               <div className="relative ml-auto">
@@ -964,7 +994,7 @@ export function SevenEightSixWorkspace() {
           </aside>
         )}
 
-        <section className={`relative shrink-0 border-t border-[#1b2940] bg-[#070c18] transition-[height] ${bottomCollapsed ? "h-0 overflow-visible" : "h-[184px]"}`}>
+        <section className={`relative hidden shrink-0 border-t border-[#1b2940] bg-[#070c18] transition-[height] md:block ${bottomCollapsed ? "h-0 overflow-visible" : "h-[184px]"}`}>
           {!bottomCollapsed && (
             <div className="grid h-full grid-cols-[.86fr_1.14fr] gap-2 p-2">
               <article className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
@@ -1005,8 +1035,8 @@ export function SevenEightSixWorkspace() {
                     disabled={!project || panelBusy}
                     className="ml-auto inline-flex items-center gap-2 rounded-md border border-violet-300/20 bg-violet-400/10 px-3 py-1.5 text-[12px] font-bold text-violet-100 disabled:opacity-40"
                   >
-                    {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                    Save checkpoint
+                    {revisionAction === "saving" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                    {revisionAction === "saving" ? "Saving…" : "Save checkpoint"}
                   </button>
                 </div>
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[#263550]">
@@ -1023,7 +1053,10 @@ export function SevenEightSixWorkspace() {
                           <b className="block truncate text-[12px]">{revision.label}</b>
                           <span className="text-[12px] text-slate-600">{new Date(revision.created_at).toLocaleString()} · {revision.source}</span>
                         </span>
-                        <button type="button" onClick={() => void restoreCheckpoint(revision.id)} disabled={panelBusy} className="rounded border border-[#345078] px-2 py-1 text-[12px] font-bold text-cyan-200 disabled:opacity-40">Restore</button>
+                        <button type="button" onClick={() => void restoreCheckpoint(revision.id)} disabled={panelBusy} className="inline-flex min-w-[76px] items-center justify-center gap-1.5 rounded border border-[#345078] px-2 py-1 text-[12px] font-bold text-cyan-200 disabled:opacity-40">
+                          {revisionAction === revision.id && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {revisionAction === revision.id ? "Restoring…" : "Restore"}
+                        </button>
                       </div>
                     ))
                   )}
@@ -1031,7 +1064,7 @@ export function SevenEightSixWorkspace() {
               </article>
             </div>
           )}
-          <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="absolute bottom-1 left-1/2 z-40 -translate-x-1/2 rounded-full border border-blue-300/30 bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-1.5 text-[12px] font-bold shadow-[0_0_24px_rgba(59,130,246,.32)]">
+          <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="absolute bottom-1 left-1/2 z-40 hidden -translate-x-1/2 rounded-full border border-blue-300/30 bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-1.5 text-[12px] font-bold shadow-[0_0_24px_rgba(59,130,246,.32)] md:block">
             {bottomCollapsed ? "Show bottom panel" : "Hide bottom panel"}
           </button>
         </section>
@@ -1076,6 +1109,11 @@ export function SevenEightSixWorkspace() {
               )}
             </div>
           </section>
+        </div>
+      )}
+      {actionNotice && (
+        <div role="status" className="fixed right-5 top-[72px] z-[70] rounded-xl border border-emerald-300/25 bg-[#0b1a1c]/95 px-4 py-3 text-[13px] font-bold text-emerald-100 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-xl">
+          <span className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-emerald-300" />{actionNotice}</span>
         </div>
       )}
       {projectToDelete && (
