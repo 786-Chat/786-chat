@@ -35,7 +35,11 @@ export const metadata: Metadata = {
     description:
       "Plan, generate, validate, build and deploy complete applications from one AI workspace.",
   },
-  icons: { icon: "/images/logo-animated.gif", apple: "/images/logo.png" },
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    shortcut: "/favicon.svg",
+    apple: "/images/logo.png",
+  },
 }
 
 export const viewport: Viewport = {
