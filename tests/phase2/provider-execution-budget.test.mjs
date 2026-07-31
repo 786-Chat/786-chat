@@ -14,6 +14,10 @@ const codegen = await readFile(
   new URL("../../lib/786-admin/codegen.ts", import.meta.url),
   "utf8",
 )
+const canonicalGenerator = await readFile(
+  new URL("../../app/api/786-chat/generate/route.ts", import.meta.url),
+  "utf8",
+)
 
 test("canonical generation route leaves cleanup time after the DeepSeek budget", () => {
   assert.match(route, /maxDuration = 180/)
@@ -30,6 +34,14 @@ test("the first successful provider cancels other in-flight attempts", () => {
   assert.match(controller, /const coordinator = new AbortController\(\)/)
   assert.match(controller, /coordinatorSignal/)
   assert.match(controller, /Provider winner selected/)
+})
+
+test("invalid full systems receive one strict validation-guided repair pass", () => {
+  assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR/)
+  assert.match(canonicalGenerator, /validation\.errors\.map/)
+  assert.match(canonicalGenerator, /keyFiles: files/)
+  assert.match(canonicalGenerator, /repairAttempted/)
+  assert.match(canonicalGenerator, /validation\.valid && repairedProject/)
 })
 
 test("large file generation has an explicit output and retry budget", () => {
