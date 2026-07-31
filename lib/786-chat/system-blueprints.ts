@@ -179,6 +179,9 @@ export function systemBlueprintBrief(value: SystemBlueprint): string[] {
     "Every tenant-scoped collection and item API route must reference companyId and invoke requireTenant, requireCompany, tenantGuard or assertTenant before every read or mutation.",
     "Every POST, PATCH and DELETE route validates input and persists a tenant-scoped audit_logs event; comments and labels are not implementations.",
     "Every required operational page contains a real form, table or state-changing interactive control using onSubmit, onClick, useState or a data mutation action.",
+    ...(value.id === "crm"
+      ? ["CRM workflow rule: implement an explicit sales follow-up task and notification in functional page or API code."]
+      : []),
     "Generate real operational pages, route handlers, typed contracts, validation, PostgreSQL schema, loading/empty/error states and audit fields.",
     "Do not substitute marketing sections, static cards or pretend-live integrations for operational implementation.",
   ]
