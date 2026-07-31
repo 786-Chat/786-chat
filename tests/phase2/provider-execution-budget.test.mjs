@@ -26,6 +26,12 @@ test("timed-out provider work is aborted instead of running in the background", 
   assert.match(controller, /controller\.abort/)
 })
 
+test("the first successful provider cancels other in-flight attempts", () => {
+  assert.match(controller, /const coordinator = new AbortController\(\)/)
+  assert.match(controller, /coordinatorSignal/)
+  assert.match(controller, /Provider winner selected/)
+})
+
 test("large file generation has an explicit output and retry budget", () => {
   assert.match(codegen, /maxOutputTokens:\s*24_000/)
   assert.match(codegen, /maxRetries:\s*0/)
