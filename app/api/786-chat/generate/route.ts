@@ -128,16 +128,17 @@ export async function POST(request: Request) {
 
   if (!validation.valid && project) {
     repairAttempted = true
-    const securityOnlyRepair = validation.errors.every((error) =>
-      /tenant guard|tenant ownership|API mutations/i.test(error)
+    const focusedSystemRepair = validation.errors.every((error) =>
+      /tenant guard|tenant ownership|API mutations|operational pages/i.test(error)
     )
-    const repairKeyFiles = securityOnlyRepair
+    const repairKeyFiles = focusedSystemRepair
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
           path === "lib/server/tenant.ts" ||
           path === "lib/server/validation.ts" ||
           path === "shared/contracts.ts" ||
           path === "sql/schema.sql" ||
-          /^app\/api\/.+\/route\.ts$/.test(path)
+          /^app\/api\/.+\/route\.ts$/.test(path) ||
+          /^app\/(?!api\/).+\/page\.tsx$/.test(path)
         ))
       : files
     const repairBrief = [
@@ -149,8 +150,10 @@ export async function POST(request: Request) {
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
       "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
+      "Every collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard or assertTenant before reading or mutating data.",
       "For every mutating POST, PATCH and DELETE handler, validate input and persist an audit_logs event in the same tenant scope.",
       "Both collection and item API files must import or call the audit implementation; a comment or label is not enough.",
+      "Every required operational page must contain a real form, table or interactive control with onSubmit, onClick, useState or a data mutation action. Static marketing cards do not count.",
       "Emit only files that must change, but return their full replacement contents.",
       "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
     ].join("\n")
