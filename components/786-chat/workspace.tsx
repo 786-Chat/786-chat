@@ -663,7 +663,7 @@ export function SevenEightSixWorkspace() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (item.label === "Overview") router.push("/786.chat")
+                    if (item.label === "Overview") router.push("/")
                     if (item.label === "Projects") void openProjects()
                   }}
                   className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[13px] transition ${
