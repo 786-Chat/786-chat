@@ -143,6 +143,8 @@ export function SevenEightSixWorkspace() {
   const [mobileView, setMobileView] = useState<"agent" | "preview">("agent")
   const [device, setDevice] = useState<BuilderDevice>("desktop")
   const [deviceOpen, setDeviceOpen] = useState(false)
+  const [customDevice, setCustomDevice] = useState({ width: 960, height: 720 })
+  const [utilityPanel, setUtilityPanel] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [agentWidth, setAgentWidth] = useState(730)
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
@@ -174,7 +176,10 @@ export function SevenEightSixWorkspace() {
 
   const isOwner = user?.email?.toLowerCase().trim() === OWNER_EMAIL
   const files = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
-  const deviceSpec = BUILDER_DEVICES[device]
+  const deviceSpec = device === "custom"
+    ? { ...BUILDER_DEVICES.custom, ...customDevice }
+    : BUILDER_DEVICES[device]
+  const phonePreview = ["mobile", "iphone15", "iphoneSE", "pixel8", "galaxyS24"].includes(device)
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
   const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
   const orderedSections = useMemo(() => {
@@ -688,10 +693,14 @@ export function SevenEightSixWorkspace() {
                   onClick={() => {
                     if (item.label === "Overview") router.push("/")
                     if (item.label === "Projects") void openProjects()
+                    if (item.label === "Agent Flow") setUtilityPanel(null)
+                    if (!["Overview", "Projects", "Agent Flow"].includes(item.label)) {
+                      setUtilityPanel(item.label)
+                    }
                   }}
                   className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[13px] transition ${
                     sidebarCollapsed ? "justify-center" : "gap-3 px-2"
-                  } ${item.active ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
+                  } ${(item.label === "Agent Flow" && !utilityPanel) || item.label === utilityPanel ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {!sidebarCollapsed && item.label}
@@ -709,7 +718,7 @@ export function SevenEightSixWorkspace() {
           ].map(([label, Icon]) => {
             const SupportIcon = Icon as typeof Logs
             return (
-              <button key={String(label)} type="button" className={`flex w-full items-center rounded-lg py-2.5 text-[13px] text-slate-400 hover:bg-white/[.04] ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
+              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[13px] hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
                 <SupportIcon className="h-3.5 w-3.5" />
                 {!sidebarCollapsed && String(label)}
               </button>
@@ -856,10 +865,21 @@ export function SevenEightSixWorkspace() {
                   </button>
                 )}
                 {deviceOpen && (
-                  <div className="absolute right-0 top-9 z-40 w-52 rounded-xl border border-[#263550] bg-[#0b1020] p-2 shadow-2xl">
+                  <div className="absolute right-0 top-9 z-40 w-64 rounded-xl border border-[#263550] bg-[#0b1020] p-2 shadow-2xl">
                     {(Object.keys(BUILDER_DEVICES) as BuilderDevice[]).map((key) => (
-                      <button key={key} type="button" onClick={() => { setDevice(key); setDeviceOpen(false) }} className="block w-full rounded-lg px-3 py-2 text-left text-[12px] text-slate-300 hover:bg-white/10">{BUILDER_DEVICES[key].label}</button>
+                      <button key={key} type="button" onClick={() => { setDevice(key); if (key !== "custom") setDeviceOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] hover:bg-white/10 ${device === key ? "bg-cyan-400/10 text-cyan-100" : "text-slate-300"}`}>{BUILDER_DEVICES[key].label}</button>
                     ))}
+                    {device === "custom" && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
+                        <label className="text-[11px] text-slate-500">Width
+                          <input type="number" min={280} max={2560} value={customDevice.width} onChange={(event) => setCustomDevice((value) => ({ ...value, width: Number(event.target.value) || 280 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[12px] text-white" />
+                        </label>
+                        <label className="text-[11px] text-slate-500">Height
+                          <input type="number" min={480} max={1800} value={customDevice.height} onChange={(event) => setCustomDevice((value) => ({ ...value, height: Number(event.target.value) || 480 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[12px] text-white" />
+                        </label>
+                        <button type="button" onClick={() => setDeviceOpen(false)} className="col-span-2 rounded bg-violet-500/25 py-2 text-[12px] font-bold text-violet-100">Apply custom size</button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -880,13 +900,17 @@ export function SevenEightSixWorkspace() {
                   <pre className="overflow-auto p-4 text-[12px] leading-5 text-cyan-50"><code>{project?.files[selectedFile] || "No project files yet."}</code></pre>
                 </div>
               ) : (
-                <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2">
+                <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {build?.status === "passed" && build.deployment_url ? (
-                    <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
-                      if (!designOpen) return
-                      postVisualMessage({ type: "786-editor:enable", enabled: true })
-                      postVisualMessage({ type: "786-editor:apply", state: visualState })
-                    }} style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="min-h-full rounded-md border-0 bg-white" />
+                    <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative shrink-0 ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
+                      {phonePreview && <span className="pointer-events-none absolute left-1/2 top-2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-black" />}
+                      <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
+                        if (!designOpen) return
+                        postVisualMessage({ type: "786-editor:enable", enabled: true })
+                        postVisualMessage({ type: "786-editor:apply", state: visualState })
+                      }} className={`h-full w-full border-0 bg-white ${phonePreview ? "rounded-[32px]" : "min-h-full rounded-md"}`} />
+                      {phonePreview && <span className="pointer-events-none absolute bottom-2 left-1/2 z-20 h-1 w-28 -translate-x-1/2 rounded-full bg-white/80" />}
+                    </div>
                   ) : (
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="grid min-h-full place-items-center rounded-md border border-[#1f2d45] bg-[radial-gradient(circle_at_50%_30%,rgba(30,64,175,.10),transparent_38%),#08111f] px-6 text-center">
                       <div>
@@ -1069,6 +1093,74 @@ export function SevenEightSixWorkspace() {
           </button>
         </section>
       </div>
+      {utilityPanel && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md">
+          <section role="dialog" aria-modal="true" aria-labelledby="utility-panel-title" className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-violet-300/25 bg-[#09101f] shadow-[0_40px_120px_rgba(0,0,0,.75)]">
+            <header className="flex shrink-0 items-center border-b border-[#263550] p-5">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[.18em] text-violet-300">786.Chat workspace</p>
+                <h2 id="utility-panel-title" className="mt-1 text-xl font-black">{utilityPanel}</h2>
+              </div>
+              <button type="button" onClick={() => setUtilityPanel(null)} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10" aria-label={`Close ${utilityPanel}`}><X className="h-4 w-4" /></button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {utilityPanel === "Tasks" && (
+                <div className="grid gap-3">
+                  {stages.map((stage, index) => {
+                    const complete = index < currentStage
+                    return (
+                      <div key={stage.label} className="flex items-center gap-3 rounded-xl border border-[#263550] bg-[#10182b] p-4">
+                        <span className={`grid h-8 w-8 place-items-center rounded-full border ${complete ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-slate-600 text-slate-500"}`}>{complete ? <Check className="h-4 w-4" /> : index + 1}</span>
+                        <span><b className="block text-[14px]">{stage.label}</b><span className="text-[12px] text-slate-500">{stage.detail}</span></span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {utilityPanel === "Knowledge" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[13px]">Application brief</b><p className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-slate-400">{project?.prompt || "Create or open a project to see its saved knowledge."}</p></div>
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[13px]">Project context</b><p className="mt-2 text-[13px] text-slate-400">{files.length} source files · {messages.length} agent messages · {revisions.length} revisions</p></div>
+                </div>
+              )}
+              {utilityPanel === "Data Sources" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-emerald-300/20 bg-emerald-400/[.06] p-4"><Database className="h-5 w-5 text-emerald-300" /><b className="mt-3 block text-[14px]">Neon PostgreSQL</b><p className="mt-2 text-[12px] leading-5 text-slate-400">{project ? "Connected to this project’s persisted files, messages, builds and revisions." : "Ready when a project is created."}</p></div>
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><FileCode2 className="h-5 w-5 text-cyan-300" /><b className="mt-3 block text-[14px]">Generated project files</b><p className="mt-2 text-[12px] leading-5 text-slate-400">{files.length ? `${files.length} files are available in the current project.` : "No project files loaded."}</p></div>
+                </div>
+              )}
+              {utilityPanel === "Integrations" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[["Neon", project ? "Connected" : "Ready"], ["Vercel", build?.status || "Not built"], ["GitHub", "Deployment source"], ["DeepSeek + Gemini", "Server-managed AI"]].map(([name, status]) => (
+                    <div key={name} className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><Plug className="h-4 w-4 text-violet-300" /><b className="mt-3 block text-[14px]">{name}</b><span className="mt-2 inline-block rounded-full bg-white/5 px-2 py-1 text-[11px] text-slate-400">{status}</span></div>
+                  ))}
+                </div>
+              )}
+              {utilityPanel === "Secrets" && (
+                <div className="rounded-xl border border-amber-300/20 bg-amber-400/[.05] p-5">
+                  <KeyRound className="h-6 w-6 text-amber-200" /><h3 className="mt-4 text-[15px] font-black">Protected server-side</h3>
+                  <p className="mt-2 text-[13px] leading-6 text-slate-400">Database, AI-provider, GitHub and Vercel credentials are stored in protected deployment variables. Secret values are never exposed in the browser.</p>
+                </div>
+              )}
+              {utilityPanel === "Settings" && (
+                <div className="space-y-3">
+                  <button type="button" onClick={() => setSidebarCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><PanelLeftClose className="mr-3 h-4 w-4 text-violet-300" />{sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}<ChevronRight className="ml-auto h-4 w-4" /></button>
+                  <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><LayoutDashboard className="mr-3 h-4 w-4 text-cyan-300" />{bottomCollapsed ? "Show diagnostics panel" : "Hide diagnostics panel"}<ChevronRight className="ml-auto h-4 w-4" /></button>
+                  <button type="button" onClick={() => { startNewProject(); setUtilityPanel(null) }} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><Sparkles className="mr-3 h-4 w-4 text-emerald-300" />Start a clean project<ChevronRight className="ml-auto h-4 w-4" /></button>
+                </div>
+              )}
+              {utilityPanel === "Logs" && (
+                <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl border border-[#263550] bg-[#050914] p-4 text-[12px] leading-5 text-cyan-100 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{build?.logs || build?.error_message || "No build logs are available yet. Run a verified build to populate this panel."}</pre>
+              )}
+              {utilityPanel === "Help & Docs" && (
+                <div className="grid gap-3">
+                  {["Describe the complete application in Agent Flow.", "Review the generated plan and verified preview.", "Use Design only after a build passes.", "Save checkpoints before major changes.", "Deploy only when the verified build is green."].map((text, index) => <div key={text} className="flex gap-3 rounded-xl border border-[#263550] bg-[#10182b] p-4"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-500/20 text-[12px] font-black text-violet-200">{index + 1}</span><p className="text-[13px] leading-6 text-slate-300">{text}</p></div>)}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       {projectsOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-5 backdrop-blur-md">
           <section className="w-full max-w-3xl overflow-hidden rounded-3xl border border-violet-300/25 bg-[#09101f] shadow-[0_40px_120px_rgba(0,0,0,.75)]">

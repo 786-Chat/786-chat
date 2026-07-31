@@ -5,7 +5,12 @@ export type BuilderDevice =
   | "desktop"
   | "laptop"
   | "tablet"
+  | "ipadPro"
   | "mobile"
+  | "iphone15"
+  | "iphoneSE"
+  | "pixel8"
+  | "galaxyS24"
   | "custom"
 
 export type BuilderMessage = {
@@ -106,6 +111,11 @@ export const BUILDER_DEVICES: Record<
   desktop: { label: "Desktop · Fill screen", width: null, height: null },
   laptop: { label: "Laptop · 1366 × 768", width: 1366, height: 768 },
   tablet: { label: "Tablet · 768 × 1024", width: 768, height: 1024 },
+  ipadPro: { label: "iPad Pro 11 · 834 × 1194", width: 834, height: 1194 },
   mobile: { label: "Mobile · 393 × 852", width: 393, height: 852 },
+  iphone15: { label: "iPhone 15 Pro · 393 × 852", width: 393, height: 852 },
+  iphoneSE: { label: "iPhone SE · 375 × 667", width: 375, height: 667 },
+  pixel8: { label: "Google Pixel 8 · 412 × 915", width: 412, height: 915 },
+  galaxyS24: { label: "Galaxy S24 · 360 × 780", width: 360, height: 780 },
   custom: { label: "Custom size", width: 960, height: 720 },
 }

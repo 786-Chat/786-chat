@@ -106,6 +106,12 @@ function bridgeSource(state: VisualEditorState) {
   let enabled = false;
   let state = initialState;
 
+  const scrollbarStyle = document.createElement("style");
+  scrollbarStyle.textContent =
+    "html,body{scrollbar-width:none;-ms-overflow-style:none}" +
+    "html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none;width:0;height:0}";
+  document.head.appendChild(scrollbarStyle);
+
   const candidates = () => Array.from(document.querySelectorAll(
     "[data-786-section-id], main > section, main > article, main > header, main > div"
   ));
