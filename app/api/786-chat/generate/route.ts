@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     }, { status: 503 })
   }
 
-  const project = result.project && typeof result.project === "object"
+  let project = result.project && typeof result.project === "object"
     ? result.project as Record<string, unknown>
     : null
   const generatedFiles = project?.files && typeof project.files === "object"
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     typeof (payload.existing as Record<string, unknown>).keyFiles === "object"
       ? (payload.existing as { keyFiles: Record<string, string> }).keyFiles
       : {}
-  const files = injectVisualEditorFiles(
+  let files = injectVisualEditorFiles(
     normalizeGeneratedAuthLinks(
       specification,
       normalizeGeneratedImports({
@@ -123,7 +123,62 @@ export async function POST(request: Request) {
     ),
     payload.visualEditorState,
   )
-  const validation = validateGeneratedProject(specification, files)
+  let validation = validateGeneratedProject(specification, files)
+  let repairAttempted = false
+
+  if (!validation.valid && project) {
+    repairAttempted = true
+    const repairBrief = [
+      prompt,
+      "",
+      "VALIDATION-GUIDED REPAIR — RETURN THE COMPLETE PROJECT:",
+      "The previous generated project was rejected. Correct every error below without removing working features.",
+      ...validation.errors.map((error) => `- ${error}`),
+      "",
+      `Exact required routes: ${specification.routes.join(", ")}`,
+      "Return complete replacement files, including every operational page, tenant-scoped API route and sql/schema.sql.",
+      "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
+    ].join("\n")
+    const repairResponse = await generateWithProviderFailover(new Request(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: JSON.stringify({
+        ...payload,
+        projectId: typeof project.id === "string" ? project.id : payload.projectId,
+        message: repairBrief,
+        existing: {
+          title: String(project.title || "Generated application"),
+          description: String(project.description || ""),
+          fileTree: Object.keys(files),
+          keyFiles: files,
+        },
+      }),
+    }))
+    const repaired = (await repairResponse.json().catch(() => ({}))) as Record<string, unknown>
+    if (repairResponse.ok && repaired.success === true && repaired.fellBackToLocal !== true) {
+      const repairedProject = repaired.project && typeof repaired.project === "object"
+        ? repaired.project as Record<string, unknown>
+        : null
+      const repairedFiles = repairedProject?.files && typeof repairedProject.files === "object"
+        ? repairedProject.files as Record<string, string>
+        : {}
+      files = injectVisualEditorFiles(
+        normalizeGeneratedAuthLinks(
+          specification,
+          normalizeGeneratedImports({
+            ...files,
+            ...repairedFiles,
+          }),
+        ),
+        payload.visualEditorState,
+      )
+      validation = validateGeneratedProject(specification, files)
+      if (validation.valid && repairedProject) {
+        project = repairedProject
+        Object.assign(result, repaired)
+      }
+    }
+  }
 
   if (!validation.valid) {
     return NextResponse.json({
@@ -134,6 +189,7 @@ export async function POST(request: Request) {
       validation,
       providerStatus: result.providerStatus,
       fellBackToLocal: result.fellBackToLocal,
+      repairAttempted,
     }, { status: 422 })
   }
 
@@ -143,5 +199,6 @@ export async function POST(request: Request) {
     specification,
     plan,
     validation,
+    repairAttempted,
   })
 }
