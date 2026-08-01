@@ -17,6 +17,13 @@ test("common requested page names become mandatory routes", () => {
   }
 })
 
+test("every web project requires the Next.js root route even for a login-only prompt", () => {
+  assert.match(specification, /const routes = unique\(\[\s*"\/"/)
+  assert.match(specification, /const pages = unique\(\[\s*"Home"/)
+  assert.match(validation, /Missing required Next\.js root route/)
+  assert.match(validation, /const hasRootPage = routeFileCandidates\("\/"\)/)
+})
+
 test("negated page names are excluded before route analysis", () => {
   assert.match(specification, /withoutNegativeRequirements/)
   assert.match(specification, /const positivePrompt = withoutNegativeRequirements\(prompt\)/)
