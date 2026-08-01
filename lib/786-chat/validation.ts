@@ -120,7 +120,15 @@ export function validateGeneratedProject(
   const warnings: string[] = []
   const combined = source(files)
 
+  const hasRootPage = routeFileCandidates("/").some(
+    (path) => typeof files[path] === "string" && files[path].trim(),
+  )
+  if (!hasRootPage) {
+    errors.push("Missing required Next.js root route: / (app/page.tsx or src/app/page.tsx)")
+  }
+
   for (const route of specification.routes) {
+    if (route === "/" && !hasRootPage) continue
     if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
       errors.push(`Missing requested route: ${route}`)
     }
