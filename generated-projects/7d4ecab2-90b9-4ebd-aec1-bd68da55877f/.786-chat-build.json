@@ -1,0 +1,12 @@
+{
+  "projectId": "7d4ecab2-90b9-4ebd-aec1-bd68da55877f",
+  "buildId": "938ee88b-c38d-444f-a4f0-e0d02b3fe1f3",
+  "title": "Runtime CRM Acceptance",
+  "sourceVersion": "94dbfc7fed7ebb698b2e34e6dffa189ed485a43c48a013dedd5aefc33cdf57b1",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-01T11:58:08.709Z"
+}
