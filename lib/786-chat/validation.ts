@@ -37,6 +37,22 @@ export function normalizeGeneratedImports(files: Record<string, string>) {
   )
 }
 
+export function normalizeGeneratedClientBoundaries(files: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (
+        !/\.(?:tsx|jsx)$/.test(path) ||
+        /^app\/api\//.test(path) ||
+        !/\b(?:useState|useEffect|useReducer|useRef|useLayoutEffect|useCallback|useMemo)\s*\(/.test(content) ||
+        /^\s*["']use client["'];?/m.test(content)
+      ) {
+        return [path, content]
+      }
+      return [path, `"use client"\n\n${content}`]
+    }),
+  )
+}
+
 export function normalizeGeneratedAuthLinks(
   specification: ProjectSpecification,
   files: Record<string, string>,

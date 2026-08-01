@@ -7,6 +7,7 @@ import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
 import {
   normalizeGeneratedAuthLinks,
+  normalizeGeneratedClientBoundaries,
   normalizeGeneratedImports,
   validateGeneratedProject,
 } from "@/lib/786-chat/validation"
@@ -118,10 +119,10 @@ export async function POST(request: Request) {
   let files = injectVisualEditorFiles(
     normalizeGeneratedAuthLinks(
       specification,
-      normalizeGeneratedImports({
+      normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
         ...existingFiles,
         ...generatedFiles,
-      }),
+      })),
     ),
     payload.visualEditorState,
   )
@@ -206,10 +207,10 @@ export async function POST(request: Request) {
       files = injectVisualEditorFiles(
         normalizeGeneratedAuthLinks(
           specification,
-          normalizeGeneratedImports({
+          normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
             ...files,
             ...repairedFiles,
-          }),
+          })),
         ),
         payload.visualEditorState,
       )

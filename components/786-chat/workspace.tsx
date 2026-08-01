@@ -173,6 +173,8 @@ export function SevenEightSixWorkspace() {
   const drag = useRef<{ x: number; width: number } | null>(null)
   const sectionDrag = useRef<string | null>(null)
   const previewIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const visualSaveQueue = useRef<Promise<void>>(Promise.resolve())
+  const visualSavePending = useRef(0)
 
   const isOwner = user?.email?.toLowerCase().trim() === OWNER_EMAIL
   const files = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
@@ -305,22 +307,23 @@ export function SevenEightSixWorkspace() {
     }
   }
 
-  async function persistVisualState(next: VisualEditorState, label: string) {
-    if (!project) return
+  function persistVisualState(next: VisualEditorState, label: string) {
+    if (!project) return Promise.resolve()
+    const projectId = project.id
+    visualSavePending.current += 1
     setEditorSaving(true)
-    try {
-      const saved = await saveVisualEditorState({
-        projectId: project.id,
-        state: next,
-        label,
-      })
+    const operation = visualSaveQueue.current.then(async () => {
+      const saved = await saveVisualEditorState({ projectId, state: next, label })
       setProject(saved)
-      setRevisions(await listBuilderRevisions(project.id))
-    } catch (failure) {
+      setRevisions(await listBuilderRevisions(projectId))
+    }).catch((failure) => {
       setError(failure instanceof Error ? failure.message : "Visual edit could not be saved.")
-    } finally {
-      setEditorSaving(false)
-    }
+    }).finally(() => {
+      visualSavePending.current -= 1
+      if (visualSavePending.current === 0) setEditorSaving(false)
+    })
+    visualSaveQueue.current = operation
+    return operation
   }
 
   function commitVisualState(nextValue: VisualEditorState, label: string) {
@@ -411,12 +414,11 @@ export function SevenEightSixWorkspace() {
     const nextOpen = !designOpen
     setDesignOpen(nextOpen)
     setShowCode(false)
-    setDesignOpen(false)
-    setVisualState(EMPTY_VISUAL_EDITOR_STATE)
-    setUndoStack([])
-    setRedoStack([])
-    setVisualDirty(false)
-    if (!nextOpen) return
+    if (!nextOpen) {
+      setEditorSections([])
+      setSelectedSection("")
+      return
+    }
     setVisualState(project.visualEditor)
     setUndoStack([])
     setRedoStack([])
