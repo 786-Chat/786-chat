@@ -27,3 +27,11 @@ test("the callback and runner allow the bounded retry and readiness window", () 
   assert.match(callback, /maxDuration = 120/)
   assert.match(workflow, /--max-time 115/)
 })
+
+test("a failed direct deployment can recover from the ready Git deployment for the same commit", () => {
+  assert.match(deployer, /readyDeploymentForCommit/)
+  assert.match(deployer, /endpoint\.searchParams\.set\("sha", input\.commitSha\)/)
+  assert.match(deployer, /const branchDeployment = await readyDeploymentForCommit\(input\)/)
+  assert.match(deployer, /if \(branchDeployment\) return branchDeployment/)
+  assert.match(deployer, /Date\.now\(\) \+ 75_000/)
+})
