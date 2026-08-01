@@ -15,6 +15,17 @@ type VercelDeploymentPayload = {
   error?: { message?: unknown }
 }
 
+type VercelDeploymentListPayload = {
+  deployments?: Array<{
+    uid?: unknown
+    id?: unknown
+    url?: unknown
+    state?: unknown
+    readyState?: unknown
+  }>
+  error?: { message?: unknown }
+}
+
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`${name} is not configured`)
@@ -59,27 +70,69 @@ async function deploymentState(
   return payload
 }
 
-async function waitForReadyDeployment(input: {
-  id: string
+async function readyDeploymentForCommit(input: {
+  commitSha: string
   token: string
   teamId?: string
-}): Promise<string> {
-  const deadline = Date.now() + 45_000
+}): Promise<GeneratedProjectDeployment | null> {
+  const endpoint = new URL("https://api.vercel.com/v6/deployments")
+  endpoint.searchParams.set("sha", input.commitSha)
+  endpoint.searchParams.set("limit", "20")
+  if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+  const response = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${input.token}` },
+    cache: "no-store",
+  })
+  const payload = (await response.json().catch(() => null)) as VercelDeploymentListPayload | null
+  if (!response.ok || !payload) return null
+  const deployment = payload.deployments?.find((candidate) =>
+    String(candidate.readyState || candidate.state || "").toUpperCase() === "READY" &&
+    typeof candidate.url === "string"
+  )
+  if (!deployment || typeof deployment.url !== "string") return null
+  const id = typeof deployment.uid === "string"
+    ? deployment.uid
+    : typeof deployment.id === "string"
+      ? deployment.id
+      : ""
+  if (!id) return null
+  const url = deployment.url.startsWith("https://")
+    ? deployment.url
+    : `https://${deployment.url}`
+  return { id, url, readyState: "READY" }
+}
+
+async function waitForReadyDeployment(input: {
+  id: string
+  url: string
+  commitSha: string
+  token: string
+  teamId?: string
+}): Promise<GeneratedProjectDeployment> {
+  const deadline = Date.now() + 75_000
   const endpoint = new URL(`https://api.vercel.com/v13/deployments/${input.id}`)
   if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+  let terminalState: string | null = null
 
   while (Date.now() < deadline) {
     const payload = await deploymentState(endpoint, input.token)
     const state = typeof payload.readyState === "string"
       ? payload.readyState.toUpperCase()
       : "UNKNOWN"
-    if (state === "READY") return state
-    if (["ERROR", "CANCELED"].includes(state)) {
-      throw new Error(`Vercel deployment finished with state ${state}`)
+    if (state === "READY") {
+      return { id: input.id, url: input.url, readyState: state }
     }
+    if (["ERROR", "CANCELED"].includes(state)) {
+      terminalState = state
+    }
+    const branchDeployment = await readyDeploymentForCommit(input)
+    if (branchDeployment) return branchDeployment
     await new Promise((resolve) => setTimeout(resolve, 2_500))
   }
-  throw new Error("Vercel deployment did not become ready within 45 seconds")
+  if (terminalState) {
+    throw new Error(`Vercel deployment finished with state ${terminalState}`)
+  }
+  throw new Error("Vercel deployment did not become ready within 75 seconds")
 }
 
 async function allowEmbeddedRuntimePreview(input: {
@@ -184,15 +237,13 @@ export async function deployGeneratedProjectToVercel(input: {
     token,
     teamId,
   })
-  const readyState = await waitForReadyDeployment({
+  const deployment = await waitForReadyDeployment({
     id: payload.id,
+    url,
+    commitSha: input.commitSha,
     token,
     teamId,
   })
 
-  return {
-    id: payload.id,
-    url,
-    readyState,
-  }
+  return deployment
 }
