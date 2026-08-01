@@ -76,12 +76,14 @@ export function analyseProjectPrompt(
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
   const routes = unique([
+    "/",
     ...pageMatches.map(([, , route]) => route),
     ...requestedRoutes,
     ...(systemBlueprint?.routes || []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
+    "Home",
     ...pageMatches.map(([, page]) => page),
     ...requestedRoutes.map((route) =>
       route
