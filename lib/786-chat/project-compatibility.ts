@@ -27,14 +27,6 @@ function dependencyMajor(version: string | undefined): number | null {
 }
 
 export function normalizePortablePostCss(files: Record<string, string>) {
-  if (
-    files["postcss.config.js"] ||
-    files["postcss.config.cjs"] ||
-    files["postcss.config.mjs"]
-  ) {
-    return { ...files }
-  }
-
   const manifest = parsePackageManifest(files["package.json"])
   if (!manifest) return { ...files }
 
@@ -45,6 +37,17 @@ export function normalizePortablePostCss(files: Record<string, string>) {
   if (!tailwindMajor) return { ...files }
 
   const normalized = { ...files }
+  const hasPostCssConfig = Boolean(
+    files["postcss.config.js"] ||
+    files["postcss.config.cjs"] ||
+    files["postcss.config.mjs"],
+  )
+  const hasTailwindConfig = Boolean(
+    files["tailwind.config.js"] ||
+    files["tailwind.config.cjs"] ||
+    files["tailwind.config.mjs"] ||
+    files["tailwind.config.ts"],
+  )
   let packageChanged = false
   const ensureDevDependency = (name: string, version: string) => {
     if (dependencies[name] || devDependencies[name]) return
@@ -53,30 +56,51 @@ export function normalizePortablePostCss(files: Record<string, string>) {
   }
 
   if (tailwindMajor >= 4) {
-    ensureDevDependency("@tailwindcss/postcss", "^4.2.0")
-    ensureDevDependency("postcss", "^8.5.0")
-    normalized["postcss.config.mjs"] = [
-      "const config = {",
-      "  plugins: {",
-      "    \"@tailwindcss/postcss\": {},",
-      "  },",
-      "}",
-      "",
-      "export default config",
-      "",
-    ].join("\n")
+    if (!hasPostCssConfig) {
+      ensureDevDependency("@tailwindcss/postcss", "^4.2.0")
+      ensureDevDependency("postcss", "^8.5.0")
+      normalized["postcss.config.mjs"] = [
+        "const config = {",
+        "  plugins: {",
+        "    \"@tailwindcss/postcss\": {},",
+        "  },",
+        "}",
+        "",
+        "export default config",
+        "",
+      ].join("\n")
+    }
   } else {
-    ensureDevDependency("autoprefixer", "^10.4.20")
-    ensureDevDependency("postcss", "^8.4.41")
-    normalized["postcss.config.cjs"] = [
-      "module.exports = {",
-      "  plugins: {",
-      "    tailwindcss: {},",
-      "    autoprefixer: {},",
-      "  },",
-      "}",
-      "",
-    ].join("\n")
+    if (!hasPostCssConfig) {
+      ensureDevDependency("autoprefixer", "^10.4.20")
+      ensureDevDependency("postcss", "^8.4.41")
+      normalized["postcss.config.cjs"] = [
+        "module.exports = {",
+        "  plugins: {",
+        "    tailwindcss: {},",
+        "    autoprefixer: {},",
+        "  },",
+        "}",
+        "",
+      ].join("\n")
+    }
+
+    if (!hasTailwindConfig) {
+      normalized["tailwind.config.cjs"] = [
+        "/** @type {import('tailwindcss').Config} */",
+        "module.exports = {",
+        "  content: [",
+        "    \"./app/**/*.{js,ts,jsx,tsx,mdx}\",",
+        "    \"./pages/**/*.{js,ts,jsx,tsx,mdx}\",",
+        "    \"./components/**/*.{js,ts,jsx,tsx,mdx}\",",
+        "    \"./src/**/*.{js,ts,jsx,tsx,mdx}\",",
+        "  ],",
+        "  theme: { extend: {} },",
+        "  plugins: [],",
+        "}",
+        "",
+      ].join("\n")
+    }
   }
 
   if (packageChanged) {
@@ -120,6 +144,16 @@ export async function migrateUnsupportedNextConfig(input: {
     )
   ) {
     migrations.push("local-postcss-config")
+  }
+
+  if (
+    !input.files["tailwind.config.js"] &&
+    !input.files["tailwind.config.cjs"] &&
+    !input.files["tailwind.config.mjs"] &&
+    !input.files["tailwind.config.ts"] &&
+    normalized["tailwind.config.cjs"]
+  ) {
+    migrations.push("local-tailwind-config")
   }
 
   const changedEntries = Object.entries(normalized).filter(
