@@ -36,8 +36,7 @@ test("confirmed builds migrate an existing TypeScript Next config transactionall
   assert.match(compatibility, /next\.config\.mjs/)
 })
 
-
-test("confirmed builds isolate Tailwind PostCSS configuration from the parent repository", async () => {
+test("confirmed builds isolate Tailwind tooling from the parent repository", async () => {
   const compatibility = await read("lib/786-chat/project-compatibility.ts")
 
   assert.match(compatibility, /normalizePortablePostCss/)
@@ -46,4 +45,7 @@ test("confirmed builds isolate Tailwind PostCSS configuration from the parent re
   assert.match(compatibility, /@tailwindcss\/postcss/)
   assert.match(compatibility, /local-postcss-config/)
   assert.match(compatibility, /delete normalized\["package-lock\.json"\]/)
+  assert.match(compatibility, /tailwind\.config\.cjs/)
+  assert.match(compatibility, /\.\/app\/\*\*\/\*\.\{js,ts,jsx,tsx,mdx\}/)
+  assert.match(compatibility, /local-tailwind-config/)
 })
