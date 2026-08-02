@@ -29,6 +29,18 @@ test("build repair deterministically fixes Lucide export errors", () => {
   assert.match(repair, /deterministic-lucide-import-compatibility/)
 })
 
+test("generation and repair normalize client-component hook boundaries", () => {
+  assert.match(validation, /normalizeGeneratedClientBoundaries/)
+  assert.match(route, /normalizeGeneratedClientBoundaries/)
+  assert.match(repair, /deterministicClientBoundaryRepair/)
+  assert.match(repair, /deterministic-client-boundary/)
+})
+
+test("build repair normalizes Neon result indexing errors", () => {
+  assert.match(repair, /deterministicNeonResultRepair/)
+  assert.match(repair, /deterministic-neon-result-index/)
+})
+
 test("AI repair has a realistic but callback-bounded timeout", () => {
   assert.match(repair, /REPAIR_PROVIDER_TIMEOUT_MS = 65_000/)
 })

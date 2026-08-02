@@ -210,6 +210,42 @@ function deterministicLucideImportRepair(context: RepairContext, logs: string) {
   }
 }
 
+function deterministicClientBoundaryRepair(context: RepairContext, logs: string) {
+  if (!/needs? (?:the )?useState|React Hook .* in a Server Component|only works? in a Client Component|use client directive/i.test(logs)) {
+    return null
+  }
+  const files: Record<string, string> = {}
+  for (const [path, content] of Object.entries(context.files)) {
+    if (
+      !logs.includes(path) ||
+      !/\.(?:tsx|jsx)$/.test(path) ||
+      /^app\/api\//.test(path) ||
+      /^\s*["']use client["'];?/m.test(content) ||
+      !/\b(?:useState|useEffect|useReducer|useRef|useLayoutEffect|useCallback|useMemo)\s*\(/.test(content)
+    ) continue
+    files[path] = `"use client"\n\n${content}`
+  }
+  if (!Object.keys(files).length) return null
+  return { files, removedPaths: [], model: "deterministic-client-boundary" }
+}
+
+function deterministicNeonResultRepair(context: RepairContext, logs: string) {
+  if (!/Property ['"]0['"] does not exist on type|FullQueryResults|QueryResult.*not.*index/i.test(logs)) {
+    return null
+  }
+  const files: Record<string, string> = {}
+  for (const [path, content] of Object.entries(context.files)) {
+    if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path)) continue
+    const repaired = content.replace(
+      /\b([A-Za-z_$][\w$]*)\[0\]/g,
+      "($1 as unknown as Array<Record<string, unknown>>)[0]",
+    )
+    if (repaired !== content) files[path] = repaired
+  }
+  if (!Object.keys(files).length) return null
+  return { files, removedPaths: [], model: "deterministic-neon-result-index" }
+}
+
 async function persistRepair(
   context: RepairContext,
   repairedFiles: Record<string, string>,
@@ -300,6 +336,8 @@ export async function repairFailedBuild(input: {
   try {
     const repair = deterministicCompatibilityRepair(context, input.logs)
       ?? deterministicLucideImportRepair(context, input.logs)
+      ?? deterministicClientBoundaryRepair(context, input.logs)
+      ?? deterministicNeonResultRepair(context, input.logs)
       ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }
     const merged = { ...context.files, ...repair.files }
     for (const path of repair.removedPaths) delete merged[path]

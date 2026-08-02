@@ -37,6 +37,22 @@ export function normalizeGeneratedImports(files: Record<string, string>) {
   )
 }
 
+export function normalizeGeneratedClientBoundaries(files: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => {
+      if (
+        !/\.(?:tsx|jsx)$/.test(path) ||
+        /^app\/api\//.test(path) ||
+        !/\b(?:useState|useEffect|useReducer|useRef|useLayoutEffect|useCallback|useMemo)\s*\(/.test(content) ||
+        /^\s*["']use client["'];?/m.test(content)
+      ) {
+        return [path, content]
+      }
+      return [path, `"use client"\n\n${content}`]
+    }),
+  )
+}
+
 export function normalizeGeneratedAuthLinks(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -120,7 +136,15 @@ export function validateGeneratedProject(
   const warnings: string[] = []
   const combined = source(files)
 
+  const hasRootPage = routeFileCandidates("/").some(
+    (path) => typeof files[path] === "string" && files[path].trim(),
+  )
+  if (!hasRootPage) {
+    errors.push("Missing required Next.js root route: / (app/page.tsx or src/app/page.tsx)")
+  }
+
   for (const route of specification.routes) {
+    if (route === "/" && !hasRootPage) continue
     if (!routeFileCandidates(route).some((path) => typeof files[path] === "string" && files[path].trim())) {
       errors.push(`Missing requested route: ${route}`)
     }

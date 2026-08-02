@@ -7,6 +7,7 @@ import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
 import {
   normalizeGeneratedAuthLinks,
+  normalizeGeneratedClientBoundaries,
   normalizeGeneratedImports,
   validateGeneratedProject,
 } from "@/lib/786-chat/validation"
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
     "- Adapt these design rules to the requested brand, industry, content and functionality.",
     "- Do not reuse generic product names, copy, metrics, people or imagery.",
     "- Return every planned file with complete content.",
+    "- app/page.tsx is mandatory for every Next.js project. A /login or other nested route never replaces the root entry file.",
+    "- When the user requests one nested page, app/page.tsx may render or redirect to that page, but it must still exist.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
     "",
@@ -116,10 +119,10 @@ export async function POST(request: Request) {
   let files = injectVisualEditorFiles(
     normalizeGeneratedAuthLinks(
       specification,
-      normalizeGeneratedImports({
+      normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
         ...existingFiles,
         ...generatedFiles,
-      }),
+      })),
     ),
     payload.visualEditorState,
   )
@@ -131,8 +134,12 @@ export async function POST(request: Request) {
     const focusedSystemRepair = validation.errors.every((error) =>
       /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence|CRUD/i.test(error)
     )
-    const requiredRepairFiles = specification.systemBlueprint
-      ? [
+    const requiredRepairFiles = [
+      ...specification.routes.map((route) =>
+        route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
+      ),
+      ...(specification.systemBlueprint
+        ? [
           "lib/server/tenant.ts",
           "lib/server/validation.ts",
           "shared/contracts.ts",
@@ -141,11 +148,9 @@ export async function POST(request: Request) {
             `app/api/${resource}/route.ts`,
             `app/api/${resource}/[id]/route.ts`,
           ]),
-          ...specification.systemBlueprint.routes.map((route) =>
-            route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
-          ),
         ]
-      : []
+        : []),
+    ]
     const repairKeyFiles = focusedSystemRepair
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
           path === "lib/server/tenant.ts" ||
@@ -165,6 +170,7 @@ export async function POST(request: Request) {
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
       `Required system files (create any that are absent and replace every rejected one): ${requiredRepairFiles.join(", ")}`,
+      "app/page.tsx is mandatory. If it is missing, create it and wire it to the requested application or requested nested route.",
       "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
       "Every collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard or assertTenant before reading or mutating data.",
       "For every mutating POST, PATCH and DELETE handler, validate input and persist an audit_logs event in the same tenant scope.",
@@ -201,10 +207,10 @@ export async function POST(request: Request) {
       files = injectVisualEditorFiles(
         normalizeGeneratedAuthLinks(
           specification,
-          normalizeGeneratedImports({
+          normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
             ...files,
             ...repairedFiles,
-          }),
+          })),
         ),
         payload.visualEditorState,
       )

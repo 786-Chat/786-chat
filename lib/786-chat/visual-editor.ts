@@ -105,6 +105,11 @@ function bridgeSource(state: VisualEditorState) {
     origin === "https://786.chat" || /^https:\\/\\/[^/]+\\.vercel\\.app$/.test(origin);
   let enabled = false;
   let state = initialState;
+  const originalStyles = new WeakMap();
+  const controlledStyleProperties = [
+    "backgroundColor", "color", "borderColor", "borderWidth", "borderStyle",
+    "borderRadius", "padding", "margin", "fontFamily", "fontSize"
+  ];
 
   const scrollbarStyle = document.createElement("style");
   scrollbarStyle.textContent =
@@ -121,6 +126,11 @@ function bridgeSource(state: VisualEditorState) {
         element.getAttribute("data-786-section-id") ||
         \`section-\${index + 1}\`;
     }
+    if (!originalStyles.has(element)) {
+      originalStyles.set(element, Object.fromEntries(
+        controlledStyleProperties.map((property) => [property, element.style[property] || ""])
+      ));
+    }
     return element;
   });
   const label = (element, index) => {
@@ -135,6 +145,10 @@ function bridgeSource(state: VisualEditorState) {
   }));
   const applyStyle = (element, style = {}) => {
     const px = (value) => Number.isFinite(value) ? \`\${value}px\` : "";
+    const original = originalStyles.get(element) || {};
+    for (const property of controlledStyleProperties) {
+      element.style[property] = original[property] || "";
+    }
     if (style.backgroundColor) element.style.backgroundColor = style.backgroundColor;
     if (style.color) element.style.color = style.color;
     if (style.borderColor) element.style.borderColor = style.borderColor;
@@ -151,6 +165,10 @@ function bridgeSource(state: VisualEditorState) {
   const apply = (next) => {
     state = next || initialState;
     let elements = ensureIds();
+    const desiredCloneIds = new Set((state.duplicates || []).map((item) => item.id));
+    for (const clone of document.querySelectorAll("[data-editor786-clone='true']")) {
+      if (!desiredCloneIds.has(clone.dataset.editor786Id)) clone.remove();
+    }
     const byId = () => new Map(ensureIds().map((element) => [element.dataset.editor786Id, element]));
     for (const duplicate of state.duplicates || []) {
       if (document.querySelector(\`[data-editor786-id="\${CSS.escape(duplicate.id)}"]\`)) continue;

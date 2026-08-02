@@ -154,6 +154,7 @@ ABSOLUTE RULES:
 20. Every tenant-scoped collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard, or assertTenant before reading or mutating data.
 21. Every required operational page must implement a real form, table, state-changing button, onSubmit, onClick, useState, or data mutation action. Static marketing cards do not count as an operational system.
 22. Implement every requested workflow as functional page, API, contract or schema code using the explicit domain terms. CRM must include a sales follow-up task and notification, not merely a generic activity.
+23. Every generated Next.js project must include app/page.tsx. A nested route such as app/login/page.tsx never replaces the root entry file; the root may render or redirect to the requested nested page.
 
 ${ROUTE_INTEGRITY_PROMPT}
 ${PREMIUM_DESIGN_ENGINE_PROMPT}`
