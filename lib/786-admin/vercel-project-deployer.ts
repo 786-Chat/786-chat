@@ -72,11 +72,13 @@ async function deploymentState(
 
 async function readyDeploymentForCommit(input: {
   commitSha: string
+  projectName: string
   token: string
   teamId?: string
 }): Promise<GeneratedProjectDeployment | null> {
-  const endpoint = new URL("https://api.vercel.com/v6/deployments")
+  const endpoint = new URL("https://api.vercel.com/v7/deployments")
   endpoint.searchParams.set("sha", input.commitSha)
+  endpoint.searchParams.set("app", input.projectName)
   endpoint.searchParams.set("limit", "20")
   if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
   const response = await fetch(endpoint, {
@@ -106,6 +108,7 @@ async function waitForReadyDeployment(input: {
   id: string
   url: string
   commitSha: string
+  projectName: string
   token: string
   teamId?: string
 }): Promise<GeneratedProjectDeployment> {
@@ -127,6 +130,9 @@ async function waitForReadyDeployment(input: {
     }
     const branchDeployment = await readyDeploymentForCommit(input)
     if (branchDeployment) return branchDeployment
+    if (terminalState) {
+      throw new Error(`Vercel deployment finished with state ${terminalState}`)
+    }
     await new Promise((resolve) => setTimeout(resolve, 2_500))
   }
   if (terminalState) {
@@ -241,6 +247,7 @@ export async function deployGeneratedProjectToVercel(input: {
     id: payload.id,
     url,
     commitSha: input.commitSha,
+    projectName,
     token,
     teamId,
   })
