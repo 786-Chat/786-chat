@@ -71,6 +71,7 @@ export async function completeRunnerBuild(input: {
   githubCommitSha?: string | null
   githubPrUrl?: string | null
   deploymentUrl?: string | null
+  repairStatus?: "not_needed" | "pending" | "running" | "repaired" | "exhausted" | null
 }): Promise<boolean> {
   const rows = (await sql`
     UPDATE admin_project_builds
@@ -81,6 +82,7 @@ export async function completeRunnerBuild(input: {
         github_commit_sha = COALESCE(${input.githubCommitSha ?? null}, github_commit_sha),
         github_pr_url = COALESCE(${input.githubPrUrl ?? null}, github_pr_url),
         deployment_url = COALESCE(${input.deploymentUrl ?? null}, deployment_url),
+        repair_status = COALESCE(${input.repairStatus ?? null}, repair_status),
         completed_at = NOW(),
         updated_at = NOW()
     WHERE id = ${input.buildId}

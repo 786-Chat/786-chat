@@ -7,6 +7,7 @@ import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { generateProjectCode, type CodegenMode } from "@/lib/786-admin/codegen"
 import { sql, transaction } from "@/lib/786-admin/db"
+import { normalizeGeneratedMetadataBoundaries } from "@/lib/786-chat/validation"
 
 const MAX_REPAIR_ATTEMPTS = 2
 const REPAIR_PROVIDER_TIMEOUT_MS = 65_000
@@ -210,6 +211,26 @@ function deterministicLucideImportRepair(context: RepairContext, logs: string) {
   }
 }
 
+function deterministicClientMetadataRepair(context: RepairContext, logs: string) {
+  if (!/metadata[^\n]{0,200}use client|use client[^\n]{0,200}metadata/i.test(logs)) {
+    return null
+  }
+
+  const files: Record<string, string> = {}
+  for (const [path, content] of Object.entries(context.files)) {
+    if (!logs.includes(path)) continue
+    const repaired = normalizeGeneratedMetadataBoundaries({ [path]: content })[path]
+    if (repaired !== content) files[path] = repaired
+  }
+  if (!Object.keys(files).length) return null
+
+  return {
+    files,
+    removedPaths: [],
+    model: "deterministic-client-metadata-boundary",
+  }
+}
+
 function deterministicClientBoundaryRepair(context: RepairContext, logs: string) {
   if (!/needs? (?:the )?useState|React Hook .* in a Server Component|only works? in a Client Component|use client directive/i.test(logs)) {
     return null
@@ -336,6 +357,7 @@ export async function repairFailedBuild(input: {
   try {
     const repair = deterministicCompatibilityRepair(context, input.logs)
       ?? deterministicLucideImportRepair(context, input.logs)
+      ?? deterministicClientMetadataRepair(context, input.logs)
       ?? deterministicClientBoundaryRepair(context, input.logs)
       ?? deterministicNeonResultRepair(context, input.logs)
       ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }

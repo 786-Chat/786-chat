@@ -240,7 +240,12 @@ export function SevenEightSixWorkspace() {
   }, [])
 
   useEffect(() => {
-    if (!project?.id || !build || !["queued", "running"].includes(build.status)) return
+    if (!project?.id || !build) return
+    const repairIsActive =
+      build.status === "failed" &&
+      ["pending", "running", "repaired"].includes(build.repair_status)
+    if (!["queued", "running"].includes(build.status) && !repairIsActive) return
+
     const timer = window.setInterval(() => {
       void loadBuilderBuild(project.id).then((next) => {
         setBuild(next)

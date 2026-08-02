@@ -36,6 +36,15 @@ test("generation and repair normalize client-component hook boundaries", () => {
   assert.match(repair, /deterministic-client-boundary/)
 })
 
+test("generation and repair reject client components that export metadata", () => {
+  assert.match(validation, /normalizeGeneratedMetadataBoundaries/)
+  assert.match(validation, /Client component cannot export Next\.js metadata/)
+  assert.match(route, /normalizeGeneratedMetadataBoundaries/)
+  assert.match(route, /must remain Server Components/)
+  assert.match(repair, /deterministicClientMetadataRepair/)
+  assert.match(repair, /deterministic-client-metadata-boundary/)
+})
+
 test("build repair normalizes Neon result indexing errors", () => {
   assert.match(repair, /deterministicNeonResultRepair/)
   assert.match(repair, /deterministic-neon-result-index/)

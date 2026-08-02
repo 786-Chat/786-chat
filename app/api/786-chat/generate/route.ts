@@ -9,6 +9,7 @@ import {
   normalizeGeneratedAuthLinks,
   normalizeGeneratedClientBoundaries,
   normalizeGeneratedImports,
+  normalizeGeneratedMetadataBoundaries,
   validateGeneratedProject,
 } from "@/lib/786-chat/validation"
 import { designFamilyBrief } from "@/lib/786-chat/design-system"
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     "- Do not reuse generic product names, copy, metrics, people or imagery.",
     "- Return every planned file with complete content.",
     "- app/page.tsx is mandatory for every Next.js project. A /login or other nested route never replaces the root entry file.",
+    "- Files that export metadata or generateMetadata must remain Server Components. Move hooks, browser APIs and event handlers into a child component marked \"use client\".",
     "- When the user requests one nested page, app/page.tsx may render or redirect to that page, but it must still exist.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
@@ -119,10 +121,12 @@ export async function POST(request: Request) {
   let files = injectVisualEditorFiles(
     normalizeGeneratedAuthLinks(
       specification,
-      normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
-        ...existingFiles,
-        ...generatedFiles,
-      })),
+      normalizeGeneratedMetadataBoundaries(
+        normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
+          ...existingFiles,
+          ...generatedFiles,
+        })),
+      ),
     ),
     payload.visualEditorState,
   )
@@ -207,10 +211,12 @@ export async function POST(request: Request) {
       files = injectVisualEditorFiles(
         normalizeGeneratedAuthLinks(
           specification,
-          normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
-            ...files,
-            ...repairedFiles,
-          })),
+          normalizeGeneratedMetadataBoundaries(
+            normalizeGeneratedClientBoundaries(normalizeGeneratedImports({
+              ...files,
+              ...repairedFiles,
+            })),
+          ),
         ),
         payload.visualEditorState,
       )

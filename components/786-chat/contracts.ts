@@ -68,6 +68,7 @@ export type BuilderBuild = {
   logs: string
   error_message: string | null
   deployment_url: string | null
+  repair_status: "not_needed" | "pending" | "running" | "repaired" | "exhausted"
 }
 
 export type BuilderAttachment = {

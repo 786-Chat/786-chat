@@ -13,6 +13,90 @@ const LUCIDE_COMPATIBILITY_ALIASES: Record<string, string> = {
   Ambulance: "HeartPulse",
 }
 
+function stripClientMetadataExport(content: string) {
+  if (
+    !/^\s*["']use client["'];?/m.test(content) ||
+    !/\bexport\s+const\s+metadata\b/.test(content)
+  ) {
+    return content
+  }
+
+  const declaration = /\bexport\s+const\s+metadata(?:\s*:\s*Metadata)?\s*=\s*\{/.exec(content)
+  if (!declaration) return content
+
+  let cursor = declaration.index + declaration[0].length
+  let depth = 1
+  let quote: "'" | '"' | "`" | null = null
+  let escaped = false
+  let lineComment = false
+  let blockComment = false
+
+  for (; cursor < content.length && depth > 0; cursor += 1) {
+    const character = content[cursor]
+    const next = content[cursor + 1]
+
+    if (lineComment) {
+      if (character === "\n") lineComment = false
+      continue
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false
+        cursor += 1
+      }
+      continue
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      } else if (character === "\\") {
+        escaped = true
+      } else if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true
+      cursor += 1
+      continue
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true
+      cursor += 1
+      continue
+    }
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character
+      continue
+    }
+    if (character === "{") depth += 1
+    if (character === "}") depth -= 1
+  }
+
+  if (depth !== 0) return content
+
+  const suffix = content.slice(cursor).match(/^\s*(?:as\s+const\s*)?(?:satisfies\s+Metadata\s*)?;?\s*/)
+  const end = cursor + (suffix?.[0].length || 0)
+  return `${content.slice(0, declaration.index)}${content.slice(end)}`
+    .replace(
+      /^\s*import\s+type\s+\{\s*Metadata\s*\}\s+from\s+["']next["'];?\s*$/m,
+      "",
+    )
+    .replace(/\n{3,}/g, "\n\n")
+}
+
+export function normalizeGeneratedMetadataBoundaries(files: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(files).map(([path, content]) => [
+      path,
+      /^(?:src\/)?app\/(?:.*\/)?(?:layout|page)\.(?:tsx|jsx)$/.test(path)
+        ? stripClientMetadataExport(content)
+        : content,
+    ]),
+  )
+}
+
 export function normalizeGeneratedImports(files: Record<string, string>) {
   return Object.fromEntries(
     Object.entries(files).map(([path, content]) => {
@@ -135,6 +219,16 @@ export function validateGeneratedProject(
   const errors: string[] = []
   const warnings: string[] = []
   const combined = source(files)
+
+  for (const [path, content] of Object.entries(files)) {
+    if (
+      /^(?:src\/)?app\/(?:.*\/)?(?:layout|page)\.(?:tsx|jsx)$/.test(path) &&
+      /^\s*["']use client["'];?/m.test(content) &&
+      /\bexport\s+const\s+metadata\b/.test(content)
+    ) {
+      errors.push(`Client component cannot export Next.js metadata: ${path}`)
+    }
+  }
 
   const hasRootPage = routeFileCandidates("/").some(
     (path) => typeof files[path] === "string" && files[path].trim(),
