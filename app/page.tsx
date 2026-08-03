@@ -295,16 +295,9 @@ export default function Home() {
         </a>
         <div className="nav-links">
           <a href="#home">Home</a>
+          <a href="/support">Support</a>
         </div>
         <div className="nav-actions">
-          <a
-            className="support-link"
-            href="tel:+447427070000"
-            aria-label="Call 786.Chat support on +44 7427 070000"
-          >
-            <span>Support</span>
-            <strong className="support-number">+44 7427 070000</strong>
-          </a>
           <a className="sign-in-link" href="/login">Sign in</a>
           <a className="nav-cta" href="/786.chat">Open builder <ArrowIcon /></a>
         </div>
