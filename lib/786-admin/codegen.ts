@@ -216,6 +216,10 @@ function isQuotaError(error: unknown): boolean {
   return /quota|rate.?limit|resource exhausted|429|exceeded your current quota/i.test(errorMessage(error))
 }
 
+function isProviderAccessError(error: unknown): boolean {
+  return /free tier users do not have access|upgrade to paid credits|insufficient (?:balance|credits)|billing/i.test(errorMessage(error))
+}
+
 function isStructuredOutputError(error: unknown): boolean {
   return /no object generated|could not parse|failed to parse|parse error|invalid json|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
 }
@@ -331,6 +335,27 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   try {
     result = await run(picked.model)
   } catch (firstError) {
+    const directProviderConfigured = picked.provider === "deepseek"
+      ? Boolean(process.env.DEEPSEEK_API_KEY?.trim())
+      : Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim())
+    const retryDirectFailureThroughGateway =
+      directProviderConfigured &&
+      gatewayConfigured() &&
+      (isQuotaError(firstError) || isProviderAccessError(firstError))
+
+    if (retryDirectFailureThroughGateway) {
+      usedModel = picked.provider === "deepseek"
+        ? BUILDER_MODELS["deepseek-flash"]
+        : BUILDER_MODELS["gemini-flash"]
+      usedReason = `${picked.reason} The direct provider quota or billing access was unavailable, so generation retried through Vercel AI Gateway with the Flash model.`
+      try {
+        result = await run(usedModel, false, true)
+      } catch (gatewayError) {
+        if (!isStructuredOutputError(gatewayError)) throw gatewayError
+        usedReason = `${usedReason} The first Gateway response could not be parsed, so generation retried once with stricter output rules.`
+        result = await run(usedModel, true, true)
+      }
+    } else {
     const canRetryWithFlash =
       attachments.length > 0 &&
       picked.provider === "gemini" &&
@@ -357,6 +382,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
         ? `${picked.reason} The direct DeepSeek response could not be parsed, so generation retried through the Vercel AI Gateway with stricter output rules.`
         : `${picked.reason} The first structured response could not be parsed, so generation retried once with stricter output rules.`
       result = await run(usedModel, true, retryThroughGateway)
+    }
     }
   }
 

@@ -20,3 +20,13 @@ test("unparseable direct DeepSeek output retries through the configured AI Gatew
   assert.match(codegen, /result = await run\(usedModel, true, retryThroughGateway\)/)
   assert.match(codegen, /retried through the Vercel AI Gateway with stricter output rules/)
 })
+
+test("direct provider quota and billing failures retry through Gateway Flash models", async () => {
+  const codegen = await read("lib/786-admin/codegen.ts")
+
+  assert.match(codegen, /isProviderAccessError/)
+  assert.match(codegen, /retryDirectFailureThroughGateway/)
+  assert.match(codegen, /BUILDER_MODELS\["deepseek-flash"\]/)
+  assert.match(codegen, /BUILDER_MODELS\["gemini-flash"\]/)
+  assert.match(codegen, /result = await run\(usedModel, false, true\)/)
+})
