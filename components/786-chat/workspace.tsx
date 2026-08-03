@@ -157,7 +157,7 @@ export function SevenEightSixWorkspace() {
   const [customDevice, setCustomDevice] = useState({ width: 960, height: 720 })
   const [utilityPanel, setUtilityPanel] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [agentWidth, setAgentWidth] = useState(730)
+  const [agentWidth, setAgentWidth] = useState(760)
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
@@ -242,8 +242,9 @@ export function SevenEightSixWorkspace() {
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!drag.current) return
-      const max = Math.max(520, window.innerWidth - 520)
-      setAgentWidth(Math.max(520, Math.min(max, drag.current.width + event.clientX - drag.current.x)))
+      const minimum = 660
+      const max = Math.max(minimum, window.innerWidth - 520)
+      setAgentWidth(Math.max(minimum, Math.min(max, drag.current.width + event.clientX - drag.current.x)))
     }
     const stop = () => {
       drag.current = null
@@ -840,8 +841,8 @@ export function SevenEightSixWorkspace() {
       <AnimatedWorldBackground intensity="subtle" />
       <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_16%_4%,rgba(124,58,237,.12),transparent_26%),radial-gradient(circle_at_75%_0%,rgba(14,165,233,.08),transparent_28%)]" />
 
-      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] lg:flex ${sidebarCollapsed ? "w-[70px]" : "w-[196px]"}`}>
-        <div className="flex h-[58px] items-center gap-3 border-b border-[#1b2940] px-4">
+      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] xl:flex ${sidebarCollapsed ? "w-[72px]" : "w-[216px]"}`}>
+        <div className="flex h-[64px] items-center gap-3 border-b border-[#1b2940] px-4">
           <button
             type="button"
             onClick={() => setSidebarCollapsed((value) => !value)}
@@ -875,7 +876,7 @@ export function SevenEightSixWorkspace() {
                       setUtilityPanel(item.label)
                     }
                   }}
-                  className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[14px] transition ${
+                  className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[16px] font-semibold transition ${
                     sidebarCollapsed ? "justify-center" : "gap-3 px-2"
                   } ${(item.label === "Agent Flow" && !utilityPanel) || item.label === utilityPanel ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
                 >
@@ -895,7 +896,7 @@ export function SevenEightSixWorkspace() {
           ].map(([label, Icon]) => {
             const SupportIcon = Icon as typeof Logs
             return (
-              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[14px] hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
+              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[16px] font-semibold hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
                 <SupportIcon className="h-3.5 w-3.5" />
                 {!sidebarCollapsed && String(label)}
               </button>
@@ -905,20 +906,20 @@ export function SevenEightSixWorkspace() {
 
         <button type="button" onClick={startNewProject} className="m-2 flex items-center gap-3 rounded-xl border border-[#24324d] bg-[#10172a] p-2 text-left">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-500/25 text-sm font-bold text-violet-200">78</span>
-          {!sidebarCollapsed && <span><b className="block text-[14px]">New project</b><span className="text-[14px] text-slate-500">Start clean workspace</span></span>}
+          {!sidebarCollapsed && <span><b className="block text-[16px]">New project</b><span className="text-[14px] text-slate-500">Start clean workspace</span></span>}
         </button>
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[58px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
-          <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 lg:hidden" aria-label="786.Chat home">786</button>
+        <header className="flex h-[64px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
+          <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 xl:hidden" aria-label="786.Chat home">786</button>
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-5 w-5 place-items-center rounded border border-slate-600"><Circle className="h-2 w-2 fill-slate-300" /></span>
-            <p className="truncate text-[14px] font-bold">{project?.title || "Untitled application"}</p>
+            <p className="truncate text-[16px] font-bold">{project?.title || "Untitled application"}</p>
             {project && <span className="hidden rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[14px] uppercase text-violet-300 sm:inline">Live project</span>}
             <ChevronDown className="h-3 w-3 text-slate-500" />
           </div>
-          <div className="mx-auto hidden items-center gap-2 md:flex">
+          <div className="mx-auto hidden items-center gap-2 2xl:flex">
             <span className="rounded-lg border border-violet-400/15 bg-violet-500/10 px-3 py-1.5 text-[14px] font-semibold text-violet-200">
               {busy ? (
                 <span className="inline-flex items-center gap-2">
@@ -933,17 +934,17 @@ export function SevenEightSixWorkspace() {
               {codeDirty ? "○ Unsaved code" : visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-1 lg:hidden">
+          <div className="ml-auto flex items-center gap-1 xl:hidden">
             <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
             <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
           </div>
-          <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[14px] font-bold text-slate-200 disabled:opacity-40 lg:inline-flex">
+          <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[14px] font-bold text-slate-200 disabled:opacity-40 xl:inline-flex">
             <Undo2 className="h-3.5 w-3.5 text-amber-200" /> Undo
           </button>
-          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-40 lg:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-40 xl:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
             <Palette className="h-3.5 w-3.5 text-fuchsia-300" /> Design
           </button>
-          <button type="button" onClick={() => { setShowCode((value) => !value); setDesignOpen(false) }} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => { setShowCode((value) => !value); setDesignOpen(false) }} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold xl:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
           <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty || codeDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[14px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
@@ -951,13 +952,13 @@ export function SevenEightSixWorkspace() {
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 border-r border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-lg:!w-full ${mobileView === "agent" ? "flex" : "hidden"} lg:flex`}>
-            <div className="hidden min-h-0 w-[240px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex">
-              <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
+        <div className="flex min-h-0 flex-1 gap-2 p-2">
+          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
+            <div className="hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex">
+              <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
-                <div className="relative grid min-h-[340px] grid-rows-5">
-                  <div className="absolute bottom-[calc(20%-24px)] left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                <div className="relative grid min-h-[400px] grid-rows-5 gap-2">
+                  <div className="absolute bottom-10 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                   </div>
                   {stages.map((stage, index) => {
@@ -969,7 +970,7 @@ export function SevenEightSixWorkspace() {
                       currentStage > 0 &&
                       index === Math.min(currentStage - 1, stages.length - 1))
                   return (
-                    <div key={stage.label} className="relative flex min-h-0 items-start gap-3 last:mb-0">
+                    <div key={stage.label} className="relative flex min-h-[72px] items-start gap-4 last:mb-0">
                       <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
                         {isCurrent && (
                           <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
@@ -978,7 +979,7 @@ export function SevenEightSixWorkspace() {
                         {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
                       <div className="min-w-0 flex-1 pt-1.5">
-                        <p className={`text-[14px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
+                        <p className={`text-[16px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
                         <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{stage.detail}</p>
                       </div>
                     </div>
@@ -989,11 +990,11 @@ export function SevenEightSixWorkspace() {
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-10 items-center border-b border-[#1b2940] px-3 text-[14px] font-bold"><Sparkles className="mr-2 h-3.5 w-3.5 text-violet-300" />Agent Flow</div>
+              <div className="flex h-12 items-center border-b border-[#1b2940] px-4 text-[16px] font-bold"><Sparkles className="mr-2 h-3.5 w-3.5 text-violet-300" />Agent Flow</div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {messages.length === 0 ? (
                   <div className="rounded-xl border border-[#24324d] bg-[#10182b] p-4">
-                    <p className="text-[14px] font-bold text-violet-200">Start with a clear application brief</p>
+                    <p className="text-[16px] font-bold text-violet-200">Start with a clear application brief</p>
                     <p className="mt-2 text-[14px] leading-5 text-slate-400">Describe the application, pages, users, interactions, backend needs and visual direction. 786.Chat will analyse, plan, generate, validate and build it.</p>
                   </div>
                 ) : (
@@ -1006,7 +1007,7 @@ export function SevenEightSixWorkspace() {
                 )}
 
                 <div className="mt-2 overflow-hidden rounded-xl border border-[#263550] bg-[#0b1221]">
-                  <div className="border-b border-[#263550] px-3 py-2 text-[14px] font-bold">Implementation plan</div>
+                  <div className="border-b border-[#263550] px-4 py-3 text-[16px] font-bold">Implementation plan</div>
                   {planItems(project).map(([title, detail], index) => (
                     <div key={title} className="flex items-center gap-2 border-b border-[#1d2a41] px-3 py-2.5 last:border-0">
                       <span className={`grid h-4 w-4 place-items-center rounded-full border ${project ? "border-emerald-400 text-emerald-300" : "border-slate-600 text-slate-500"}`}>
@@ -1035,9 +1036,9 @@ export function SevenEightSixWorkspace() {
             <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => { drag.current = { x: event.clientX, width: agentWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none" }} className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize hover:bg-cyan-300/25" />
           </section>
 
-          <section className={`min-w-0 flex-1 flex-col bg-[#060b16]/78 backdrop-blur-xl ${mobileView === "preview" ? "flex" : "hidden"} lg:flex`}>
-            <div className="flex h-10 items-center border-b border-[#1b2940] px-3">
-              <span className="text-[14px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
+          <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#1b2940] bg-[#060b16]/78 backdrop-blur-xl ${mobileView === "preview" ? "flex" : "hidden"} xl:flex`}>
+            <div className="flex h-12 items-center border-b border-[#1b2940] px-4">
+              <span className="text-[16px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
               <div className="relative ml-auto">
                 {!showCode && (
                   <button type="button" onClick={() => setDeviceOpen((value) => !value)} className="inline-flex h-7 items-center gap-2 rounded-md border border-[#263550] bg-[#0c1424] px-3 text-[14px] font-bold text-slate-300">
@@ -1051,10 +1052,10 @@ export function SevenEightSixWorkspace() {
                     ))}
                     {device === "custom" && (
                       <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
-                        <label className="text-[13px] text-slate-500">Width
+                        <label className="text-[14px] text-slate-500">Width
                           <input type="number" min={280} max={2560} value={customDevice.width} onChange={(event) => setCustomDevice((value) => ({ ...value, width: Number(event.target.value) || 280 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[14px] text-white" />
                         </label>
-                        <label className="text-[13px] text-slate-500">Height
+                        <label className="text-[14px] text-slate-500">Height
                           <input type="number" min={480} max={1800} value={customDevice.height} onChange={(event) => setCustomDevice((value) => ({ ...value, height: Number(event.target.value) || 480 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[14px] text-white" />
                         </label>
                         <button type="button" onClick={() => setDeviceOpen(false)} className="col-span-2 rounded bg-violet-500/25 py-2 text-[14px] font-bold text-violet-100">Apply custom size</button>
@@ -1080,9 +1081,9 @@ export function SevenEightSixWorkspace() {
                   <div className="flex min-w-0 flex-col overflow-hidden">
                     <div className="flex h-10 shrink-0 items-center border-b border-[#263550] px-3">
                       <code className="min-w-0 flex-1 truncate text-[14px] text-cyan-100">{selectedFile}</code>
-                      {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[13px] font-bold text-amber-200">Unsaved</span>}
-                      <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[13px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
-                      <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[13px] font-black text-white disabled:opacity-35">
+                      {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[14px] font-bold text-amber-200">Unsaved</span>}
+                      <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[14px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
+                      <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[14px] font-black text-white disabled:opacity-35">
                         {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save &amp; rebuild
                       </button>
                     </div>
@@ -1298,7 +1299,7 @@ export function SevenEightSixWorkspace() {
           <section role="dialog" aria-modal="true" aria-labelledby="utility-panel-title" className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-violet-300/25 bg-[#09101f] shadow-[0_40px_120px_rgba(0,0,0,.75)]">
             <header className="flex shrink-0 items-center border-b border-[#263550] p-5">
               <div>
-                <p className="text-[13px] font-black uppercase tracking-[.18em] text-violet-300">786.Chat workspace</p>
+                <p className="text-[14px] font-black uppercase tracking-[.18em] text-violet-300">786.Chat workspace</p>
                 <h2 id="utility-panel-title" className="mt-1 text-xl font-black">{utilityPanel}</h2>
               </div>
               <button type="button" onClick={() => setUtilityPanel(null)} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10" aria-label={`Close ${utilityPanel}`}><X className="h-4 w-4" /></button>
@@ -1332,7 +1333,7 @@ export function SevenEightSixWorkspace() {
               {utilityPanel === "Integrations" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[["Neon", project ? "Connected" : "Ready"], ["Vercel", build?.status || "Not built"], ["GitHub", "Deployment source"], ["DeepSeek + Gemini", "Server-managed AI"]].map(([name, status]) => (
-                    <div key={name} className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><Plug className="h-4 w-4 text-violet-300" /><b className="mt-3 block text-[14px]">{name}</b><span className="mt-2 inline-block rounded-full bg-white/5 px-2 py-1 text-[13px] text-slate-400">{status}</span></div>
+                    <div key={name} className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><Plug className="h-4 w-4 text-violet-300" /><b className="mt-3 block text-[14px]">{name}</b><span className="mt-2 inline-block rounded-full bg-white/5 px-2 py-1 text-[14px] text-slate-400">{status}</span></div>
                   ))}
                 </div>
               )}
@@ -1468,7 +1469,7 @@ export function SevenEightSixWorkspace() {
                   <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/[.06] p-5">
                     <div className="flex flex-wrap items-center gap-3">
                       <div>
-                        <p className="text-[13px] font-black uppercase tracking-[.16em] text-cyan-300">Current production release</p>
+                        <p className="text-[14px] font-black uppercase tracking-[.16em] text-cyan-300">Current production release</p>
                         <h3 className="mt-2 text-xl font-black">Version {deploymentLifecycle.deployment.version}</h3>
                         <p className="mt-1 text-[14px] text-slate-400">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(deploymentLifecycle.deployment.published_at))}</p>
                       </div>
@@ -1528,18 +1529,18 @@ export function SevenEightSixWorkspace() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <b className="break-all text-[14px] text-cyan-200">{address}</b>
-                                {domain.is_primary && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[12px] font-black text-emerald-200">PRIMARY</span>}
+                                {domain.is_primary && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[14px] font-black text-emerald-200">PRIMARY</span>}
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-2 text-[13px] text-slate-400">
+                              <div className="mt-2 flex flex-wrap gap-2 text-[14px] text-slate-400">
                                 <span>DNS {domain.dns_status}</span><span>SSL {domain.ssl_status}</span><span>App {domain.status}</span>
                               </div>
                             </div>
                             {domain.address_type !== "path" && (
-                              <button type="button" onClick={() => void refreshDeploymentDomain(domain.id)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[13px] font-bold disabled:opacity-40"><RefreshCw className="h-3 w-3" /> Refresh DNS</button>
+                              <button type="button" onClick={() => void refreshDeploymentDomain(domain.id)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[14px] font-bold disabled:opacity-40"><RefreshCw className="h-3 w-3" /> Refresh DNS</button>
                             )}
                           </div>
                           {domain.dns_records?.map((record, index) => (
-                            <div key={record.type + "-" + index} className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[13px]">
+                            <div key={record.type + "-" + index} className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[14px]">
                               <b className="text-violet-200">{record.type}</b>
                               <span className="min-w-0 flex-1 break-all">{record.name} → {record.value}</span>
                               <button type="button" onClick={() => void navigator.clipboard.writeText(record.value)} aria-label="Copy DNS value"><Copy className="h-4 w-4" /></button>
@@ -1564,13 +1565,13 @@ export function SevenEightSixWorkspace() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <b className="text-[14px] capitalize">{release.action}</b>
-                              {isCurrent && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[12px] font-black text-emerald-200">CURRENT</span>}
-                              {release.restored_version && <span className="text-[13px] text-slate-500">restored v{release.restored_version}</span>}
+                              {isCurrent && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[14px] font-black text-emerald-200">CURRENT</span>}
+                              {release.restored_version && <span className="text-[14px] text-slate-500">restored v{release.restored_version}</span>}
                             </div>
-                            <p className="mt-1 text-[13px] text-slate-500">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(release.published_at))}</p>
+                            <p className="mt-1 text-[14px] text-slate-500">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(release.published_at))}</p>
                           </div>
                           {!isCurrent && (
-                            <button type="button" onClick={() => void rollbackDeploymentVersion(release.version)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[13px] font-black text-amber-100 disabled:opacity-40">
+                            <button type="button" onClick={() => void rollbackDeploymentVersion(release.version)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[14px] font-black text-amber-100 disabled:opacity-40">
                               {deploymentActionVersion === release.version ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />} Roll back
                             </button>
                           )}
