@@ -23,6 +23,14 @@ test("gateway requests include attribution, tags, privacy and plan budgets", () 
   assert.match(codegen, /maxOutputTokensForPlan\(input\.userPlan\)/)
 })
 
+test("builder code generation prefers connected direct provider keys before gateway", () => {
+  assert.match(codegen, /createDeepSeek/)
+  assert.match(codegen, /createGoogleGenerativeAI/)
+  assert.match(codegen, /DEEPSEEK_API_KEY/)
+  assert.match(codegen, /GOOGLE_GENERATIVE_AI_API_KEY/)
+  assert.match(codegen, /typeof model === "string"/)
+})
+
 test("governance enforces prompt, minute, daily, monthly and token limits", () => {
   assert.match(governance, /maxPromptCharacters/)
   assert.match(governance, /requestsPerMinute/)

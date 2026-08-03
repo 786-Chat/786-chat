@@ -1,5 +1,7 @@
 import "server-only"
 import { generateObject, type FilePart, type ImagePart, type TextPart } from "ai"
+import { createDeepSeek } from "@ai-sdk/deepseek"
+import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 
 import {
@@ -60,6 +62,23 @@ const ProjectSchema = z.object({
   reply: z.string().min(1),
   files: z.array(FileSchema).min(1),
 })
+
+function providerModel(modelName: string) {
+  if (modelName.startsWith("deepseek/") && process.env.DEEPSEEK_API_KEY?.trim()) {
+    const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY.trim() })
+    return deepseek(modelName.slice("deepseek/".length))
+  }
+
+  const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
+  if (modelName.startsWith("google/") && googleApiKey) {
+    const google = createGoogleGenerativeAI({ apiKey: googleApiKey })
+    return google(modelName.slice("google/".length))
+  }
+
+  // A string model identifier is intentionally retained when no direct key is
+  // present so Vercel AI Gateway remains a supported managed fallback.
+  return modelName
+}
 
 function pickModel(mode: CodegenMode, hasAttachments: boolean): {
   provider: "deepseek" | "gemini"
@@ -253,26 +272,29 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
 
   async function run(modelName: string, structuredRetry = false) {
     const prompt = structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt
+    const model = providerModel(modelName)
     const request = {
-      model: modelName,
+      model,
       schema: ProjectSchema,
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
       maxOutputTokens: maxOutputTokensForPlan(input.userPlan),
       maxRetries: 0,
       abortSignal: input.abortSignal,
-      providerOptions: {
-        gateway: {
-          user: input.userId || "anonymous-builder",
-          tags: [
-            "feature:builder-codegen",
-            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
-            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
-            ...(input.generationId ? [`generation:${input.generationId}`] : []),
-          ],
-          zeroDataRetention: true,
+      ...(typeof model === "string" ? {
+        providerOptions: {
+          gateway: {
+            user: input.userId || "anonymous-builder",
+            tags: [
+              "feature:builder-codegen",
+              `plan:${String(input.userPlan || "starter").toLowerCase()}`,
+              `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
+              ...(input.generationId ? [`generation:${input.generationId}`] : []),
+            ],
+            zeroDataRetention: true,
+          },
         },
-      },
+      } : {}),
     }
 
     if (attachments.length > 0) {
