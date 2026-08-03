@@ -1,5 +1,6 @@
 import type {
   BuilderBuild,
+  BuilderDeploymentLifecycle,
   BuilderDeploymentResult,
   BuilderMessage,
   BuilderProject,
@@ -7,37 +8,37 @@ import type {
   BuilderRevision,
   GenerationRequest,
   GenerationResult,
-} from "./contracts"
+} from "./contracts";
 import {
   normalizeVisualEditorState,
   type VisualEditorState,
-} from "@/lib/786-chat/visual-editor"
+} from "@/lib/786-chat/visual-editor";
 
 type StoredMessage = {
-  id: string
-  role: "user" | "assistant" | "system"
-  content: string
-  model?: string | null
-  reason?: string | null
-}
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  model?: string | null;
+  reason?: string | null;
+};
 
 type StoredProject = {
-  id: string
-  title: string
-  description: string
-  prompt: string
-  files?: Record<string, string>
-  preview_state?: Record<string, unknown>
-  metadata?: Record<string, unknown>
-  messages?: StoredMessage[]
-}
+  id: string;
+  title: string;
+  description: string;
+  prompt: string;
+  files?: Record<string, string>;
+  preview_state?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  messages?: StoredMessage[];
+};
 
 function errorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
-    const value = (payload as { error?: unknown }).error
-    if (typeof value === "string" && value.trim()) return value
+    const value = (payload as { error?: unknown }).error;
+    if (typeof value === "string" && value.trim()) return value;
   }
-  return fallback
+  return fallback;
 }
 
 function toMessage(message: StoredMessage): BuilderMessage {
@@ -47,7 +48,7 @@ function toMessage(message: StoredMessage): BuilderMessage {
     content: message.content,
     model: message.model,
     reason: message.reason,
-  }
+  };
 }
 
 function toProject(project: StoredProject): BuilderProject {
@@ -60,13 +61,13 @@ function toProject(project: StoredProject): BuilderProject {
     previewState: project.preview_state || {},
     metadata: project.metadata || {},
     visualEditor: normalizeVisualEditorState(project.metadata?.visual_editor),
-  }
+  };
 }
 
 export async function saveVisualEditorState(input: {
-  projectId: string
-  state: VisualEditorState
-  label: string
+  projectId: string;
+  state: VisualEditorState;
+  label: string;
 }) {
   const response = await fetch(
     `/api/786-chat/projects/${input.projectId}/visual-editor`,
@@ -75,32 +76,32 @@ export async function saveVisualEditorState(input: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ state: input.state, label: input.label }),
     },
-  )
+  );
   const payload = (await response.json().catch(() => ({}))) as {
-    project?: StoredProject
-    state?: VisualEditorState
-    error?: string
-  }
+    project?: StoredProject;
+    state?: VisualEditorState;
+    error?: string;
+  };
   if (!response.ok || !payload.project) {
-    throw new Error(payload.error || "Visual edit could not be saved.")
+    throw new Error(payload.error || "Visual edit could not be saved.");
   }
-  return toProject(payload.project)
+  return toProject(payload.project);
 }
 
 export async function loadBuilderProject(projectId: string) {
   const response = await fetch(`/api/786-chat/projects/${projectId}`, {
     cache: "no-store",
-  })
+  });
   const payload = (await response.json().catch(() => ({}))) as {
-    project?: StoredProject
-  }
+    project?: StoredProject;
+  };
   if (!response.ok || !payload.project) {
-    throw new Error(errorMessage(payload, "Could not load this project."))
+    throw new Error(errorMessage(payload, "Could not load this project."));
   }
   return {
     project: toProject(payload.project),
     messages: (payload.project.messages || []).map(toMessage),
-  }
+  };
 }
 
 export async function generateBuilderProject(request: GenerationRequest) {
@@ -108,17 +109,21 @@ export async function generateBuilderProject(request: GenerationRequest) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...request, mode: "auto" }),
-  })
-  const payload = (await response.json().catch(() => ({}))) as Partial<GenerationResult> & {
-    success?: boolean
-    validation?: { errors?: string[] }
-  }
+  });
+  const payload = (await response
+    .json()
+    .catch(() => ({}))) as Partial<GenerationResult> & {
+    success?: boolean;
+    validation?: { errors?: string[] };
+  };
   if (!response.ok || !payload.success || !payload.project) {
-    const validationErrors = payload.validation?.errors?.filter(Boolean) || []
+    const validationErrors = payload.validation?.errors?.filter(Boolean) || [];
     const detail = validationErrors.length
       ? ` Missing: ${validationErrors.slice(0, 4).join("; ")}`
-      : ""
-    throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
+      : "";
+    throw new Error(
+      `${errorMessage(payload, "Project generation failed.")}${detail}`,
+    );
   }
   return {
     response: payload.response || `Created ${payload.project.title}`,
@@ -128,17 +133,17 @@ export async function generateBuilderProject(request: GenerationRequest) {
     plan: payload.plan as Record<string, unknown> | undefined,
     validation: payload.validation as Record<string, unknown> | undefined,
     project: payload.project,
-  } satisfies GenerationResult
+  } satisfies GenerationResult;
 }
 
 export async function saveBuilderProject(input: {
-  currentProjectId: string | null
-  userPrompt: string
-  generated: GenerationResult
+  currentProjectId: string | null;
+  userPrompt: string;
+  generated: GenerationResult;
 }) {
   const activeFile = input.generated.project.files["app/page.tsx"]
     ? "app/page.tsx"
-    : Object.keys(input.generated.project.files)[0] || "app/page.tsx"
+    : Object.keys(input.generated.project.files)[0] || "app/page.tsx";
   const response = await fetch(
     input.currentProjectId
       ? `/api/786-chat/projects/${input.currentProjectId}`
@@ -173,14 +178,16 @@ export async function saveBuilderProject(input: {
         ],
       }),
     },
-  )
+  );
   const payload = (await response.json().catch(() => ({}))) as {
-    project?: StoredProject
-  }
+    project?: StoredProject;
+  };
   if (!response.ok || !payload.project) {
-    throw new Error(errorMessage(payload, "Generated files could not be saved."))
+    throw new Error(
+      errorMessage(payload, "Generated files could not be saved."),
+    );
   }
-  return toProject(payload.project)
+  return toProject(payload.project);
 }
 
 export async function queueBuilderBuild(projectId: string) {
@@ -188,122 +195,196 @@ export async function queueBuilderBuild(projectId: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confirm: true }),
-  })
+  });
   const payload = (await response.json().catch(() => ({}))) as {
-    build?: BuilderBuild
-    validation?: unknown
-    error?: string
-  }
+    build?: BuilderBuild;
+    validation?: unknown;
+    error?: string;
+  };
   if (!response.ok || !payload.build) {
-    const validation = payload.validation as { errors?: Array<{ message?: string; path?: string }> } | undefined
+    const validation = payload.validation as
+      | { errors?: Array<{ message?: string; path?: string }> }
+      | undefined;
     const detail = validation?.errors?.length
-      ? ` Missing: ${validation.errors.slice(0, 4).map((issue) =>
-          `${issue.path ? `${issue.path}: ` : ""}${issue.message || "Invalid build input"}`,
-        ).join("; ")}`
-      : ""
-    throw new Error(`${payload.error || "Project could not be queued for build."}${detail}`)
+      ? ` Missing: ${validation.errors
+          .slice(0, 4)
+          .map(
+            (issue) =>
+              `${issue.path ? `${issue.path}: ` : ""}${issue.message || "Invalid build input"}`,
+          )
+          .join("; ")}`
+      : "";
+    throw new Error(
+      `${payload.error || "Project could not be queued for build."}${detail}`,
+    );
   }
-  return payload.build
+  return payload.build;
 }
 
 export async function loadBuilderBuild(projectId: string) {
   const response = await fetch(`/api/786-chat/projects/${projectId}/build`, {
     cache: "no-store",
-  })
+  });
   const payload = (await response.json().catch(() => ({}))) as {
-    build?: BuilderBuild | null
-    error?: string
-  }
-  if (!response.ok) throw new Error(payload.error || "Build status could not be loaded.")
-  return payload.build || null
+    build?: BuilderBuild | null;
+    error?: string;
+  };
+  if (!response.ok)
+    throw new Error(payload.error || "Build status could not be loaded.");
+  return payload.build || null;
 }
 
 export async function listBuilderProjects(): Promise<BuilderProjectSummary[]> {
-  const response = await fetch("/api/786-chat/projects", { cache: "no-store" })
+  const response = await fetch("/api/786-chat/projects", { cache: "no-store" });
   const payload = (await response.json().catch(() => ({}))) as {
-    projects?: BuilderProjectSummary[]
-    error?: string
-  }
-  if (!response.ok) throw new Error(payload.error || "Projects could not be loaded.")
-  return payload.projects || []
+    projects?: BuilderProjectSummary[];
+    error?: string;
+  };
+  if (!response.ok)
+    throw new Error(payload.error || "Projects could not be loaded.");
+  return payload.projects || [];
 }
 
 export async function deleteBuilderProject(projectId: string) {
   const response = await fetch(`/api/786-chat/projects/${projectId}`, {
     method: "DELETE",
-  })
+  });
   const payload = (await response.json().catch(() => ({}))) as {
-    success?: boolean
-    error?: string
-  }
+    success?: boolean;
+    error?: string;
+  };
   if (!response.ok || !payload.success) {
-    throw new Error(payload.error || "Project could not be deleted.")
+    throw new Error(payload.error || "Project could not be deleted.");
   }
 }
 
-export async function listBuilderRevisions(projectId: string): Promise<BuilderRevision[]> {
-  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions`, {
-    cache: "no-store",
-  })
+export async function listBuilderRevisions(
+  projectId: string,
+): Promise<BuilderRevision[]> {
+  const response = await fetch(
+    `/api/786-chat/projects/${projectId}/revisions`,
+    {
+      cache: "no-store",
+    },
+  );
   const payload = (await response.json().catch(() => ({}))) as {
-    revisions?: BuilderRevision[]
-    error?: string
-  }
-  if (!response.ok) throw new Error(payload.error || "Revisions could not be loaded.")
-  return payload.revisions || []
+    revisions?: BuilderRevision[];
+    error?: string;
+  };
+  if (!response.ok)
+    throw new Error(payload.error || "Revisions could not be loaded.");
+  return payload.revisions || [];
 }
 
-export async function createBuilderRevision(projectId: string, label = "Manual checkpoint") {
-  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ label, source: "manual" }),
-  })
+export async function createBuilderRevision(
+  projectId: string,
+  label = "Manual checkpoint",
+) {
+  const response = await fetch(
+    `/api/786-chat/projects/${projectId}/revisions`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, source: "manual" }),
+    },
+  );
   const payload = (await response.json().catch(() => ({}))) as {
-    revision?: BuilderRevision
-    error?: string
-  }
+    revision?: BuilderRevision;
+    error?: string;
+  };
   if (!response.ok || !payload.revision) {
-    throw new Error(payload.error || "Revision could not be created.")
+    throw new Error(payload.error || "Revision could not be created.");
   }
-  return payload.revision
+  return payload.revision;
 }
 
-export async function restoreBuilderRevision(projectId: string, revisionId: string) {
+export async function restoreBuilderRevision(
+  projectId: string,
+  revisionId: string,
+) {
   const response = await fetch(
     `/api/786-chat/projects/${projectId}/revisions/${revisionId}/restore`,
     { method: "POST" },
-  )
+  );
   const payload = (await response.json().catch(() => ({}))) as {
-    project?: StoredProject
-    error?: string
-  }
+    project?: StoredProject;
+    error?: string;
+  };
   if (!response.ok || !payload.project) {
-    throw new Error(payload.error || "Revision could not be restored.")
+    throw new Error(payload.error || "Revision could not be restored.");
   }
   return {
     project: toProject(payload.project),
     messages: (payload.project.messages || []).map(toMessage),
+  };
+}
+
+async function deploymentAction(
+  projectId: string,
+  body: Record<string, unknown>,
+): Promise<BuilderDeploymentResult> {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/deploy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = (await response
+    .json()
+    .catch(() => ({}))) as Partial<BuilderDeploymentResult> & {
+    error?: string;
+  };
+  if (!response.ok || !payload.url || !payload.domain) {
+    throw new Error(payload.error || "Deployment action failed.");
   }
+  return payload as BuilderDeploymentResult;
+}
+
+export async function loadBuilderDeploymentLifecycle(
+  projectId: string,
+): Promise<BuilderDeploymentLifecycle> {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/deploy`, {
+    cache: "no-store",
+  });
+  const payload = (await response
+    .json()
+    .catch(() => ({}))) as Partial<BuilderDeploymentLifecycle> & {
+    error?: string;
+  };
+  if (!response.ok)
+    throw new Error(payload.error || "Deployment history could not be loaded.");
+  return {
+    deployment: payload.deployment || null,
+    domains: payload.domains || [],
+    history: payload.history || [],
+  };
 }
 
 export async function deployBuilderProject(input: {
-  projectId: string
-  addressType: "path" | "subdomain" | "custom"
-  addressValue: string
-}): Promise<BuilderDeploymentResult> {
-  const response = await fetch(`/api/786-chat/projects/${input.projectId}/deploy`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      addressType: input.addressType,
-      addressValue: input.addressValue,
-    }),
-  })
-  const payload = (await response.json().catch(() => ({}))) as
-    Partial<BuilderDeploymentResult> & { error?: string }
-  if (!response.ok || !payload.url || !payload.domain) {
-    throw new Error(payload.error || "Verified deployment could not be created.")
-  }
-  return payload as BuilderDeploymentResult
+  projectId: string;
+  addressType: "path" | "subdomain" | "custom";
+  addressValue: string;
+}) {
+  return deploymentAction(input.projectId, {
+    action: "deploy",
+    addressType: input.addressType,
+    addressValue: input.addressValue,
+  });
+}
+
+export async function redeployBuilderProject(projectId: string) {
+  return deploymentAction(projectId, { action: "redeploy" });
+}
+
+export async function rollbackBuilderDeployment(
+  projectId: string,
+  version: number,
+) {
+  return deploymentAction(projectId, { action: "rollback", version });
+}
+
+export async function refreshBuilderDomain(
+  projectId: string,
+  domainId: string,
+) {
+  return deploymentAction(projectId, { action: "refresh-domain", domainId });
 }
