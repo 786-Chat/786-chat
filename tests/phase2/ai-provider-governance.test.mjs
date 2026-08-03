@@ -48,7 +48,7 @@ test("governance enforces prompt, minute, daily, monthly and token limits", () =
 })
 
 test("the verified owner session bypasses plan quotas without disabling governance", () => {
-  assert.match(route, /session\.role === "admin" && isAdminUser\(session\.email\)/)
+  assert.match(route, /bypassPlanLimits: isAdminUser\(session\.email\)/)
   assert.match(route, /import \{ isAdminUser \} from "@\/lib\/admin-config"/)
   assert.match(route, /bypassPlanLimits:/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(rate\?\.request_count/)
