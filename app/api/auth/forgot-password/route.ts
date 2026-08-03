@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { ensureAccountSecuritySchema, issueAuthToken } from "@/lib/account-security"
 import { sql } from "@/lib/db"
 import { sendAccountEmail } from "@/lib/transactional-email"
+import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
 
 const MESSAGE = "If an active account exists for this email, a password-reset link has been sent."
 
@@ -11,6 +12,16 @@ export async function POST(request: Request) {
   const email = String(body.email || "").trim().toLowerCase()
   if (!email) return NextResponse.json({ error: "Email is required." }, { status: 400 })
   try {
+    const limit = await consumeSecurityRateLimit({
+      namespace: "auth-forgot-password",
+      identifier: `${requestIdentifier(request)}:${email}`,
+      limit: 5,
+      windowSeconds: 60 * 60,
+    })
+    if (!limit.allowed) {
+      const response = rateLimitResponse(limit)
+      return NextResponse.json(response.body, { status: response.status, headers: response.headers })
+    }
     await ensureAccountSecuritySchema()
     const rows = (await sql`
       SELECT id, name FROM users

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth"
 import { deleteProject, getProjectWithData } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
 import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
+import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -43,6 +44,13 @@ export async function PATCH(request: Request, { params }: Context) {
     return NextResponse.json({
       error: "Generated files no longer match the analysed project specification.",
       validation,
+    }, { status: 422 })
+  }
+  const securityValidation = validateGeneratedSecurity(files)
+  if (!securityValidation.valid) {
+    return NextResponse.json({
+      error: "The edited source contains unsafe code, dependencies or credentials.",
+      securityValidation,
     }, { status: 422 })
   }
   try {

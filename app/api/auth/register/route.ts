@@ -4,6 +4,7 @@ import { ensureAccountSecuritySchema, isStrongPassword, issueAuthToken } from "@
 import { hashPassword } from "@/lib/auth"
 import { sql } from "@/lib/db"
 import { sendAccountEmail } from "@/lib/transactional-email"
+import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
 
 export async function POST(request: Request) {
   try {
@@ -15,6 +16,15 @@ export async function POST(request: Request) {
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
+    }
+    const limits = await Promise.all([
+      consumeSecurityRateLimit({ namespace: "auth-register-ip", identifier: requestIdentifier(request), limit: 20, windowSeconds: 60 * 60 }),
+      consumeSecurityRateLimit({ namespace: "auth-register-account", identifier: email, limit: 5, windowSeconds: 60 * 60 }),
+    ])
+    const blocked = limits.find((limit) => !limit.allowed)
+    if (blocked) {
+      const response = rateLimitResponse(blocked)
+      return NextResponse.json(response.body, { status: response.status, headers: response.headers })
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "Invalid email address" }, { status: 400 })

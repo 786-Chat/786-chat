@@ -31,20 +31,53 @@ export interface UsageContext {
   imageCount?: number
 }
 
-/**
- * Main protection check - call this before processing any AI request
- * DISABLED FOR TESTING - Always allows requests
- */
+/** Main protection check - call this before processing any AI request. */
 export async function checkAIProtection(ctx: UsageContext): Promise<ProtectionResult> {
-  // TESTING MODE: Always allow all requests
-  return {
-    allowed: true,
-    remaining: {
-      dailyMessages: 9999,
-      monthlyMessages: 9999,
-      extraCredits: 9999,
-    },
-    canUseExtraCredits: false,
+  try {
+    if (ctx.fileSize !== undefined && ctx.fileType) {
+      const file = checkFileLimits(ctx.fileSize, ctx.fileType, ctx.pdfPages)
+      if (!file.allowed) return file
+    }
+
+    if (!ctx.messageContent) return { allowed: true }
+
+    const message = checkMessageLimits(ctx.messageContent)
+    if (!message.allowed) return message
+
+    for (const check of [
+      () => checkUserBlocked(ctx.userId),
+      () => checkRateLimit(ctx.userId),
+      () => checkSpamPatterns(ctx.userId, ctx.messageContent || ""),
+      () => checkUsageLimits(ctx),
+    ]) {
+      const result = await check()
+      if (!result.allowed) return result
+    }
+
+    const budget = await checkBudgetLimits()
+    if (budget.exceeded) {
+      return {
+        allowed: false,
+        error: "AI generation is temporarily paused because the platform safety budget was reached.",
+        errorCode: "PLATFORM_BUDGET_REACHED",
+        retryAfter: 3600,
+      }
+    }
+
+    const remaining = await getRemainingUsage(ctx.userId, ctx.plan)
+    return {
+      allowed: true,
+      remaining,
+      canUseExtraCredits: remaining.monthlyMessages <= 0 && remaining.extraCredits > 0,
+    }
+  } catch (error) {
+    console.error("[AI Protection] Protection check failed", error)
+    return {
+      allowed: false,
+      error: "AI safety checks are temporarily unavailable. Please try again.",
+      errorCode: "PROTECTION_UNAVAILABLE",
+      retryAfter: 30,
+    }
   }
 }
 

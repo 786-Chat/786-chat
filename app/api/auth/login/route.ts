@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { ensureAccountSecuritySchema } from "@/lib/account-security"
 import { createToken, setAuthCookie, verifyPassword } from "@/lib/auth"
 import { sql } from "@/lib/db"
+import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
 
 function isNeonQuotaError(message: string) {
   const lower = message.toLowerCase()
@@ -18,6 +19,15 @@ export async function POST(request: Request) {
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
+    }
+    const limits = await Promise.all([
+      consumeSecurityRateLimit({ namespace: "auth-login-ip", identifier: requestIdentifier(request), limit: 30, windowSeconds: 15 * 60 }),
+      consumeSecurityRateLimit({ namespace: "auth-login-account", identifier: email, limit: 10, windowSeconds: 15 * 60 }),
+    ])
+    const blocked = limits.find((limit) => !limit.allowed)
+    if (blocked) {
+      const response = rateLimitResponse(blocked)
+      return NextResponse.json(response.body, { status: response.status, headers: response.headers })
     }
 
     const users = (await sql`
