@@ -64,8 +64,20 @@ const ProjectSchema = z.object({
   files: z.array(FileSchema).min(1),
 })
 
-function providerModel(modelName: string) {
-  if (modelName.startsWith("deepseek/") && process.env.DEEPSEEK_API_KEY?.trim()) {
+function gatewayConfigured() {
+  return Boolean(
+    process.env.AI_GATEWAY_API_KEY?.trim() ||
+    process.env.VERCEL_OIDC_TOKEN?.trim() ||
+    process.env.VERCEL === "1",
+  )
+}
+
+function providerModel(modelName: string, forceGateway = false) {
+  if (
+    !forceGateway &&
+    modelName.startsWith("deepseek/") &&
+    process.env.DEEPSEEK_API_KEY?.trim()
+  ) {
     const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY.trim() })
     // Vercel AI Gateway exposes versioned DeepSeek routing IDs, while the
     // direct DeepSeek API documents the stable deepseek-chat alias. Keeping
@@ -275,9 +287,9 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     return content
   }
 
-  async function run(modelName: string, structuredRetry = false) {
+  async function run(modelName: string, structuredRetry = false, forceGateway = false) {
     const prompt = structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt
-    const model = providerModel(modelName)
+    const model = providerModel(modelName, forceGateway)
     const request = {
       model,
       schema: ProjectSchema,
@@ -337,8 +349,14 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       }
     } else {
       if (!isStructuredOutputError(firstError)) throw firstError
-      usedReason = `${picked.reason} The first structured response could not be parsed, so generation retried once with stricter output rules.`
-      result = await run(usedModel, true)
+      const retryThroughGateway =
+        picked.provider === "deepseek" &&
+        Boolean(process.env.DEEPSEEK_API_KEY?.trim()) &&
+        gatewayConfigured()
+      usedReason = retryThroughGateway
+        ? `${picked.reason} The direct DeepSeek response could not be parsed, so generation retried through the Vercel AI Gateway with stricter output rules.`
+        : `${picked.reason} The first structured response could not be parsed, so generation retried once with stricter output rules.`
+      result = await run(usedModel, true, retryThroughGateway)
     }
   }
 
