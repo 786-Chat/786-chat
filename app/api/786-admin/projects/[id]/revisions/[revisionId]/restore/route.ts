@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import {
   createProjectRevision,
   restoreProjectRevision,
 } from "@/lib/786-admin/project-revisions"
 import { getProjectWithData } from "@/lib/786-admin/projects"
 
-async function requireAdminEmail(): Promise<string | null> {
+async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
   const email = session?.email
-  if (!isAdminUser(email)) return null
-  return email!.toLowerCase().trim()
+  if (!email) return null
+  return email.toLowerCase().trim()
 }
 
 type Ctx = { params: Promise<{ id: string; revisionId: string }> }
 
 export async function POST(_request: Request, { params }: Ctx) {
-  const email = await requireAdminEmail()
+  const email = await requireOwnerEmail()
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id, revisionId } = await params

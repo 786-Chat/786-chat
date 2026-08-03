@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server"
 
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import { listProjects } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
 import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
 
 async function ownerEmail() {
   const session = await getSession()
-  return isAdminUser(session?.email) ? session!.email!.toLowerCase().trim() : null
+  return session?.email ? session.email.toLowerCase().trim() : null
 }
 
 export async function GET() {

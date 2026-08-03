@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import {
   createProjectRevision,
   listProjectRevisions,
 } from "@/lib/786-admin/project-revisions"
 
-async function requireAdminEmail(): Promise<string | null> {
+async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
   const email = session?.email
-  if (!isAdminUser(email)) return null
-  return email!.toLowerCase().trim()
+  if (!email) return null
+  return email.toLowerCase().trim()
 }
 
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function GET(request: Request, { params }: Ctx) {
-  const email = await requireAdminEmail()
+  const email = await requireOwnerEmail()
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
@@ -26,7 +25,7 @@ export async function GET(request: Request, { params }: Ctx) {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
-  const email = await requireAdminEmail()
+  const email = await requireOwnerEmail()
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params

@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
@@ -10,11 +9,11 @@ import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibili
 
 type Ctx = { params: Promise<{ id: string }> }
 
-async function requireAdminEmail(): Promise<string | null> {
+async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
   const email = session?.email
-  if (!isAdminUser(email)) return null
-  return email!.toLowerCase().trim()
+  if (!email) return null
+  return email.toLowerCase().trim()
 }
 
 function sourceVersion(files: Record<string, string>): string {
@@ -27,7 +26,7 @@ function sourceVersion(files: Record<string, string>): string {
 }
 
 export async function GET(_request: Request, { params }: Ctx) {
-  const email = await requireAdminEmail()
+  const email = await requireOwnerEmail()
   if (!email) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
   }
@@ -50,7 +49,7 @@ export async function GET(_request: Request, { params }: Ctx) {
 }
 
 export async function POST(request: Request, { params }: Ctx) {
-  const email = await requireAdminEmail()
+  const email = await requireOwnerEmail()
   if (!email) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
   }

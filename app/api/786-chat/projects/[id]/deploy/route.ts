@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import {
   createHostedDomain,
   createPathDomain,
@@ -13,10 +12,10 @@ type Context = { params: Promise<{ id: string }> }
 
 export async function POST(request: Request, { params }: Context) {
   const session = await getSession()
-  if (!isAdminUser(session?.email)) {
+  if (!session?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  const ownerEmail = session!.email!.toLowerCase().trim()
+  const ownerEmail = session.email.toLowerCase().trim()
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as {
     addressType?: unknown
