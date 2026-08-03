@@ -47,6 +47,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { useAuth } from "@/contexts/auth-context"
+import { AnimatedWorldBackground } from "@/components/launch/animated-world-background"
 import {
   generateBuilderProject,
   createBuilderRevision,
@@ -156,7 +157,7 @@ export function SevenEightSixWorkspace() {
   const [customDevice, setCustomDevice] = useState({ width: 960, height: 720 })
   const [utilityPanel, setUtilityPanel] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [agentWidth, setAgentWidth] = useState(730)
+  const [agentWidth, setAgentWidth] = useState(760)
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
@@ -241,8 +242,9 @@ export function SevenEightSixWorkspace() {
   useEffect(() => {
     const move = (event: PointerEvent) => {
       if (!drag.current) return
-      const max = Math.max(520, window.innerWidth - 520)
-      setAgentWidth(Math.max(520, Math.min(max, drag.current.width + event.clientX - drag.current.x)))
+      const minimum = 660
+      const max = Math.max(minimum, window.innerWidth - 520)
+      setAgentWidth(Math.max(minimum, Math.min(max, drag.current.width + event.clientX - drag.current.x)))
     }
     const stop = () => {
       drag.current = null
@@ -835,11 +837,12 @@ export function SevenEightSixWorkspace() {
   }
 
   return (
-    <main className="relative flex h-screen min-w-0 overflow-hidden bg-[#050813] text-slate-100">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_4%,rgba(124,58,237,.12),transparent_26%),radial-gradient(circle_at_75%_0%,rgba(14,165,233,.08),transparent_28%)]" />
+    <main className="relative flex h-screen min-w-0 overflow-hidden bg-[#02040f] font-sans text-slate-100 antialiased">
+      <AnimatedWorldBackground intensity="subtle" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_16%_4%,rgba(124,58,237,.12),transparent_26%),radial-gradient(circle_at_75%_0%,rgba(14,165,233,.08),transparent_28%)]" />
 
-      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18] transition-[width] lg:flex ${sidebarCollapsed ? "w-[70px]" : "w-[176px]"}`}>
-        <div className="flex h-[58px] items-center gap-3 border-b border-[#1b2940] px-4">
+      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] xl:flex ${sidebarCollapsed ? "w-[72px]" : "w-[216px]"}`}>
+        <div className="flex h-[64px] items-center gap-3 border-b border-[#1b2940] px-4">
           <button
             type="button"
             onClick={() => setSidebarCollapsed((value) => !value)}
@@ -861,7 +864,7 @@ export function SevenEightSixWorkspace() {
             return (
               <div key={item.label}>
                 {index === 2 && !sidebarCollapsed && (
-                  <p className="mb-2 mt-5 px-2 text-[13px] font-bold uppercase tracking-[.16em] text-slate-600">Project</p>
+                  <p className="mb-2 mt-5 px-2 text-[14px] font-bold uppercase tracking-[.16em] text-slate-500">Project</p>
                 )}
                 <button
                   type="button"
@@ -873,7 +876,7 @@ export function SevenEightSixWorkspace() {
                       setUtilityPanel(item.label)
                     }
                   }}
-                  className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[13px] transition ${
+                  className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[16px] font-semibold transition ${
                     sidebarCollapsed ? "justify-center" : "gap-3 px-2"
                   } ${(item.label === "Agent Flow" && !utilityPanel) || item.label === utilityPanel ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
                 >
@@ -885,7 +888,7 @@ export function SevenEightSixWorkspace() {
             )
           })}
           {!sidebarCollapsed && (
-            <p className="mb-2 mt-7 px-2 text-[13px] font-bold uppercase tracking-[.16em] text-slate-600">Support</p>
+            <p className="mb-2 mt-7 px-2 text-[14px] font-bold uppercase tracking-[.16em] text-slate-500">Support</p>
           )}
           {[
             ["Logs", Logs],
@@ -893,7 +896,7 @@ export function SevenEightSixWorkspace() {
           ].map(([label, Icon]) => {
             const SupportIcon = Icon as typeof Logs
             return (
-              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[13px] hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
+              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[16px] font-semibold hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
                 <SupportIcon className="h-3.5 w-3.5" />
                 {!sidebarCollapsed && String(label)}
               </button>
@@ -903,21 +906,21 @@ export function SevenEightSixWorkspace() {
 
         <button type="button" onClick={startNewProject} className="m-2 flex items-center gap-3 rounded-xl border border-[#24324d] bg-[#10172a] p-2 text-left">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-500/25 text-sm font-bold text-violet-200">78</span>
-          {!sidebarCollapsed && <span><b className="block text-[14px]">New project</b><span className="text-[13px] text-slate-500">Start clean workspace</span></span>}
+          {!sidebarCollapsed && <span><b className="block text-[16px]">New project</b><span className="text-[14px] text-slate-500">Start clean workspace</span></span>}
         </button>
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[58px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
-          <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 lg:hidden" aria-label="786.Chat home">786</button>
+        <header className="flex h-[64px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
+          <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 xl:hidden" aria-label="786.Chat home">786</button>
           <div className="flex min-w-0 items-center gap-2">
             <span className="grid h-5 w-5 place-items-center rounded border border-slate-600"><Circle className="h-2 w-2 fill-slate-300" /></span>
-            <p className="truncate text-[13px] font-bold">{project?.title || "Untitled application"}</p>
+            <p className="truncate text-[16px] font-bold">{project?.title || "Untitled application"}</p>
             {project && <span className="hidden rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[14px] uppercase text-violet-300 sm:inline">Live project</span>}
             <ChevronDown className="h-3 w-3 text-slate-500" />
           </div>
-          <div className="mx-auto hidden items-center gap-2 md:flex">
-            <span className="rounded-lg border border-violet-400/15 bg-violet-500/10 px-3 py-1.5 text-[13px] font-semibold text-violet-200">
+          <div className="mx-auto hidden items-center gap-2 2xl:flex">
+            <span className="rounded-lg border border-violet-400/15 bg-violet-500/10 px-3 py-1.5 text-[14px] font-semibold text-violet-200">
               {busy ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -927,35 +930,35 @@ export function SevenEightSixWorkspace() {
                 <>✦ {project ? "Design generated" : "Ready to analyse"}</>
               )}
             </span>
-            <span className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
+            <span className={`rounded-lg border px-3 py-1.5 text-[14px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
               {codeDirty ? "○ Unsaved code" : visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-1 lg:hidden">
-            <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
-            <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
+          <div className="ml-auto flex items-center gap-1 xl:hidden">
+            <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
+            <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
           </div>
-          <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[12px] font-bold text-slate-200 disabled:opacity-40 lg:inline-flex">
+          <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[14px] font-bold text-slate-200 disabled:opacity-40 xl:inline-flex">
             <Undo2 className="h-3.5 w-3.5 text-amber-200" /> Undo
           </button>
-          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold disabled:opacity-40 lg:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-40 xl:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
             <Palette className="h-3.5 w-3.5 text-fuchsia-300" /> Design
           </button>
-          <button type="button" onClick={() => { setShowCode((value) => !value); setDesignOpen(false) }} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => { setShowCode((value) => !value); setDesignOpen(false) }} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[14px] font-bold xl:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty || codeDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
+          <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty || codeDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[14px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
             <Rocket className="h-3.5 w-3.5" /><span className="hidden sm:inline">Deploy</span><ChevronDown className="hidden h-3 w-3 sm:block" />
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 border-r border-[#1b2940] bg-[#080e1c]/90 max-lg:!w-full ${mobileView === "agent" ? "flex" : "hidden"} lg:flex`}>
-            <div className="hidden min-h-0 w-[210px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] px-4 py-4 sm:flex">
-              <p className="mb-4 flex shrink-0 items-center gap-2 text-[14px] font-bold text-violet-200"><Sparkles className="h-3.5 w-3.5" /> AI Agent</p>
+        <div className="flex min-h-0 flex-1 gap-2 p-2">
+          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
+            <div className="hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex">
+              <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
               <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
-                <div className="relative grid min-h-[340px] grid-rows-5">
-                  <div className="absolute bottom-[calc(20%-24px)] left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                <div className="relative grid min-h-[400px] grid-rows-5 gap-2">
+                  <div className="absolute bottom-10 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                   </div>
                   {stages.map((stage, index) => {
@@ -967,7 +970,7 @@ export function SevenEightSixWorkspace() {
                       currentStage > 0 &&
                       index === Math.min(currentStage - 1, stages.length - 1))
                   return (
-                    <div key={stage.label} className="relative flex min-h-0 items-start gap-3 last:mb-0">
+                    <div key={stage.label} className="relative flex min-h-[72px] items-start gap-4 last:mb-0">
                       <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
                         {isCurrent && (
                           <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
@@ -976,8 +979,8 @@ export function SevenEightSixWorkspace() {
                         {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
                       <div className="min-w-0 flex-1 pt-1.5">
-                        <p className={`text-[14px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
-                        <p className="mt-1 break-words text-[12px] leading-[14px] text-slate-600">{stage.detail}</p>
+                        <p className={`text-[16px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
+                        <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{stage.detail}</p>
                       </div>
                     </div>
                   )
@@ -987,30 +990,30 @@ export function SevenEightSixWorkspace() {
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex h-10 items-center border-b border-[#1b2940] px-3 text-[14px] font-bold"><Sparkles className="mr-2 h-3.5 w-3.5 text-violet-300" />Agent Flow</div>
+              <div className="flex h-12 items-center border-b border-[#1b2940] px-4 text-[16px] font-bold"><Sparkles className="mr-2 h-3.5 w-3.5 text-violet-300" />Agent Flow</div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {messages.length === 0 ? (
                   <div className="rounded-xl border border-[#24324d] bg-[#10182b] p-4">
-                    <p className="text-[12px] font-bold text-violet-200">Start with a clear application brief</p>
-                    <p className="mt-2 text-[12px] leading-5 text-slate-400">Describe the application, pages, users, interactions, backend needs and visual direction. 786.Chat will analyse, plan, generate, validate and build it.</p>
+                    <p className="text-[16px] font-bold text-violet-200">Start with a clear application brief</p>
+                    <p className="mt-2 text-[14px] leading-5 text-slate-400">Describe the application, pages, users, interactions, backend needs and visual direction. 786.Chat will analyse, plan, generate, validate and build it.</p>
                   </div>
                 ) : (
                   messages.map((message) => (
                     <article key={message.id} className={`mb-2 rounded-xl border p-3 ${message.role === "user" ? "border-[#2b3b5d] bg-[#111a2e]" : "border-violet-400/20 bg-violet-500/[.07]"}`}>
-                      <p className="mb-2 text-[13px] font-bold text-slate-300">{message.role === "user" ? "● You" : "✦ AI Agent"}</p>
-                      <p className="whitespace-pre-wrap text-[12px] leading-5 text-slate-400">{message.content}</p>
+                      <p className="mb-2 text-[14px] font-bold text-slate-300">{message.role === "user" ? "● You" : "✦ AI Agent"}</p>
+                      <p className="whitespace-pre-wrap text-[14px] leading-5 text-slate-400">{message.content}</p>
                     </article>
                   ))
                 )}
 
                 <div className="mt-2 overflow-hidden rounded-xl border border-[#263550] bg-[#0b1221]">
-                  <div className="border-b border-[#263550] px-3 py-2 text-[13px] font-bold">Implementation plan</div>
+                  <div className="border-b border-[#263550] px-4 py-3 text-[16px] font-bold">Implementation plan</div>
                   {planItems(project).map(([title, detail], index) => (
                     <div key={title} className="flex items-center gap-2 border-b border-[#1d2a41] px-3 py-2.5 last:border-0">
-                      <span className={`grid h-4 w-4 place-items-center rounded-full border ${project ? "border-emerald-400 text-emerald-300" : "border-slate-600 text-slate-600"}`}>
+                      <span className={`grid h-4 w-4 place-items-center rounded-full border ${project ? "border-emerald-400 text-emerald-300" : "border-slate-600 text-slate-500"}`}>
                         {project ? <Check className="h-2.5 w-2.5" /> : <Circle className="h-2 w-2" />}
                       </span>
-                      <span className="min-w-0 flex-1"><b className="block text-[13px]">{title}</b><span className="text-[12px] text-slate-600">{detail}</span></span>
+                      <span className="min-w-0 flex-1"><b className="block text-[14px]">{title}</b><span className="text-[14px] text-slate-500">{detail}</span></span>
                       <ChevronRight className="h-3 w-3 text-slate-500" />
                     </div>
                   ))}
@@ -1018,10 +1021,10 @@ export function SevenEightSixWorkspace() {
               </div>
 
               <div className="border-t border-[#1b2940] p-2">
-                {error && <p className="mb-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[13px] text-rose-200">{error}</p>}
+                {error && <p className="mb-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[14px] text-rose-200">{error}</p>}
                 <div className="flex items-center rounded-lg border border-[#263550] bg-[#0c1424] px-2">
                   <button type="button" className="text-slate-500"><Paperclip className="h-3.5 w-3.5" /></button>
-                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send() } }} rows={1} placeholder="Ask the agent anything…" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-3 text-[12px] outline-none placeholder:text-slate-600" />
+                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send() } }} rows={1} placeholder="Ask the agent anything…" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-3 text-[14px] outline-none placeholder:text-slate-500" />
                   <button type="button" onClick={() => void send()} disabled={busy || !prompt.trim()} className="grid h-7 w-7 place-items-center rounded-full bg-violet-500 text-white disabled:opacity-40"><Send className="h-3.5 w-3.5" /></button>
                 </div>
                 <div className="mt-2 grid grid-cols-4 gap-1 text-center text-[14px] text-slate-500">
@@ -1033,9 +1036,9 @@ export function SevenEightSixWorkspace() {
             <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => { drag.current = { x: event.clientX, width: agentWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none" }} className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize hover:bg-cyan-300/25" />
           </section>
 
-          <section className={`min-w-0 flex-1 flex-col bg-[#060b16] ${mobileView === "preview" ? "flex" : "hidden"} lg:flex`}>
-            <div className="flex h-10 items-center border-b border-[#1b2940] px-3">
-              <span className="text-[14px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
+          <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#1b2940] bg-[#060b16]/78 backdrop-blur-xl ${mobileView === "preview" ? "flex" : "hidden"} xl:flex`}>
+            <div className="flex h-12 items-center border-b border-[#1b2940] px-4">
+              <span className="text-[16px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
               <div className="relative ml-auto">
                 {!showCode && (
                   <button type="button" onClick={() => setDeviceOpen((value) => !value)} className="inline-flex h-7 items-center gap-2 rounded-md border border-[#263550] bg-[#0c1424] px-3 text-[14px] font-bold text-slate-300">
@@ -1045,17 +1048,17 @@ export function SevenEightSixWorkspace() {
                 {deviceOpen && (
                   <div className="absolute right-0 top-9 z-40 w-64 rounded-xl border border-[#263550] bg-[#0b1020] p-2 shadow-2xl">
                     {(Object.keys(BUILDER_DEVICES) as BuilderDevice[]).map((key) => (
-                      <button key={key} type="button" onClick={() => { setDevice(key); if (key !== "custom") setDeviceOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] hover:bg-white/10 ${device === key ? "bg-cyan-400/10 text-cyan-100" : "text-slate-300"}`}>{BUILDER_DEVICES[key].label}</button>
+                      <button key={key} type="button" onClick={() => { setDevice(key); if (key !== "custom") setDeviceOpen(false) }} className={`block w-full rounded-lg px-3 py-2 text-left text-[14px] hover:bg-white/10 ${device === key ? "bg-cyan-400/10 text-cyan-100" : "text-slate-300"}`}>{BUILDER_DEVICES[key].label}</button>
                     ))}
                     {device === "custom" && (
                       <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
-                        <label className="text-[11px] text-slate-500">Width
-                          <input type="number" min={280} max={2560} value={customDevice.width} onChange={(event) => setCustomDevice((value) => ({ ...value, width: Number(event.target.value) || 280 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[12px] text-white" />
+                        <label className="text-[14px] text-slate-500">Width
+                          <input type="number" min={280} max={2560} value={customDevice.width} onChange={(event) => setCustomDevice((value) => ({ ...value, width: Number(event.target.value) || 280 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[14px] text-white" />
                         </label>
-                        <label className="text-[11px] text-slate-500">Height
-                          <input type="number" min={480} max={1800} value={customDevice.height} onChange={(event) => setCustomDevice((value) => ({ ...value, height: Number(event.target.value) || 480 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[12px] text-white" />
+                        <label className="text-[14px] text-slate-500">Height
+                          <input type="number" min={480} max={1800} value={customDevice.height} onChange={(event) => setCustomDevice((value) => ({ ...value, height: Number(event.target.value) || 480 }))} className="mt-1 h-8 w-full rounded border border-[#263550] bg-[#070c18] px-2 text-[14px] text-white" />
                         </label>
-                        <button type="button" onClick={() => setDeviceOpen(false)} className="col-span-2 rounded bg-violet-500/25 py-2 text-[12px] font-bold text-violet-100">Apply custom size</button>
+                        <button type="button" onClick={() => setDeviceOpen(false)} className="col-span-2 rounded bg-violet-500/25 py-2 text-[14px] font-bold text-violet-100">Apply custom size</button>
                       </div>
                     )}
                   </div>
@@ -1068,19 +1071,19 @@ export function SevenEightSixWorkspace() {
               {showCode ? (
                 <div className="grid h-full grid-cols-[220px_1fr] overflow-hidden rounded-lg border border-[#263550] bg-[#07101d]">
                   <div className="overflow-auto border-r border-[#263550] p-2">
-                    {files.length === 0 && <p className="p-2 text-[13px] text-slate-600">No project files yet.</p>}
+                    {files.length === 0 && <p className="p-2 text-[14px] text-slate-500">No project files yet.</p>}
                     {files.map((file) => (
-                      <button key={file} type="button" onClick={() => setSelectedFile(file)} disabled={codeDirty && selectedFile !== file} title={codeDirty && selectedFile !== file ? "Save or reset the current file first" : file} className={`mb-1 flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[13px] disabled:cursor-not-allowed disabled:opacity-35 ${selectedFile === file ? "bg-violet-400/15 text-violet-100" : "text-slate-500"}`}>
+                      <button key={file} type="button" onClick={() => setSelectedFile(file)} disabled={codeDirty && selectedFile !== file} title={codeDirty && selectedFile !== file ? "Save or reset the current file first" : file} className={`mb-1 flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[14px] disabled:cursor-not-allowed disabled:opacity-35 ${selectedFile === file ? "bg-violet-400/15 text-violet-100" : "text-slate-500"}`}>
                         <FileCode2 className="h-3 w-3" /><span className="truncate">{file}</span>
                       </button>
                     ))}
                   </div>
                   <div className="flex min-w-0 flex-col overflow-hidden">
                     <div className="flex h-10 shrink-0 items-center border-b border-[#263550] px-3">
-                      <code className="min-w-0 flex-1 truncate text-[12px] text-cyan-100">{selectedFile}</code>
-                      {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[11px] font-bold text-amber-200">Unsaved</span>}
-                      <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[11px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
-                      <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[11px] font-black text-white disabled:opacity-35">
+                      <code className="min-w-0 flex-1 truncate text-[14px] text-cyan-100">{selectedFile}</code>
+                      {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[14px] font-bold text-amber-200">Unsaved</span>}
+                      <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[14px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
+                      <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[14px] font-black text-white disabled:opacity-35">
                         {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save &amp; rebuild
                       </button>
                     </div>
@@ -1093,7 +1096,7 @@ export function SevenEightSixWorkspace() {
                         setCodeDirty(event.target.value !== selectedCode)
                       }}
                       disabled={!project || panelBusy}
-                      className="min-h-0 flex-1 resize-none overflow-auto bg-[#07101d] p-4 font-mono text-[12px] leading-5 text-cyan-50 outline-none disabled:opacity-60"
+                      className="min-h-0 flex-1 resize-none overflow-auto bg-[#07101d] p-4 font-mono text-[14px] leading-5 text-cyan-50 outline-none disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -1114,7 +1117,7 @@ export function SevenEightSixWorkspace() {
                       <div>
                         {build && ["queued", "running"].includes(build.status) ? <Loader2 className="mx-auto h-9 w-9 animate-spin text-cyan-300" /> : <Monitor className="mx-auto h-9 w-9 text-cyan-300" />}
                         <h2 className="mt-4 text-[14px] font-black">{build?.status === "failed" ? "Build failed" : build ? "Building verified preview" : "Your application will appear here"}</h2>
-                        <p className="mt-2 max-w-sm text-[12px] leading-5 text-slate-500">{build?.error_message || (build ? "Preview becomes available only after the isolated Next.js build passes." : "Describe the production application you want to create.")}</p>
+                        <p className="mt-2 max-w-sm text-[14px] leading-5 text-slate-500">{build?.error_message || (build ? "Preview becomes available only after the isolated Next.js build passes." : "Describe the production application you want to create.")}</p>
                       </div>
                     </div>
                   )}
@@ -1128,7 +1131,7 @@ export function SevenEightSixWorkspace() {
           <aside className="absolute bottom-[184px] right-0 top-[58px] z-50 flex w-[340px] flex-col border-l border-fuchsia-300/20 bg-[#080d19]/[.98] shadow-[-24px_0_60px_rgba(0,0,0,.45)]">
             <div className="flex h-12 shrink-0 items-center border-b border-[#263550] px-3">
               <Palette className="mr-2 h-4 w-4 text-fuchsia-300" />
-              <b className="text-[13px]">VVIP Visual Editor</b>
+              <b className="text-[14px]">VVIP Visual Editor</b>
               {editorSaving && <Loader2 className="ml-2 h-3.5 w-3.5 animate-spin text-cyan-300" />}
               <button type="button" onClick={undoVisualEdit} disabled={!undoStack.length || editorSaving} aria-label="Undo visual edit" className="ml-auto rounded p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30"><Undo2 className="h-4 w-4" /></button>
               <button type="button" onClick={redoVisualEdit} disabled={!redoStack.length || editorSaving} aria-label="Redo visual edit" className="rounded p-2 text-slate-300 hover:bg-white/10 disabled:opacity-30"><Redo2 className="h-4 w-4" /></button>
@@ -1136,7 +1139,7 @@ export function SevenEightSixWorkspace() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              <p className="mb-2 text-[13px] font-bold uppercase tracking-[.15em] text-slate-500">Page sections</p>
+              <p className="mb-2 text-[14px] font-bold uppercase tracking-[.15em] text-slate-500">Page sections</p>
               {orderedSections.length ? (
                 <div className="space-y-1">
                   {orderedSections.map((section, index) => (
@@ -1149,7 +1152,7 @@ export function SevenEightSixWorkspace() {
                       onClick={() => setSelectedSection(section.id)}
                       className={`flex cursor-grab items-center gap-1 rounded-lg border px-2 py-2 ${selectedSection === section.id ? "border-fuchsia-300/40 bg-fuchsia-400/10" : "border-[#263550] bg-[#0d1526]"}`}
                     >
-                      <span className="mr-1 min-w-0 flex-1 truncate text-[12px] font-semibold">{section.label}</span>
+                      <span className="mr-1 min-w-0 flex-1 truncate text-[14px] font-semibold">{section.label}</span>
                       <button type="button" aria-label="Move section up" onClick={(event) => { event.stopPropagation(); moveSection(section.id, -1) }} disabled={index === 0} className="p-1 text-slate-400 disabled:opacity-25"><ArrowUp className="h-3 w-3" /></button>
                       <button type="button" aria-label="Move section down" onClick={(event) => { event.stopPropagation(); moveSection(section.id, 1) }} disabled={index === orderedSections.length - 1} className="p-1 text-slate-400 disabled:opacity-25"><ArrowDown className="h-3 w-3" /></button>
                       <button type="button" aria-label="Duplicate section" onClick={(event) => { event.stopPropagation(); duplicateSection(section.id) }} className="p-1 text-cyan-300"><Copy className="h-3 w-3" /></button>
@@ -1158,13 +1161,13 @@ export function SevenEightSixWorkspace() {
                   ))}
                 </div>
               ) : (
-                <p className="rounded-lg border border-dashed border-[#263550] p-3 text-[12px] leading-5 text-slate-500">Click inside the preview or wait for its editable sections to load.</p>
+                <p className="rounded-lg border border-dashed border-[#263550] p-3 text-[14px] leading-5 text-slate-500">Click inside the preview or wait for its editable sections to load.</p>
               )}
 
               <div className="my-4 h-px bg-[#263550]" />
-              <p className="mb-3 text-[13px] font-bold uppercase tracking-[.15em] text-slate-500">Style selected section</p>
+              <p className="mb-3 text-[14px] font-bold uppercase tracking-[.15em] text-slate-500">Style selected section</p>
               {!selectedSection ? (
-                <p className="text-[12px] text-slate-500">Select a section to edit its design.</p>
+                <p className="text-[14px] text-slate-500">Select a section to edit its design.</p>
               ) : (
                 <div className="space-y-3">
                   {([
@@ -1172,16 +1175,16 @@ export function SevenEightSixWorkspace() {
                     ["Text", "color", selectedStyle.color || "#111827"],
                     ["Border", "borderColor", selectedStyle.borderColor || "#d1d5db"],
                   ] as const).map(([label, key, value]) => (
-                    <label key={key} className="flex items-center justify-between text-[12px] text-slate-300">
+                    <label key={key} className="flex items-center justify-between text-[14px] text-slate-300">
                       {label} colour
                       <span className="flex items-center gap-2">
-                        <code className="text-[13px] text-slate-500">{value}</code>
+                        <code className="text-[14px] text-slate-500">{value}</code>
                         <input type="color" value={value.startsWith("#") ? value.slice(0, 7) : "#ffffff"} onChange={(event) => updateSelectedStyle({ [key]: event.target.value }, `Change ${label.toLowerCase()} colour`)} className="h-8 w-10 cursor-pointer rounded border border-[#263550] bg-transparent p-0.5" />
                       </span>
                     </label>
                   ))}
-                  <label className="block text-[12px] text-slate-300">Typography
-                    <select value={selectedStyle.fontFamily || ""} onChange={(event) => updateSelectedStyle({ fontFamily: event.target.value || undefined }, "Change typography")} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[12px]">
+                  <label className="block text-[14px] text-slate-300">Typography
+                    <select value={selectedStyle.fontFamily || ""} onChange={(event) => updateSelectedStyle({ fontFamily: event.target.value || undefined }, "Change typography")} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[14px]">
                       <option value="">Project default</option>
                       <option value="Inter, sans-serif">Inter modern</option>
                       <option value="Georgia, serif">Editorial serif</option>
@@ -1198,8 +1201,8 @@ export function SevenEightSixWorkspace() {
                       ["Margin", "margin", 0, 240],
                       ["Font size", "fontSize", 8, 160],
                     ] as const).map(([label, key, min, max]) => (
-                      <label key={key} className="text-[13px] text-slate-400">{label}
-                        <input type="number" min={min} max={max} value={selectedStyle[key] ?? ""} placeholder="Default" onChange={(event) => updateSelectedStyle({ [key]: event.target.value === "" ? undefined : Number(event.target.value) }, `Change ${label.toLowerCase()}`)} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[12px] text-white outline-none focus:border-fuchsia-300/50" />
+                      <label key={key} className="text-[14px] text-slate-400">{label}
+                        <input type="number" min={min} max={max} value={selectedStyle[key] ?? ""} placeholder="Default" onChange={(event) => updateSelectedStyle({ [key]: event.target.value === "" ? undefined : Number(event.target.value) }, `Change ${label.toLowerCase()}`)} className="mt-1 h-9 w-full rounded-md border border-[#263550] bg-[#0d1526] px-2 text-[14px] text-white outline-none focus:border-fuchsia-300/50" />
                       </label>
                     ))}
                   </div>
@@ -1208,8 +1211,8 @@ export function SevenEightSixWorkspace() {
             </div>
 
             <div className="border-t border-[#263550] p-3">
-              <p className="mb-2 text-[13px] text-slate-500">Changes save automatically and update the preview instantly. Rebuild before publishing.</p>
-              <button type="button" onClick={() => void retryBuild()} disabled={!visualDirty || panelBusy || editorSaving} className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-violet-500 text-[12px] font-black text-white disabled:opacity-40">
+              <p className="mb-2 text-[14px] text-slate-500">Changes save automatically and update the preview instantly. Rebuild before publishing.</p>
+              <button type="button" onClick={() => void retryBuild()} disabled={!visualDirty || panelBusy || editorSaving} className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-fuchsia-500 to-violet-500 text-[14px] font-black text-white disabled:opacity-40">
                 <RotateCw className="h-3.5 w-3.5" /> Save &amp; rebuild verified preview
               </button>
             </div>
@@ -1221,21 +1224,21 @@ export function SevenEightSixWorkspace() {
             <div className="grid h-full grid-cols-[.86fr_1.14fr] gap-2 p-2">
               <article className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center">
-                  <b className="text-[12px]">Build sandbox</b>
+                  <b className="text-[14px]">Build sandbox</b>
                   {project && build && !["queued", "running"].includes(build.status) ? (
-                    <button type="button" onClick={() => void retryBuild()} disabled={panelBusy || busy} className="ml-auto inline-flex items-center gap-1.5 rounded border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-1 text-[12px] font-bold text-cyan-100 disabled:opacity-40">
+                    <button type="button" onClick={() => void retryBuild()} disabled={panelBusy || busy} className="ml-auto inline-flex items-center gap-1.5 rounded border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-1 text-[14px] font-bold text-cyan-100 disabled:opacity-40">
                       {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
                       {build.status === "passed" ? "Rebuild" : "Retry build"}
                     </button>
                   ) : (
-                    <span className="ml-auto rounded border border-[#263550] px-2 py-1 text-[12px] text-slate-500">Isolated environment</span>
+                    <span className="ml-auto rounded border border-[#263550] px-2 py-1 text-[14px] text-slate-500">Isolated environment</span>
                   )}
                 </div>
                 <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden rounded-lg border border-dashed border-[#263550] px-4">
                   <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-cyan-300"><TerminalSquare className="h-4 w-4" /></span>
                   <div>
-                    <b className="text-[13px]">{build ? `Build ${build.status}` : "No build has run"}</b>
-                    <p className="mt-1 text-[12px] text-slate-600">
+                    <b className="text-[14px]">{build ? `Build ${build.status}` : "No build has run"}</b>
+                    <p className="mt-1 text-[14px] text-slate-500">
                       {build?.status === "failed"
                         ? build.error_message || "The isolated build failed. Review the captured logs and retry."
                         : build?.status === "passed"
@@ -1247,15 +1250,15 @@ export function SevenEightSixWorkspace() {
               </article>
               <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center gap-2">
-                  <b className="text-[12px]">Revisions</b>
-                  <span className="rounded bg-white/[.04] px-2 py-1 text-[12px] text-slate-500">
+                  <b className="text-[14px]">Revisions</b>
+                  <span className="rounded bg-white/[.04] px-2 py-1 text-[14px] text-slate-500">
                     {project ? `${revisions.length} saved` : "No project"}
                   </span>
                   <button
                     type="button"
                     onClick={() => void saveCheckpoint()}
                     disabled={!project || panelBusy}
-                    className="ml-auto inline-flex items-center gap-2 rounded-md border border-violet-300/20 bg-violet-400/10 px-3 py-1.5 text-[12px] font-bold text-violet-100 disabled:opacity-40"
+                    className="ml-auto inline-flex items-center gap-2 rounded-md border border-violet-300/20 bg-violet-400/10 px-3 py-1.5 text-[14px] font-bold text-violet-100 disabled:opacity-40"
                   >
                     {revisionAction === "saving" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                     {revisionAction === "saving" ? "Saving…" : "Save checkpoint"}
@@ -1265,17 +1268,17 @@ export function SevenEightSixWorkspace() {
                   {!project || revisions.length === 0 ? (
                     <div className="flex h-full items-center px-4">
                       <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-violet-300"><History className="h-4 w-4" /></span>
-                      <div><b className="text-[13px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[12px] text-slate-600">Manual checkpoints and automatic repair snapshots appear here.</p></div>
+                      <div><b className="text-[14px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[14px] text-slate-500">Manual checkpoints and automatic repair snapshots appear here.</p></div>
                     </div>
                   ) : (
                     revisions.map((revision) => (
                       <div key={revision.id} className="flex items-center gap-3 border-b border-[#1d2a41] px-3 py-2 last:border-0">
                         <History className="h-3.5 w-3.5 text-violet-300" />
                         <span className="min-w-0 flex-1">
-                          <b className="block truncate text-[12px]">{revision.label}</b>
-                          <span className="text-[12px] text-slate-600">{new Date(revision.created_at).toLocaleString()} · {revision.source}</span>
+                          <b className="block truncate text-[14px]">{revision.label}</b>
+                          <span className="text-[14px] text-slate-500">{new Date(revision.created_at).toLocaleString()} · {revision.source}</span>
                         </span>
-                        <button type="button" onClick={() => void restoreCheckpoint(revision.id)} disabled={panelBusy} className="inline-flex min-w-[76px] items-center justify-center gap-1.5 rounded border border-[#345078] px-2 py-1 text-[12px] font-bold text-cyan-200 disabled:opacity-40">
+                        <button type="button" onClick={() => void restoreCheckpoint(revision.id)} disabled={panelBusy} className="inline-flex min-w-[76px] items-center justify-center gap-1.5 rounded border border-[#345078] px-2 py-1 text-[14px] font-bold text-cyan-200 disabled:opacity-40">
                           {revisionAction === revision.id && <Loader2 className="h-3 w-3 animate-spin" />}
                           {revisionAction === revision.id ? "Restoring…" : "Restore"}
                         </button>
@@ -1286,7 +1289,7 @@ export function SevenEightSixWorkspace() {
               </article>
             </div>
           )}
-          <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="absolute bottom-1 left-1/2 z-40 hidden -translate-x-1/2 rounded-full border border-blue-300/30 bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-1.5 text-[12px] font-bold shadow-[0_0_24px_rgba(59,130,246,.32)] md:block">
+          <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="absolute bottom-1 left-1/2 z-40 hidden -translate-x-1/2 rounded-full border border-blue-300/30 bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-1.5 text-[14px] font-bold shadow-[0_0_24px_rgba(59,130,246,.32)] md:block">
             {bottomCollapsed ? "Show bottom panel" : "Hide bottom panel"}
           </button>
         </section>
@@ -1296,7 +1299,7 @@ export function SevenEightSixWorkspace() {
           <section role="dialog" aria-modal="true" aria-labelledby="utility-panel-title" className="flex max-h-[82vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-violet-300/25 bg-[#09101f] shadow-[0_40px_120px_rgba(0,0,0,.75)]">
             <header className="flex shrink-0 items-center border-b border-[#263550] p-5">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[.18em] text-violet-300">786.Chat workspace</p>
+                <p className="text-[14px] font-black uppercase tracking-[.18em] text-violet-300">786.Chat workspace</p>
                 <h2 id="utility-panel-title" className="mt-1 text-xl font-black">{utilityPanel}</h2>
               </div>
               <button type="button" onClick={() => setUtilityPanel(null)} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10" aria-label={`Close ${utilityPanel}`}><X className="h-4 w-4" /></button>
@@ -1309,7 +1312,7 @@ export function SevenEightSixWorkspace() {
                     return (
                       <div key={stage.label} className="flex items-center gap-3 rounded-xl border border-[#263550] bg-[#10182b] p-4">
                         <span className={`grid h-8 w-8 place-items-center rounded-full border ${complete ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-slate-600 text-slate-500"}`}>{complete ? <Check className="h-4 w-4" /> : index + 1}</span>
-                        <span><b className="block text-[14px]">{stage.label}</b><span className="text-[12px] text-slate-500">{stage.detail}</span></span>
+                        <span><b className="block text-[14px]">{stage.label}</b><span className="text-[14px] text-slate-500">{stage.detail}</span></span>
                       </div>
                     )
                   })}
@@ -1317,42 +1320,42 @@ export function SevenEightSixWorkspace() {
               )}
               {utilityPanel === "Knowledge" && (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[13px]">Application brief</b><p className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-slate-400">{project?.prompt || "Create or open a project to see its saved knowledge."}</p></div>
-                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[13px]">Project context</b><p className="mt-2 text-[13px] text-slate-400">{files.length} source files · {messages.length} agent messages · {revisions.length} revisions</p></div>
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[14px]">Application brief</b><p className="mt-2 whitespace-pre-wrap text-[14px] leading-6 text-slate-400">{project?.prompt || "Create or open a project to see its saved knowledge."}</p></div>
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><b className="text-[14px]">Project context</b><p className="mt-2 text-[14px] text-slate-400">{files.length} source files · {messages.length} agent messages · {revisions.length} revisions</p></div>
                 </div>
               )}
               {utilityPanel === "Data Sources" && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-emerald-300/20 bg-emerald-400/[.06] p-4"><Database className="h-5 w-5 text-emerald-300" /><b className="mt-3 block text-[14px]">Neon PostgreSQL</b><p className="mt-2 text-[12px] leading-5 text-slate-400">{project ? "Connected to this project’s persisted files, messages, builds and revisions." : "Ready when a project is created."}</p></div>
-                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><FileCode2 className="h-5 w-5 text-cyan-300" /><b className="mt-3 block text-[14px]">Generated project files</b><p className="mt-2 text-[12px] leading-5 text-slate-400">{files.length ? `${files.length} files are available in the current project.` : "No project files loaded."}</p></div>
+                  <div className="rounded-xl border border-emerald-300/20 bg-emerald-400/[.06] p-4"><Database className="h-5 w-5 text-emerald-300" /><b className="mt-3 block text-[14px]">Neon PostgreSQL</b><p className="mt-2 text-[14px] leading-5 text-slate-400">{project ? "Connected to this project’s persisted files, messages, builds and revisions." : "Ready when a project is created."}</p></div>
+                  <div className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><FileCode2 className="h-5 w-5 text-cyan-300" /><b className="mt-3 block text-[14px]">Generated project files</b><p className="mt-2 text-[14px] leading-5 text-slate-400">{files.length ? `${files.length} files are available in the current project.` : "No project files loaded."}</p></div>
                 </div>
               )}
               {utilityPanel === "Integrations" && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[["Neon", project ? "Connected" : "Ready"], ["Vercel", build?.status || "Not built"], ["GitHub", "Deployment source"], ["DeepSeek + Gemini", "Server-managed AI"]].map(([name, status]) => (
-                    <div key={name} className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><Plug className="h-4 w-4 text-violet-300" /><b className="mt-3 block text-[14px]">{name}</b><span className="mt-2 inline-block rounded-full bg-white/5 px-2 py-1 text-[11px] text-slate-400">{status}</span></div>
+                    <div key={name} className="rounded-xl border border-[#263550] bg-[#10182b] p-4"><Plug className="h-4 w-4 text-violet-300" /><b className="mt-3 block text-[14px]">{name}</b><span className="mt-2 inline-block rounded-full bg-white/5 px-2 py-1 text-[14px] text-slate-400">{status}</span></div>
                   ))}
                 </div>
               )}
               {utilityPanel === "Secrets" && (
                 <div className="rounded-xl border border-amber-300/20 bg-amber-400/[.05] p-5">
                   <KeyRound className="h-6 w-6 text-amber-200" /><h3 className="mt-4 text-[15px] font-black">Protected server-side</h3>
-                  <p className="mt-2 text-[13px] leading-6 text-slate-400">Database, AI-provider, GitHub and Vercel credentials are stored in protected deployment variables. Secret values are never exposed in the browser.</p>
+                  <p className="mt-2 text-[14px] leading-6 text-slate-400">Database, AI-provider, GitHub and Vercel credentials are stored in protected deployment variables. Secret values are never exposed in the browser.</p>
                 </div>
               )}
               {utilityPanel === "Settings" && (
                 <div className="space-y-3">
-                  <button type="button" onClick={() => setSidebarCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><PanelLeftClose className="mr-3 h-4 w-4 text-violet-300" />{sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}<ChevronRight className="ml-auto h-4 w-4" /></button>
-                  <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><LayoutDashboard className="mr-3 h-4 w-4 text-cyan-300" />{bottomCollapsed ? "Show diagnostics panel" : "Hide diagnostics panel"}<ChevronRight className="ml-auto h-4 w-4" /></button>
-                  <button type="button" onClick={() => { startNewProject(); setUtilityPanel(null) }} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[13px] font-bold"><Sparkles className="mr-3 h-4 w-4 text-emerald-300" />Start a clean project<ChevronRight className="ml-auto h-4 w-4" /></button>
+                  <button type="button" onClick={() => setSidebarCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[14px] font-bold"><PanelLeftClose className="mr-3 h-4 w-4 text-violet-300" />{sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}<ChevronRight className="ml-auto h-4 w-4" /></button>
+                  <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[14px] font-bold"><LayoutDashboard className="mr-3 h-4 w-4 text-cyan-300" />{bottomCollapsed ? "Show diagnostics panel" : "Hide diagnostics panel"}<ChevronRight className="ml-auto h-4 w-4" /></button>
+                  <button type="button" onClick={() => { startNewProject(); setUtilityPanel(null) }} className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[14px] font-bold"><Sparkles className="mr-3 h-4 w-4 text-emerald-300" />Start a clean project<ChevronRight className="ml-auto h-4 w-4" /></button>
                 </div>
               )}
               {utilityPanel === "Logs" && (
-                <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl border border-[#263550] bg-[#050914] p-4 text-[12px] leading-5 text-cyan-100 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{build?.logs || build?.error_message || "No build logs are available yet. Run a verified build to populate this panel."}</pre>
+                <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl border border-[#263550] bg-[#050914] p-4 text-[14px] leading-5 text-cyan-100 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{build?.logs || build?.error_message || "No build logs are available yet. Run a verified build to populate this panel."}</pre>
               )}
               {utilityPanel === "Help & Docs" && (
                 <div className="grid gap-3">
-                  {["Describe the complete application in Agent Flow.", "Review the generated plan and verified preview.", "Use Design only after a build passes.", "Save checkpoints before major changes.", "Deploy only when the verified build is green."].map((text, index) => <div key={text} className="flex gap-3 rounded-xl border border-[#263550] bg-[#10182b] p-4"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-500/20 text-[12px] font-black text-violet-200">{index + 1}</span><p className="text-[13px] leading-6 text-slate-300">{text}</p></div>)}
+                  {["Describe the complete application in Agent Flow.", "Review the generated plan and verified preview.", "Use Design only after a build passes.", "Save checkpoints before major changes.", "Deploy only when the verified build is green."].map((text, index) => <div key={text} className="flex gap-3 rounded-xl border border-[#263550] bg-[#10182b] p-4"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-500/20 text-[14px] font-black text-violet-200">{index + 1}</span><p className="text-[14px] leading-6 text-slate-300">{text}</p></div>)}
                 </div>
               )}
             </div>
@@ -1365,7 +1368,7 @@ export function SevenEightSixWorkspace() {
             <header className="flex items-center border-b border-[#263550] p-5">
               <div>
                 <h2 className="text-xl font-black">Projects</h2>
-                <p className="mt-1 text-[13px] text-slate-400">Open a saved application with its files, messages, revisions and latest build.</p>
+                <p className="mt-1 text-[14px] text-slate-400">Open a saved application with its files, messages, revisions and latest build.</p>
               </div>
               <button type="button" onClick={() => setProjectsOpen(false)} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10" aria-label="Close projects"><X className="h-4 w-4" /></button>
             </header>
@@ -1373,15 +1376,15 @@ export function SevenEightSixWorkspace() {
               {panelBusy && projects.length === 0 ? (
                 <div className="grid h-40 place-items-center"><Loader2 className="h-7 w-7 animate-spin text-cyan-300" /></div>
               ) : projects.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#345078] p-8 text-center text-[13px] text-slate-400">No saved projects yet.</div>
+                <div className="rounded-2xl border border-dashed border-[#345078] p-8 text-center text-[14px] text-slate-400">No saved projects yet.</div>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {projects.map((saved) => (
                     <article key={saved.id} className="group relative overflow-hidden rounded-2xl border border-[#263550] bg-[#10182b] transition hover:border-cyan-300/40 hover:bg-[#131e35]">
                       <button type="button" onClick={() => void openProject(saved.id)} disabled={panelBusy} className="block w-full p-4 pr-12 text-left disabled:opacity-40">
                         <span className="block truncate text-[14px] font-black">{saved.title}</span>
-                        <span className="mt-2 line-clamp-2 block min-h-10 text-[12px] leading-5 text-slate-400">{saved.description || "No description"}</span>
-                        <span className="mt-3 flex gap-3 text-[12px] text-slate-500"><span>{saved.file_count} files</span><span>{saved.message_count} messages</span><span className="ml-auto">{new Date(saved.updated_at).toLocaleDateString()}</span></span>
+                        <span className="mt-2 line-clamp-2 block min-h-10 text-[14px] leading-5 text-slate-400">{saved.description || "No description"}</span>
+                        <span className="mt-3 flex gap-3 text-[14px] text-slate-500"><span>{saved.file_count} files</span><span>{saved.message_count} messages</span><span className="ml-auto">{new Date(saved.updated_at).toLocaleDateString()}</span></span>
                       </button>
                       <button
                         type="button"
@@ -1402,7 +1405,7 @@ export function SevenEightSixWorkspace() {
         </div>
       )}
       {actionNotice && (
-        <div role="status" className="fixed right-5 top-[72px] z-[70] rounded-xl border border-emerald-300/25 bg-[#0b1a1c]/95 px-4 py-3 text-[13px] font-bold text-emerald-100 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-xl">
+        <div role="status" className="fixed right-5 top-[72px] z-[70] rounded-xl border border-emerald-300/25 bg-[#0b1a1c]/95 px-4 py-3 text-[14px] font-bold text-emerald-100 shadow-[0_18px_50px_rgba(0,0,0,.45)] backdrop-blur-xl">
           <span className="inline-flex items-center gap-2"><Check className="h-4 w-4 text-emerald-300" />{actionNotice}</span>
         </div>
       )}
@@ -1417,7 +1420,7 @@ export function SevenEightSixWorkspace() {
               <p className="mt-3 text-[14px] leading-6 text-slate-400">
                 This permanently removes this project and its files, messages, builds, revisions, deployments and visual-editor data from Neon. Other projects are not affected.
               </p>
-              {error && <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
+              {error && <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[14px] text-rose-100">{error}</p>}
               <div className="mt-6 flex justify-end gap-3">
                 <button type="button" onClick={() => { setProjectToDelete(null); setError("") }} disabled={panelBusy} className="rounded-xl border border-white/10 px-4 py-2.5 text-[14px] font-bold text-slate-300 transition hover:bg-white/5 disabled:opacity-40">Cancel</button>
                 <button type="button" onClick={() => void confirmProjectDelete()} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-[14px] font-black text-white transition hover:bg-rose-400 disabled:opacity-40">
@@ -1434,9 +1437,9 @@ export function SevenEightSixWorkspace() {
           <section className="my-5 w-full max-w-4xl overflow-hidden rounded-3xl border border-amber-300/25 bg-gradient-to-br from-[#09101f] via-[#11102b] to-[#21103b] shadow-[0_40px_120px_rgba(0,0,0,.8)]">
             <header className="flex items-start border-b border-white/10 p-6">
               <div>
-                <p className="text-[12px] font-black uppercase tracking-[.18em] text-emerald-300">Production deployment</p>
+                <p className="text-[14px] font-black uppercase tracking-[.18em] text-emerald-300">Production deployment</p>
                 <h2 className="mt-2 text-2xl font-black">Deploy {project.title}</h2>
-                <p className="mt-2 text-[13px] leading-6 text-slate-400">Ship a verified build, connect domains, redeploy safely or restore any earlier release.</p>
+                <p className="mt-2 text-[14px] leading-6 text-slate-400">Ship a verified build, connect domains, redeploy safely or restore any earlier release.</p>
               </div>
               <button type="button" onClick={() => setDeployOpen(false)} disabled={panelBusy} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10 disabled:opacity-40" aria-label="Close deployment"><X className="h-4 w-4" /></button>
             </header>
@@ -1448,9 +1451,9 @@ export function SevenEightSixWorkspace() {
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-200"><Check className="h-5 w-5" /></span>
                     <div className="min-w-0">
                       <h3 className="font-black">Deployment action completed</h3>
-                      <p className="mt-1 break-all text-[13px] font-bold text-cyan-200">{deployResult.requestedUrl}</p>
+                      <p className="mt-1 break-all text-[14px] font-bold text-cyan-200">{deployResult.requestedUrl}</p>
                     </div>
-                    <a href={deployResult.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-300 px-3 py-2 text-[12px] font-black text-slate-950">Open <ExternalLink className="h-3.5 w-3.5" /></a>
+                    <a href={deployResult.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-300 px-3 py-2 text-[14px] font-black text-slate-950">Open <ExternalLink className="h-3.5 w-3.5" /></a>
                   </div>
                 </div>
               )}
@@ -1466,13 +1469,13 @@ export function SevenEightSixWorkspace() {
                   <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/[.06] p-5">
                     <div className="flex flex-wrap items-center gap-3">
                       <div>
-                        <p className="text-[11px] font-black uppercase tracking-[.16em] text-cyan-300">Current production release</p>
+                        <p className="text-[14px] font-black uppercase tracking-[.16em] text-cyan-300">Current production release</p>
                         <h3 className="mt-2 text-xl font-black">Version {deploymentLifecycle.deployment.version}</h3>
-                        <p className="mt-1 text-[12px] text-slate-400">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(deploymentLifecycle.deployment.published_at))}</p>
+                        <p className="mt-1 text-[14px] text-slate-400">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(deploymentLifecycle.deployment.published_at))}</p>
                       </div>
                       <div className="ml-auto flex flex-wrap gap-2">
-                        <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-[12px] font-bold">Open live <ExternalLink className="h-3.5 w-3.5" /></a>
-                        <button type="button" onClick={() => void redeployVerifiedProject()} disabled={panelBusy || build?.status !== "passed" || visualDirty} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-[12px] font-black text-slate-950 disabled:opacity-40">
+                        <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-[14px] font-bold">Open live <ExternalLink className="h-3.5 w-3.5" /></a>
+                        <button type="button" onClick={() => void redeployVerifiedProject()} disabled={panelBusy || build?.status !== "passed" || visualDirty} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-[14px] font-black text-slate-950 disabled:opacity-40">
                           {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />} Redeploy current build
                         </button>
                       </div>
@@ -1484,7 +1487,7 @@ export function SevenEightSixWorkspace() {
               <div>
                 <div className="mb-3">
                   <h3 className="text-[15px] font-black">{deploymentLifecycle.deployment ? "Add or switch production address" : "Choose a production address"}</h3>
-                  <p className="mt-1 text-[12px] text-slate-400">Existing verified domains are reused; a deployment never creates a duplicate address.</p>
+                  <p className="mt-1 text-[14px] text-slate-400">Existing verified domains are reused; a deployment never creates a duplicate address.</p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   {([
@@ -1494,20 +1497,20 @@ export function SevenEightSixWorkspace() {
                   ] as const).map(([value, title, detail]) => (
                     <button key={value} type="button" onClick={() => { setDeployType(value); setDeployValue("") }} className={deployType === value ? "rounded-2xl border border-cyan-300/60 bg-cyan-400/10 p-4 text-left transition" : "rounded-2xl border border-white/10 bg-white/[.035] p-4 text-left transition hover:border-white/20"}>
                       <span className="block text-[14px] font-black">{title}</span>
-                      <span className="mt-2 block text-[12px] text-slate-400">{detail}</span>
+                      <span className="mt-2 block text-[14px] text-slate-400">{detail}</span>
                     </button>
                   ))}
                 </div>
                 {deployType !== "path" && (
                   <label className="mt-4 block">
-                    <span className="mb-2 block text-[12px] font-bold text-slate-300">{deployType === "subdomain" ? "Subdomain name" : "Complete customer domain"}</span>
+                    <span className="mb-2 block text-[14px] font-bold text-slate-300">{deployType === "subdomain" ? "Subdomain name" : "Complete customer domain"}</span>
                     <div className="flex rounded-xl border border-white/10 bg-slate-950/50 focus-within:border-cyan-300/50">
-                      <input value={deployValue} onChange={(event) => setDeployValue(event.target.value)} placeholder={deployType === "subdomain" ? "customer-app" : "app.customer.com"} className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[13px] outline-none" />
-                      {deployType === "subdomain" && <span className="self-center pr-4 text-[13px] text-slate-400">.786.chat</span>}
+                      <input value={deployValue} onChange={(event) => setDeployValue(event.target.value)} placeholder={deployType === "subdomain" ? "customer-app" : "app.customer.com"} className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[14px] outline-none" />
+                      {deployType === "subdomain" && <span className="self-center pr-4 text-[14px] text-slate-400">.786.chat</span>}
                     </div>
                   </label>
                 )}
-                {error && <p role="alert" className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
+                {error && <p role="alert" className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[14px] text-rose-100">{error}</p>}
                 <button type="button" onClick={() => void deployVerifiedProject()} disabled={panelBusy || (deployType !== "path" && !deployValue.trim())} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-200 to-amber-400 px-5 py-3 text-[14px] font-black text-slate-950 disabled:opacity-40">
                   {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
                   {deploymentLifecycle.deployment ? "Deploy to this address" : "Deploy verified build"}
@@ -1525,19 +1528,19 @@ export function SevenEightSixWorkspace() {
                           <div className="flex flex-wrap items-start gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <b className="break-all text-[13px] text-cyan-200">{address}</b>
-                                {domain.is_primary && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-200">PRIMARY</span>}
+                                <b className="break-all text-[14px] text-cyan-200">{address}</b>
+                                {domain.is_primary && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[14px] font-black text-emerald-200">PRIMARY</span>}
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                              <div className="mt-2 flex flex-wrap gap-2 text-[14px] text-slate-400">
                                 <span>DNS {domain.dns_status}</span><span>SSL {domain.ssl_status}</span><span>App {domain.status}</span>
                               </div>
                             </div>
                             {domain.address_type !== "path" && (
-                              <button type="button" onClick={() => void refreshDeploymentDomain(domain.id)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-bold disabled:opacity-40"><RefreshCw className="h-3 w-3" /> Refresh DNS</button>
+                              <button type="button" onClick={() => void refreshDeploymentDomain(domain.id)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[14px] font-bold disabled:opacity-40"><RefreshCw className="h-3 w-3" /> Refresh DNS</button>
                             )}
                           </div>
                           {domain.dns_records?.map((record, index) => (
-                            <div key={record.type + "-" + index} className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[11px]">
+                            <div key={record.type + "-" + index} className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[14px]">
                               <b className="text-violet-200">{record.type}</b>
                               <span className="min-w-0 flex-1 break-all">{record.name} → {record.value}</span>
                               <button type="button" onClick={() => void navigator.clipboard.writeText(record.value)} aria-label="Copy DNS value"><Copy className="h-4 w-4" /></button>
@@ -1558,17 +1561,17 @@ export function SevenEightSixWorkspace() {
                       const isCurrent = release.version === deploymentLifecycle.deployment?.version
                       return (
                         <div key={release.id} className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[.025] p-4 last:border-b-0">
-                          <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-[12px] font-black">v{release.version}</span>
+                          <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-[14px] font-black">v{release.version}</span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <b className="text-[13px] capitalize">{release.action}</b>
-                              {isCurrent && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-200">CURRENT</span>}
-                              {release.restored_version && <span className="text-[11px] text-slate-500">restored v{release.restored_version}</span>}
+                              <b className="text-[14px] capitalize">{release.action}</b>
+                              {isCurrent && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[14px] font-black text-emerald-200">CURRENT</span>}
+                              {release.restored_version && <span className="text-[14px] text-slate-500">restored v{release.restored_version}</span>}
                             </div>
-                            <p className="mt-1 text-[11px] text-slate-500">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(release.published_at))}</p>
+                            <p className="mt-1 text-[14px] text-slate-500">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(release.published_at))}</p>
                           </div>
                           {!isCurrent && (
-                            <button type="button" onClick={() => void rollbackDeploymentVersion(release.version)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[11px] font-black text-amber-100 disabled:opacity-40">
+                            <button type="button" onClick={() => void rollbackDeploymentVersion(release.version)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[14px] font-black text-amber-100 disabled:opacity-40">
                               {deploymentActionVersion === release.version ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />} Roll back
                             </button>
                           )}
@@ -1577,7 +1580,7 @@ export function SevenEightSixWorkspace() {
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-[12px] text-slate-500">The first successful production deployment will appear here.</div>
+                  <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-[14px] text-slate-500">The first successful production deployment will appear here.</div>
                 )}
               </div>
             </div>
