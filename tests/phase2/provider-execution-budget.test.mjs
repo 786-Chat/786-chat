@@ -21,7 +21,8 @@ const canonicalGenerator = await readFile(
 
 test("canonical generation route leaves cleanup time after the DeepSeek budget", () => {
   assert.match(route, /maxDuration = 180/)
-  assert.match(controller, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000/)
+  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 105_000/)
+  assert.match(controller, /FALLBACK_ATTEMPT_TIMEOUT_MS = 65_000/)
 })
 
 test("timed-out provider work is aborted instead of running in the background", () => {
@@ -30,10 +31,10 @@ test("timed-out provider work is aborted instead of running in the background", 
   assert.match(controller, /controller\.abort/)
 })
 
-test("the first successful provider cancels other in-flight attempts", () => {
-  assert.match(controller, /const coordinator = new AbortController\(\)/)
-  assert.match(controller, /coordinatorSignal/)
-  assert.match(controller, /Provider winner selected/)
+test("the alternate provider is not started while the primary is running", () => {
+  assert.match(controller, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
+  assert.match(controller, /result = await runAttempt/)
+  assert.doesNotMatch(controller, /coordinatorSignal|attemptsByMode/)
 })
 
 test("invalid full systems receive one strict validation-guided repair pass", () => {
@@ -63,7 +64,7 @@ test("the active code generator requires tenant ownership rejection and real aud
 })
 
 test("large file generation has an explicit output and retry budget", () => {
-  assert.match(codegen, /maxOutputTokens:\s*24_000/)
+  assert.match(codegen, /maxOutputTokens:\s*maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /maxRetries:\s*0/)
   assert.match(codegen, /abortSignal: input\.abortSignal/)
 })

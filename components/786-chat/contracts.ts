@@ -127,9 +127,18 @@ export type GenerationRequest = {
 }
 
 export type GenerationResult = {
+  generationId?: string
   response: string
   model: string | null
   reason: string | null
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    estimatedCostUsd: number
+  }
+  providerAttempts?: unknown[]
+  providerFailoverUsed?: boolean
   specification?: Record<string, unknown>
   plan?: Record<string, unknown>
   validation?: Record<string, unknown>

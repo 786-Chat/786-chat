@@ -1,8 +1,13 @@
 import "server-only"
-import { generateObject } from "ai"
-import { createDeepSeek } from "@ai-sdk/deepseek"
-import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { generateObject, type FilePart, type ImagePart, type TextPart } from "ai"
 import { z } from "zod"
+
+import {
+  BUILDER_MODELS,
+  maxOutputTokensForPlan,
+  normalizeGenerationUsage,
+  type BuilderGenerationUsage,
+} from "@/lib/786-chat/ai-provider-config"
 
 export type CodegenMode =
   | "auto"
@@ -21,6 +26,9 @@ export type CodegenInput = {
   prompt: string
   mode?: CodegenMode
   abortSignal?: AbortSignal
+  userId?: string
+  userPlan?: string
+  generationId?: string
   attachments?: CodegenAttachment[]
   existing?: {
     title: string
@@ -37,6 +45,7 @@ export type CodegenResult = {
   files: Record<string, string>
   model: string
   reason: string
+  usage: BuilderGenerationUsage
 }
 
 const FileSchema = z.object({
@@ -52,14 +61,6 @@ const ProjectSchema = z.object({
   files: z.array(FileSchema).min(1),
 })
 
-const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY || "" })
-const google = createGoogleGenerativeAI({
-  apiKey:
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    "",
-})
-
 function pickModel(mode: CodegenMode, hasAttachments: boolean): {
   provider: "deepseek" | "gemini"
   model: string
@@ -67,20 +68,20 @@ function pickModel(mode: CodegenMode, hasAttachments: boolean): {
 } {
   if (hasAttachments) {
     if (mode === "gemini-flash") {
-      return { provider: "gemini", model: "gemini-2.5-flash", reason: "Gemini Flash selected for image/file analysis." }
+      return { provider: "gemini", model: BUILDER_MODELS["gemini-flash"], reason: "Gemini Flash selected for image/file analysis." }
     }
-    return { provider: "gemini", model: "gemini-2.5-pro", reason: "Gemini Pro selected because one or more images/files were attached." }
+    return { provider: "gemini", model: BUILDER_MODELS["gemini-pro"], reason: "Gemini Pro selected because one or more images/files were attached." }
   }
 
-  if (mode === "deepseek-flash") return { provider: "deepseek", model: "deepseek-v4-flash", reason: "Manual DeepSeek Flash." }
-  if (mode === "deepseek-pro") return { provider: "deepseek", model: "deepseek-v4-pro", reason: "Manual DeepSeek Pro." }
-  if (mode === "gemini-flash") return { provider: "gemini", model: "gemini-2.5-flash", reason: "Manual Gemini Flash." }
-  if (mode === "gemini-pro") return { provider: "gemini", model: "gemini-2.5-pro", reason: "Manual Gemini Pro." }
+  if (mode === "deepseek-flash") return { provider: "deepseek", model: BUILDER_MODELS["deepseek-flash"], reason: "Manual DeepSeek Flash." }
+  if (mode === "deepseek-pro") return { provider: "deepseek", model: BUILDER_MODELS["deepseek-pro"], reason: "Manual DeepSeek Pro." }
+  if (mode === "gemini-flash") return { provider: "gemini", model: BUILDER_MODELS["gemini-flash"], reason: "Manual Gemini Flash." }
+  if (mode === "gemini-pro") return { provider: "gemini", model: BUILDER_MODELS["gemini-pro"], reason: "Manual Gemini Pro." }
 
   return {
     provider: "deepseek",
-    model: "deepseek-v4-pro",
-    reason: "Auto: DeepSeek v4 Pro for structured code generation.",
+    model: BUILDER_MODELS["deepseek-pro"],
+    reason: "Auto: DeepSeek v4 Pro is primary for structured code generation.",
   }
 }
 
@@ -233,8 +234,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
 
   const userPrompt = promptParts.join("\n")
 
-  function buildContent(prompt: string): unknown[] {
-    const content: unknown[] = [{ type: "text", text: prompt }]
+  function buildContent(prompt: string): Array<TextPart | ImagePart | FilePart> {
+    const content: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]
     for (const attachment of attachments) {
       if (attachment.mediaType.startsWith("image/")) {
         content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
@@ -251,30 +252,37 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   }
 
   async function run(modelName: string, structuredRetry = false) {
-    const model = picked.provider === "deepseek" ? deepseek(modelName) : google(modelName)
     const prompt = structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt
-    const request: Parameters<typeof generateObject>[0] = {
-      model,
+    const request = {
+      model: modelName,
       schema: ProjectSchema,
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
-      maxOutputTokens: 24_000,
+      maxOutputTokens: maxOutputTokensForPlan(input.userPlan),
       maxRetries: 0,
       abortSignal: input.abortSignal,
-      prompt,
-      providerOptions: picked.provider === "deepseek"
-        ? { deepseek: { thinking: { type: "disabled" } } }
-        : undefined,
+      providerOptions: {
+        gateway: {
+          user: input.userId || "anonymous-builder",
+          tags: [
+            "feature:builder-codegen",
+            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
+            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
+            ...(input.generationId ? [`generation:${input.generationId}`] : []),
+          ],
+          zeroDataRetention: true,
+        },
+      },
     }
 
     if (attachments.length > 0) {
-      delete (request as { prompt?: string }).prompt
-      ;(request as unknown as { messages: unknown[] }).messages = [
-        { role: "user", content: buildContent(prompt) },
-      ]
+      return generateObject({
+        ...request,
+        messages: [{ role: "user", content: buildContent(prompt) }],
+      })
     }
 
-    return generateObject(request)
+    return generateObject({ ...request, prompt })
   }
 
   let usedModel = picked.model
@@ -287,11 +295,11 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     const canRetryWithFlash =
       attachments.length > 0 &&
       picked.provider === "gemini" &&
-      picked.model !== "gemini-2.5-flash" &&
+      picked.model !== BUILDER_MODELS["gemini-flash"] &&
       isQuotaError(firstError)
 
     if (canRetryWithFlash) {
-      usedModel = "gemini-2.5-flash"
+      usedModel = BUILDER_MODELS["gemini-flash"]
       usedReason = `${picked.reason} Gemini Pro quota was unavailable, so the request retried with Gemini Flash.`
       try {
         result = await run(usedModel)
@@ -324,5 +332,6 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     files: filesMap,
     model: usedModel,
     reason: usedReason,
+    usage: normalizeGenerationUsage(result.usage, usedModel),
   }
 }

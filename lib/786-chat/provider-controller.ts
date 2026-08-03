@@ -7,16 +7,21 @@ import {
 
 export const runtime = "nodejs"
 export const maxDuration = 180
-const GEMINI_ATTEMPT_TIMEOUT_MS = 25_000
-const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000
-const DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS = 120_000
+const PRIMARY_ATTEMPT_TIMEOUT_MS = 105_000
+const FALLBACK_ATTEMPT_TIMEOUT_MS = 65_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
-type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string }
-type ProviderAttempt = { mode: CodegenMode; model?: string; reason?: string; fallback: boolean; configured: boolean; status: "ok" | "missing" | "quota_exhausted" | "timed_out" | "failed"; profile?: string }
+type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string; usage?: unknown }
+type ProviderAttempt = { mode: CodegenMode; model?: string; reason?: string; fallback: boolean; configured: boolean; status: "ok" | "missing" | "quota_exhausted" | "timed_out" | "failed"; profile?: string; durationMs?: number; usage?: unknown }
 
 function configured(name: string): boolean {
   return Boolean(process.env[name]?.trim())
+}
+
+function gatewayConfigured(): boolean {
+  return configured("AI_GATEWAY_API_KEY") ||
+    configured("VERCEL_OIDC_TOKEN") ||
+    process.env.VERCEL === "1"
 }
 
 function providerForMode(mode: CodegenMode): "deepseek" | "gemini" {
@@ -24,21 +29,16 @@ function providerForMode(mode: CodegenMode): "deepseek" | "gemini" {
 }
 
 function modeConfigured(mode: CodegenMode): boolean {
-  if (providerForMode(mode) === "deepseek") return configured("DEEPSEEK_API_KEY")
-  return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY")
+  void mode
+  return gatewayConfigured()
 }
 
-function attemptTimeout(mode: CodegenMode) {
-  if (mode === "deepseek-flash") return DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS
-  return providerForMode(mode) === "deepseek"
-    ? DEEPSEEK_ATTEMPT_TIMEOUT_MS
-    : GEMINI_ATTEMPT_TIMEOUT_MS
+function attemptTimeout(position: number) {
+  return position === 0 ? PRIMARY_ATTEMPT_TIMEOUT_MS : FALLBACK_ATTEMPT_TIMEOUT_MS
 }
 
 function missingConfigurationReason(mode: CodegenMode): string {
-  return providerForMode(mode) === "deepseek"
-    ? "DeepSeek is not configured in Vercel (DEEPSEEK_API_KEY is missing)."
-    : "Gemini is not configured in Vercel (GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY is missing)."
+  return `${providerForMode(mode) === "deepseek" ? "DeepSeek" : "Gemini"} cannot start because Vercel AI Gateway authentication is unavailable.`
 }
 
 function safeReason(value: unknown): string {
@@ -67,8 +67,6 @@ function alternateMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode 
 function resolvedPrimaryMode(requested: CodegenMode, hasAttachments: boolean): CodegenMode {
   if (requested !== "auto") return requested
   if (hasAttachments) return "gemini-pro"
-  if (configured("DEEPSEEK_API_KEY")) return "deepseek-pro"
-  if (configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY")) return "gemini-pro"
   return "deepseek-pro"
 }
 
@@ -90,7 +88,7 @@ async function runAttempt(
   payload: GeneratorPayload,
   mode: CodegenMode,
   useCompactProfile: boolean,
-  coordinatorSignal: AbortSignal,
+  timeoutMs: number,
 ): Promise<GeneratorResult> {
   const message = String(payload.message || "").trim()
   const compactRules = useCompactProfile
@@ -119,17 +117,17 @@ async function runAttempt(
       })
     : []
   let timer: ReturnType<typeof setTimeout> | undefined
-  const timeoutMs = attemptTimeout(mode)
   const controller = new AbortController()
   const abortFromClient = () => controller.abort(request.signal.reason)
-  const abortFromCoordinator = () => controller.abort(coordinatorSignal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
-  coordinatorSignal.addEventListener("abort", abortFromCoordinator, { once: true })
   const generated = await Promise.race([
     generateProjectCode({
       prompt: `${message}${compactRules}`,
       mode,
       abortSignal: controller.signal,
+      userId: String(payload._actorUserId || "anonymous-builder"),
+      userPlan: String(payload._actorPlan || "starter"),
+      generationId: String(payload._generationId || ""),
       attachments,
       existing,
     }),
@@ -145,7 +143,6 @@ async function runAttempt(
   ]).finally(() => {
     if (timer) clearTimeout(timer)
     request.signal.removeEventListener("abort", abortFromClient)
-    coordinatorSignal.removeEventListener("abort", abortFromCoordinator)
   })
   const now = new Date().toISOString()
   return {
@@ -153,6 +150,7 @@ async function runAttempt(
     response: generated.reply,
     model: generated.model,
     reason: generated.reason,
+    usage: generated.usage,
     fellBackToLocal: false,
     generationProfile: useCompactProfile ? "compact-website" : "full-platform",
     project: {
@@ -196,77 +194,63 @@ export async function POST(request: Request) {
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const compactEligible = isSimpleWebsiteRequest(payload, hasAttachments)
-  const primaryMode = requestedMode === "auto" && compactEligible && configured("DEEPSEEK_API_KEY")
+  const primaryMode = requestedMode === "auto" && compactEligible
     ? "deepseek-flash"
     : resolvedPrimaryMode(requestedMode, hasAttachments)
   const secondaryMode = alternateMode(primaryMode, hasAttachments)
-  const rescueModes: CodegenMode[] = hasAttachments ? [] : ["deepseek-flash", "gemini-flash"]
-  const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode, ...rescueModes]))
+  const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode]))
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
     .map((mode) => ({ mode, reason: missingConfigurationReason(mode), fallback: false, configured: false, status: "missing" }))
 
-  // Run one bounded attempt when no key is configured so the response contains a
-  // truthful provider error. A static project is never substituted.
-  const modesToRun = configuredModes.length > 0 ? configuredModes : [primaryMode]
-  const attemptsByMode = new Map<CodegenMode, Promise<{ mode: CodegenMode; result?: GeneratorResult; error?: unknown; compact: boolean }>>()
-  const coordinator = new AbortController()
-
-  for (const mode of modesToRun) {
+  // Run primary first. The alternate provider starts only after a real primary
+  // failure so successful requests never pay for two simultaneous generations.
+  for (const [position, mode] of configuredModes.entries()) {
     const compact = compactEligible && providerForMode(mode) === "deepseek"
-    attemptsByMode.set(
-      mode,
-      runAttempt(request, payload, mode, compact, coordinator.signal)
-        .then((result) => ({ mode, result, compact }))
-        .catch((error) => ({ mode, error, compact })),
-    )
-  }
-
-  while (attemptsByMode.size > 0) {
-    const settled = await Promise.race(Array.from(attemptsByMode.values()))
-    attemptsByMode.delete(settled.mode)
-
-    if (settled.error) {
-      const reason = safeReason(settled.error instanceof Error ? settled.error.message : settled.error)
+    const startedAt = Date.now()
+    let result: GeneratorResult
+    try {
+      result = await runAttempt(request, payload, mode, compact, attemptTimeout(position))
+    } catch (error) {
+      const reason = safeReason(error instanceof Error ? error.message : error)
       attempts.push({
-        mode: settled.mode,
+        mode,
         reason,
-        fallback: false,
-        configured: modeConfigured(settled.mode),
+        fallback: position > 0,
+        configured: true,
         status: attemptStatus(reason),
-        profile: settled.compact ? "compact-website" : "full-platform",
+        profile: compact ? "compact-website" : "full-platform",
+        durationMs: Date.now() - startedAt,
       })
       continue
     }
 
-    const result = settled.result || {}
     const reason = safeReason(result.reason || result.response || "Provider returned no diagnostic.")
     attempts.push({
-      mode: settled.mode,
+      mode,
       model: String(result.model || ""),
       reason,
-      fallback: Boolean(result.fellBackToLocal),
-      configured: modeConfigured(settled.mode),
+      fallback: position > 0,
+      configured: true,
       status: result.success && !result.fellBackToLocal ? "ok" : attemptStatus(reason),
-      profile: String(result.generationProfile || (settled.compact ? "compact-website" : "full-platform")),
+      profile: String(result.generationProfile || (compact ? "compact-website" : "full-platform")),
+      durationMs: Date.now() - startedAt,
+      usage: result.usage,
     })
 
     if (result.success && !result.fellBackToLocal) {
-      coordinator.abort(new Error(`Provider winner selected: ${settled.mode}`))
       return NextResponse.json({
         ...result,
-        response: settled.mode === primaryMode
+        response: mode === primaryMode
           ? result.response
-          : `Primary AI provider was unavailable. 786.Chat automatically completed this project with ${result.model || settled.mode}.\n\n${result.response || ""}`.trim(),
+          : `Primary AI provider was unavailable. 786.Chat automatically completed this project with ${result.model || mode}.\n\n${result.response || ""}`.trim(),
         providerAttempts: attempts,
         providerStatus: providerSummary(attempts),
-        providerFailoverUsed: settled.mode !== primaryMode,
+        providerFailoverUsed: mode !== primaryMode,
       })
     }
-
   }
-  coordinator.abort(new Error("All provider attempts completed."))
 
   const diagnostic = attempts
     .map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason || attempt.model || "failed")}`)
