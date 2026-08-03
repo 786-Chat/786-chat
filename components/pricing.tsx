@@ -2,14 +2,14 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Check, Sparkles, Bot, Rocket, Users, Code2, ArrowRight, ShieldCheck } from "lucide-react"
+import { Check, Sparkles, Bot, Rocket, Users, ArrowRight, ShieldCheck } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 const plans = [
   {
-    id: "starter",
-    name: "Starter",
+    id: "free",
+    name: "Free",
     description: "Explore the AI builder",
     price: "Free",
     icon: Bot,
@@ -17,7 +17,8 @@ const plans = [
     popular: false,
     features: [
       "Customer account and private workspace",
-      "AI project generation",
+      "20 AI generations/month",
+      "3 private projects",
       "Project save and reopen",
       "Template gallery access",
       "Basic project history",
@@ -26,58 +27,41 @@ const plans = [
     href: "/register",
   },
   {
-    id: "builder",
-    name: "Builder",
+    id: "pro",
+    name: "Pro",
     description: "For active project creation",
-    price: "Contact",
-    icon: Code2,
+    price: "£20/mo",
+    icon: Rocket,
     gradient: "from-violet-500 to-purple-500",
     popular: true,
     features: [
-      "Everything in Starter",
-      "AI multi-file editing",
+      "500 AI generations/month",
+      "20 private projects",
+      "20 production deployments/month",
       "Revision checkpoints and restore",
-      "Project collaboration tools",
-      "Priority project support",
+      "3 custom domains",
+      "Priority builds",
     ],
-    cta: "Discuss access",
-    href: "/contact",
+    cta: "Choose Pro",
+    href: "/register?plan=pro&next=/dashboard/billing",
   },
   {
-    id: "publish",
-    name: "Publish",
-    description: "For build and deployment workflows",
-    price: "Contact",
-    icon: Rocket,
-    gradient: "from-emerald-500 to-cyan-500",
-    popular: false,
-    features: [
-      "Everything in Builder",
-      "GitHub project publishing",
-      "Isolated validation builds",
-      "Vercel preview deployment links",
-      "Build and deployment history",
-    ],
-    cta: "Contact us",
-    href: "/contact",
-  },
-  {
-    id: "team",
-    name: "Team",
+    id: "business",
+    name: "Business",
     description: "For collaboration and custom delivery",
-    price: "Custom",
+    price: "£40/mo",
     icon: Users,
     gradient: "from-amber-500 to-orange-500",
     popular: false,
     features: [
-      "Role-based collaborators",
-      "Review comments and approvals",
-      "Custom integrations",
-      "Onboarding and implementation help",
-      "Production-readiness review",
+      "3,000 AI generations/month",
+      "100 private projects",
+      "200 production deployments/month",
+      "20 custom domains",
+      "Up to 10 team members",
     ],
-    cta: "Request a quote",
-    href: "/contact",
+    cta: "Choose Business",
+    href: "/register?plan=business&next=/dashboard/billing",
   },
 ]
 
@@ -99,11 +83,11 @@ export function Pricing() {
             <span className="mt-2 block gradient-text">the workflow you need</span>
           </h1>
           <p className="text-lg text-white/60">
-            No unsupported payment promises are shown here. Paid access, publishing capacity and team requirements are confirmed before activation.
+            Predictable monthly limits, secure Stripe checkout, and extra AI credits when you need them.
           </p>
         </motion.div>
 
-        <div className="grid items-stretch gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid items-stretch gap-6 md:grid-cols-3">
           {plans.map((plan, index) => (
             <motion.article key={plan.id} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: index * 0.08 }} whileHover={{ y: -5 }} className={cn("relative group", plan.popular && "lg:-mt-4 lg:mb-4")}>
               {plan.popular && <div className="absolute -inset-px rounded-3xl bg-gradient-to-r from-cyan-500 via-purple-500 to-cyan-500 opacity-50 blur-lg transition-opacity group-hover:opacity-70" />}

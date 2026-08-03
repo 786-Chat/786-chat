@@ -1,314 +1,248 @@
 import { NextResponse } from "next/server"
+import type Stripe from "stripe"
+
+import { BUILDER_PLANS, normalizeBuilderPlan, type BuilderPlanId } from "@/lib/786-chat/billing"
 import { sql } from "@/lib/db"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
-// Get Stripe instance with settings from database
-async function getStripeWithSecret() {
-  const settings = await sql`SELECT stripe_secret_key, stripe_webhook_secret FROM stripe_settings LIMIT 1`
-  if (settings.length === 0 || !settings[0].stripe_secret_key) {
-    throw new Error("Stripe not configured")
+export const runtime = "nodejs"
+
+function safeMessage(error: unknown) {
+  return (error instanceof Error ? error.message : String(error || "Webhook processing failed"))
+    .replace(/[\r\n\t]+/g, " ")
+    .slice(0, 500)
+}
+
+function stripeStatus(status: string) {
+  if (status === "active" || status === "trialing") return "active"
+  if (status === "past_due" || status === "unpaid" || status === "paused") return status
+  return "canceled"
+}
+
+function unixDate(value: unknown) {
+  const seconds = Number(value || 0)
+  return Number.isFinite(seconds) && seconds > 0
+    ? new Date(seconds * 1000).toISOString()
+    : null
+}
+
+async function beginEvent(event: Stripe.Event) {
+  const rows = (await sql`
+    INSERT INTO builder_billing_events (event_id, event_type, status, attempt_count, updated_at)
+    VALUES (${event.id}, ${event.type}, 'processing', 1, NOW())
+    ON CONFLICT (event_id) DO UPDATE SET
+      status = 'processing',
+      attempt_count = builder_billing_events.attempt_count + 1,
+      error_message = NULL,
+      updated_at = NOW()
+    WHERE builder_billing_events.status = 'failed'
+    RETURNING event_id
+  `) as unknown as Array<{ event_id: string }>
+  return Boolean(rows[0])
+}
+
+async function completeEvent(eventId: string) {
+  await sql`
+    UPDATE builder_billing_events
+    SET status = 'completed', completed_at = NOW(), updated_at = NOW(), error_message = NULL
+    WHERE event_id = ${eventId}
+  `
+}
+
+async function failEvent(eventId: string, error: unknown) {
+  await sql`
+    UPDATE builder_billing_events
+    SET status = 'failed', error_message = ${safeMessage(error)}, updated_at = NOW()
+    WHERE event_id = ${eventId}
+  `
+}
+
+async function activateCheckout(session: Stripe.Checkout.Session, eventId: string) {
+  const metadata = session.metadata || {}
+  if (metadata.billing_version !== "2") return
+  const userId = metadata.user_id
+  if (!userId || session.client_reference_id !== userId) {
+    throw new Error("Checkout session customer reference does not match billing metadata")
   }
-  return {
-    stripe: new Stripe(settings[0].stripe_secret_key),
-    webhookSecret: settings[0].stripe_webhook_secret
+  const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id
+  const paymentId = typeof session.payment_intent === "string"
+    ? session.payment_intent
+    : session.payment_intent?.id
+
+  await sql`
+    UPDATE payments
+    SET status = 'completed', stripe_payment_id = ${paymentId || (typeof session.subscription === "string" ? session.subscription : null)},
+        stripe_event_id = ${eventId}, updated_at = NOW()
+    WHERE stripe_session_id = ${session.id} AND user_id = ${userId}::uuid
+  `
+
+  if (metadata.type === "builder_credits") {
+    if (session.payment_status !== "paid") throw new Error("Credit checkout is not paid")
+    const credits = Number(metadata.credits || 0)
+    if (!Number.isInteger(credits) || credits < 1 || credits > 10_000) {
+      throw new Error("Invalid credit quantity")
+    }
+    await sql`
+      UPDATE subscriptions
+      SET extra_credits = COALESCE(extra_credits, 0) + ${credits},
+          stripe_customer_id = COALESCE(${customerId || null}, stripe_customer_id),
+          updated_at = NOW()
+      WHERE user_id = ${userId}::uuid
+    `
+    await sql`
+      INSERT INTO revenue_logs (user_id, amount, currency, type, credits_added, stripe_payment_id)
+      VALUES (${userId}::uuid, ${Number(session.amount_total || 0) / 100},
+              ${String(session.currency || "gbp").toUpperCase()}, 'credit_purchase', ${credits}, ${paymentId || null})
+    `
+    return
+  }
+
+  if (metadata.type !== "builder_subscription") return
+  const planId = normalizeBuilderPlan(metadata.plan_id)
+  if (planId === "free") throw new Error("Invalid paid plan")
+  const subscriptionId = typeof session.subscription === "string"
+    ? session.subscription
+    : session.subscription?.id
+  if (!subscriptionId) throw new Error("Stripe subscription ID is missing")
+  const stripeSubscription = await getStripe().subscriptions.retrieve(subscriptionId)
+  const raw = stripeSubscription as unknown as Record<string, unknown>
+  const items = stripeSubscription.items?.data || []
+  const priceId = items[0]?.price?.id || null
+  const plan = BUILDER_PLANS[planId]
+  await sql`
+    INSERT INTO subscriptions (
+      user_id, plan, messages_used, messages_limit, extra_credits,
+      stripe_customer_id, stripe_subscription_id, stripe_price_id, status,
+      current_period_start, current_period_end, cancel_at_period_end, updated_at
+    ) VALUES (
+      ${userId}::uuid, ${planId}, 0, ${plan.messagesIncluded}, 0,
+      ${customerId || null}, ${subscriptionId}, ${priceId}, ${stripeStatus(stripeSubscription.status)},
+      ${unixDate(raw.current_period_start)}, ${unixDate(raw.current_period_end)},
+      ${Boolean(stripeSubscription.cancel_at_period_end)}, NOW()
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      plan = EXCLUDED.plan,
+      messages_used = 0,
+      messages_limit = EXCLUDED.messages_limit,
+      stripe_customer_id = EXCLUDED.stripe_customer_id,
+      stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+      stripe_price_id = EXCLUDED.stripe_price_id,
+      status = EXCLUDED.status,
+      current_period_start = EXCLUDED.current_period_start,
+      current_period_end = EXCLUDED.current_period_end,
+      cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+      updated_at = NOW()
+  `
+  await sql`UPDATE users SET plan = ${planId} WHERE id = ${userId}::uuid`
+  await sql`
+    INSERT INTO revenue_logs (user_id, amount, currency, type, plan_id, stripe_payment_id)
+    VALUES (${userId}::uuid, ${Number(session.amount_total || plan.monthlyPriceGbp * 100) / 100},
+            ${String(session.currency || "gbp").toUpperCase()}, 'subscription', ${planId}, ${subscriptionId})
+  `
+}
+
+async function updateSubscription(subscription: Stripe.Subscription) {
+  const raw = subscription as unknown as Record<string, unknown>
+  const metadata = subscription.metadata || {}
+  const planId = normalizeBuilderPlan(metadata.plan_id)
+  const status = stripeStatus(subscription.status)
+  const customerId = typeof subscription.customer === "string"
+    ? subscription.customer
+    : subscription.customer.id
+  const rows = (await sql`
+    UPDATE subscriptions
+    SET status = ${status},
+        plan = CASE WHEN ${status} = 'canceled' THEN 'free' ELSE plan END,
+        messages_limit = CASE WHEN ${status} = 'canceled' THEN ${BUILDER_PLANS.free.messagesIncluded} ELSE messages_limit END,
+        stripe_customer_id = ${customerId},
+        stripe_price_id = ${subscription.items?.data[0]?.price?.id || null},
+        current_period_start = ${unixDate(raw.current_period_start)},
+        current_period_end = ${unixDate(raw.current_period_end)},
+        cancel_at_period_end = ${Boolean(subscription.cancel_at_period_end)},
+        stripe_subscription_id = CASE WHEN ${status} = 'canceled' THEN NULL ELSE ${subscription.id} END,
+        updated_at = NOW()
+    WHERE stripe_subscription_id = ${subscription.id}
+       OR (${metadata.user_id || null} IS NOT NULL AND user_id = ${metadata.user_id || null}::uuid)
+    RETURNING user_id
+  `) as unknown as Array<{ user_id: string }>
+  if (rows[0]) {
+    await sql`
+      UPDATE users SET plan = ${status === "canceled" ? "free" : planId}
+      WHERE id = ${rows[0].user_id}::uuid
+    `
   }
 }
 
-// Plan message limits
-const PLAN_LIMITS: Record<string, number> = {
-  starter: 5,
-  basic: 100,
-  pro: 300,
-  business: 2000,
-  enterprise: 3000
+function invoiceSubscriptionId(invoice: Stripe.Invoice) {
+  const raw = invoice as unknown as Record<string, unknown>
+  if (typeof raw.subscription === "string") return raw.subscription
+  const parent = raw.parent && typeof raw.parent === "object" ? raw.parent as Record<string, unknown> : {}
+  const detail = parent.subscription_details && typeof parent.subscription_details === "object"
+    ? parent.subscription_details as Record<string, unknown>
+    : {}
+  return typeof detail.subscription === "string" ? detail.subscription : null
 }
 
-// Plan prices in GBP for revenue tracking
-const PLAN_PRICES: Record<string, number> = {
-  starter: 0,
-  basic: 10,
-  pro: 20,
-  business: 40,
-  enterprise: 99
+async function processEvent(event: Stripe.Event) {
+  switch (event.type) {
+    case "checkout.session.completed":
+      await activateCheckout(event.data.object as Stripe.Checkout.Session, event.id)
+      break
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted":
+      await updateSubscription(event.data.object as Stripe.Subscription)
+      break
+    case "invoice.payment_succeeded": {
+      const invoice = event.data.object as Stripe.Invoice
+      const subscriptionId = invoiceSubscriptionId(invoice)
+      if (subscriptionId) {
+        await sql`
+          UPDATE subscriptions
+          SET messages_used = 0, status = 'active', billing_period_start = NOW(), updated_at = NOW()
+          WHERE stripe_subscription_id = ${subscriptionId}
+        `
+      }
+      break
+    }
+    case "invoice.payment_failed": {
+      const subscriptionId = invoiceSubscriptionId(event.data.object as Stripe.Invoice)
+      if (subscriptionId) {
+        await sql`
+          UPDATE subscriptions SET status = 'past_due', updated_at = NOW()
+          WHERE stripe_subscription_id = ${subscriptionId}
+        `
+      }
+      break
+    }
+  }
 }
 
 export async function POST(request: Request) {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim()
+  if (!secret) {
+    console.error("[786.Chat billing] STRIPE_WEBHOOK_SECRET is not configured")
+    return NextResponse.json({ error: "Webhook is not configured." }, { status: 503 })
+  }
+  const signature = request.headers.get("stripe-signature")
+  if (!signature) return NextResponse.json({ error: "Missing Stripe signature." }, { status: 400 })
+
+  let event: Stripe.Event
   try {
-    const body = await request.text()
-    const signature = request.headers.get("stripe-signature")
+    event = getStripe().webhooks.constructEvent(await request.text(), signature, secret)
+  } catch (error) {
+    console.error("[786.Chat billing] Webhook signature rejected", safeMessage(error))
+    return NextResponse.json({ error: "Invalid Stripe signature." }, { status: 400 })
+  }
 
-    if (!signature) {
-      return NextResponse.json({ error: "No signature" }, { status: 400 })
-    }
-
-    const { stripe, webhookSecret } = await getStripeWithSecret()
-    
-    let event: Stripe.Event
-
-    try {
-      if (webhookSecret) {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-      } else {
-        // If no webhook secret configured, parse directly (not recommended for production)
-        event = JSON.parse(body) as Stripe.Event
-      }
-    } catch (err) {
-      console.error("Webhook signature verification failed:", err)
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
-    }
-
-    console.log(`Processing Stripe event: ${event.type}`)
-
-    switch (event.type) {
-      // ============================================
-      // CHECKOUT COMPLETED
-      // ============================================
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session
-        const metadata = session.metadata || {}
-        const userId = metadata.user_id
-        const type = metadata.type
-
-        if (!userId) {
-          console.error("No user_id in session metadata")
-          break
-        }
-
-        // Get or create Stripe customer ID for user
-        const stripeCustomerId = session.customer as string
-
-        // Update user with Stripe customer ID
-        if (stripeCustomerId) {
-          await sql`
-            UPDATE subscriptions 
-            SET stripe_customer_id = ${stripeCustomerId}
-            WHERE user_id = ${userId}::uuid
-          `
-        }
-
-        // Update payment record
-        await sql`
-          UPDATE payments 
-          SET status = 'completed', 
-              stripe_payment_id = ${session.payment_intent as string || session.subscription as string || null}
-          WHERE stripe_session_id = ${session.id}
-        `
-
-        if (type === "subscription" && metadata.plan_id) {
-          // Update user plan and reset message count
-          const newLimit = PLAN_LIMITS[metadata.plan_id] || 100
-          const planPrice = PLAN_PRICES[metadata.plan_id] || 0
-
-          await sql`
-            UPDATE subscriptions 
-            SET plan = ${metadata.plan_id}, 
-                messages_used = 0, 
-                messages_limit = ${newLimit},
-                stripe_subscription_id = ${session.subscription as string || null},
-                stripe_customer_id = ${stripeCustomerId},
-                status = 'active',
-                updated_at = NOW()
-            WHERE user_id = ${userId}::uuid
-          `
-
-          await sql`
-            UPDATE users SET plan = ${metadata.plan_id} WHERE id = ${userId}::uuid
-          `
-
-          // Record revenue for admin dashboard
-          await sql`
-            INSERT INTO revenue_logs (user_id, amount, currency, type, plan_id, stripe_payment_id)
-            VALUES (${userId}::uuid, ${planPrice}, 'GBP', 'subscription', ${metadata.plan_id}, ${session.payment_intent as string || null})
-          `
-
-          console.log(`Updated user ${userId} to plan ${metadata.plan_id}`)
-
-        } else if (type === "topup" && metadata.credits) {
-          // Add credits to user's message limit
-          const credits = parseInt(metadata.credits)
-          const amount = parseFloat(metadata.amount || "0")
-
-          await sql`
-            UPDATE subscriptions 
-            SET messages_limit = messages_limit + ${credits},
-                updated_at = NOW()
-            WHERE user_id = ${userId}::uuid
-          `
-
-          // Record topup revenue
-          await sql`
-            INSERT INTO revenue_logs (user_id, amount, currency, type, credits_added, stripe_payment_id)
-            VALUES (${userId}::uuid, ${amount}, 'GBP', 'topup', ${credits}, ${session.payment_intent as string || null})
-          `
-
-          console.log(`Added ${credits} message credits to user ${userId}`)
-
-        } else if (type === "credit_purchase" && metadata.credits) {
-          // Add EXTRA credits (different from monthly limit)
-          const credits = parseInt(metadata.credits)
-          const amount = (session.amount_total || 0) / 100 // Convert from cents
-
-          await sql`
-            UPDATE subscriptions 
-            SET extra_credits = COALESCE(extra_credits, 0) + ${credits},
-                updated_at = NOW()
-            WHERE user_id = ${userId}::uuid
-          `
-
-          // Record credit purchase revenue
-          await sql`
-            INSERT INTO revenue_logs (user_id, amount, currency, type, credits_added, stripe_payment_id)
-            VALUES (${userId}::uuid, ${amount}, 'GBP', 'credit_purchase', ${credits}, ${session.payment_intent as string || null})
-          `
-
-          // Log usage for tracking
-          await sql`
-            INSERT INTO usage_logs (user_id, action, metadata)
-            VALUES (${userId}::uuid, 'credit_purchase', ${JSON.stringify({ credits, amount })})
-          `
-
-          console.log(`Added ${credits} extra credits to user ${userId} for £${amount}`)
-        }
-        break
-      }
-
-      // ============================================
-      // SUBSCRIPTION CREATED
-      // ============================================
-      case "customer.subscription.created": {
-        const subscription = event.data.object as Stripe.Subscription
-        const customerId = subscription.customer as string
-
-        // Find user by Stripe customer ID and activate subscription
-        await sql`
-          UPDATE subscriptions 
-          SET stripe_subscription_id = ${subscription.id},
-              status = 'active',
-              updated_at = NOW()
-          WHERE stripe_customer_id = ${customerId}
-        `
-
-        console.log(`Subscription ${subscription.id} created for customer ${customerId}`)
-        break
-      }
-
-      // ============================================
-      // SUBSCRIPTION UPDATED
-      // ============================================
-      case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription
-        const status = subscription.status
-
-        // Map Stripe status to our status
-        let ourStatus = 'active'
-        if (status === 'past_due') ourStatus = 'past_due'
-        else if (status === 'canceled') ourStatus = 'canceled'
-        else if (status === 'unpaid') ourStatus = 'unpaid'
-        else if (status === 'paused') ourStatus = 'paused'
-
-        await sql`
-          UPDATE subscriptions 
-          SET status = ${ourStatus},
-              updated_at = NOW()
-          WHERE stripe_subscription_id = ${subscription.id}
-        `
-
-        console.log(`Subscription ${subscription.id} updated to status ${ourStatus}`)
-        break
-      }
-
-      // ============================================
-      // SUBSCRIPTION DELETED (CANCELED)
-      // ============================================
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription
-
-        // Downgrade user to Starter plan
-        await sql`
-          UPDATE subscriptions 
-          SET plan = 'starter',
-              messages_limit = 5,
-              messages_used = 0,
-              status = 'canceled',
-              stripe_subscription_id = NULL,
-              updated_at = NOW()
-          WHERE stripe_subscription_id = ${subscription.id}
-          RETURNING user_id
-        `
-
-        // Also update the user's plan
-        const result = await sql`
-          SELECT user_id FROM subscriptions WHERE stripe_subscription_id = ${subscription.id}
-        `
-        if (result.length > 0) {
-          await sql`UPDATE users SET plan = 'starter' WHERE id = ${result[0].user_id}`
-        }
-
-        console.log(`Subscription ${subscription.id} canceled, user downgraded to Starter`)
-        break
-      }
-
-      // ============================================
-      // INVOICE PAYMENT SUCCEEDED (Renewal)
-      // ============================================
-      case "invoice.payment_succeeded": {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const invoice = event.data.object as any
-        const subscriptionId = invoice.subscription as string
-        const amountPaid = (invoice.amount_paid || 0) / 100 // Convert from cents
-
-        if (subscriptionId && invoice.billing_reason === "subscription_cycle") {
-          // This is a renewal payment - reset message count
-          const result = await sql`
-            UPDATE subscriptions 
-            SET messages_used = 0, 
-                status = 'active',
-                updated_at = NOW()
-            WHERE stripe_subscription_id = ${subscriptionId}
-            RETURNING user_id, plan
-          `
-
-          if (result.length > 0) {
-            const { user_id, plan } = result[0]
-            
-            // Record renewal revenue
-            await sql`
-              INSERT INTO revenue_logs (user_id, amount, currency, type, plan_id, stripe_payment_id)
-              VALUES (${user_id}, ${amountPaid}, 'GBP', 'renewal', ${plan}, ${invoice.payment_intent as string || null})
-            `
-
-            console.log(`Subscription ${subscriptionId} renewed, messages reset`)
-          }
-        }
-        break
-      }
-
-      // ============================================
-      // INVOICE PAYMENT FAILED
-      // ============================================
-      case "invoice.payment_failed": {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const invoice = event.data.object as any
-        const subscriptionId = invoice.subscription as string
-
-        if (subscriptionId) {
-          // Mark subscription as past_due - this will pause AI chat access
-          await sql`
-            UPDATE subscriptions 
-            SET status = 'past_due',
-                updated_at = NOW()
-            WHERE stripe_subscription_id = ${subscriptionId}
-          `
-
-          console.log(`Subscription ${subscriptionId} payment failed, marked as past_due`)
-        }
-        break
-      }
-    }
-
+  if (!(await beginEvent(event))) return NextResponse.json({ received: true, duplicate: true })
+  try {
+    await processEvent(event)
+    await completeEvent(event.id)
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("Webhook error:", error)
-    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
+    await failEvent(event.id, error)
+    console.error("[786.Chat billing] Webhook processing failed", safeMessage(error))
+    return NextResponse.json({ error: "Webhook processing failed." }, { status: 500 })
   }
 }

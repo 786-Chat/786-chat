@@ -1,26 +1,18 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { sql } from "@/lib/db"
-import { verifyToken } from "@/lib/auth"
+import { getSession } from "@/lib/auth"
 
 export async function GET() {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("auth-token")?.value
-    
-    if (!token) {
+    const session = await getSession()
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const payload = await verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
     const payments = await sql`
       SELECT id, created_at, amount, currency, type, status, plan_id, credits_added
       FROM payments
-      WHERE user_id = ${payload.id}::uuid
+      WHERE user_id = ${session.id}::uuid
       ORDER BY created_at DESC
       LIMIT 20
     `
