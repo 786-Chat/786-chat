@@ -65,3 +65,36 @@ export async function sendAccountEmail(input: {
   }
   return { sent: true as const }
 }
+
+export async function sendOperationalAlertEmail(input: {
+  to: string
+  fingerprint: string
+  title: string
+  severity: string
+  errorCode: string | null
+  errorMessage: string
+  category: string
+}) {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  const from = process.env.AUTH_EMAIL_FROM?.trim()
+  if (!apiKey || !from) return { sent: false, reason: "ALERT_EMAIL_NOT_CONFIGURED" as const }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `operational-alert-${input.fingerprint}-${new Date().toISOString().slice(0, 10)}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [input.to],
+      subject: `[${input.severity.toUpperCase()}] 786.Chat ${input.title}`,
+      html: `<!doctype html><html><body style="margin:0;background:#050814;color:#e5eefc;font-family:Arial,sans-serif"><div style="max-width:620px;margin:0 auto;padding:40px 24px"><h1 style="color:#67e8f9">786.Chat production alert</h1><div style="border:1px solid #25324a;border-radius:18px;background:#0b1222;padding:28px"><p><strong>Severity:</strong> ${escapeHtml(input.severity)}</p><p><strong>Category:</strong> ${escapeHtml(input.category)}</p><p><strong>Incident:</strong> ${escapeHtml(input.title)}</p><p><strong>Error code:</strong> ${escapeHtml(input.errorCode || "none")}</p><p style="line-height:1.7;color:#b7c4d8">${escapeHtml(input.errorMessage)}</p><p style="font-size:12px;color:#718096">Fingerprint: ${escapeHtml(input.fingerprint)}</p></div></div></body></html>`,
+    }),
+    signal: AbortSignal.timeout(8_000),
+  }).catch(() => null)
+
+  if (!response?.ok) return { sent: false, reason: response ? `ALERT_EMAIL_HTTP_${response.status}` : "ALERT_EMAIL_DELIVERY_FAILED" }
+  return { sent: true as const, reason: null }
+}

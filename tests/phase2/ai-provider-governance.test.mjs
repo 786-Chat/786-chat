@@ -5,6 +5,7 @@ import test from "node:test"
 const config = await readFile("lib/786-chat/ai-provider-config.ts", "utf8")
 const governance = await readFile("lib/786-chat/ai-governance.ts", "utf8")
 const codegen = await readFile("lib/786-admin/codegen.ts", "utf8")
+const controller = await readFile("lib/786-chat/provider-controller.ts", "utf8")
 const route = await readFile("app/api/786-chat/generate/route.ts", "utf8")
 const migration = await readFile("lib/786-admin/migrations/007-ai-provider-governance.sql", "utf8")
 
@@ -21,6 +22,10 @@ test("gateway requests include attribution, tags, privacy and plan budgets", () 
   assert.match(codegen, /plan:/)
   assert.match(codegen, /zeroDataRetention: true/)
   assert.match(codegen, /maxOutputTokensForPlan\(input\.userPlan\)/)
+  assert.match(codegen, /deepseek\("deepseek-chat"\)/)
+  assert.match(controller, /payload\._originalPrompt \|\| payload\.message/)
+  assert.match(controller, /maxOutputTokens: useCompactProfile \? 10_000 : undefined/)
+  assert.match(controller, /compactEligible \? "gemini-flash"/)
 })
 
 test("builder code generation prefers connected direct provider keys before gateway", () => {

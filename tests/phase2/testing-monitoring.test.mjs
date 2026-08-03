@@ -30,6 +30,8 @@ test("monitoring persists structured events, deduplicates incidents and signs al
   assert.match(monitoring, /createHmac\("sha256"/)
   assert.match(monitoring, /ALERT_WEBHOOK_URL/)
   assert.match(monitoring, /ALERT_WEBHOOK_SECRET/)
+  assert.match(monitoring, /ALERT_EMAIL_TO/)
+  assert.match(monitoring, /sendOperationalAlertEmail/)
   assert.match(monitoring, /ON CONFLICT \(fingerprint\)/)
   assert.match(monitoring, /SENSITIVE_KEY/)
   assert.match(migration, /builder_journey_runs/)

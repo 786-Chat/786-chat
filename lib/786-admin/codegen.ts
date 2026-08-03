@@ -31,6 +31,7 @@ export type CodegenInput = {
   userId?: string
   userPlan?: string
   generationId?: string
+  maxOutputTokens?: number
   attachments?: CodegenAttachment[]
   existing?: {
     title: string
@@ -66,7 +67,11 @@ const ProjectSchema = z.object({
 function providerModel(modelName: string) {
   if (modelName.startsWith("deepseek/") && process.env.DEEPSEEK_API_KEY?.trim()) {
     const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY.trim() })
-    return deepseek(modelName.slice("deepseek/".length))
+    // Vercel AI Gateway exposes versioned DeepSeek routing IDs, while the
+    // direct DeepSeek API documents the stable deepseek-chat alias. Keeping
+    // those identifiers separate avoids sending a Gateway-only ID to the
+    // direct endpoint.
+    return deepseek("deepseek-chat")
   }
 
   const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
@@ -278,7 +283,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
       schema: ProjectSchema,
       system: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT,
       temperature: structuredRetry ? 0.05 : 0.18,
-      maxOutputTokens: maxOutputTokensForPlan(input.userPlan),
+      maxOutputTokens: input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan),
       maxRetries: 0,
       abortSignal: input.abortSignal,
       ...(typeof model === "string" ? {

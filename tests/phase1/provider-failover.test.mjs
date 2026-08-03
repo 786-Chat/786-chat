@@ -49,7 +49,7 @@ test("code generation uses gateway attribution and plan-specific budgets", () =>
   assert.match(codegen, /providerOptions/)
   assert.match(codegen, /gateway:\s*\{/)
   assert.match(codegen, /zeroDataRetention:\s*true/)
-  assert.match(codegen, /maxOutputTokens:\s*maxOutputTokensForPlan\(input\.userPlan\)/)
+  assert.match(codegen, /maxOutputTokens:\s*input\.maxOutputTokens \?\? maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /maxRetries:\s*0/)
 })
 
