@@ -14,7 +14,6 @@ import {
   Loader2,
   Download,
   Calendar,
-  Star,
   Plus,
   CheckCircle,
   XCircle,
@@ -44,21 +43,12 @@ import {
 
 const plans = [
   {
-    id: "starter",
-    name: "Starter",
+    id: "free",
+    name: "Free",
     price: 0,
     description: "Perfect for trying out",
     icon: Zap,
-    features: ["5 AI messages total", "Basic AI responses", "Community support"],
-    popular: false,
-  },
-  {
-    id: "basic",
-    name: "Basic",
-    price: 10,
-    description: "For individuals",
-    icon: Star,
-    features: ["100 AI messages/month", "Full AI capabilities", "Source code output", "Email support"],
+    features: ["20 AI generations/month", "3 private projects", "Preview builds", "Code and visual editing"],
     popular: false,
   },
   {
@@ -67,7 +57,7 @@ const plans = [
     price: 20,
     description: "For professionals",
     icon: Crown,
-    features: ["300 AI messages/month", "Priority AI processing", "Advanced source code", "Priority email support"],
+    features: ["500 AI generations/month", "20 projects", "20 deployments/month", "3 custom domains"],
     popular: true,
   },
   {
@@ -76,7 +66,7 @@ const plans = [
     price: 40,
     description: "For teams",
     icon: Building,
-    features: ["2000 AI messages/month", "Team collaboration", "Custom AI models", "Phone support"],
+    features: ["3,000 AI generations/month", "100 projects", "200 deployments/month", "20 domains and 10 members"],
     popular: false,
   },
 ]
@@ -106,6 +96,7 @@ export default function BillingPage() {
   const [subscription, setSubscription] = useState<{
     messages_used: number
     messages_limit: number
+    extra_credits: number
     plan: string
     status?: string
     current_period_end?: string
@@ -113,6 +104,7 @@ export default function BillingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [isLoadingPortal, setIsLoadingPortal] = useState(false)
+  const [billingError, setBillingError] = useState("")
 
   useEffect(() => {
     if (searchParams.get("success") === "true") {
@@ -158,7 +150,8 @@ export default function BillingPage() {
   }
 
   const handleUpgrade = async (planId: string) => {
-    if (planId === "starter") return
+    if (planId === "free") return
+    setBillingError("")
     setIsUpgrading(planId)
     try {
       const res = await fetch("/api/stripe/checkout", {
@@ -170,6 +163,8 @@ export default function BillingPage() {
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
+      } else {
+        setBillingError(data.error || "Checkout could not be started.")
       }
     } catch (error) {
       console.error("Checkout error:", error)
@@ -178,8 +173,29 @@ export default function BillingPage() {
     }
   }
 
+  const handleCredits = async (packageId: "small" | "medium" | "large") => {
+    setIsUpgrading(`credits-${packageId}`)
+    setBillingError("")
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ type: "credits", packageId }),
+      })
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+      else setBillingError(data.error || "Credit checkout could not be started.")
+    } catch {
+      setBillingError("Credit checkout could not be started.")
+    } finally {
+      setIsUpgrading(null)
+    }
+  }
+
   const handleManageBilling = async () => {
     setIsLoadingPortal(true)
+    setBillingError("")
     try {
       const res = await fetch("/api/stripe/portal", {
         method: "POST",
@@ -188,6 +204,8 @@ export default function BillingPage() {
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
+      } else {
+        setBillingError(data.error || "The billing portal could not be opened.")
       }
     } catch (error) {
       console.error("Portal error:", error)
@@ -196,9 +214,15 @@ export default function BillingPage() {
     }
   }
 
-  const currentPlan = plans.find(p => p.id === (user?.plan || "starter").toLowerCase())
+  const rawPlan = String(subscription?.plan || user?.plan || "free").toLowerCase()
+  const normalizedPlan = rawPlan === "business" || rawPlan === "enterprise"
+    ? "business"
+    : rawPlan === "pro" || rawPlan === "basic"
+      ? "pro"
+      : "free"
+  const currentPlan = plans.find(p => p.id === normalizedPlan)
   const messagesUsed = subscription?.messages_used || 0
-  const messagesLimit = subscription?.messages_limit || 5
+  const messagesLimit = subscription?.messages_limit || 20
 
   return (
     <SettingsLayout>
@@ -245,6 +269,13 @@ export default function BillingPage() {
           <p className="text-muted-foreground">Manage your subscription and payment methods</p>
         </motion.div>
 
+        {billingError && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            {billingError}
+          </div>
+        )}
+
         {/* Current Plan Card */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card>
@@ -277,6 +308,7 @@ export default function BillingPage() {
                 <div className="text-right">
                   <p className="text-sm text-muted-foreground">Messages</p>
                   <p className="font-semibold">{messagesUsed} / {messagesLimit}</p>
+                  <p className="text-xs text-muted-foreground">{subscription?.extra_credits || 0} extra credits</p>
                 </div>
               </div>
               
@@ -293,7 +325,7 @@ export default function BillingPage() {
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Manage in Stripe
                 </Button>
-                {(user?.plan || "starter") !== "business" && (
+                {normalizedPlan !== "business" && (
                   <Button onClick={() => handleUpgrade("pro")}>
                     <Zap className="w-4 h-4 mr-2" />
                     Upgrade Plan
@@ -312,9 +344,9 @@ export default function BillingPage() {
               <CardDescription>Choose the plan that fits your needs</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {plans.map((plan) => {
-                  const isCurrentPlan = (user?.plan || "starter").toLowerCase() === plan.id
+                  const isCurrentPlan = normalizedPlan === plan.id
                   return (
                     <div
                       key={plan.id}
@@ -359,6 +391,33 @@ export default function BillingPage() {
                   )
                 })}
               </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Extra AI credits</CardTitle>
+              <CardDescription>Credits are used only after the monthly plan allowance is reached.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-3">
+              {[
+                { id: "small" as const, credits: 50, price: 5 },
+                { id: "medium" as const, credits: 150, price: 12 },
+                { id: "large" as const, credits: 500, price: 35 },
+              ].map((item) => (
+                <Button
+                  key={item.id}
+                  variant="outline"
+                  className="h-auto justify-between px-4 py-4"
+                  disabled={isUpgrading === `credits-${item.id}`}
+                  onClick={() => handleCredits(item.id)}
+                >
+                  <span>{item.credits} credits</span>
+                  <span>£{item.price}</span>
+                </Button>
+              ))}
             </CardContent>
           </Card>
         </motion.div>

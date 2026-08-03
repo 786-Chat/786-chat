@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto"
 
 import { sql } from "@/lib/786-admin/db"
 import type { BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
+import { normalizeBuilderPlan } from "@/lib/786-chat/billing"
 
 type PlanLimit = {
   requestsPerMinute: number
@@ -57,7 +58,7 @@ export async function reserveBuilderGeneration(input: {
   projectId?: string | null
 }): Promise<BuilderGenerationReservation> {
   const owner = normalizedEmail(input.ownerEmail)
-  const plan = String(input.plan || "starter").toLowerCase()
+  const plan = normalizeBuilderPlan(input.plan)
   const limit = limitsForPlan(plan)
   const prompt = input.prompt.trim()
 
@@ -114,21 +115,41 @@ export async function reserveBuilderGeneration(input: {
   if (Number(usage?.requests_today || 0) >= limit.requestsPerDay) {
     return { allowed: false, error: `Daily AI generation limit reached for the ${plan} plan.`, errorCode: "AI_DAILY_LIMIT", limit }
   }
+  let creditReserved = 0
   if (Number(usage?.requests_month || 0) >= limit.requestsPerMonth || Number(usage?.tokens_month || 0) >= limit.tokensPerMonth) {
-    return { allowed: false, error: `Monthly AI usage limit reached for the ${plan} plan. Upgrade or wait for the next billing period.`, errorCode: "AI_MONTHLY_LIMIT", limit }
+    const creditRows = (await sql`
+      UPDATE subscriptions
+      SET extra_credits = extra_credits - 1, updated_at = NOW()
+      WHERE user_id = ${input.userId}::uuid AND COALESCE(extra_credits, 0) > 0
+      RETURNING extra_credits
+    `) as unknown as Array<{ extra_credits: number }>
+    if (!creditRows[0]) {
+      return { allowed: false, error: `Monthly AI usage limit reached for the ${plan} plan. Upgrade, add credits or wait for the next billing period.`, errorCode: "AI_MONTHLY_LIMIT", limit }
+    }
+    creditReserved = 1
   }
 
   const generationId = randomUUID()
   const promptHash = createHash("sha256").update(prompt).digest("hex")
-  await sql`
-    INSERT INTO builder_ai_generations (
-      id, owner_email, user_id, project_id, plan, feature, status,
-      prompt_hash, prompt_characters, created_at
-    ) VALUES (
-      ${generationId}, ${owner}, ${input.userId}, ${input.projectId || null}, ${plan},
-      'builder-codegen', 'pending', ${promptHash}, ${prompt.length}, NOW()
-    )
-  `
+  try {
+    await sql`
+      INSERT INTO builder_ai_generations (
+        id, owner_email, user_id, project_id, plan, feature, status,
+        prompt_hash, prompt_characters, credit_reserved, created_at
+      ) VALUES (
+        ${generationId}, ${owner}, ${input.userId}, ${input.projectId || null}, ${plan},
+        'builder-codegen', 'pending', ${promptHash}, ${prompt.length}, ${creditReserved}, NOW()
+      )
+    `
+  } catch (error) {
+    if (creditReserved) {
+      await sql`
+        UPDATE subscriptions SET extra_credits = COALESCE(extra_credits, 0) + 1, updated_at = NOW()
+        WHERE user_id = ${input.userId}::uuid
+      `
+    }
+    throw error
+  }
   return { allowed: true, generationId, limit }
 }
 
@@ -184,13 +205,24 @@ export async function failBuilderGeneration(input: {
   latencyMs: number
 }) {
   await sql`
-    UPDATE builder_ai_generations
-    SET status = 'failed',
-        provider_attempts = ${JSON.stringify(input.providerAttempts || [])}::jsonb,
-        error_code = ${input.errorCode.slice(0, 80)},
-        error_message = ${safeError(input.error)},
-        latency_ms = ${Math.max(0, Math.floor(input.latencyMs))},
-        completed_at = NOW()
-    WHERE id = ${input.generationId} AND owner_email = ${normalizedEmail(input.ownerEmail)}
+    WITH failed AS (
+      UPDATE builder_ai_generations
+      SET status = 'failed',
+          provider_attempts = ${JSON.stringify(input.providerAttempts || [])}::jsonb,
+          error_code = ${input.errorCode.slice(0, 80)},
+          error_message = ${safeError(input.error)},
+          latency_ms = ${Math.max(0, Math.floor(input.latencyMs))},
+          credit_refunded = credit_reserved > 0,
+          completed_at = NOW()
+      WHERE id = ${input.generationId}
+        AND owner_email = ${normalizedEmail(input.ownerEmail)}
+        AND status = 'pending'
+      RETURNING user_id, credit_reserved
+    )
+    UPDATE subscriptions s
+    SET extra_credits = COALESCE(s.extra_credits, 0) + failed.credit_reserved,
+        updated_at = NOW()
+    FROM failed
+    WHERE failed.credit_reserved > 0 AND s.user_id::text = failed.user_id
   `
 }

@@ -246,3 +246,14 @@ CREATE TABLE IF NOT EXISTS builder_project_secrets (
 
 CREATE INDEX IF NOT EXISTS idx_builder_project_secrets_owner_project
   ON builder_project_secrets (owner_email, project_id, name);
+
+CREATE TABLE IF NOT EXISTS builder_billing_events (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('processing','completed','failed')),
+  attempt_count INTEGER NOT NULL DEFAULT 1,
+  error_message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);

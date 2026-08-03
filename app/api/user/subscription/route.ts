@@ -1,48 +1,32 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { sql } from "@/lib/db"
-import { verifyToken } from "@/lib/auth"
+import { getSession } from "@/lib/auth"
+import { getBuilderSubscription } from "@/lib/786-chat/billing"
 
 export async function GET() {
   try {
-    const cookieStore = await cookies()
-    const token =
-      cookieStore.get("auth_token")?.value ||
-      cookieStore.get("auth-token")?.value
-
-    if (!token) {
+    const session = await getSession()
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const payload = await verifyToken(token)
-
-    if (!payload) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const userId = payload.id
-
-    const subscriptions = await sql`
-      SELECT plan, messages_used, messages_limit, status, stripe_subscription_id, current_period_end
-      FROM subscriptions
-      WHERE user_id = ${userId}::uuid
-    `
-
-    if (subscriptions.length === 0) {
-      await sql`
-        INSERT INTO subscriptions (user_id, plan, messages_used, messages_limit, status)
-        VALUES (${userId}::uuid, 'starter', 0, 10, 'active')
-      `
-
-      return NextResponse.json({
-        plan: "starter",
-        messages_used: 0,
-        messages_limit: 10,
-        status: "active",
-      })
-    }
-
-    return NextResponse.json(subscriptions[0])
+    const subscription = await getBuilderSubscription(session.id)
+    return NextResponse.json({
+      plan: subscription.plan,
+      plan_name: subscription.planConfig.name,
+      messages_used: subscription.messages_used,
+      messages_limit: subscription.messages_limit,
+      extra_credits: subscription.extra_credits,
+      status: subscription.status,
+      stripe_subscription_id: subscription.stripe_subscription_id || null,
+      current_period_end: subscription.current_period_end || null,
+      cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+      features: subscription.planConfig.features,
+      entitlements: {
+        projects: subscription.planConfig.projects,
+        deployments_per_month: subscription.planConfig.deploymentsPerMonth,
+        custom_domains: subscription.planConfig.customDomains,
+        team_members: subscription.planConfig.teamMembers,
+      },
+    })
   } catch (error) {
     console.error("Subscription fetch error:", error)
     return NextResponse.json(

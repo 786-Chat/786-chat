@@ -4,21 +4,32 @@ import { getSession } from "@/lib/auth"
 import { listProjects } from "@/lib/786-admin/projects"
 import { saveGeneratedProjectAtomic } from "@/lib/786-chat/persistence"
 import { validatePersistedGeneration } from "@/lib/786-chat/persistence-validation"
+import { builderPlanUsage } from "@/lib/786-chat/billing"
 
-async function ownerEmail() {
+async function ownerSession() {
   const session = await getSession()
-  return session?.email ? session.email.toLowerCase().trim() : null
+  return session?.email
+    ? { ...session, email: session.email.toLowerCase().trim() }
+    : null
 }
 
 export async function GET() {
-  const owner = await ownerEmail()
-  if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  return NextResponse.json({ projects: await listProjects(owner) })
+  const session = await ownerSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  return NextResponse.json({ projects: await listProjects(session.email) })
 }
 
 export async function POST(request: Request) {
-  const owner = await ownerEmail()
-  if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const session = await ownerSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const allowance = await builderPlanUsage({ userId: session.id, ownerEmail: session.email })
+  if (allowance.usage.projects >= allowance.subscription.planConfig.projects) {
+    return NextResponse.json({
+      error: `${allowance.subscription.planConfig.name} supports ${allowance.subscription.planConfig.projects} projects. Upgrade or remove an old project.`,
+      code: "PROJECT_LIMIT_REACHED",
+      plan: allowance.subscription.plan,
+    }, { status: 402 })
+  }
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const title = String(body.title || "").trim()
   const files = body.files && typeof body.files === "object"
@@ -39,7 +50,7 @@ export async function POST(request: Request) {
   }
   try {
     const project = await saveGeneratedProjectAtomic({
-      ownerEmail: owner,
+      ownerEmail: session.email,
       title,
       description: String(body.description || ""),
       prompt: String(body.prompt || ""),

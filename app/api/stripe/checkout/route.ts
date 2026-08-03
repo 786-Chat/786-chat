@@ -1,155 +1,158 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+import type Stripe from "stripe"
+
+import {
+  BUILDER_CREDIT_PACKAGES,
+  BUILDER_PLANS,
+  getBuilderSubscription,
+  trustedBillingOrigin,
+  type BuilderCreditPackageId,
+  type BuilderPlanId,
+} from "@/lib/786-chat/billing"
+import { consumeSecurityRateLimit, rateLimitResponse } from "@/lib/786-chat/security"
+import { getSession } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import { verifyToken } from "@/lib/auth"
-import Stripe from "stripe"
+import { getStripe } from "@/lib/stripe"
 
-// Get Stripe instance with stored keys
-async function getStripe() {
-  const settings = await sql`SELECT stripe_secret_key FROM stripe_settings LIMIT 1`
-  if (settings.length === 0 || !settings[0].stripe_secret_key) {
-    throw new Error("Stripe not configured")
+export const runtime = "nodejs"
+
+function subscriptionLineItem(planId: Exclude<BuilderPlanId, "free">): Stripe.Checkout.SessionCreateParams.LineItem {
+  const configuredPrice = process.env[`STRIPE_PRICE_${planId.toUpperCase()}_GBP`]?.trim()
+  if (configuredPrice) return { price: configuredPrice, quantity: 1 }
+  const plan = BUILDER_PLANS[planId]
+  return {
+    price_data: {
+      currency: "gbp",
+      product_data: {
+        name: `786.Chat ${plan.name}`,
+        description: plan.features.join(" · "),
+      },
+      unit_amount: plan.monthlyPriceGbp * 100,
+      recurring: { interval: "month" },
+    },
+    quantity: 1,
   }
-  return new Stripe(settings[0].stripe_secret_key)
-}
-
-// Get current user
-async function getCurrentUser() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth-token")?.value
-  if (!token) return null
-  return verifyToken(token)
-}
-
-// Plan prices in pence/cents
-const PLAN_PRICES: Record<string, Record<string, number>> = {
-  basic: { GBP: 200, USD: 300, EUR: 300, PKR: 100000 },
-  pro: { GBP: 2000, USD: 2600, EUR: 2400, PKR: 700000 },
-  business: { GBP: 4000, USD: 5200, EUR: 4800, PKR: 1400000 },
-  enterprise: { GBP: 9900, USD: 12900, EUR: 11900, PKR: 3500000 }
-}
-
-const PLAN_NAMES: Record<string, string> = {
-  basic: "MujeebProAI Membership",
-  pro: "Pro Plan", 
-  business: "Business Plan",
-  enterprise: "Enterprise Plan"
-}
-
-// Credit top-up options
-const TOPUP_OPTIONS: Record<string, { credits: number; prices: Record<string, number> }> = {
-  small: { credits: 50, prices: { GBP: 500, USD: 650, EUR: 600, PKR: 175000 } },
-  medium: { credits: 150, prices: { GBP: 1200, USD: 1560, EUR: 1440, PKR: 420000 } },
-  large: { credits: 500, prices: { GBP: 3500, USD: 4550, EUR: 4200, PKR: 1225000 } }
 }
 
 export async function POST(request: Request) {
+  const session = await getSession()
+  if (!session?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!process.env.STRIPE_WEBHOOK_SECRET?.trim()) {
+    return NextResponse.json({
+      error: "Billing activation is being configured. No payment was created.",
+      code: "BILLING_WEBHOOK_NOT_CONFIGURED",
+    }, { status: 503 })
+  }
+
+  const limit = await consumeSecurityRateLimit({
+    namespace: "billing-checkout",
+    identifier: session.id,
+    limit: 10,
+    windowSeconds: 15 * 60,
+  })
+  if (!limit.allowed) {
+    const response = rateLimitResponse(limit)
+    return NextResponse.json(response.body, { status: response.status, headers: response.headers })
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const type = String(body.type || "")
+  const origin = trustedBillingOrigin(request)
+  const subscription = await getBuilderSubscription(session.id)
+  const stripe = getStripe()
+  const customerId = typeof subscription.stripe_customer_id === "string"
+    ? subscription.stripe_customer_id
+    : undefined
+
+  let mode: Stripe.Checkout.SessionCreateParams.Mode
+  let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[]
+  let metadata: Record<string, string>
+  let planId: BuilderPlanId | null = null
+  let credits = 0
+  let amountGbp = 0
+
+  if (type === "subscription") {
+    const requestedPlan = String(body.planId || "") as BuilderPlanId
+    if (requestedPlan !== "pro" && requestedPlan !== "business") {
+      return NextResponse.json({ error: "Choose the Pro or Business plan." }, { status: 400 })
+    }
+    if (subscription.plan === requestedPlan && subscription.status === "active") {
+      return NextResponse.json({ error: "This plan is already active. Use Manage billing to make changes." }, { status: 409 })
+    }
+    planId = requestedPlan
+    amountGbp = BUILDER_PLANS[requestedPlan].monthlyPriceGbp
+    mode = "subscription"
+    lineItems = [subscriptionLineItem(requestedPlan)]
+    metadata = {
+      billing_version: "2",
+      type: "builder_subscription",
+      user_id: session.id,
+      owner_email: session.email.toLowerCase().trim(),
+      plan_id: requestedPlan,
+    }
+  } else if (type === "credits" || type === "topup") {
+    const packageId = String(body.packageId || body.topupId || "") as BuilderCreditPackageId
+    const creditPackage = BUILDER_CREDIT_PACKAGES[packageId]
+    if (!creditPackage) {
+      return NextResponse.json({ error: "Choose a valid credit package." }, { status: 400 })
+    }
+    credits = creditPackage.credits
+    amountGbp = creditPackage.priceGbp
+    mode = "payment"
+    lineItems = [{
+      price_data: {
+        currency: "gbp",
+        product_data: {
+          name: `${credits} 786.Chat AI credits`,
+          description: "Extra builder generations that do not expire while the account remains active.",
+        },
+        unit_amount: amountGbp * 100,
+      },
+      quantity: 1,
+    }]
+    metadata = {
+      billing_version: "2",
+      type: "builder_credits",
+      user_id: session.id,
+      owner_email: session.email.toLowerCase().trim(),
+      credits: String(credits),
+      package_id: packageId,
+    }
+  } else {
+    return NextResponse.json({ error: "Choose a subscription or credit purchase." }, { status: 400 })
+  }
+
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { type, planId, topupId } = await request.json()
-    const stripe = await getStripe()
-    
-    // Get currency from settings
-    const settings = await sql`SELECT default_currency, vat_enabled, vat_rate FROM stripe_settings LIMIT 1`
-    const currency = settings[0]?.default_currency?.toLowerCase() || "gbp"
-    const vatEnabled = settings[0]?.vat_enabled || false
-    const vatRate = settings[0]?.vat_rate || 20
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let lineItems: any[] = []
-    let metadata: Record<string, string> = {
-      user_id: user.id,
-      type
-    }
-
-    if (type === "subscription" && planId) {
-      const planPrice = PLAN_PRICES[planId]?.[currency.toUpperCase()]
-      if (!planPrice) {
-        return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
-      }
-
-      let unitAmount = planPrice
-      if (vatEnabled) {
-        unitAmount = Math.round(planPrice * (1 + vatRate / 100))
-      }
-
-      lineItems = [{
-        price_data: {
-          currency,
-          product_data: {
-            name: PLAN_NAMES[planId],
-            description: `MujeebProAI ${PLAN_NAMES[planId]} - Monthly subscription`
-          },
-          unit_amount: unitAmount,
-          recurring: { interval: "month" }
-        },
-        quantity: 1
-      }]
-      metadata.plan_id = planId
-
-    } else if (type === "topup" && topupId) {
-      const topup = TOPUP_OPTIONS[topupId]
-      if (!topup) {
-        return NextResponse.json({ error: "Invalid top-up option" }, { status: 400 })
-      }
-
-      let unitAmount = topup.prices[currency.toUpperCase()]
-      if (vatEnabled) {
-        unitAmount = Math.round(unitAmount * (1 + vatRate / 100))
-      }
-
-      lineItems = [{
-        price_data: {
-          currency,
-          product_data: {
-            name: `${topup.credits} AI Credits`,
-            description: `Top up ${topup.credits} AI message credits`
-          },
-          unit_amount: unitAmount
-        },
-        quantity: 1
-      }]
-      metadata.credits = topup.credits.toString()
-      metadata.topup_id = topupId
-
-    } else {
-      return NextResponse.json({ error: "Invalid checkout type" }, { status: 400 })
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: type === "subscription" ? "subscription" : "payment",
+    const checkout = await stripe.checkout.sessions.create({
+      mode,
       line_items: lineItems,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard/billing?canceled=true`,
-      customer_email: user.email,
+      success_url: `${origin}/dashboard/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/dashboard/billing?canceled=true`,
+      client_reference_id: session.id,
+      customer: customerId,
+      customer_email: customerId ? undefined : session.email,
+      allow_promotion_codes: mode === "subscription",
       metadata,
-      allow_promotion_codes: true
+      subscription_data: mode === "subscription" ? { metadata } : undefined,
     })
 
-    // Record pending payment
     await sql`
-      INSERT INTO payments (user_id, stripe_session_id, type, amount, currency, status, plan_id, credits_added)
-      VALUES (
-        ${user.id}::uuid,
-        ${session.id},
-        ${type},
-        ${(lineItems[0].price_data?.unit_amount || 0) / 100},
-        ${currency.toUpperCase()},
-        'pending',
-        ${planId || null},
-        ${type === "topup" ? parseInt(metadata.credits || "0") : 0}
+      INSERT INTO payments (
+        user_id, stripe_session_id, type, amount, currency, status,
+        plan_id, credits_added, updated_at
+      ) VALUES (
+        ${session.id}::uuid, ${checkout.id}, ${type}, ${amountGbp}, 'GBP', 'pending',
+        ${planId}, ${credits}, NOW()
       )
+      ON CONFLICT (stripe_session_id) WHERE stripe_session_id IS NOT NULL DO NOTHING
     `
-
-    return NextResponse.json({ url: session.url })
+    return NextResponse.json({ url: checkout.url })
   } catch (error) {
-    console.error("Checkout error:", error)
-    const message = error instanceof Error ? error.message : "Checkout failed"
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error("[786.Chat billing] Checkout failed", error)
+    return NextResponse.json({
+      error: process.env.STRIPE_SECRET_KEY
+        ? "Checkout is temporarily unavailable. Please try again."
+        : "Billing is not configured yet.",
+    }, { status: 503 })
   }
 }

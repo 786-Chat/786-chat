@@ -19,6 +19,7 @@ import {
   rollbackProjectDeployment,
   type AdminProjectDeployment,
 } from "@/lib/786-admin/publishing";
+import { builderPlanUsage } from "@/lib/786-chat/billing";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -212,6 +213,20 @@ export async function POST(request: Request, { params }: Context) {
       });
     }
 
+    const allowance = await builderPlanUsage({ userId: session.id, ownerEmail });
+    if (
+      (action === "deploy" || action === "redeploy") &&
+      allowance.usage.deploymentsThisMonth >= allowance.subscription.planConfig.deploymentsPerMonth
+    ) {
+      return NextResponse.json({
+        error: allowance.subscription.plan === "free"
+          ? "Production deployment is available on Pro and Business plans. Preview builds remain available on Free."
+          : `${allowance.subscription.planConfig.name} has reached its monthly deployment limit.`,
+        code: "DEPLOYMENT_LIMIT_REACHED",
+        plan: allowance.subscription.plan,
+      }, { status: 402 });
+    }
+
     if (action === "redeploy") {
       const deployment = await publishCompiledProject({
         projectId: id,
@@ -246,6 +261,22 @@ export async function POST(request: Request, { params }: Context) {
         { error: "Enter the requested domain or subdomain." },
         { status: 400 },
       );
+    }
+    if (addressType === "custom") {
+      if (allowance.subscription.planConfig.customDomains < 1) {
+        return NextResponse.json({
+          error: "Custom domains are available on Pro and Business plans.",
+          code: "CUSTOM_DOMAIN_PLAN_REQUIRED",
+        }, { status: 402 });
+      }
+      const existingDomains = await listProjectDomains(id, ownerEmail);
+      const existingMatch = matchingDomain(existingDomains, addressType, addressValue);
+      if (!existingMatch && allowance.usage.customDomains >= allowance.subscription.planConfig.customDomains) {
+        return NextResponse.json({
+          error: `${allowance.subscription.planConfig.name} supports ${allowance.subscription.planConfig.customDomains} custom domains.`,
+          code: "CUSTOM_DOMAIN_LIMIT_REACHED",
+        }, { status: 402 });
+      }
     }
 
     const deployment = await publishCompiledProject({
