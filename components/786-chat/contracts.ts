@@ -48,17 +48,52 @@ export type BuilderRevision = {
   created_at: string
 }
 
-export type BuilderDeploymentResult = {
+export type BuilderDeploymentDomain = {
+  id: string
+  address_type: "path" | "subdomain" | "custom"
+  slug: string | null
+  hostname: string | null
+  is_primary: boolean
+  status: string
+  dns_status: string
+  ssl_status: string
+  dns_records?: Array<{ type: string; name: string; value: string; reason?: string }>
+  error_message?: string | null
+  verified_at?: string | null
+  updated_at?: string
+}
+
+export type BuilderDeploymentVersion = {
+  id: string
+  version: number
+  action: "deploy" | "redeploy" | "rollback"
+  status: "live" | "failed"
+  runtime_url: string | null
+  build_id: string | null
+  source_version: string
+  restored_version: number | null
+  published_at: string
+}
+
+export type BuilderDeploymentLifecycle = {
+  deployment: {
+    id: string
+    slug: string
+    status: "live" | "failed"
+    version: number
+    runtime_url: string | null
+    build_id: string | null
+    published_at: string
+  } | null
+  domains: BuilderDeploymentDomain[]
+  history: BuilderDeploymentVersion[]
+}
+
+export type BuilderDeploymentResult = BuilderDeploymentLifecycle & {
   url: string
   requestedUrl: string
   fallbackUrl: string
-  domain: {
-    address_type: "path" | "subdomain" | "custom"
-    status: string
-    dns_status: string
-    ssl_status: string
-    dns_records?: Array<{ type: string; name: string; value: string }>
-  }
+  domain: BuilderDeploymentDomain
 }
 
 export type BuilderBuild = {

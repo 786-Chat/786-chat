@@ -1,5 +1,6 @@
 import type {
   BuilderBuild,
+  BuilderDeploymentLifecycle,
   BuilderDeploymentResult,
   BuilderMessage,
   BuilderProject,
@@ -287,23 +288,59 @@ export async function restoreBuilderRevision(projectId: string, revisionId: stri
   }
 }
 
-export async function deployBuilderProject(input: {
-  projectId: string
-  addressType: "path" | "subdomain" | "custom"
-  addressValue: string
-}): Promise<BuilderDeploymentResult> {
-  const response = await fetch(`/api/786-chat/projects/${input.projectId}/deploy`, {
+async function deploymentAction(
+  projectId: string,
+  body: Record<string, unknown>,
+): Promise<BuilderDeploymentResult> {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      addressType: input.addressType,
-      addressValue: input.addressValue,
-    }),
+    body: JSON.stringify(body),
   })
   const payload = (await response.json().catch(() => ({}))) as
     Partial<BuilderDeploymentResult> & { error?: string }
   if (!response.ok || !payload.url || !payload.domain) {
-    throw new Error(payload.error || "Verified deployment could not be created.")
+    throw new Error(payload.error || "Deployment action failed.")
   }
   return payload as BuilderDeploymentResult
+}
+
+export async function loadBuilderDeploymentLifecycle(
+  projectId: string,
+): Promise<BuilderDeploymentLifecycle> {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/deploy`, {
+    cache: "no-store",
+  })
+  const payload = (await response.json().catch(() => ({}))) as
+    Partial<BuilderDeploymentLifecycle> & { error?: string }
+  if (!response.ok) throw new Error(payload.error || "Deployment history could not be loaded.")
+  return {
+    deployment: payload.deployment || null,
+    domains: payload.domains || [],
+    history: payload.history || [],
+  }
+}
+
+export async function deployBuilderProject(input: {
+  projectId: string
+  addressType: "path" | "subdomain" | "custom"
+  addressValue: string
+}) {
+  return deploymentAction(input.projectId, {
+    action: "deploy",
+    addressType: input.addressType,
+    addressValue: input.addressValue,
+  })
+}
+
+export async function redeployBuilderProject(projectId: string) {
+  return deploymentAction(projectId, { action: "redeploy" })
+}
+
+export async function rollbackBuilderDeployment(projectId: string, version: number) {
+  return deploymentAction(projectId, { action: "rollback", version })
+}
+
+export async function refreshBuilderDomain(projectId: string, domainId: string) {
+  return deploymentAction(projectId, { action: "refresh-domain", domainId })
 }

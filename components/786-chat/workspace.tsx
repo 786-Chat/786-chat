@@ -52,17 +52,22 @@ import {
   deleteBuilderProject,
   deployBuilderProject,
   loadBuilderBuild,
+  loadBuilderDeploymentLifecycle,
   loadBuilderProject,
   listBuilderProjects,
   listBuilderRevisions,
   queueBuilderBuild,
+  redeployBuilderProject,
+  refreshBuilderDomain,
   restoreBuilderRevision,
+  rollbackBuilderDeployment,
   saveBuilderProject,
   saveVisualEditorState,
 } from "./api"
 import {
   BUILDER_DEVICES,
   type BuilderBuild,
+  type BuilderDeploymentLifecycle,
   type BuilderDeploymentResult,
   type BuilderDevice,
   type BuilderMessage,
@@ -161,6 +166,8 @@ export function SevenEightSixWorkspace() {
   const [deployType, setDeployType] = useState<"path" | "subdomain" | "custom">("path")
   const [deployValue, setDeployValue] = useState("")
   const [deployResult, setDeployResult] = useState<BuilderDeploymentResult | null>(null)
+  const [deploymentLifecycle, setDeploymentLifecycle] = useState<BuilderDeploymentLifecycle>({ deployment: null, domains: [], history: [] })
+  const [deploymentActionVersion, setDeploymentActionVersion] = useState<number | null>(null)
   const [designOpen, setDesignOpen] = useState(false)
   const [editorSections, setEditorSections] = useState<EditorSection[]>([])
   const [selectedSection, setSelectedSection] = useState("")
@@ -563,19 +570,86 @@ export function SevenEightSixWorkspace() {
     }
   }
 
+  function applyDeploymentResult(result: BuilderDeploymentResult) {
+    setDeployResult(result)
+    setDeploymentLifecycle({
+      deployment: result.deployment,
+      domains: result.domains,
+      history: result.history,
+    })
+  }
+
+  async function openDeploymentPanel() {
+    if (!project || build?.status !== "passed" || visualDirty) return
+    setError("")
+    setDeployResult(null)
+    setDeployOpen(true)
+    setPanelBusy(true)
+    try {
+      setDeploymentLifecycle(await loadBuilderDeploymentLifecycle(project.id))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Deployment history could not be loaded.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
   async function deployVerifiedProject() {
     if (!project || build?.status !== "passed" || panelBusy || visualDirty) return
     setPanelBusy(true)
     setError("")
     setDeployResult(null)
     try {
-      setDeployResult(await deployBuilderProject({
+      applyDeploymentResult(await deployBuilderProject({
         projectId: project.id,
         addressType: deployType,
         addressValue: deployValue,
       }))
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Deployment failed.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function redeployVerifiedProject() {
+    if (!project || build?.status !== "passed" || panelBusy || visualDirty) return
+    setPanelBusy(true)
+    setError("")
+    setDeployResult(null)
+    try {
+      applyDeploymentResult(await redeployBuilderProject(project.id))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Redeployment failed.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function rollbackDeploymentVersion(version: number) {
+    if (!project || panelBusy) return
+    setPanelBusy(true)
+    setDeploymentActionVersion(version)
+    setError("")
+    setDeployResult(null)
+    try {
+      applyDeploymentResult(await rollbackBuilderDeployment(project.id, version))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Rollback failed.")
+    } finally {
+      setDeploymentActionVersion(null)
+      setPanelBusy(false)
+    }
+  }
+
+  async function refreshDeploymentDomain(domainId: string) {
+    if (!project || panelBusy) return
+    setPanelBusy(true)
+    setError("")
+    try {
+      applyDeploymentResult(await refreshBuilderDomain(project.id, domainId))
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Domain status could not be refreshed.")
     } finally {
       setPanelBusy(false)
     }
@@ -772,7 +846,7 @@ export function SevenEightSixWorkspace() {
           <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" onClick={() => { setError(""); setDeployResult(null); setDeployOpen(true) }} disabled={!project || build?.status !== "passed" || visualDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
+          <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
             <Rocket className="h-3.5 w-3.5" /><span className="hidden sm:inline">Deploy</span><ChevronDown className="hidden h-3 w-3 sm:block" />
           </button>
         </header>
@@ -1239,68 +1313,155 @@ export function SevenEightSixWorkspace() {
       )}
       {deployOpen && project && (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/85 p-5 backdrop-blur-md">
-          <section className="my-5 w-full max-w-2xl overflow-hidden rounded-3xl border border-amber-300/25 bg-gradient-to-br from-[#09101f] via-[#11102b] to-[#21103b] shadow-[0_40px_120px_rgba(0,0,0,.8)]">
+          <section className="my-5 w-full max-w-4xl overflow-hidden rounded-3xl border border-amber-300/25 bg-gradient-to-br from-[#09101f] via-[#11102b] to-[#21103b] shadow-[0_40px_120px_rgba(0,0,0,.8)]">
             <header className="flex items-start border-b border-white/10 p-6">
               <div>
-                <p className="text-[12px] font-black uppercase tracking-[.18em] text-emerald-300">Verified build ready</p>
+                <p className="text-[12px] font-black uppercase tracking-[.18em] text-emerald-300">Production deployment</p>
                 <h2 className="mt-2 text-2xl font-black">Deploy {project.title}</h2>
-                <p className="mt-2 text-[13px] leading-6 text-slate-400">Every address below points to the exact compiled build that passed validation.</p>
+                <p className="mt-2 text-[13px] leading-6 text-slate-400">Ship a verified build, connect domains, redeploy safely or restore any earlier release.</p>
               </div>
               <button type="button" onClick={() => setDeployOpen(false)} disabled={panelBusy} className="ml-auto grid h-9 w-9 place-items-center rounded-full border border-white/10 disabled:opacity-40" aria-label="Close deployment"><X className="h-4 w-4" /></button>
             </header>
-            <div className="p-6">
-              {!deployResult ? (
-                <>
-                  <div className="grid gap-3">
-                    {([
-                      ["path", "786.Chat project link", `786.chat/p/${project.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, "Immediate · no DNS"],
-                      ["subdomain", "786.Chat subdomain", `${deployValue || "customer-app"}.786.chat`, "Free SSL"],
-                      ["custom", "Customer-owned domain", deployValue || "app.customer.com", "DNS verification"],
-                    ] as const).map(([value, title, example, detail]) => (
-                      <button key={value} type="button" onClick={() => { setDeployType(value); setDeployValue("") }} className={`rounded-2xl border p-4 text-left transition ${deployType === value ? "border-cyan-300/60 bg-cyan-400/10" : "border-white/10 bg-white/[.035] hover:border-white/20"}`}>
-                        <span className="flex items-center"><b className="text-[14px]">{title}</b><span className="ml-auto text-[12px] text-slate-500">{detail}</span></span>
-                        <span className="mt-2 block text-[13px] font-bold text-cyan-200">{example}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {deployType !== "path" && (
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-[12px] font-bold text-slate-300">{deployType === "subdomain" ? "Subdomain name" : "Complete customer domain"}</span>
-                      <div className="flex rounded-xl border border-white/10 bg-slate-950/50 focus-within:border-cyan-300/50">
-                        <input value={deployValue} onChange={(event) => setDeployValue(event.target.value)} placeholder={deployType === "subdomain" ? "customer-app" : "app.customer.com"} className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[13px] outline-none" />
-                        {deployType === "subdomain" && <span className="self-center pr-4 text-[13px] text-slate-400">.786.chat</span>}
-                      </div>
-                    </label>
-                  )}
-                  {error && <p className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
-                  <button type="button" onClick={() => void deployVerifiedProject()} disabled={panelBusy || (deployType !== "path" && !deployValue.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-200 to-amber-400 px-5 py-3 text-[14px] font-black text-slate-950 disabled:opacity-40">
-                    {panelBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                    Deploy verified build
-                  </button>
-                </>
-              ) : (
-                <div>
-                  <div className="grid h-14 w-14 place-items-center rounded-full bg-emerald-400/15 text-emerald-200"><Check className="h-7 w-7" /></div>
-                  <h3 className="mt-4 text-xl font-black">Deployment recorded</h3>
-                  <p className="mt-2 break-all text-[13px] font-bold text-cyan-200">{deployResult.requestedUrl}</p>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[12px]">
-                    <span className="rounded-lg bg-white/5 p-2">DNS: {deployResult.domain.dns_status}</span>
-                    <span className="rounded-lg bg-white/5 p-2">SSL: {deployResult.domain.ssl_status}</span>
-                    <span className="rounded-lg bg-white/5 p-2">App: {deployResult.domain.status}</span>
-                  </div>
-                  {deployResult.domain.dns_records?.map((record, index) => (
-                    <div key={`${record.type}-${index}`} className="mt-2 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[12px]">
-                      <b className="text-violet-200">{record.type}</b>
-                      <span className="min-w-0 flex-1 break-all">{record.name} → {record.value}</span>
-                      <button type="button" onClick={() => void navigator.clipboard.writeText(record.value)} aria-label="Copy DNS value"><Copy className="h-4 w-4" /></button>
+
+            <div className="max-h-[78vh] space-y-6 overflow-y-auto p-6">
+              {deployResult && (
+                <div className="rounded-2xl border border-emerald-300/25 bg-emerald-400/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-emerald-200"><Check className="h-5 w-5" /></span>
+                    <div className="min-w-0">
+                      <h3 className="font-black">Deployment action completed</h3>
+                      <p className="mt-1 break-all text-[13px] font-bold text-cyan-200">{deployResult.requestedUrl}</p>
                     </div>
-                  ))}
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <button type="button" onClick={() => setDeployOpen(false)} className="rounded-xl border border-white/10 px-4 py-3 text-[13px] font-bold">Close</button>
-                    <a href={deployResult.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-3 text-[13px] font-black text-slate-950">Open deployment <ExternalLink className="h-4 w-4" /></a>
+                    <a href={deployResult.url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-300 px-3 py-2 text-[12px] font-black text-slate-950">Open <ExternalLink className="h-3.5 w-3.5" /></a>
                   </div>
                 </div>
               )}
+
+              {deploymentLifecycle.deployment && (() => {
+                const primary = deploymentLifecycle.domains.find((domain) => domain.is_primary) || deploymentLifecycle.domains[0]
+                const liveUrl = primary
+                  ? primary.address_type === "path"
+                    ? "/p/" + (primary.slug || deploymentLifecycle.deployment?.slug || "")
+                    : "https://" + primary.hostname
+                  : "/p/" + deploymentLifecycle.deployment.slug
+                return (
+                  <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/[.06] p-5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-[.16em] text-cyan-300">Current production release</p>
+                        <h3 className="mt-2 text-xl font-black">Version {deploymentLifecycle.deployment.version}</h3>
+                        <p className="mt-1 text-[12px] text-slate-400">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(deploymentLifecycle.deployment.published_at))}</p>
+                      </div>
+                      <div className="ml-auto flex flex-wrap gap-2">
+                        <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-[12px] font-bold">Open live <ExternalLink className="h-3.5 w-3.5" /></a>
+                        <button type="button" onClick={() => void redeployVerifiedProject()} disabled={panelBusy || build?.status !== "passed" || visualDirty} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-[12px] font-black text-slate-950 disabled:opacity-40">
+                          {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />} Redeploy current build
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <div>
+                <div className="mb-3">
+                  <h3 className="text-[15px] font-black">{deploymentLifecycle.deployment ? "Add or switch production address" : "Choose a production address"}</h3>
+                  <p className="mt-1 text-[12px] text-slate-400">Existing verified domains are reused; a deployment never creates a duplicate address.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {([
+                    ["path", "786.Chat project link", "Immediate · no DNS"],
+                    ["subdomain", "786.Chat subdomain", "Free SSL"],
+                    ["custom", "Customer-owned domain", "DNS verification"],
+                  ] as const).map(([value, title, detail]) => (
+                    <button key={value} type="button" onClick={() => { setDeployType(value); setDeployValue("") }} className={deployType === value ? "rounded-2xl border border-cyan-300/60 bg-cyan-400/10 p-4 text-left transition" : "rounded-2xl border border-white/10 bg-white/[.035] p-4 text-left transition hover:border-white/20"}>
+                      <span className="block text-[14px] font-black">{title}</span>
+                      <span className="mt-2 block text-[12px] text-slate-400">{detail}</span>
+                    </button>
+                  ))}
+                </div>
+                {deployType !== "path" && (
+                  <label className="mt-4 block">
+                    <span className="mb-2 block text-[12px] font-bold text-slate-300">{deployType === "subdomain" ? "Subdomain name" : "Complete customer domain"}</span>
+                    <div className="flex rounded-xl border border-white/10 bg-slate-950/50 focus-within:border-cyan-300/50">
+                      <input value={deployValue} onChange={(event) => setDeployValue(event.target.value)} placeholder={deployType === "subdomain" ? "customer-app" : "app.customer.com"} className="min-w-0 flex-1 bg-transparent px-4 py-3 text-[13px] outline-none" />
+                      {deployType === "subdomain" && <span className="self-center pr-4 text-[13px] text-slate-400">.786.chat</span>}
+                    </div>
+                  </label>
+                )}
+                {error && <p role="alert" className="mt-4 rounded-xl border border-rose-300/20 bg-rose-500/10 p-3 text-[13px] text-rose-100">{error}</p>}
+                <button type="button" onClick={() => void deployVerifiedProject()} disabled={panelBusy || (deployType !== "path" && !deployValue.trim())} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-200 to-amber-400 px-5 py-3 text-[14px] font-black text-slate-950 disabled:opacity-40">
+                  {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                  {deploymentLifecycle.deployment ? "Deploy to this address" : "Deploy verified build"}
+                </button>
+              </div>
+
+              {deploymentLifecycle.domains.length > 0 && (
+                <div>
+                  <div className="mb-3 flex items-center gap-2"><ExternalLink className="h-4 w-4 text-violet-300" /><h3 className="text-[15px] font-black">Domains</h3></div>
+                  <div className="grid gap-3">
+                    {deploymentLifecycle.domains.map((domain) => {
+                      const address = domain.address_type === "path" ? "786.chat/p/" + domain.slug : domain.hostname
+                      return (
+                        <div key={domain.id} className="rounded-2xl border border-white/10 bg-white/[.035] p-4">
+                          <div className="flex flex-wrap items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <b className="break-all text-[13px] text-cyan-200">{address}</b>
+                                {domain.is_primary && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-200">PRIMARY</span>}
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400">
+                                <span>DNS {domain.dns_status}</span><span>SSL {domain.ssl_status}</span><span>App {domain.status}</span>
+                              </div>
+                            </div>
+                            {domain.address_type !== "path" && (
+                              <button type="button" onClick={() => void refreshDeploymentDomain(domain.id)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[11px] font-bold disabled:opacity-40"><RefreshCw className="h-3 w-3" /> Refresh DNS</button>
+                            )}
+                          </div>
+                          {domain.dns_records?.map((record, index) => (
+                            <div key={record.type + "-" + index} className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 p-3 text-[11px]">
+                              <b className="text-violet-200">{record.type}</b>
+                              <span className="min-w-0 flex-1 break-all">{record.name} → {record.value}</span>
+                              <button type="button" onClick={() => void navigator.clipboard.writeText(record.value)} aria-label="Copy DNS value"><Copy className="h-4 w-4" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="mb-3 flex items-center gap-2"><History className="h-4 w-4 text-amber-200" /><h3 className="text-[15px] font-black">Deployment history</h3></div>
+                {deploymentLifecycle.history.length ? (
+                  <div className="overflow-hidden rounded-2xl border border-white/10">
+                    {deploymentLifecycle.history.map((release) => {
+                      const isCurrent = release.version === deploymentLifecycle.deployment?.version
+                      return (
+                        <div key={release.id} className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-white/[.025] p-4 last:border-b-0">
+                          <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-[12px] font-black">v{release.version}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <b className="text-[13px] capitalize">{release.action}</b>
+                              {isCurrent && <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black text-emerald-200">CURRENT</span>}
+                              {release.restored_version && <span className="text-[11px] text-slate-500">restored v{release.restored_version}</span>}
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-500">{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(release.published_at))}</p>
+                          </div>
+                          {!isCurrent && (
+                            <button type="button" onClick={() => void rollbackDeploymentVersion(release.version)} disabled={panelBusy} className="inline-flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-[11px] font-black text-amber-100 disabled:opacity-40">
+                              {deploymentActionVersion === release.version ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />} Roll back
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-[12px] text-slate-500">The first successful production deployment will appear here.</div>
+                )}
+              </div>
             </div>
           </section>
         </div>
