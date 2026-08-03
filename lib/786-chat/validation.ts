@@ -190,6 +190,10 @@ function source(files: Record<string, string>) {
     .join("\n")
 }
 
+function regexEscape(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 function internalHrefRoutes(files: Record<string, string>) {
   const routes = new Set<string>()
   for (const [path, content] of Object.entries(files)) {
@@ -251,6 +255,9 @@ export function validateGeneratedProject(
   }
 
   const requirements: Record<string, RegExp> = {
+    "navigation": /<(?:header|nav)\b/i,
+    "form": /<form\b/i,
+    "data-table": /<table\b|role\s*=\s*["']grid["']/i,
     "email-input": /type\s*=\s*["']email["']|name\s*=\s*["']email["']/i,
     "password-input": /type\s*=\s*(?:["']password["']|\{[^}]*["']password["'][^}]*\})|name\s*=\s*["']password["']/i,
     "remember-me": /remember[\s_-]*me/i,
@@ -261,6 +268,35 @@ export function validateGeneratedProject(
   for (const component of specification.requiredComponents) {
     const pattern = requirements[component]
     if (pattern && !pattern.test(combined)) errors.push(`Missing required control: ${component}`)
+  }
+
+  if (specification.requiredInteractions.includes("submit-booking")) {
+    const bookingSource = routeFileCandidates("/booking")
+      .map((path) => files[path] || "")
+      .join("\n")
+    if (!/<form\b/i.test(bookingSource) ||
+        !/(?:onSubmit|action\s*=|formAction)/i.test(bookingSource) ||
+        !/(?:date|time|appointment|booking)/i.test(bookingSource)) {
+      errors.push("Booking route is missing a functional booking form with submit handling.")
+    }
+  }
+
+  if (specification.platforms.includes("database")) {
+    const schema = files["sql/schema.sql"] || ""
+    if (!schema.trim()) {
+      errors.push("Missing required database schema: sql/schema.sql")
+    } else if (!/CREATE\s+TABLE/i.test(schema)) {
+      errors.push("PostgreSQL schema does not create a database table.")
+    }
+    for (const table of specification.databaseTables || []) {
+      const tablePattern = new RegExp(
+        `CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+["']?${regexEscape(table)}["']?\\b`,
+        "i",
+      )
+      if (!tablePattern.test(schema)) {
+        errors.push(`Missing requested database table: ${table}`)
+      }
+    }
   }
 
   if (specification.systemBlueprint) {

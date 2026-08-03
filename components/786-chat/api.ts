@@ -180,6 +180,9 @@ export async function saveBuilderProject(input: {
             reason: input.generated.reason,
           },
         ],
+        revision_label: `Before AI edit: ${input.userPrompt.slice(0, 100)}`,
+        revision_source: "ai-edit",
+        record_generation_job: true,
       }),
     },
   )
@@ -190,6 +193,52 @@ export async function saveBuilderProject(input: {
     throw new Error(errorMessage(payload, "Generated files could not be saved."))
   }
   return toProject(payload.project)
+}
+
+export async function saveBuilderCodeEdit(input: {
+  project: BuilderProject
+  path: string
+  content: string
+}) {
+  const files = { ...input.project.files, [input.path]: input.content }
+  const response = await fetch(`/api/786-chat/projects/${input.project.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: input.project.prompt,
+      files,
+      preview_state: input.project.previewState,
+      metadata: input.project.metadata,
+      revision_label: `Before code edit: ${input.path}`,
+      revision_source: "code-editor",
+      record_generation_job: false,
+    }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as { project?: StoredProject }
+  if (!response.ok || !payload.project) {
+    throw new Error(errorMessage(payload, "Code edit could not be saved."))
+  }
+  return toProject(payload.project)
+}
+
+export async function undoBuilderProject(projectId: string, message = "Undo the last change") {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions/undo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    project?: StoredProject
+    restoredRevision?: BuilderRevision
+  }
+  if (!response.ok || !payload.project || !payload.restoredRevision) {
+    throw new Error(errorMessage(payload, "The last change could not be undone."))
+  }
+  return {
+    project: toProject(payload.project),
+    messages: (payload.project.messages || []).map(toMessage),
+    restoredRevision: payload.restoredRevision,
+  }
 }
 
 export async function queueBuilderBuild(projectId: string) {

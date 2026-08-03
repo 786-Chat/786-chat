@@ -60,6 +60,13 @@ export async function PATCH(request: Request, { params }: Context) {
       messages: Array.isArray(body.messages)
         ? body.messages as Array<{ role: "user" | "assistant" | "system"; content: string; model?: string | null; reason?: string | null }>
         : [],
+      revisionLabel: typeof body.revision_label === "string" && body.revision_label.trim()
+        ? body.revision_label.trim().slice(0, 160)
+        : "Before AI edit",
+      revisionSource: typeof body.revision_source === "string" && body.revision_source.trim()
+        ? body.revision_source.trim().slice(0, 40)
+        : "ai-edit",
+      recordGenerationJob: body.record_generation_job !== false,
     })
     return NextResponse.json({ project })
   } catch (error) {

@@ -30,6 +30,7 @@ import {
   Plug,
   Rocket,
   RotateCw,
+  RefreshCw,
   Redo2,
   Save,
   Send,
@@ -61,8 +62,10 @@ import {
   refreshBuilderDomain,
   restoreBuilderRevision,
   rollbackBuilderDeployment,
+  saveBuilderCodeEdit,
   saveBuilderProject,
   saveVisualEditorState,
+  undoBuilderProject,
 } from "./api"
 import {
   BUILDER_DEVICES,
@@ -81,6 +84,7 @@ import {
   type VisualEditorState,
   type VisualEditorStyle,
 } from "@/lib/786-chat/visual-editor"
+import { isUndoApplicationEdit } from "@/lib/786-chat/edit-intent"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
 
@@ -143,6 +147,8 @@ export function SevenEightSixWorkspace() {
   const [messages, setMessages] = useState<BuilderMessage[]>([])
   const [prompt, setPrompt] = useState("")
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
+  const [codeDraft, setCodeDraft] = useState("")
+  const [codeDirty, setCodeDirty] = useState(false)
   const [showCode, setShowCode] = useState(false)
   const [mobileView, setMobileView] = useState<"agent" | "preview">("agent")
   const [device, setDevice] = useState<BuilderDevice>("desktop")
@@ -190,6 +196,7 @@ export function SevenEightSixWorkspace() {
   const phonePreview = ["mobile", "iphone15", "iphoneSE", "pixel8", "galaxyS24"].includes(device)
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
   const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
+  const selectedCode = project?.files[selectedFile] || ""
   const orderedSections = useMemo(() => {
     const map = new Map(editorSections.map((section) => [section.id, section]))
     const ordered = visualState.order.flatMap((id) => {
@@ -201,6 +208,11 @@ export function SevenEightSixWorkspace() {
     }
     return ordered
   }, [editorSections, visualState.order])
+
+  useEffect(() => {
+    setCodeDraft(selectedCode)
+    setCodeDirty(false)
+  }, [selectedFile, selectedCode])
 
   useEffect(() => {
     if (!isLoading && !hasWorkspaceUser) router.replace("/login?next=/786.chat")
@@ -451,6 +463,8 @@ export function SevenEightSixWorkspace() {
     setPrompt("")
     setError("")
     setShowCode(false)
+    setCodeDraft("")
+    setCodeDirty(false)
     setBuild(null)
     setRevisions([])
   }
@@ -570,6 +584,75 @@ export function SevenEightSixWorkspace() {
     }
   }
 
+  async function undoLastProjectChange(message = "Undo the last change") {
+    if (!project || panelBusy || busy) return
+    if (codeDirty) {
+      setError("Save or reset the open code file before undoing a saved change.")
+      return
+    }
+    setPanelBusy(true)
+    setError("")
+    try {
+      const restored = await undoBuilderProject(project.id, message)
+      setProject(restored.project)
+      setMessages(restored.messages)
+      setVisualState(restored.project.visualEditor)
+      setUndoStack([])
+      setRedoStack([])
+      setVisualDirty(true)
+      setRevisions(await listBuilderRevisions(project.id))
+      setSelectedFile(
+        String(restored.project.previewState.active_file || "") ||
+          Object.keys(restored.project.files)[0] ||
+          "app/page.tsx",
+      )
+      setActionNotice(`Undid: ${restored.restoredRevision.label}. Rebuilding preview…`)
+      try {
+        setBuild(await queueBuilderBuild(restored.project.id))
+        setVisualDirty(false)
+      } catch (buildFailure) {
+        setBuild(null)
+        setError(buildFailure instanceof Error ? buildFailure.message : "Change was undone, but the rebuild could not be queued.")
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "The last change could not be undone.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
+  async function saveCodeChanges() {
+    if (!project || !selectedFile || !codeDirty || panelBusy || busy) return
+    setPanelBusy(true)
+    setError("")
+    try {
+      const saved = await saveBuilderCodeEdit({
+        project,
+        path: selectedFile,
+        content: codeDraft,
+      })
+      setProject(saved)
+      setVisualState(saved.visualEditor)
+      setUndoStack([])
+      setRedoStack([])
+      setCodeDirty(false)
+      setVisualDirty(true)
+      setRevisions(await listBuilderRevisions(saved.id))
+      setActionNotice(`Saved ${selectedFile}. Rebuilding preview…`)
+      try {
+        setBuild(await queueBuilderBuild(saved.id))
+        setVisualDirty(false)
+      } catch (buildFailure) {
+        setBuild(null)
+        setError(buildFailure instanceof Error ? buildFailure.message : "Code was saved, but the rebuild could not be queued.")
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Code edit could not be saved.")
+    } finally {
+      setPanelBusy(false)
+    }
+  }
+
   function applyDeploymentResult(result: BuilderDeploymentResult) {
     setDeployResult(result)
     setDeploymentLifecycle({
@@ -580,7 +663,7 @@ export function SevenEightSixWorkspace() {
   }
 
   async function openDeploymentPanel() {
-    if (!project || build?.status !== "passed" || visualDirty) return
+    if (!project || build?.status !== "passed" || visualDirty || codeDirty) return
     setError("")
     setDeployResult(null)
     setDeployOpen(true)
@@ -671,8 +754,20 @@ export function SevenEightSixWorkspace() {
   async function send() {
     const text = prompt.trim()
     if (!text || busy) return
+    if (codeDirty) {
+      setError("Save or reset the open code file before asking the agent to edit this project.")
+      return
+    }
     setPrompt("")
     setError("")
+    if (isUndoApplicationEdit(text)) {
+      if (!project) {
+        setError("Create or open a project before asking to undo a change.")
+        return
+      }
+      await undoLastProjectChange(text)
+      return
+    }
     setBusy(true)
     setMessages((current) => [
       ...current,
@@ -833,20 +928,23 @@ export function SevenEightSixWorkspace() {
               )}
             </span>
             <span className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
-              {visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
+              {codeDirty ? "○ Unsaved code" : visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-1 lg:hidden">
             <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
             <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[12px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
           </div>
+          <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[12px] font-bold text-slate-200 disabled:opacity-40 lg:inline-flex">
+            <Undo2 className="h-3.5 w-3.5 text-amber-200" /> Undo
+          </button>
           <button type="button" onClick={() => void openDesignEditor()} disabled={!project || build?.status !== "passed"} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold disabled:opacity-40 lg:inline-flex ${designOpen ? "border-fuchsia-300/40 bg-fuchsia-400/15 text-fuchsia-100" : "border-[#263550] bg-[#0d1526]"}`}>
             <Palette className="h-3.5 w-3.5 text-fuchsia-300" /> Design
           </button>
-          <button type="button" onClick={() => setShowCode((value) => !value)} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
+          <button type="button" onClick={() => { setShowCode((value) => !value); setDesignOpen(false) }} className={`mr-2 hidden h-9 items-center gap-2 rounded-lg border px-3 text-[12px] font-bold lg:inline-flex ${showCode ? "border-violet-300/30 bg-violet-400/15" : "border-[#263550] bg-[#0d1526]"}`}>
             <Code2 className="h-3.5 w-3.5 text-cyan-300" /> Code
           </button>
-          <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
+          <button data-786-publish type="button" onClick={() => void openDeploymentPanel()} disabled={!project || build?.status !== "passed" || visualDirty || codeDirty} className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-amber-200 to-amber-400 px-3 text-[13px] font-black text-slate-950 shadow-[0_0_22px_rgba(251,191,36,.16)] disabled:opacity-40 sm:px-5">
             <Rocket className="h-3.5 w-3.5" /><span className="hidden sm:inline">Deploy</span><ChevronDown className="hidden h-3 w-3 sm:block" />
           </button>
         </header>
@@ -972,12 +1070,32 @@ export function SevenEightSixWorkspace() {
                   <div className="overflow-auto border-r border-[#263550] p-2">
                     {files.length === 0 && <p className="p-2 text-[13px] text-slate-600">No project files yet.</p>}
                     {files.map((file) => (
-                      <button key={file} type="button" onClick={() => setSelectedFile(file)} className={`mb-1 flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[13px] ${selectedFile === file ? "bg-violet-400/15 text-violet-100" : "text-slate-500"}`}>
+                      <button key={file} type="button" onClick={() => setSelectedFile(file)} disabled={codeDirty && selectedFile !== file} title={codeDirty && selectedFile !== file ? "Save or reset the current file first" : file} className={`mb-1 flex w-full items-center gap-2 rounded px-2 py-2 text-left text-[13px] disabled:cursor-not-allowed disabled:opacity-35 ${selectedFile === file ? "bg-violet-400/15 text-violet-100" : "text-slate-500"}`}>
                         <FileCode2 className="h-3 w-3" /><span className="truncate">{file}</span>
                       </button>
                     ))}
                   </div>
-                  <pre className="overflow-auto p-4 text-[12px] leading-5 text-cyan-50"><code>{project?.files[selectedFile] || "No project files yet."}</code></pre>
+                  <div className="flex min-w-0 flex-col overflow-hidden">
+                    <div className="flex h-10 shrink-0 items-center border-b border-[#263550] px-3">
+                      <code className="min-w-0 flex-1 truncate text-[12px] text-cyan-100">{selectedFile}</code>
+                      {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[11px] font-bold text-amber-200">Unsaved</span>}
+                      <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[11px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
+                      <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[11px] font-black text-white disabled:opacity-35">
+                        {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save &amp; rebuild
+                      </button>
+                    </div>
+                    <textarea
+                      aria-label={`Edit ${selectedFile}`}
+                      spellCheck={false}
+                      value={project ? codeDraft : "No project files yet."}
+                      onChange={(event) => {
+                        setCodeDraft(event.target.value)
+                        setCodeDirty(event.target.value !== selectedCode)
+                      }}
+                      disabled={!project || panelBusy}
+                      className="min-h-0 flex-1 resize-none overflow-auto bg-[#07101d] p-4 font-mono text-[12px] leading-5 text-cyan-50 outline-none disabled:opacity-60"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

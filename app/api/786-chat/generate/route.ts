@@ -27,6 +27,10 @@ import {
   normalizeGenerationUsage,
   type BuilderGenerationUsage,
 } from "@/lib/786-chat/ai-provider-config"
+import {
+  applicationEditBrief,
+  classifyApplicationEdit,
+} from "@/lib/786-chat/edit-intent"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
@@ -45,6 +49,14 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
   const ownerEmail = session.email.toLowerCase().trim()
+  const editIntent = classifyApplicationEdit(prompt)
+  if (editIntent.kind === "undo" && typeof payload.projectId === "string") {
+    return NextResponse.json({
+      success: false,
+      error: "Undo is handled from the saved revision history, not by generating replacement code.",
+      warning: "UNDO_REQUIRES_REVISION_ENDPOINT",
+    }, { status: 409 })
+  }
   let reservation
   try {
     reservation = await reserveBuilderGeneration({
@@ -150,6 +162,7 @@ export async function POST(request: Request) {
     "- When the user requests one nested page, app/page.tsx may render or redirect to that page, but it must still exist.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
+    ...applicationEditBrief(editIntent, typeof payload.projectId === "string"),
     "",
     "ACTIVE APPLICATION AND PLATFORM RULES:",
     ...systemArchitectureBrief(specification).map((line) => `- ${line}`),

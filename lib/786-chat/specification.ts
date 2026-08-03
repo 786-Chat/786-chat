@@ -4,6 +4,7 @@ import {
   type DesignFamily,
 } from "./design-system"
 import { selectSystemBlueprint, type SystemBlueprint } from "./system-blueprints"
+import { classifyApplicationEdit } from "./edit-intent"
 
 export type ProjectPlatform = "web" | "mobile" | "backend" | "database" | "iot"
 
@@ -19,6 +20,7 @@ export type ProjectSpecification = {
   colours: string[]
   contentRequirements: string[]
   backendRequirements: string[]
+  databaseTables: string[]
   designFamily: DesignFamily
   designVariant: number
   platforms: ProjectPlatform[]
@@ -72,6 +74,7 @@ export function analyseProjectPrompt(
 ): ProjectSpecification {
   const positivePrompt = withoutNegativeRequirements(prompt)
   const systemBlueprint = selectSystemBlueprint(positivePrompt)
+  const editIntent = classifyApplicationEdit(positivePrompt)
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
@@ -154,6 +157,7 @@ export function analyseProjectPrompt(
     requiredComponents: unique(requiredComponents),
     requiredInteractions: unique(matches(prompt, [
       [/\blog[ -]?in|sign[ -]?in\b/i, "submit-login"],
+      [/\bbooking|appointment\b/i, "submit-booking"],
       [/\bsearch\b/i, "search"],
       [/\bfilter\b/i, "filter"],
       [/\bmodal|dialog\b/i, "modal"],
@@ -175,6 +179,7 @@ export function analyseProjectPrompt(
       [/\bpayment|stripe\b/i, "payments"],
       [/\bemail\b/i, "email"],
     ])),
+    databaseTables: editIntent.requestedTable ? [editIntent.requestedTable] : [],
     designFamily,
     designVariant: designVariantNumber(designFamily.id, familyHistory),
     platforms,
