@@ -18,20 +18,20 @@ const footerLinks = {
   product: [
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
+    { label: "Examples", href: "/examples" },
     { label: "Templates", href: "/themes" },
-    { label: "Import Website", href: "/import-website" },
   ],
   company: [
     { label: "About", href: "/about" },
-    { label: "Contact", href: "/contact" },
+    { label: "Support", href: "/support" },
     { label: "Dashboard", href: "/dashboard" },
     { label: "Register", href: "/register" },
   ],
   resources: [
-    { label: "Start Building", href: "/register" },
-    { label: "Browse Templates", href: "/themes" },
-    { label: "AI Builder", href: "/dashboard" },
-    { label: "Support", href: "/contact" },
+    { label: "Documentation", href: "/docs" },
+    { label: "Security", href: "/security" },
+    { label: "Start Building", href: "/786.chat" },
+    { label: "Customer Support", href: "/support" },
   ],
   legal: [
     { label: "Privacy", href: "/privacy" },
@@ -145,17 +145,9 @@ export function Footer() {
           </div>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mt-16 border-t border-white/5 pt-10">
-          <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-            <div>
-              <h3 className="text-lg font-semibold">Stay up to date</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Receive 786 Chat AI product and platform updates.</p>
-            </div>
-            <form className="flex w-full max-w-md gap-3" onSubmit={(event) => event.preventDefault()}>
-              <input type="email" aria-label="Newsletter email" placeholder="Enter your email" className="h-12 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 text-foreground glass placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50" />
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="h-12 rounded-xl bg-gradient-to-r from-primary to-accent px-6 font-medium text-primary-foreground transition-opacity hover:opacity-90">Subscribe</motion.button>
-            </form>
-          </div>
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mt-16 rounded-2xl border border-white/10 bg-white/[0.035] p-6 glass sm:flex sm:items-center sm:justify-between sm:gap-6">
+          <div><h3 className="text-lg font-semibold">Build with a production workflow</h3><p className="mt-1 text-sm text-muted-foreground">Start free, or review the documentation before creating your first project.</p></div>
+          <div className="mt-5 flex gap-3 sm:mt-0"><Link href="/docs" className="rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold hover:bg-white/5">Read docs</Link><Link href="/register" className="rounded-xl bg-gradient-to-r from-primary to-accent px-4 py-3 text-sm font-semibold text-primary-foreground">Start free</Link></div>
         </motion.div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-8 sm:flex-row">

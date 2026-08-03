@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import "./marketing-home.css";
 
 const files = [
@@ -294,11 +295,11 @@ export default function Home() {
         </a>
         <div className="nav-links">
           <a href="#home">Home</a>
-          <a href="#features">Features</a>
-          <a href="#themes">Themes</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#about">About</a>
-          <a href="#contact">Contact</a>
+          <a href="/features">Features</a>
+          <a href="/examples">Examples</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/docs">Docs</a>
+          <a href="/support">Support</a>
         </div>
         <div className="nav-actions">
           <a className="sign-in-link" href="/login">Sign in</a>
@@ -308,10 +309,14 @@ export default function Home() {
 
       <section className="hero" id="home">
         <div className="hero-grid" aria-hidden="true" />
-        <img
+        <Image
           className="hero-art"
           src="https://seven86-chat-v2.link24-7days.chatgpt.site/hero-blue-glass-v2.png"
           alt=""
+          width={1600}
+          height={900}
+          priority
+          unoptimized
         />
         <div className="hero-copy">
           <div className="eyebrow"><span /> Agentic product engineering</div>
@@ -368,7 +373,7 @@ export default function Home() {
           <span className="section-label">Pricing</span>
           <h2>Start with an idea. Scale when it works.</h2>
           <p>Clear plans for experimenting, shipping production applications and collaborating with a growing team.</p>
-          <a href="#contact">View launch options <ArrowIcon /></a>
+          <a href="/pricing">View plans <ArrowIcon /></a>
         </article>
 
         <article className="landing-card about-card" id="about">
@@ -383,7 +388,7 @@ export default function Home() {
           <p>Start in the builder, shape the specification and move from prompt to a verified application in one focused workspace.</p>
           <div className="contact-actions" id="signin">
             <a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a>
-            <a className="secondary-cta" href="/login">Sign in</a>
+            <a className="secondary-cta" href="/support">Contact support</a>
           </div>
         </article>
       </section>
