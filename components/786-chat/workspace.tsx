@@ -1043,8 +1043,8 @@ export function SevenEightSixWorkspace() {
             <div className={`hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex ${styles.stagePanel}`}>
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
               <div className="min-h-0 flex-1 overflow-hidden pr-1 pb-3">
-                <div className="relative grid min-h-[400px] grid-rows-5 gap-2">
-                  <div className="absolute bottom-10 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+                <div className="relative grid h-full min-h-0 grid-rows-5 gap-1 py-2">
+                  <div className="absolute bottom-[10%] left-[22px] top-[10%] w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                   </div>
                   {stages.map((stage, index) => {
@@ -1056,7 +1056,7 @@ export function SevenEightSixWorkspace() {
                       currentStage > 0 &&
                       index === Math.min(currentStage - 1, stages.length - 1))
                   return (
-                    <div key={stage.label} className="relative flex min-h-[72px] items-start gap-4 last:mb-0">
+                    <div key={stage.label} className="relative flex min-h-0 items-center gap-4">
                       <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
                         {isCurrent && (
                           <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
@@ -1064,7 +1064,7 @@ export function SevenEightSixWorkspace() {
                         <span className="absolute inset-0 rounded-full border border-current bg-[#0a1221] shadow-[inset_0_0_18px_rgba(255,255,255,.035)]" />
                         {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
-                      <div className="min-w-0 flex-1 pt-1.5">
+                      <div className="min-w-0 flex-1">
                         <p className={`text-[16px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
                         <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{stage.detail}</p>
                       </div>
