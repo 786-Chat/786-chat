@@ -14,7 +14,7 @@ test("unverified generated routes cannot be accepted", () => {
 })
 
 test("canonical workspace previews only the compiled deployment", () => {
-  assert.match(workspace, /src=\{build\.deployment_url\}/)
+  assert.match(workspace, /src=\{activePreviewBuild\.deployment_url\}/)
   assert.doesNotMatch(workspace, /srcDoc|jsxToHtml/)
 })
 

@@ -6,6 +6,10 @@ export function isAdminUser(email: string | null | undefined): boolean {
   return Boolean(email && email.trim().toLowerCase() === ADMIN_EMAIL)
 }
 
+export function hasPlatformOwnerEntitlement(email: string | null | undefined): boolean {
+  return isAdminUser(email)
+}
+
 export const AGENT_CONFIG = {
   github: {
     owner: process.env.GITHUB_REPOSITORY_OWNER || "786-Chat",

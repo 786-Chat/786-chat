@@ -265,15 +265,23 @@ export async function queueBuilderBuild(projectId: string) {
 }
 
 export async function loadBuilderBuild(projectId: string) {
+  return (await loadBuilderBuildState(projectId)).build
+}
+
+export async function loadBuilderBuildState(projectId: string) {
   const response = await fetch(`/api/786-chat/projects/${projectId}/build`, {
     cache: "no-store",
   })
   const payload = (await response.json().catch(() => ({}))) as {
     build?: BuilderBuild | null
+    latestPassedBuild?: BuilderBuild | null
     error?: string
   }
   if (!response.ok) throw new Error(payload.error || "Build status could not be loaded.")
-  return payload.build || null
+  return {
+    build: payload.build || null,
+    latestPassedBuild: payload.latestPassedBuild || null,
+  }
 }
 
 export async function listBuilderProjects(): Promise<BuilderProjectSummary[]> {

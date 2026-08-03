@@ -22,7 +22,8 @@ test("runtime preview is displayed only from a passed deployment URL", async () 
   const workspace = await read("components/786-chat/workspace.tsx")
 
   assert.match(workspace, /build\?\.status === "passed" && build\.deployment_url/)
-  assert.match(workspace, /src=\{build\.deployment_url\}/)
+  assert.match(workspace, /latestPassedBuild/)
+  assert.match(workspace, /src=\{activePreviewBuild\.deployment_url\}/)
   assert.doesNotMatch(workspace, /srcDoc|Babel\.transform|regex.*jsx/i)
 })
 
