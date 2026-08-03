@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Clock3, Mail, MapPin, Phone, ShieldCheck } from "lucide-react"
 
 import { SupportForm } from "@/components/launch/support-form"
+import { mujeebSardarPhoto } from "./ceo-photo"
 import "../marketing-home.css"
 import "./support-home.css"
 
@@ -82,6 +83,24 @@ export default function SupportPage() {
             <Link className="support-back-home" href="/">Back to homepage</Link>
           </div>
         </div>
+
+        <section className="ceo-profile-card" aria-labelledby="ceo-name">
+          <div className="ceo-photo-frame">
+            <Image
+              className="ceo-photo"
+              src={mujeebSardarPhoto}
+              alt="Mujeeb Sardar, CEO of 786.CHAT"
+              width={640}
+              height={640}
+              unoptimized
+            />
+          </div>
+          <div className="ceo-profile-copy">
+            <span className="section-label">Leadership</span>
+            <h2 id="ceo-name">Mujeeb Sardar</h2>
+            <p>CEO, 786.CHAT</p>
+          </div>
+        </section>
 
         <div className="support-layout">
           <aside className="support-details" aria-label="Support information">
