@@ -62,14 +62,14 @@ function attemptStatus(reason: unknown, success = false): ProviderAttempt["statu
 
 function alternateMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode {
   if (hasAttachments) return mode === "gemini-flash" ? "gemini-pro" : "gemini-flash"
-  if (mode === "gemini-flash" || mode === "gemini-pro") return "deepseek-pro"
-  return "gemini-pro"
+  if (mode === "gemini-flash" || mode === "gemini-pro") return "deepseek-flash"
+  return "gemini-flash"
 }
 
 function resolvedPrimaryMode(requested: CodegenMode, hasAttachments: boolean): CodegenMode {
   if (requested !== "auto") return requested
-  if (hasAttachments) return "gemini-pro"
-  return "deepseek-pro"
+  if (hasAttachments) return "gemini-flash"
+  return "deepseek-flash"
 }
 
 function isSimpleWebsiteRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
