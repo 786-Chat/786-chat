@@ -33,7 +33,8 @@ test("support requests are persisted, rate limited and available to admins", asy
 
 test("search engines receive an explicit sitemap and safe robots policy", async () => {
   const [sitemap, robots] = await Promise.all([read("app/sitemap.ts"), read("app/robots.ts")])
-  for (const route of ["/pricing", "/examples", "/docs", "/privacy", "/terms", "/support"]) assert.match(sitemap, new RegExp(route))
+  for (const route of ["/examples", "/docs", "/privacy", "/terms", "/support"]) assert.match(sitemap, new RegExp(route))
+  assert.doesNotMatch(sitemap, /\/pricing/)
   assert.match(robots, /disallow: \["\/api\/", "\/admin\/", "\/dashboard\/", "\/786-admin\/"\]/)
 })
 
@@ -42,6 +43,6 @@ test("the old fake contact and newsletter interactions are removed", async () =>
   assert.match(contact, /redirect\("\/support"\)/)
   assert.doesNotMatch(contact, /XXXXXXXXX|setTimeout/)
   assert.doesNotMatch(footer, /Newsletter email|Subscribe/)
-  assert.match(home, /href="\/pricing"/)
+  assert.doesNotMatch(home, /href="\/pricing"/)
   assert.match(home, /href="\/support"/)
 })

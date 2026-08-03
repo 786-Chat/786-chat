@@ -17,7 +17,6 @@ function TikTokIcon({ className }: { className?: string }) {
 const footerLinks = {
   product: [
     { label: "Features", href: "/features" },
-    { label: "Pricing", href: "/pricing" },
     { label: "Examples", href: "/examples" },
     { label: "Templates", href: "/themes" },
   ],

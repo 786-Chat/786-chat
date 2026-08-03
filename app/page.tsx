@@ -297,7 +297,6 @@ export default function Home() {
           <a href="#home">Home</a>
           <a href="/features">Features</a>
           <a href="/examples">Examples</a>
-          <a href="/pricing">Pricing</a>
           <a href="/docs">Docs</a>
           <a href="/support">Support</a>
         </div>
@@ -369,11 +368,11 @@ export default function Home() {
           </div>
         </article>
 
-        <article className="landing-card pricing-card" id="pricing">
-          <span className="section-label">Pricing</span>
-          <h2>Start with an idea. Scale when it works.</h2>
-          <p>Clear plans for experimenting, shipping production applications and collaborating with a growing team.</p>
-          <a href="/pricing">View plans <ArrowIcon /></a>
+        <article className="landing-card pricing-card" id="production">
+          <span className="section-label">Production workflow</span>
+          <h2>Build, verify and deploy from one workspace.</h2>
+          <p>Create the real application first. Usage, storage, pages, deployments and domains can then be measured before paid plans are published.</p>
+          <a href="/786.chat">Open builder <ArrowIcon /></a>
         </article>
 
         <article className="landing-card about-card" id="about">
