@@ -1,4 +1,5 @@
 import type { ProjectSpecification } from "./specification"
+import { backendCapabilities, requiredBackendFiles } from "./backend-capabilities"
 
 export type ProjectPlan = {
   files: Array<{ path: string; purpose: string }>
@@ -11,6 +12,7 @@ function routeFile(route: string) {
 }
 
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
+  const capabilities = backendCapabilities(specification)
   const mobileFiles = specification.platforms.includes("mobile")
     ? [
         { path: "mobile/package.json", purpose: "Expo mobile dependencies and scripts" },
@@ -35,6 +37,13 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
         })),
       ]
     : []
+  const systemFilePaths = new Set(systemFiles.map((file) => file.path))
+  const backendFiles = requiredBackendFiles(specification)
+    .filter((path) => !systemFilePaths.has(path))
+    .map((path) => ({
+      path,
+      purpose: `Production ${capabilities.join("/")} backend implementation`,
+    }))
   const files = [
     { path: "package.json", purpose: "Allowed dependencies and build scripts" },
     { path: "tsconfig.json", purpose: "TypeScript compiler configuration" },
@@ -46,6 +55,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       purpose: `${route} route`,
     })),
     ...systemFiles,
+    ...backendFiles,
     ...mobileFiles,
   ]
 
@@ -58,6 +68,9 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       "Connect navigation only to existing routes",
       "Validate syntax, imports, requirements and project specificity",
       "Build the project in the isolated runner",
+      ...(capabilities.length > 0
+        ? ["Implement and validate every declared backend capability through real server routes and provider adapters"]
+        : []),
       ...(specification.systemBlueprint
         ? [
             "Create the tenant-safe relational schema and contracts",
@@ -75,6 +88,9 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
       "Project content is specific to the request",
       "No generic fallback homepage is accepted as a verified build",
+      ...(capabilities.length > 0
+        ? ["Backend manifest, migrations, server adapters and authenticated APIs pass production acceptance"]
+        : []),
       ...(specification.systemBlueprint
         ? [
             "Tenant-owned records and APIs enforce company_id",

@@ -1,6 +1,7 @@
 import type { ProjectSpecification } from "./specification"
 import { assessGeneratedSystem } from "./system-acceptance"
 import { assessDomainAcceptance } from "./domain-acceptance"
+import { assessGeneratedBackend } from "./backend-capabilities"
 
 export type ProjectValidation = {
   valid: boolean
@@ -298,6 +299,10 @@ export function validateGeneratedProject(
       }
     }
   }
+
+  const backendAcceptance = assessGeneratedBackend(specification, files)
+  errors.push(...backendAcceptance.errors)
+  warnings.push(...backendAcceptance.warnings)
 
   if (specification.systemBlueprint) {
     const requiredSystemFiles = [

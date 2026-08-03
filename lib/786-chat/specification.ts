@@ -139,8 +139,8 @@ export function analyseProjectPrompt(
   const platforms = unique([
     "web",
     ...(/\bmobile app|android|iphone|ipad|ios|expo|react native\b/i.test(positivePrompt) ? ["mobile"] : []),
-    ...(/\bapi|backend|server|saas|crm|erp\b/i.test(positivePrompt) || systemBlueprint ? ["backend"] : []),
-    ...(/\bdatabase|postgres|neon|relational\b/i.test(positivePrompt) || systemBlueprint ? ["database"] : []),
+    ...(/\bapi|backend|server|saas|crm|erp|auth|log[ -]?in|register|upload|attachment|email\b/i.test(positivePrompt) || systemBlueprint ? ["backend"] : []),
+    ...(/\bdatabase|postgres|neon|relational|auth|log[ -]?in|register|upload|attachment\b/i.test(positivePrompt) || systemBlueprint ? ["database"] : []),
     ...(/\biot|sensor|device|telemetry|mqtt|bluetooth|firmware\b/i.test(positivePrompt) ? ["iot"] : []),
   ]) as ProjectPlatform[]
 
@@ -178,6 +178,7 @@ export function analyseProjectPrompt(
       [/\bapi\b/i, "api"],
       [/\bpayment|stripe\b/i, "payments"],
       [/\bemail\b/i, "email"],
+      [/\bupload|attachment|file storage|blob\b/i, "file-storage"],
     ])),
     databaseTables: editIntent.requestedTable ? [editIntent.requestedTable] : [],
     designFamily,
