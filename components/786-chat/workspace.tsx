@@ -86,14 +86,24 @@ import {
   type VisualEditorStyle,
 } from "@/lib/786-chat/visual-editor"
 import { isUndoApplicationEdit } from "@/lib/786-chat/edit-intent"
+import styles from "./workspace-theme.module.css"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
+const WORKSPACE_THEME_KEY = "786chat_workspace_theme"
+
+type WorkspaceTheme = "royal" | "ocean" | "midnight"
 
 type EditorSection = { id: string; label: string; hidden: boolean }
 
 function copyEditorState(state: VisualEditorState): VisualEditorState {
   return JSON.parse(JSON.stringify(state)) as VisualEditorState
 }
+
+const workspaceThemes: { id: WorkspaceTheme; label: string; description: string }[] = [
+  { id: "royal", label: "Royal Fusion", description: "Purple, navy, gold and blue" },
+  { id: "ocean", label: "Ocean Glass", description: "Teal, emerald, cyan and gold" },
+  { id: "midnight", label: "Midnight Gold", description: "Deep blue, plum and warm gold" },
+]
 
 const navigation = [
   { label: "Overview", icon: LayoutDashboard },
@@ -152,6 +162,8 @@ export function SevenEightSixWorkspace() {
   const [codeDirty, setCodeDirty] = useState(false)
   const [showCode, setShowCode] = useState(false)
   const [mobileView, setMobileView] = useState<"agent" | "preview">("agent")
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [workspaceTheme, setWorkspaceTheme] = useState<WorkspaceTheme>("royal")
   const [device, setDevice] = useState<BuilderDevice>("desktop")
   const [deviceOpen, setDeviceOpen] = useState(false)
   const [customDevice, setCustomDevice] = useState({ width: 960, height: 720 })
@@ -214,6 +226,13 @@ export function SevenEightSixWorkspace() {
     setCodeDraft(selectedCode)
     setCodeDirty(false)
   }, [selectedFile, selectedCode])
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem(WORKSPACE_THEME_KEY)
+    if (savedTheme === "royal" || savedTheme === "ocean" || savedTheme === "midnight") {
+      setWorkspaceTheme(savedTheme)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isLoading && !hasWorkspaceUser) router.replace("/login?next=/786.chat")
@@ -469,6 +488,30 @@ export function SevenEightSixWorkspace() {
     setCodeDirty(false)
     setBuild(null)
     setRevisions([])
+  }
+
+  function changeWorkspaceTheme(nextTheme: WorkspaceTheme) {
+    setWorkspaceTheme(nextTheme)
+    localStorage.setItem(WORKSPACE_THEME_KEY, nextTheme)
+  }
+
+  function activateNavigation(label: string) {
+    setMobileMenuOpen(false)
+    if (label === "Overview") {
+      router.push("/")
+      return
+    }
+    if (label === "Projects") {
+      void openProjects()
+      return
+    }
+    setMobileView("agent")
+    setShowCode(false)
+    if (label === "Agent Flow") {
+      setUtilityPanel(null)
+      return
+    }
+    setUtilityPanel(label)
   }
 
   async function openProjects() {
@@ -837,11 +880,53 @@ export function SevenEightSixWorkspace() {
   }
 
   return (
-    <main className="relative flex h-screen min-w-0 overflow-hidden bg-[#02040f] font-sans text-slate-100 antialiased">
+    <main className={`relative flex h-screen min-w-0 overflow-hidden bg-[#02040f] font-sans text-slate-100 antialiased ${styles.workspace} ${styles[workspaceTheme]}`}>
       <AnimatedWorldBackground intensity="subtle" />
       <div className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_16%_4%,rgba(124,58,237,.12),transparent_26%),radial-gradient(circle_at_75%_0%,rgba(14,165,233,.08),transparent_28%)]" />
 
-      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] xl:flex ${sidebarCollapsed ? "w-[72px]" : "w-[216px]"}`}>
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[80] xl:hidden">
+          <button type="button" aria-label="Close navigation menu" onClick={() => setMobileMenuOpen(false)} className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm" />
+          <aside className={`relative flex h-full w-[min(340px,88vw)] flex-col border-r p-3 ${styles.mobileDrawer}`}>
+            <div className="flex h-12 items-center border-b border-white/10 px-2">
+              <span className="bg-gradient-to-r from-violet-300 via-white to-amber-200 bg-clip-text text-[24px] font-black tracking-[-0.05em] text-transparent">786.Chat</span>
+              <button type="button" onClick={() => setMobileMenuOpen(false)} className="ml-auto grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/5" aria-label="Close navigation"><X className="h-4 w-4" /></button>
+            </div>
+            <nav className="min-h-0 flex-1 overflow-y-auto py-3">
+              {navigation.map((item) => {
+                const Icon = item.icon
+                const active = (item.label === "Agent Flow" && !utilityPanel) || item.label === utilityPanel
+                return (
+                  <button key={item.label} type="button" onClick={() => activateNavigation(item.label)} className={`mb-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[16px] font-bold transition ${active ? "border border-violet-300/25 bg-white/10 text-white" : "text-slate-300 hover:bg-white/[.07]"}`}>
+                    <Icon className="h-4 w-4 text-violet-200" />{item.label}
+                  </button>
+                )
+              })}
+              <p className="mb-2 mt-5 px-3 text-[14px] font-bold uppercase tracking-[.16em] text-slate-400">Support</p>
+              {([["Logs", Logs], ["Help & Docs", LifeBuoy]] as const).map(([label, Icon]) => (
+                <button key={label} type="button" onClick={() => activateNavigation(label)} className={`mb-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[16px] font-bold ${utilityPanel === label ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/[.07]"}`}><Icon className="h-4 w-4 text-cyan-200" />{label}</button>
+              ))}
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <p className="mb-3 px-3 text-[14px] font-bold uppercase tracking-[.16em] text-slate-400">Dashboard theme</p>
+                <div className="grid gap-2">
+                  {workspaceThemes.map((theme) => (
+                    <button key={theme.id} type="button" onClick={() => changeWorkspaceTheme(theme.id)} className={`rounded-xl border p-3 text-left ${workspaceTheme === theme.id ? "border-amber-300/45 bg-amber-300/10" : "border-white/10 bg-white/[.035]"}`}>
+                      <span className="block text-[16px] font-black text-white">{theme.label}</span>
+                      <span className="mt-1 block text-[14px] leading-5 text-slate-400">{theme.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </nav>
+            <button type="button" onClick={() => { startNewProject(); setMobileMenuOpen(false) }} className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/[.06] p-3 text-left">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-500/30 text-[14px] font-black text-violet-100">78</span>
+              <span><b className="block text-[16px]">New project</b><span className="text-[14px] text-slate-400">Start clean workspace</span></span>
+            </button>
+          </aside>
+        </div>
+      )}
+
+      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] xl:flex ${styles.sidebar} ${sidebarCollapsed ? "w-[72px]" : "w-[216px]"}`}>
         <div className="flex h-[64px] items-center gap-3 border-b border-[#1b2940] px-4">
           <button
             type="button"
@@ -868,14 +953,7 @@ export function SevenEightSixWorkspace() {
                 )}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (item.label === "Overview") router.push("/")
-                    if (item.label === "Projects") void openProjects()
-                    if (item.label === "Agent Flow") setUtilityPanel(null)
-                    if (!["Overview", "Projects", "Agent Flow"].includes(item.label)) {
-                      setUtilityPanel(item.label)
-                    }
-                  }}
+                  onClick={() => activateNavigation(item.label)}
                   className={`mb-1 flex h-10 w-full items-center rounded-lg py-2.5 text-[16px] font-semibold transition ${
                     sidebarCollapsed ? "justify-center" : "gap-3 px-2"
                   } ${(item.label === "Agent Flow" && !utilityPanel) || item.label === utilityPanel ? "border-l-2 border-violet-400 bg-[#151b31] text-white" : "text-slate-400 hover:bg-white/[.04] hover:text-white"}`}
@@ -896,7 +974,7 @@ export function SevenEightSixWorkspace() {
           ].map(([label, Icon]) => {
             const SupportIcon = Icon as typeof Logs
             return (
-              <button key={String(label)} type="button" onClick={() => setUtilityPanel(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[16px] font-semibold hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
+              <button key={String(label)} type="button" onClick={() => activateNavigation(String(label))} className={`flex w-full items-center rounded-lg py-2.5 text-[16px] font-semibold hover:bg-white/[.04] ${String(label) === utilityPanel ? "bg-[#151b31] text-white" : "text-slate-400"} ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"}`}>
                 <SupportIcon className="h-3.5 w-3.5" />
                 {!sidebarCollapsed && String(label)}
               </button>
@@ -913,7 +991,7 @@ export function SevenEightSixWorkspace() {
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <header className="flex h-[64px] shrink-0 items-center border-b border-[#1b2940] bg-[#070c18]/95 px-4">
           <button type="button" onClick={() => router.push("/")} className="mr-3 text-[16px] font-black text-violet-200 xl:hidden" aria-label="786.Chat home">786</button>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="hidden min-w-0 items-center gap-2 md:flex">
             <span className="grid h-5 w-5 place-items-center rounded border border-slate-600"><Circle className="h-2 w-2 fill-slate-300" /></span>
             <p className="truncate text-[16px] font-bold">{project?.title || "Untitled application"}</p>
             {project && <span className="hidden rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[14px] uppercase text-violet-300 sm:inline">Live project</span>}
@@ -935,9 +1013,17 @@ export function SevenEightSixWorkspace() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-1 xl:hidden">
-            <button type="button" onClick={() => setMobileView("agent")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "agent" ? "bg-violet-500/25 text-violet-100" : "text-slate-500"}`}>Agent</button>
-            <button type="button" onClick={() => setMobileView("preview")} className={`rounded-md px-2 py-1.5 text-[14px] font-bold ${mobileView === "preview" ? "bg-cyan-500/20 text-cyan-100" : "text-slate-500"}`}>Preview</button>
+            <button type="button" onClick={() => setMobileMenuOpen(true)} aria-expanded={mobileMenuOpen} aria-label="Open dashboard menu" title="Menu" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-violet-300/20 bg-violet-500/10 px-2 text-[14px] font-bold text-violet-100"><PanelLeftOpen className="h-4 w-4" /><span className="hidden lg:inline">Menu</span></button>
+            <button type="button" onClick={() => { setMobileView("agent"); setShowCode(false) }} aria-label="Show AI Agent" title="AI Agent" className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-[14px] font-bold ${mobileView === "agent" && !showCode ? "bg-violet-500/25 text-violet-100" : "text-slate-400"}`}><Sparkles className="h-4 w-4" /><span className="hidden lg:inline">Agent</span></button>
+            <button type="button" onClick={() => { setMobileView("preview"); setShowCode(false) }} aria-label="Show live preview" title="Live preview" className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-[14px] font-bold ${mobileView === "preview" && !showCode ? "bg-emerald-500/20 text-emerald-100" : "text-slate-400"}`}><Monitor className="h-4 w-4" /><span className="hidden lg:inline">Preview</span></button>
+            <button type="button" onClick={() => { setMobileView("preview"); setShowCode(true); setDesignOpen(false) }} aria-label="Show project code" title="Project code" className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-[14px] font-bold ${mobileView === "preview" && showCode ? "bg-blue-500/25 text-blue-100" : "text-slate-400"}`}><Code2 className="h-4 w-4" /><span className="hidden lg:inline">Code</span></button>
           </div>
+          <label className="mr-2 hidden xl:block">
+            <span className="sr-only">Dashboard colour theme</span>
+            <select value={workspaceTheme} onChange={(event) => changeWorkspaceTheme(event.target.value as WorkspaceTheme)} className={`h-9 w-[142px] rounded-lg px-2 text-[14px] font-bold outline-none ${styles.themeSelect}`}>
+              {workspaceThemes.map((theme) => <option key={theme.id} value={theme.id}>{theme.label}</option>)}
+            </select>
+          </label>
           <button type="button" onClick={() => void undoLastProjectChange()} disabled={!project || revisions.length === 0 || panelBusy || busy || editorSaving || codeDirty} className="mr-2 hidden h-9 items-center gap-2 rounded-lg border border-[#263550] bg-[#0d1526] px-3 text-[14px] font-bold text-slate-200 disabled:opacity-40 xl:inline-flex">
             <Undo2 className="h-3.5 w-3.5 text-amber-200" /> Undo
           </button>
@@ -953,12 +1039,12 @@ export function SevenEightSixWorkspace() {
         </header>
 
         <div className="flex min-h-0 flex-1 gap-2 p-2">
-          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
-            <div className="hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex">
+          <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${styles.agentShell} ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
+            <div className={`hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex ${styles.stagePanel}`}>
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
-                <div className="relative grid min-h-[400px] grid-rows-5 gap-2">
-                  <div className="absolute bottom-10 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
+              <div className="min-h-0 flex-1 overflow-hidden pr-1 pb-3">
+                <div className="relative grid h-full min-h-0 grid-rows-5 gap-1 py-2">
+                  <div className="absolute bottom-[10%] left-[22px] top-[10%] w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
                   </div>
                   {stages.map((stage, index) => {
@@ -970,7 +1056,7 @@ export function SevenEightSixWorkspace() {
                       currentStage > 0 &&
                       index === Math.min(currentStage - 1, stages.length - 1))
                   return (
-                    <div key={stage.label} className="relative flex min-h-[72px] items-start gap-4 last:mb-0">
+                    <div key={stage.label} className="relative flex min-h-0 items-center gap-4">
                       <span className={`relative z-10 grid h-12 w-12 shrink-0 place-items-center rounded-full ${toneClasses[stage.tone]} ${active ? "" : "opacity-45"}`}>
                         {isCurrent && (
                           <span className="absolute -inset-1 animate-spin rounded-full border border-transparent border-r-current border-t-current opacity-90" />
@@ -978,7 +1064,7 @@ export function SevenEightSixWorkspace() {
                         <span className="absolute inset-0 rounded-full border border-current bg-[#0a1221] shadow-[inset_0_0_18px_rgba(255,255,255,.035)]" />
                         {busy && index === 0 ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Icon className="relative h-4 w-4" />}
                       </span>
-                      <div className="min-w-0 flex-1 pt-1.5">
+                      <div className="min-w-0 flex-1">
                         <p className={`text-[16px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
                         <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{stage.detail}</p>
                       </div>
@@ -989,7 +1075,7 @@ export function SevenEightSixWorkspace() {
               </div>
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className={`flex min-w-0 flex-1 flex-col ${styles.agentPanel}`}>
               <div className="flex h-12 items-center border-b border-[#1b2940] px-4 text-[16px] font-bold"><Sparkles className="mr-2 h-3.5 w-3.5 text-violet-300" />Agent Flow</div>
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {messages.length === 0 ? (
@@ -1036,7 +1122,7 @@ export function SevenEightSixWorkspace() {
             <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => { drag.current = { x: event.clientX, width: agentWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none" }} className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize hover:bg-cyan-300/25" />
           </section>
 
-          <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#1b2940] bg-[#060b16]/78 backdrop-blur-xl ${mobileView === "preview" ? "flex" : "hidden"} xl:flex`}>
+          <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#1b2940] bg-[#060b16]/78 backdrop-blur-xl ${styles.previewPanel} ${mobileView === "preview" ? "flex" : "hidden"} xl:flex`}>
             <div className="flex h-12 items-center border-b border-[#1b2940] px-4">
               <span className="text-[16px] font-bold">{showCode ? "Project code" : "Live preview"}</span>
               <div className="relative ml-auto">
@@ -1069,7 +1155,7 @@ export function SevenEightSixWorkspace() {
 
             <div className="min-h-0 flex-1 overflow-auto p-2">
               {showCode ? (
-                <div className="grid h-full grid-cols-[220px_1fr] overflow-hidden rounded-lg border border-[#263550] bg-[#07101d]">
+                <div className={`grid h-full grid-cols-[220px_1fr] overflow-hidden rounded-lg border border-[#263550] bg-[#07101d] ${styles.codePanel}`}>
                   <div className="overflow-auto border-r border-[#263550] p-2">
                     {files.length === 0 && <p className="p-2 text-[14px] text-slate-500">No project files yet.</p>}
                     {files.map((file) => (
@@ -1079,12 +1165,12 @@ export function SevenEightSixWorkspace() {
                     ))}
                   </div>
                   <div className="flex min-w-0 flex-col overflow-hidden">
-                    <div className="flex h-10 shrink-0 items-center border-b border-[#263550] px-3">
+                    <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 border-b border-[#263550] px-3 py-2">
                       <code className="min-w-0 flex-1 truncate text-[14px] text-cyan-100">{selectedFile}</code>
                       {codeDirty && <span className="mr-2 rounded bg-amber-300/10 px-2 py-1 text-[14px] font-bold text-amber-200">Unsaved</span>}
                       <button type="button" onClick={() => { setCodeDraft(selectedCode); setCodeDirty(false) }} disabled={!codeDirty || panelBusy} className="mr-2 rounded border border-[#32435f] px-2 py-1 text-[14px] font-bold text-slate-300 disabled:opacity-35">Reset</button>
                       <button type="button" onClick={() => void saveCodeChanges()} disabled={!project || !codeDirty || panelBusy || busy} className="inline-flex items-center gap-1.5 rounded bg-violet-500 px-3 py-1.5 text-[14px] font-black text-white disabled:opacity-35">
-                        {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Save &amp; rebuild
+                        {panelBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} <span className="hidden sm:inline">Save &amp; rebuild</span><span className="sm:hidden">Save</span>
                       </button>
                     </div>
                     <textarea
