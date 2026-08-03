@@ -122,9 +122,13 @@ export async function generateBuilderProject(request: GenerationRequest) {
     throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
   }
   return {
+    generationId: payload.generationId,
     response: payload.response || `Created ${payload.project.title}`,
     model: payload.model || null,
     reason: payload.reason || null,
+    usage: payload.usage,
+    providerAttempts: payload.providerAttempts,
+    providerFailoverUsed: payload.providerFailoverUsed,
     specification: payload.specification as Record<string, unknown> | undefined,
     plan: payload.plan as Record<string, unknown> | undefined,
     validation: payload.validation as Record<string, unknown> | undefined,
@@ -158,7 +162,11 @@ export async function saveBuilderProject(input: {
         files: input.generated.project.files,
         preview_state: { active_file: activeFile, entry_path: "app/page.tsx" },
         metadata: {
+          generation_id: input.generated.generationId,
           model: input.generated.model,
+          usage: input.generated.usage,
+          provider_attempts: input.generated.providerAttempts,
+          provider_failover_used: input.generated.providerFailoverUsed,
           specification: input.generated.specification,
           plan: input.generated.plan,
           validation: input.generated.validation,

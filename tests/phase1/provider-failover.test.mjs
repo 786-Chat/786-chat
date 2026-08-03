@@ -30,31 +30,31 @@ test("canonical generation rejects local fallback output", () => {
   assert.match(canonicalRoute, /status:\s*503/)
 })
 
-test("parallel provider attempts are bounded inside the Vercel window", () => {
-  assert.match(providerController, /GEMINI_ATTEMPT_TIMEOUT_MS = 25_000/)
-  assert.match(providerController, /DEEPSEEK_ATTEMPT_TIMEOUT_MS = 150_000/)
-  assert.match(providerController, /DEEPSEEK_FLASH_ATTEMPT_TIMEOUT_MS = 120_000/)
+test("sequential provider attempts are bounded inside the Vercel window", () => {
+  assert.match(providerController, /PRIMARY_ATTEMPT_TIMEOUT_MS = 105_000/)
+  assert.match(providerController, /FALLBACK_ATTEMPT_TIMEOUT_MS = 65_000/)
   assert.match(providerController, /maxDuration = 180/)
-  assert.match(providerController, /Promise\.race/)
+  assert.match(providerController, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
   assert.match(providerController, /controller\.abort/)
 })
 
-test("complex generation includes bounded flash rescue providers and cancels losers", () => {
-  assert.match(providerController, /rescueModes/)
-  assert.match(providerController, /\["deepseek-flash", "gemini-flash"\]/)
-  assert.match(providerController, /Provider winner selected/)
-  assert.match(providerController, /abortFromCoordinator/)
+test("fallback starts only after the primary provider fails", () => {
+  assert.match(providerController, /The alternate provider starts only after a real primary/)
+  assert.match(providerController, /fallback: position > 0/)
+  assert.match(providerController, /continue/)
+  assert.doesNotMatch(providerController, /rescueModes|abortFromCoordinator|coordinatorSignal/)
 })
 
-test("DeepSeek code generation disables slow thinking mode", () => {
+test("code generation uses gateway attribution and plan-specific budgets", () => {
   assert.match(codegen, /providerOptions/)
-  assert.match(codegen, /deepseek:\s*\{\s*thinking:\s*\{\s*type:\s*"disabled"/)
-  assert.match(codegen, /maxOutputTokens:\s*24_000/)
+  assert.match(codegen, /gateway:\s*\{/)
+  assert.match(codegen, /zeroDataRetention:\s*true/)
+  assert.match(codegen, /maxOutputTokens:\s*maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /maxRetries:\s*0/)
 })
 
 test("compact websites prefer DeepSeek Flash while complex apps keep normal selection", () => {
-  assert.match(providerController, /compactEligible && configured\("DEEPSEEK_API_KEY"\)/)
+  assert.match(providerController, /requestedMode === "auto" && compactEligible/)
   assert.match(providerController, /\? "deepseek-flash"/)
   assert.match(providerController, /: resolvedPrimaryMode\(requestedMode, hasAttachments\)/)
 })

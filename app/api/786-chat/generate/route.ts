@@ -17,11 +17,26 @@ import { systemBlueprintBrief } from "@/lib/786-chat/system-blueprints"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
 import { listProjects } from "@/lib/786-admin/projects"
 import { systemArchitectureBrief } from "@/lib/786-chat/system-architecture"
+import {
+  completeBuilderGeneration,
+  failBuilderGeneration,
+  reserveBuilderGeneration,
+} from "@/lib/786-chat/ai-governance"
+import {
+  mergeGenerationUsage,
+  normalizeGenerationUsage,
+  type BuilderGenerationUsage,
+} from "@/lib/786-chat/ai-provider-config"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
 
+function attemptsFrom(value: unknown) {
+  return Array.isArray(value) ? value : []
+}
+
 export async function POST(request: Request) {
+  const generationStartedAt = Date.now()
   const session = await getSession()
   if (!session?.email) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
@@ -30,6 +45,77 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
   const ownerEmail = session.email.toLowerCase().trim()
+  let reservation
+  try {
+    reservation = await reserveBuilderGeneration({
+      ownerEmail,
+      userId: session.id,
+      plan: session.plan,
+      prompt,
+      projectId: typeof payload.projectId === "string" ? payload.projectId : null,
+    })
+  } catch (error) {
+    console.error("[786.Chat AI governance] Could not reserve generation", error)
+    return NextResponse.json({
+      success: false,
+      error: "AI usage checks are temporarily unavailable. Please try again.",
+      warning: "AI_GOVERNANCE_UNAVAILABLE",
+    }, { status: 503 })
+  }
+  if (!reservation.allowed || !reservation.generationId) {
+    const status = reservation.errorCode === "PROMPT_REQUIRED"
+      ? 400
+      : reservation.errorCode === "PROMPT_TOO_LONG"
+        ? 413
+        : 429
+    return NextResponse.json({
+      success: false,
+      error: reservation.error || "AI generation limit reached.",
+      warning: reservation.errorCode || "AI_USAGE_LIMIT",
+      retryAfter: reservation.retryAfter,
+    }, {
+      status,
+      headers: reservation.retryAfter ? { "Retry-After": String(reservation.retryAfter) } : undefined,
+    })
+  }
+  const generationId = reservation.generationId
+  let aggregateUsage: BuilderGenerationUsage = mergeGenerationUsage()
+  let aggregateAttempts: unknown[] = []
+
+  async function recordFailure(errorCode: string, error: unknown) {
+    try {
+      await failBuilderGeneration({
+        generationId,
+        ownerEmail,
+        errorCode,
+        error,
+        providerAttempts: aggregateAttempts,
+        latencyMs: Date.now() - generationStartedAt,
+      })
+    } catch (trackingError) {
+      console.error("[786.Chat AI governance] Could not record failed generation", trackingError)
+    }
+  }
+
+  async function recordCompletion(status: "completed" | "validation_failed", selectedModel?: string | null) {
+    try {
+      const first = aggregateAttempts[0] && typeof aggregateAttempts[0] === "object"
+        ? aggregateAttempts[0] as Record<string, unknown>
+        : {}
+      await completeBuilderGeneration({
+        generationId,
+        ownerEmail,
+        status,
+        primaryModel: typeof first.model === "string" ? first.model : null,
+        selectedModel,
+        providerAttempts: aggregateAttempts,
+        usage: aggregateUsage,
+        latencyMs: Date.now() - generationStartedAt,
+      })
+    } catch (trackingError) {
+      console.error("[786.Chat AI governance] Could not record generation usage", trackingError)
+    }
+  }
   const familyHistory = payload.projectId
     ? []
     : (await listProjects(ownerEmail)).flatMap((project) => {
@@ -79,21 +165,35 @@ export async function POST(request: Request) {
   const delegatedRequest = new Request(request.url, {
     method: "POST",
     headers: request.headers,
-    body: JSON.stringify({ ...payload, message: generationBrief }),
+    body: JSON.stringify({
+      ...payload,
+      message: generationBrief,
+      _actorUserId: session.id,
+      _actorPlan: session.plan || "starter",
+      _generationId: generationId,
+    }),
   })
   const response = await generateWithProviderFailover(delegatedRequest)
   const result = (await response.json().catch(() => ({}))) as Record<string, unknown>
+  aggregateAttempts = attemptsFrom(result.providerAttempts)
+  aggregateUsage = mergeGenerationUsage(
+    aggregateUsage,
+    normalizeGenerationUsage(result.usage, String(result.model || "")),
+  )
 
   if (!response.ok || result.success !== true) {
+    await recordFailure(String(result.warning || "AI_PROVIDER_FAILURE"), result.error)
     return NextResponse.json(
-      { ...result, specification, plan },
+      { ...result, generationId, specification, plan },
       { status: response.status },
     )
   }
 
   if (result.fellBackToLocal === true) {
+    await recordFailure("AI_LOCAL_FALLBACK_REJECTED", result.error)
     return NextResponse.json({
       success: false,
+      generationId,
       error: "The configured AI providers were unavailable. No generic fallback project was accepted or saved.",
       warning: "AI_PROVIDERS_UNAVAILABLE_PROJECT_NOT_CREATED",
       specification,
@@ -197,9 +297,17 @@ export async function POST(request: Request) {
           fileTree: Object.keys(files),
           keyFiles: repairKeyFiles,
         },
+        _actorUserId: session.id,
+        _actorPlan: session.plan || "starter",
+        _generationId: generationId,
       }),
     }))
     const repaired = (await repairResponse.json().catch(() => ({}))) as Record<string, unknown>
+    aggregateAttempts = [...aggregateAttempts, ...attemptsFrom(repaired.providerAttempts)]
+    aggregateUsage = mergeGenerationUsage(
+      aggregateUsage,
+      normalizeGenerationUsage(repaired.usage, String(repaired.model || "")),
+    )
     if (repairResponse.ok && repaired.success === true && repaired.fellBackToLocal !== true) {
       const repairedProject = repaired.project && typeof repaired.project === "object"
         ? repaired.project as Record<string, unknown>
@@ -223,13 +331,17 @@ export async function POST(request: Request) {
       if (validation.valid && repairedProject) {
         project = repairedProject
         Object.assign(result, repaired)
+        result.providerAttempts = aggregateAttempts
+        result.usage = aggregateUsage
       }
     }
   }
 
   if (!validation.valid) {
+    await recordCompletion("validation_failed", String(result.model || "") || null)
     return NextResponse.json({
       success: false,
+      generationId,
       error: "Generated project failed requirement validation and was not accepted.",
       specification,
       plan,
@@ -240,8 +352,13 @@ export async function POST(request: Request) {
     }, { status: 422 })
   }
 
+  await recordCompletion("completed", String(result.model || "") || null)
+
   return NextResponse.json({
     ...result,
+    generationId,
+    usage: aggregateUsage,
+    providerAttempts: aggregateAttempts,
     project: project ? { ...project, prompt, files } : project,
     specification,
     plan,
