@@ -371,6 +371,14 @@
   gap: 14px;
 }
 
+.support-call {
+  white-space: nowrap;
+}
+
+.support-call span {
+  color: #70dbff;
+}
+
 .sign-in-link {
   color: rgba(245, 247, 255, 0.72);
   font-size: 13px;
@@ -1563,6 +1571,7 @@
   .nav-links {
     display: none;
   }
+
 
   .hero {
     min-height: auto;

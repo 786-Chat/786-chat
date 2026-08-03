@@ -295,9 +295,6 @@ export default function Home() {
         </a>
         <div className="nav-links">
           <a href="#home">Home</a>
-          <a href="/features">Features</a>
-          <a href="/examples">Examples</a>
-          <a href="/docs">Docs</a>
           <a href="/support">Support</a>
         </div>
         <div className="nav-actions">
@@ -387,7 +384,7 @@ export default function Home() {
           <p>Start in the builder, shape the specification and move from prompt to a verified application in one focused workspace.</p>
           <div className="contact-actions" id="signin">
             <a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a>
-            <a className="secondary-cta" href="/support">Contact support</a>
+            <a className="secondary-cta support-call" href="tel:+447427070000">Call support <span>+44 7427 070000</span></a>
           </div>
         </article>
       </section>
