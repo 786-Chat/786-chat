@@ -143,6 +143,27 @@ export async function getLatestBuildJob(
   return rows[0] ?? null
 }
 
+export async function getLatestPassedBuildJob(
+  projectId: string,
+  ownerEmail: string,
+): Promise<AdminProjectBuild | null> {
+  await ensureBuildJobsSchema()
+
+  const rows = (await sql`
+    SELECT b.*
+    FROM admin_project_builds b
+    INNER JOIN admin_projects p ON p.id = b.project_id
+    WHERE b.project_id = ${projectId}
+      AND p.owner_email = ${normalizeEmail(ownerEmail)}
+      AND b.status = 'passed'
+      AND b.deployment_url IS NOT NULL
+    ORDER BY b.created_at DESC
+    LIMIT 1
+  `) as unknown as AdminProjectBuild[]
+
+  return rows[0] ?? null
+}
+
 export async function appendBuildLog(input: {
   buildId: string
   line: string

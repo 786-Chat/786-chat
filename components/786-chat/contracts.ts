@@ -106,6 +106,11 @@ export type BuilderBuild = {
   repair_status: "not_needed" | "pending" | "running" | "repaired" | "exhausted"
 }
 
+export type BuilderBuildState = {
+  build: BuilderBuild | null
+  latestPassedBuild: BuilderBuild | null
+}
+
 export type BuilderAttachment = {
   id: string
   name: string

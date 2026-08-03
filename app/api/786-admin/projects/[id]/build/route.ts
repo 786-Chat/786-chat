@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
-import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
+import {
+  appendBuildLog,
+  createBuildJob,
+  getLatestBuildJob,
+  getLatestPassedBuildJob,
+} from "@/lib/786-admin/build-jobs"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData } from "@/lib/786-admin/projects"
@@ -39,13 +44,17 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 
   const validation = validateGeneratedProject(project.files || {})
-  const build = await getLatestBuildJob(id, email)
+  const [build, latestPassedBuild] = await Promise.all([
+    getLatestBuildJob(id, email),
+    getLatestPassedBuildJob(id, email),
+  ])
 
   return NextResponse.json({
     success: true,
     project: { id: project.id, title: project.title, updated_at: project.updated_at },
     validation,
     build,
+    latestPassedBuild,
   })
 }
 

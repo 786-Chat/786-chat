@@ -55,12 +55,14 @@ export async function reserveBuilderGeneration(input: {
   ownerEmail: string
   userId: string
   plan?: string
+  bypassUsageCaps?: boolean
   prompt: string
   projectId?: string | null
 }): Promise<BuilderGenerationReservation> {
   const owner = normalizedEmail(input.ownerEmail)
   const plan = normalizeBuilderPlan(input.plan)
-  const limit = limitsForPlan(plan)
+  const bypassUsageCaps = input.bypassUsageCaps === true
+  const limit = bypassUsageCaps ? PLAN_LIMITS.enterprise : limitsForPlan(plan)
   const prompt = input.prompt.trim()
 
   if (!prompt) {
@@ -102,32 +104,34 @@ export async function reserveBuilderGeneration(input: {
     }
   }
 
-  const usageRows = await sql`
-    SELECT
-      (SELECT COUNT(*) FROM builder_ai_generations
-        WHERE owner_email = ${owner} AND created_at >= CURRENT_DATE) AS requests_today,
-      (SELECT COUNT(*) FROM builder_ai_generations
-        WHERE owner_email = ${owner} AND created_at >= DATE_TRUNC('month', CURRENT_DATE)) AS requests_month,
-      (SELECT COALESCE(SUM(total_tokens), 0) FROM builder_ai_usage_daily
-        WHERE owner_email = ${owner}
-          AND usage_date >= DATE_TRUNC('month', CURRENT_DATE)::date) AS tokens_month
-  ` as unknown as Array<{ requests_today: number; requests_month: number; tokens_month: number }>
-  const usage = usageRows[0]
-  if (Number(usage?.requests_today || 0) >= limit.requestsPerDay) {
-    return { allowed: false, error: `Daily AI generation limit reached for the ${plan} plan.`, errorCode: "AI_DAILY_LIMIT", limit }
-  }
   let creditReserved = 0
-  if (Number(usage?.requests_month || 0) >= limit.requestsPerMonth || Number(usage?.tokens_month || 0) >= limit.tokensPerMonth) {
-    const creditRows = (await sql`
-      UPDATE subscriptions
-      SET extra_credits = extra_credits - 1, updated_at = NOW()
-      WHERE user_id = ${input.userId}::uuid AND COALESCE(extra_credits, 0) > 0
-      RETURNING extra_credits
-    `) as unknown as Array<{ extra_credits: number }>
-    if (!creditRows[0]) {
-      return { allowed: false, error: `Monthly AI usage limit reached for the ${plan} plan. Upgrade, add credits or wait for the next billing period.`, errorCode: "AI_MONTHLY_LIMIT", limit }
+  if (!bypassUsageCaps) {
+    const usageRows = await sql`
+      SELECT
+        (SELECT COUNT(*) FROM builder_ai_generations
+          WHERE owner_email = ${owner} AND created_at >= CURRENT_DATE) AS requests_today,
+        (SELECT COUNT(*) FROM builder_ai_generations
+          WHERE owner_email = ${owner} AND created_at >= DATE_TRUNC('month', CURRENT_DATE)) AS requests_month,
+        (SELECT COALESCE(SUM(total_tokens), 0) FROM builder_ai_usage_daily
+          WHERE owner_email = ${owner}
+            AND usage_date >= DATE_TRUNC('month', CURRENT_DATE)::date) AS tokens_month
+    ` as unknown as Array<{ requests_today: number; requests_month: number; tokens_month: number }>
+    const usage = usageRows[0]
+    if (Number(usage?.requests_today || 0) >= limit.requestsPerDay) {
+      return { allowed: false, error: `Daily AI generation limit reached for the ${plan} plan.`, errorCode: "AI_DAILY_LIMIT", limit }
     }
-    creditReserved = 1
+    if (Number(usage?.requests_month || 0) >= limit.requestsPerMonth || Number(usage?.tokens_month || 0) >= limit.tokensPerMonth) {
+      const creditRows = (await sql`
+        UPDATE subscriptions
+        SET extra_credits = extra_credits - 1, updated_at = NOW()
+        WHERE user_id = ${input.userId}::uuid AND COALESCE(extra_credits, 0) > 0
+        RETURNING extra_credits
+      `) as unknown as Array<{ extra_credits: number }>
+      if (!creditRows[0]) {
+        return { allowed: false, error: `Monthly AI usage limit reached for the ${plan} plan. Upgrade, add credits or wait for the next billing period.`, errorCode: "AI_MONTHLY_LIMIT", limit }
+      }
+      creditReserved = 1
+    }
   }
 
   const generationId = randomUUID()

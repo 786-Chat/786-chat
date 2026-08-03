@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { hasPlatformOwnerEntitlement } from "@/lib/admin-config"
 import { getSession } from "@/lib/auth"
 import { POST as generateWithProviderFailover } from "@/lib/786-chat/provider-controller"
 import { createProjectPlan } from "@/lib/786-chat/planner"
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
       ownerEmail,
       userId: session.id,
       plan: session.plan,
+      bypassUsageCaps: hasPlatformOwnerEntitlement(ownerEmail),
       prompt,
       projectId: typeof payload.projectId === "string" ? payload.projectId : null,
     })

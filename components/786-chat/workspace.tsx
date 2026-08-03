@@ -53,7 +53,7 @@ import {
   createBuilderRevision,
   deleteBuilderProject,
   deployBuilderProject,
-  loadBuilderBuild,
+  loadBuilderBuildState,
   loadBuilderDeploymentLifecycle,
   loadBuilderProject,
   listBuilderProjects,
@@ -71,6 +71,7 @@ import {
 import {
   BUILDER_DEVICES,
   type BuilderBuild,
+  type BuilderBuildState,
   type BuilderDeploymentLifecycle,
   type BuilderDeploymentResult,
   type BuilderDevice,
@@ -173,6 +174,7 @@ export function SevenEightSixWorkspace() {
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
+  const [previewBuild, setPreviewBuild] = useState<BuilderBuild | null>(null)
   const [error, setError] = useState("")
   const [projectsOpen, setProjectsOpen] = useState(false)
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
@@ -207,6 +209,12 @@ export function SevenEightSixWorkspace() {
     ? { ...BUILDER_DEVICES.custom, ...customDevice }
     : BUILDER_DEVICES[device]
   const phonePreview = ["mobile", "iphone15", "iphoneSE", "pixel8", "galaxyS24"].includes(device)
+  const activePreviewBuild = previewBuild || (
+    build?.status === "passed" && build.deployment_url ? build : null
+  )
+  const showingLastVerifiedPreview = Boolean(
+    activePreviewBuild && (!build || build.id !== activePreviewBuild.id || build.status !== "passed"),
+  )
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
   const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
   const selectedCode = project?.files[selectedFile] || ""
@@ -221,6 +229,20 @@ export function SevenEightSixWorkspace() {
     }
     return ordered
   }, [editorSections, visualState.order])
+
+  function applyBuildState(state: BuilderBuildState) {
+    setBuild(state.build)
+    if (state.latestPassedBuild) setPreviewBuild(state.latestPassedBuild)
+    else if (state.build?.status === "passed" && state.build.deployment_url) {
+      setPreviewBuild(state.build)
+    }
+  }
+
+  async function refreshBuildState(projectId: string) {
+    const state = await loadBuilderBuildState(projectId)
+    applyBuildState(state)
+    return state
+  }
 
   useEffect(() => {
     setCodeDraft(selectedCode)
@@ -252,7 +274,7 @@ export function SevenEightSixWorkspace() {
             Object.keys(saved.files)[0] ||
             "app/page.tsx",
         )
-        void loadBuilderBuild(saved.id).then(setBuild).catch(() => undefined)
+        void refreshBuildState(saved.id).catch(() => undefined)
         void listBuilderRevisions(saved.id).then(setRevisions).catch(() => undefined)
       })
       .catch(() => localStorage.removeItem(ACTIVE_PROJECT_KEY))
@@ -286,9 +308,9 @@ export function SevenEightSixWorkspace() {
     if (!["queued", "running"].includes(build.status) && !repairIsActive) return
 
     const timer = window.setInterval(() => {
-      void loadBuilderBuild(project.id).then((next) => {
-        setBuild(next)
-        if (next?.status === "passed") setVisualDirty(false)
+      void loadBuilderBuildState(project.id).then((next) => {
+        applyBuildState(next)
+        if (next.build?.status === "passed") setVisualDirty(false)
       }).catch(() => undefined)
     }, 5_000)
     return () => window.clearInterval(timer)
@@ -303,10 +325,10 @@ export function SevenEightSixWorkspace() {
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       const frame = previewIframeRef.current
-      if (!frame || event.source !== frame.contentWindow || !build?.deployment_url) return
+      if (!frame || event.source !== frame.contentWindow || !activePreviewBuild?.deployment_url) return
       let expectedOrigin = ""
       try {
-        expectedOrigin = new URL(build.deployment_url).origin
+        expectedOrigin = new URL(activePreviewBuild.deployment_url).origin
       } catch {
         return
       }
@@ -330,21 +352,21 @@ export function SevenEightSixWorkspace() {
     }
     window.addEventListener("message", receive)
     return () => window.removeEventListener("message", receive)
-  }, [build?.deployment_url])
+  }, [activePreviewBuild?.deployment_url])
 
   useEffect(() => {
     if (!designOpen) return
     postVisualMessage({ type: "786-editor:enable", enabled: true })
     postVisualMessage({ type: "786-editor:apply", state: visualState })
     return () => postVisualMessage({ type: "786-editor:enable", enabled: false })
-  }, [designOpen, build?.deployment_url])
+  }, [designOpen, activePreviewBuild?.deployment_url])
 
   function postVisualMessage(message: Record<string, unknown>) {
-    if (!previewIframeRef.current?.contentWindow || !build?.deployment_url) return
+    if (!previewIframeRef.current?.contentWindow || !activePreviewBuild?.deployment_url) return
     try {
       previewIframeRef.current.contentWindow.postMessage(
         message,
-        new URL(build.deployment_url).origin,
+        new URL(activePreviewBuild.deployment_url).origin,
       )
     } catch {
       // The preview may be rebuilding; the iframe load handler will replay state.
@@ -487,6 +509,7 @@ export function SevenEightSixWorkspace() {
     setCodeDraft("")
     setCodeDirty(false)
     setBuild(null)
+    setPreviewBuild(null)
     setRevisions([])
   }
 
@@ -530,6 +553,8 @@ export function SevenEightSixWorkspace() {
   async function openProject(projectId: string) {
     setPanelBusy(true)
     setError("")
+    setBuild(null)
+    setPreviewBuild(null)
     try {
       const loaded = await loadBuilderProject(projectId)
       localStorage.setItem(ACTIVE_PROJECT_KEY, projectId)
@@ -544,11 +569,11 @@ export function SevenEightSixWorkspace() {
           Object.keys(loaded.project.files)[0] ||
           "app/page.tsx",
       )
-      const [latestBuild, savedRevisions] = await Promise.all([
-        loadBuilderBuild(projectId),
+      const [buildState, savedRevisions] = await Promise.all([
+        loadBuilderBuildState(projectId),
         listBuilderRevisions(projectId),
       ])
-      setBuild(latestBuild)
+      applyBuildState(buildState)
       setRevisions(savedRevisions)
       setProjectsOpen(false)
     } catch (failure) {
@@ -617,7 +642,7 @@ export function SevenEightSixWorkspace() {
         setBuild(queuedBuild)
         setVisualDirty(false)
       } catch (buildFailure) {
-        setBuild(null)
+        await refreshBuildState(restored.project.id).catch(() => undefined)
         setVisualDirty(true)
         setError(buildFailure instanceof Error ? buildFailure.message : "Revision restored, but the rebuild could not be queued.")
       }
@@ -656,7 +681,7 @@ export function SevenEightSixWorkspace() {
         setBuild(await queueBuilderBuild(restored.project.id))
         setVisualDirty(false)
       } catch (buildFailure) {
-        setBuild(null)
+        await refreshBuildState(restored.project.id).catch(() => undefined)
         setError(buildFailure instanceof Error ? buildFailure.message : "Change was undone, but the rebuild could not be queued.")
       }
     } catch (failure) {
@@ -688,7 +713,7 @@ export function SevenEightSixWorkspace() {
         setBuild(await queueBuilderBuild(saved.id))
         setVisualDirty(false)
       } catch (buildFailure) {
-        setBuild(null)
+        await refreshBuildState(saved.id).catch(() => undefined)
         setError(buildFailure instanceof Error ? buildFailure.message : "Code was saved, but the rebuild could not be queued.")
       }
     } catch (failure) {
@@ -838,6 +863,7 @@ export function SevenEightSixWorkspace() {
         generated,
       })
       localStorage.setItem(ACTIVE_PROJECT_KEY, saved.id)
+      if (saved.id !== project?.id) setPreviewBuild(null)
       setProject(saved)
       setVisualState(saved.visualEditor)
       setUndoStack([])
@@ -1188,10 +1214,22 @@ export function SevenEightSixWorkspace() {
                 </div>
               ) : (
                 <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {build?.status === "passed" && build.deployment_url ? (
+                  {activePreviewBuild?.deployment_url ? (
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative shrink-0 ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
                       {phonePreview && <span className="pointer-events-none absolute left-1/2 top-2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-black" />}
-                      <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
+                      {showingLastVerifiedPreview && (
+                        <div className="pointer-events-none absolute left-1/2 top-3 z-30 inline-flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full border border-amber-300/35 bg-[#07101d]/95 px-3 py-2 text-[14px] font-bold text-amber-100 shadow-xl backdrop-blur">
+                          {build && ["queued", "running"].includes(build.status) ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-cyan-300" /> : <Monitor className="h-3.5 w-3.5 shrink-0 text-amber-200" />}
+                          <span className="truncate">
+                            {build?.status === "failed" && ["pending", "running", "repaired"].includes(build.repair_status)
+                              ? "Repairing latest build — showing last verified preview"
+                              : build?.status === "failed"
+                                ? "Latest build failed — showing last verified preview"
+                                : "Rebuilding — showing last verified preview"}
+                          </span>
+                        </div>
+                      )}
+                      <iframe ref={previewIframeRef} src={activePreviewBuild.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
                         if (!designOpen) return
                         postVisualMessage({ type: "786-editor:enable", enabled: true })
                         postVisualMessage({ type: "786-editor:apply", state: visualState })
