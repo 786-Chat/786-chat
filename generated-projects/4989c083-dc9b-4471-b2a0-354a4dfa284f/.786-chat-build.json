@@ -1,0 +1,12 @@
+{
+  "projectId": "4989c083-dc9b-4471-b2a0-354a4dfa284f",
+  "buildId": "895c7873-7932-4369-b942-b5311a281639",
+  "title": "Orbit Health – Production Smoke-Test",
+  "sourceVersion": "a96d3570940fefa5e64e692701259eab07cad25b43ef49f30433d9e6a383676a",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-01T11:56:14.816Z"
+}
