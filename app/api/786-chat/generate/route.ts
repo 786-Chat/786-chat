@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       plan: session.plan,
       prompt,
       projectId: typeof payload.projectId === "string" ? payload.projectId : null,
-      bypassPlanLimits: session.role === "admin" && isAdminUser(session.email),
+      bypassPlanLimits: isAdminUser(session.email),
     })
   } catch (error) {
     console.error("[786.Chat AI governance] Could not reserve generation", error)
