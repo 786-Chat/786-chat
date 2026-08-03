@@ -12,10 +12,10 @@ import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/features", label: "Features" },
-  { href: "/themes", label: "Themes" },
+  { href: "/examples", label: "Examples" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
+  { href: "/docs", label: "Docs" },
+  { href: "/support", label: "Support" },
 ]
 
 export function Navbar() {

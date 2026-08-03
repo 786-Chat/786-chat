@@ -1,0 +1,24 @@
+import type { Metadata } from "next"
+
+import { LegalDocument, type LegalSection } from "@/components/launch/legal-document"
+
+export const metadata: Metadata = { title: "Terms of service | 786.Chat", description: "Terms governing access to and use of 786.Chat." }
+
+const sections: LegalSection[] = [
+  { title: "1. Agreement and eligibility", paragraphs: ["These terms govern access to 786.Chat. By creating an account or using the service, you agree to them and confirm that you can enter a binding agreement. If you use the service for an organisation, you confirm authority to bind it."] },
+  { title: "2. Accounts", items: ["Provide accurate information, verify your email and keep account access secure.", "Do not share passwords or use another person’s account without authority.", "You are responsible for activity under your account and must report suspected compromise promptly.", "We may suspend an account to protect users, data, infrastructure or legal compliance."] },
+  { title: "3. Plans, credits and billing", paragraphs: ["Free, Pro and Business plans have displayed limits for generations, projects, deployments, domains and teams. Paid purchases use Stripe Checkout. Subscription changes, renewals, cancellation and refunds follow the checkout terms and applicable law. Usage or credit records shown by 786.Chat determine platform allowances unless a clear error is demonstrated."] },
+  { title: "4. Acceptable use", items: ["Do not create malware, phishing, credential theft, abusive automation or unlawful content.", "Do not bypass authentication, tenant isolation, rate limits, safety checks or plan controls.", "Do not probe other customers’ data, disrupt the service, misrepresent identity or infringe intellectual property.", "Do not submit secrets or personal data you lack authority to process."] },
+  { title: "5. AI output and customer review", paragraphs: ["AI-generated source may contain errors. Validation and isolated builds reduce risk but do not replace professional review. You must review security, licensing, accessibility, accuracy, regulatory compliance and fitness before using generated applications with real customers or sensitive data."] },
+  { title: "6. Projects and intellectual property", paragraphs: ["As between you and 786.Chat, you retain rights you hold in prompts, uploaded material and customer-specific project content. Subject to payment and law, you may use generated project output. You grant 786.Chat the limited rights needed to host, process, secure, build and deploy your projects. You must have rights to all material you submit."] },
+  { title: "7. Deployments, domains and third parties", paragraphs: ["Deployments depend on Vercel, GitHub, Neon, DNS providers and other integrations. Domain ownership and DNS remain your responsibility. Third-party services have separate terms, limits and availability. A deployment marked ready does not guarantee business, legal or security suitability."] },
+  { title: "8. Availability and changes", paragraphs: ["We aim to provide a reliable service but may maintain, change, limit or discontinue features. Preview, beta or experimental functions may change without notice. We may update plan allowances for future billing periods with reasonable notice where required."] },
+  { title: "9. Warranties and liability", paragraphs: ["To the maximum extent permitted by law, 786.Chat is provided without implied warranties beyond those that cannot be excluded. We are not responsible for indirect or consequential loss, lost profits, lost data or third-party failures. Nothing limits liability for fraud, death or personal injury caused by negligence, or other liability that law does not allow us to limit."] },
+  { title: "10. Termination", paragraphs: ["You may stop using the service and cancel paid access through the billing portal when available. We may suspend or terminate for material breach, abuse, non-payment, legal requirement or security risk. Provisions intended to survive, including payment, ownership, disclaimers and liability terms, continue after termination."] },
+  { title: "11. Governing law", paragraphs: ["These terms are governed by the laws of England and Wales, subject to mandatory consumer rights. Courts with lawful jurisdiction may hear disputes. We encourage you to contact Support first so we can try to resolve concerns promptly."] },
+  { title: "12. Contact and updates", paragraphs: ["Questions about these terms can be submitted through the Support page. We may update these terms and will publish the new effective date and provide any notice required for material changes."] },
+]
+
+export default function TermsPage() {
+  return <LegalDocument eyebrow="Legal" title="Terms of service" description="The rules for using 786.Chat accounts, AI generation, billing, projects and deployments." updated="3 August 2026" sections={sections} />
+}
