@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { Clock3, Mail, Phone, ShieldCheck } from "lucide-react"
+import { Clock3, Mail, MapPin, Phone, ShieldCheck } from "lucide-react"
 
 import { SupportForm } from "@/components/launch/support-form"
 import "../marketing-home.css"
@@ -92,6 +92,13 @@ export default function SupportPage() {
             <article className="support-detail-card">
               <ShieldCheck aria-hidden="true" />
               <div><h2>Safe support</h2><p>Explain the problem and steps taken, but never include passwords, API keys or private tokens.</p></div>
+            </article>
+            <article className="support-detail-card">
+              <MapPin aria-hidden="true" />
+              <div>
+                <h2>Business address</h2>
+                <address>786.CHAT<br />104 Ilford Lane<br />Ilford, IG1 2LD<br />United Kingdom</address>
+              </div>
             </article>
             <article className="support-detail-card">
               <Mail aria-hidden="true" />
