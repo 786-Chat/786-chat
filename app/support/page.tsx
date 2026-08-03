@@ -97,7 +97,7 @@ export default function SupportPage() {
               <MapPin aria-hidden="true" />
               <div>
                 <h2>Business address</h2>
-                <address>786.CHAT<br />104 Ilford Lane<br />Ilford, IG1 2LD<br />United Kingdom</address>
+                <address>786.CHAT<br />104 Ilford Ln<br />Ilford IG1 2LD</address>
               </div>
             </article>
             <article className="support-detail-card">
