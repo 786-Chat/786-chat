@@ -37,6 +37,12 @@ test("the alternate provider is not started while the primary is running", () =>
   assert.doesNotMatch(controller, /coordinatorSignal|attemptsByMode/)
 })
 
+test("automatic generation prefers Gateway-compatible Flash modes", () => {
+  assert.match(controller, /if \(hasAttachments\) return "gemini-flash"/)
+  assert.match(controller, /return "deepseek-flash"/)
+  assert.match(controller, /return "gemini-flash"/)
+})
+
 test("invalid full systems receive one strict validation-guided repair pass", () => {
   assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE/)
   assert.match(canonicalGenerator, /validation\.errors\.map/)
