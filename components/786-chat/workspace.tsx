@@ -1042,7 +1042,7 @@ export function SevenEightSixWorkspace() {
           <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${styles.agentShell} ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
             <div className={`hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex ${styles.stagePanel}`}>
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-3">
+              <div className="min-h-0 flex-1 overflow-hidden pr-1 pb-3">
                 <div className="relative grid min-h-[400px] grid-rows-5 gap-2">
                   <div className="absolute bottom-10 left-[22px] top-6 w-[3px] overflow-hidden rounded-full bg-gradient-to-b from-cyan-400/35 via-violet-500/35 to-amber-300/35">
                     <span className="stage-flow absolute inset-x-0 h-20 rounded-full bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_14px_rgba(125,211,252,.9)]" />
@@ -1071,17 +1071,6 @@ export function SevenEightSixWorkspace() {
                     </div>
                   )
                   })}
-                </div>
-                <div className={styles.thinkingCard} role="status" aria-live="polite">
-                  <div className="relative z-10 flex items-start gap-3">
-                    <span className={styles.thinkingOrb}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Waves className="h-4 w-4" />}</span>
-                    <span className="min-w-0 flex-1">
-                      <b className="block text-[16px] text-white">{busy ? "Agent thinking" : project ? "Workspace ready" : "Ready for your idea"}</b>
-                      <span className="mt-1 block text-[14px] leading-[19px] text-slate-300">{busy ? "Analysing your request and preparing the next clear action." : project ? "Ask for a change, then watch each stage update here." : "Describe your application to begin the five-stage build."}</span>
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-slate-950/35 px-2 py-1 text-[14px] font-bold text-amber-100">{busy ? "Working" : "Ready"}</span>
-                  </div>
-                  <div className={styles.thinkingBars} aria-hidden="true"><span /><span /><span /></div>
                 </div>
               </div>
             </div>
