@@ -18,6 +18,10 @@ import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature
 import { listProjects } from "@/lib/786-admin/projects"
 import { systemArchitectureBrief } from "@/lib/786-chat/system-architecture"
 import {
+  backendCapabilityBrief,
+  requiredBackendFiles,
+} from "@/lib/786-chat/backend-capabilities"
+import {
   completeBuilderGeneration,
   failBuilderGeneration,
   reserveBuilderGeneration,
@@ -176,6 +180,7 @@ export async function POST(request: Request) {
     "",
     "ACTIVE APPLICATION AND PLATFORM RULES:",
     ...systemArchitectureBrief(specification).map((line) => `- ${line}`),
+    ...backendCapabilityBrief(specification).map((line) => `- ${line}`),
     OPTIONAL_PROJECT_FEATURE_RULES,
     ...(specification.systemBlueprint
       ? [
@@ -263,6 +268,7 @@ export async function POST(request: Request) {
 
   if (!validation.valid && project) {
     repairAttempted = true
+    const backendRepairFiles = requiredBackendFiles(specification)
     const focusedSystemRepair = validation.errors.every((error) =>
       /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence|CRUD/i.test(error)
     )
@@ -282,6 +288,7 @@ export async function POST(request: Request) {
           ]),
         ]
         : []),
+      ...backendRepairFiles,
     ]
     const repairKeyFiles = focusedSystemRepair
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
@@ -290,6 +297,7 @@ export async function POST(request: Request) {
           path === "shared/contracts.ts" ||
           path === "sql/schema.sql" ||
           /^app\/api\/.+\/route\.ts$/.test(path) ||
+          backendRepairFiles.includes(path) ||
           /^app\/(?!api\/).+\/page\.tsx$/.test(path)
         ))
       : files
@@ -302,6 +310,7 @@ export async function POST(request: Request) {
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
       `Required system files (create any that are absent and replace every rejected one): ${requiredRepairFiles.join(", ")}`,
+      ...backendCapabilityBrief(specification).map((line) => `- ${line}`),
       "app/page.tsx is mandatory. If it is missing, create it and wire it to the requested application or requested nested route.",
       "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
       "Every collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard or assertTenant before reading or mutating data.",
