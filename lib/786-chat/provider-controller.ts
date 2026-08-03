@@ -74,7 +74,10 @@ function resolvedPrimaryMode(requested: CodegenMode, hasAttachments: boolean): C
 
 function isSimpleWebsiteRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
   if (hasAttachments || payload.existing) return false
-  const message = String(payload.message || "").trim().toLowerCase()
+  // The public generation route expands the user's prompt with architecture
+  // and validation rules. Classify the original request so those internal
+  // rules do not accidentally force every simple site onto the slow profile.
+  const message = String(payload._originalPrompt || payload.message || "").trim().toLowerCase()
   if (!message || message.length > 3_000) return false
   const complexTerms = [
     "database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing", "factory",
@@ -130,6 +133,7 @@ async function runAttempt(
       userId: String(payload._actorUserId || "anonymous-builder"),
       userPlan: String(payload._actorPlan || "starter"),
       generationId: String(payload._generationId || ""),
+      maxOutputTokens: useCompactProfile ? 10_000 : undefined,
       attachments,
       existing,
     }),
@@ -199,7 +203,7 @@ export async function POST(request: Request) {
   const primaryMode = requestedMode === "auto" && compactEligible
     ? "deepseek-flash"
     : resolvedPrimaryMode(requestedMode, hasAttachments)
-  const secondaryMode = alternateMode(primaryMode, hasAttachments)
+  const secondaryMode = compactEligible ? "gemini-flash" : alternateMode(primaryMode, hasAttachments)
   const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode]))
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes

@@ -196,6 +196,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       ...payload,
       message: generationBrief,
+      _originalPrompt: prompt,
       _actorUserId: session.id,
       _actorPlan: session.plan || "starter",
       _generationId: generationId,

@@ -3,6 +3,7 @@ import "server-only"
 import { createHash, createHmac } from "node:crypto"
 
 import { sql } from "@/lib/786-admin/db"
+import { sendOperationalAlertEmail } from "@/lib/transactional-email"
 
 export type MonitoringCategory = "account" | "project" | "ai" | "build" | "deployment" | "journey" | "system"
 export type MonitoringStatus = "started" | "succeeded" | "failed" | "cancelled" | "degraded"
@@ -65,7 +66,6 @@ async function sendAlert(input: {
   metadata: Record<string, unknown>
 }) {
   const url = process.env.ALERT_WEBHOOK_URL?.trim()
-  if (!url || !/^https:\/\//i.test(url)) return { sent: false, reason: "ALERT_WEBHOOK_NOT_CONFIGURED" }
   const body = JSON.stringify({
     source: "786.chat",
     fingerprint: input.fingerprint,
@@ -77,23 +77,40 @@ async function sendAlert(input: {
     metadata: input.metadata,
     occurredAt: new Date().toISOString(),
   })
-  const secret = process.env.ALERT_WEBHOOK_SECRET?.trim()
-  const signature = secret ? createHmac("sha256", secret).update(body).digest("hex") : null
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(signature ? { "x-786-signature": signature } : {}),
-      },
-      body,
-      signal: AbortSignal.timeout(5_000),
-      cache: "no-store",
-    })
-    return { sent: response.ok, reason: response.ok ? null : `ALERT_HTTP_${response.status}` }
-  } catch (error) {
-    return { sent: false, reason: safeMonitoringError(error) }
+  let webhookReason = "ALERT_WEBHOOK_NOT_CONFIGURED"
+  if (url && /^https:\/\//i.test(url)) {
+    const secret = process.env.ALERT_WEBHOOK_SECRET?.trim()
+    const signature = secret ? createHmac("sha256", secret).update(body).digest("hex") : null
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(signature ? { "x-786-signature": signature } : {}),
+        },
+        body,
+        signal: AbortSignal.timeout(5_000),
+        cache: "no-store",
+      })
+      if (response.ok) return { sent: true, reason: null }
+      webhookReason = `ALERT_HTTP_${response.status}`
+    } catch (error) {
+      webhookReason = safeMonitoringError(error)
+    }
   }
+
+  const alertEmail = process.env.ALERT_EMAIL_TO?.trim()
+  if (!alertEmail || !/^\S+@\S+\.\S+$/.test(alertEmail)) return { sent: false, reason: webhookReason }
+  const emailDelivery = await sendOperationalAlertEmail({
+    to: alertEmail,
+    fingerprint: input.fingerprint,
+    title: input.title,
+    severity: input.severity,
+    errorCode: input.errorCode,
+    errorMessage: input.errorMessage,
+    category: input.category,
+  })
+  return emailDelivery.sent ? emailDelivery : { sent: false, reason: `${webhookReason};${emailDelivery.reason}` }
 }
 
 export async function recordOperationalEvent(input: OperationalEvent) {

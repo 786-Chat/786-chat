@@ -64,7 +64,7 @@ test("the active code generator requires tenant ownership rejection and real aud
 })
 
 test("large file generation has an explicit output and retry budget", () => {
-  assert.match(codegen, /maxOutputTokens:\s*maxOutputTokensForPlan\(input\.userPlan\)/)
+  assert.match(codegen, /maxOutputTokens:\s*input\.maxOutputTokens \?\? maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /maxRetries:\s*0/)
   assert.match(codegen, /abortSignal: input\.abortSignal/)
 })
