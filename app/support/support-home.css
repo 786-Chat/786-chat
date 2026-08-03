@@ -165,10 +165,12 @@
   font-weight: 730;
 }
 
-.support-detail-card p {
+.support-detail-card p,
+.support-detail-card address {
   margin-top: 8px;
   color: rgba(220, 228, 255, 0.58);
   font-size: 14px;
+  font-style: normal;
   line-height: 1.7;
 }
 
