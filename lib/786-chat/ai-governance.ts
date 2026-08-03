@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { sql } from "@/lib/786-admin/db"
 import type { BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
 import { normalizeBuilderPlan } from "@/lib/786-chat/billing"
+import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type PlanLimit = {
   requestsPerMinute: number
@@ -225,4 +226,15 @@ export async function failBuilderGeneration(input: {
     FROM failed
     WHERE failed.credit_reserved > 0 AND s.user_id::text = failed.user_id
   `
+  await recordOperationalEvent({
+    category: "ai",
+    eventName: "builder_generation_failed",
+    status: "failed",
+    severity: "error",
+    ownerEmail: input.ownerEmail,
+    errorCode: input.errorCode,
+    error: input.error,
+    durationMs: input.latencyMs,
+    metadata: { generationId: input.generationId },
+  })
 }

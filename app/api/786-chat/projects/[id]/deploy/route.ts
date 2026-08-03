@@ -20,6 +20,7 @@ import {
   type AdminProjectDeployment,
 } from "@/lib/786-admin/publishing";
 import { builderPlanUsage } from "@/lib/786-chat/billing";
+import { recordOperationalEvent } from "@/lib/786-chat/monitoring";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -133,6 +134,14 @@ async function deploymentResponse(input: {
       input.domain.dns_status === "verified" &&
       input.domain.ssl_status === "active");
   const fallbackUrl = `/p/${input.deployment.slug}`;
+  await recordOperationalEvent({
+    category: "deployment",
+    eventName: "production_deployment_succeeded",
+    status: "succeeded",
+    ownerEmail: input.ownerEmail,
+    projectId: input.projectId,
+    metadata: { version: input.deployment.version, addressType: input.domain.address_type },
+  });
   return NextResponse.json({
     ...(await lifecycle(input.projectId, input.ownerEmail)),
     domain: publicDomain(input.domain),
@@ -311,6 +320,17 @@ export async function POST(request: Request, { params }: Context) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Deployment failed.";
+    await recordOperationalEvent({
+      category: "deployment",
+      eventName: "production_deployment_failed",
+      status: "failed",
+      severity: "error",
+      ownerEmail,
+      projectId: id,
+      errorCode: "PRODUCTION_DEPLOYMENT_FAILED",
+      error: message,
+      metadata: { action },
+    });
     return NextResponse.json(
       { error: message },
       {

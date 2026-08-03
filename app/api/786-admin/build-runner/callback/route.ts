@@ -3,6 +3,7 @@ import { completeRunnerBuild, getRunnerBuildBundle } from "@/lib/786-admin/build
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
 import { repairFailedBuild } from "@/lib/786-chat/build-repair"
+import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -97,6 +98,19 @@ export async function POST(request: Request) {
 
   if (!updated) {
     return NextResponse.json({ error: "Build not found or already completed" }, { status: 409 })
+  }
+
+  if (status === "failed" || status === "cancelled") {
+    await recordOperationalEvent({
+      category: "build",
+      eventName: status === "failed" ? "generated_build_failed" : "generated_build_cancelled",
+      status,
+      severity: status === "failed" ? "error" : "warning",
+      buildId: body.buildId,
+      errorCode: status === "failed" ? "GENERATED_BUILD_FAILED" : "GENERATED_BUILD_CANCELLED",
+      error: errorMessage || `Build ${status}`,
+      metadata: { repairPending: runnerBuildFailed },
+    })
   }
 
   const repair = runnerBuildFailed
