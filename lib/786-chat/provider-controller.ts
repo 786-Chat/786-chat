@@ -29,8 +29,10 @@ function providerForMode(mode: CodegenMode): "deepseek" | "gemini" {
 }
 
 function modeConfigured(mode: CodegenMode): boolean {
-  void mode
-  return gatewayConfigured()
+  if (providerForMode(mode) === "deepseek") {
+    return configured("DEEPSEEK_API_KEY") || gatewayConfigured()
+  }
+  return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY") || gatewayConfigured()
 }
 
 function attemptTimeout(position: number) {
@@ -38,7 +40,7 @@ function attemptTimeout(position: number) {
 }
 
 function missingConfigurationReason(mode: CodegenMode): string {
-  return `${providerForMode(mode) === "deepseek" ? "DeepSeek" : "Gemini"} cannot start because Vercel AI Gateway authentication is unavailable.`
+  return `${providerForMode(mode) === "deepseek" ? "DeepSeek" : "Gemini"} cannot start because neither its direct API key nor Vercel AI Gateway authentication is available.`
 }
 
 function safeReason(value: unknown): string {
