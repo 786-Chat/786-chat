@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import Image from "next/image"
 import { Clock3, Mail, Phone, ShieldCheck } from "lucide-react"
 
 import { SupportForm } from "@/components/launch/support-form"
@@ -43,6 +44,15 @@ export default function SupportPage() {
         <span className="light-beam beam-two" />
         <span className="star-field" />
       </div>
+      <Image
+        className="hero-art support-background-art"
+        src="https://seven86-chat-v2.link24-7days.chatgpt.site/hero-blue-glass-v2.png"
+        alt=""
+        width={1600}
+        height={900}
+        priority
+        unoptimized
+      />
 
       <nav className="site-nav" aria-label="Primary navigation">
         <Link className="site-brand" href="/" aria-label="786.Chat home">
