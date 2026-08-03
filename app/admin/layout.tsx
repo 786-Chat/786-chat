@@ -35,7 +35,8 @@ import {
   Share2,
   Bot,
   Menu,
-  X
+  X,
+  BellRing,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -45,6 +46,7 @@ const adminNavItems = [
   { href: "/admin", label: "Overview", icon: BarChart3 },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/activity", label: "Activity", icon: Activity },
+  { href: "/admin/monitoring", label: "Monitoring", icon: BellRing },
   { href: "/admin/ai-control", label: "AI Control", icon: Bot },
   { href: "/admin/ai-usage", label: "AI Usage", icon: Bot },
   { href: "/admin/balances", label: "User Balances", icon: Coins },

@@ -6,6 +6,7 @@ import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData } from "@/lib/786-admin/projects"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
+import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -143,6 +144,17 @@ export async function POST(request: Request, { params }: Ctx) {
       line: `[dispatcher] ${message}`,
       status: "failed",
       errorMessage: message,
+    })
+    await recordOperationalEvent({
+      category: "build",
+      eventName: "build_dispatch_failed",
+      status: "failed",
+      severity: "error",
+      ownerEmail: email,
+      projectId: id,
+      buildId: build.id,
+      errorCode: "BUILD_DISPATCH_FAILED",
+      error: message,
     })
 
     return NextResponse.json(
