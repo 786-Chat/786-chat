@@ -142,7 +142,7 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="password" className="text-[12px] font-bold uppercase tracking-[.12em] text-slate-400">Password</Label>
-                    <Link href="/contact" className="text-[12px] text-cyan-300 transition-colors hover:text-cyan-200">Need help?</Link>
+                    <Link href="/forgot-password" className="text-[12px] text-cyan-300 transition-colors hover:text-cyan-200">Forgot password?</Link>
                   </div>
                   <div className="relative">
                     <Input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Enter your password" required value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 rounded-xl border-white/10 bg-[#050914]/80 px-4 pr-11 text-[14px] placeholder:text-slate-700 focus-visible:border-cyan-300/50 focus-visible:ring-cyan-300/20" />

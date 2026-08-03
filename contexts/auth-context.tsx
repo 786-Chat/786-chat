@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string; verificationRequired?: boolean; email?: string }>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -144,10 +144,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json()
 
       if (response.ok) {
-        setUser(data.user)
-        writeVerifiedSessionCache(data.user)
-        setIsLoading(false)
-        return { success: true }
+        if (data.user) {
+          setUser(data.user)
+          writeVerifiedSessionCache(data.user)
+          setIsLoading(false)
+        }
+        return {
+          success: true,
+          verificationRequired: Boolean(data.verificationRequired),
+          email: typeof data.email === "string" ? data.email : email,
+        }
       }
 
       return { success: false, error: data.error }

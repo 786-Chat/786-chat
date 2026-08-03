@@ -78,7 +78,6 @@ import {
 } from "@/lib/786-chat/visual-editor"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
-const OWNER_EMAIL = "mujeeb@job4u.com"
 
 type EditorSection = { id: string; label: string; hidden: boolean }
 
@@ -176,7 +175,7 @@ export function SevenEightSixWorkspace() {
   const visualSaveQueue = useRef<Promise<void>>(Promise.resolve())
   const visualSavePending = useRef(0)
 
-  const isOwner = user?.email?.toLowerCase().trim() === OWNER_EMAIL
+  const hasWorkspaceUser = Boolean(user?.id && user.email)
   const files = useMemo(() => Object.keys(project?.files || {}).sort(), [project])
   const deviceSpec = device === "custom"
     ? { ...BUILDER_DEVICES.custom, ...customDevice }
@@ -197,11 +196,11 @@ export function SevenEightSixWorkspace() {
   }, [editorSections, visualState.order])
 
   useEffect(() => {
-    if (!isLoading && !isOwner) router.replace("/786-admin/login")
-  }, [isLoading, isOwner, router])
+    if (!isLoading && !hasWorkspaceUser) router.replace("/login?next=/786.chat")
+  }, [hasWorkspaceUser, isLoading, router])
 
   useEffect(() => {
-    if (!isOwner) return
+    if (!hasWorkspaceUser) return
     const id = localStorage.getItem(ACTIVE_PROJECT_KEY)
     if (!id) return
     void loadBuilderProject(id)
@@ -218,7 +217,7 @@ export function SevenEightSixWorkspace() {
         void listBuilderRevisions(saved.id).then(setRevisions).catch(() => undefined)
       })
       .catch(() => localStorage.removeItem(ACTIVE_PROJECT_KEY))
-  }, [isOwner])
+  }, [hasWorkspaceUser])
 
   useEffect(() => {
     const move = (event: PointerEvent) => {
@@ -658,7 +657,7 @@ export function SevenEightSixWorkspace() {
     }
   }
 
-  if (isLoading || !isOwner) {
+  if (isLoading || !hasWorkspaceUser) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#050813] text-cyan-200">
         <Loader2 className="h-7 w-7 animate-spin" />

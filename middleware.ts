@@ -69,6 +69,7 @@ export async function middleware(request: NextRequest) {
   const isBuildRunnerApi = pathname.startsWith("/api/786-admin/build-runner/")
   const isAdminPage = pathname.startsWith("/786-admin")
   const isCustomerWorkspace = pathname === "/customer-workspace"
+  const isBuilderPage = pathname === "/786.chat"
   const isCustomerDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/")
   const isMainCustomerWorkspaceRoute = pathname === "/dashboard" || pathname === "/dashboard/chat"
 
@@ -88,16 +89,18 @@ export async function middleware(request: NextRequest) {
 
     if (isAdminApi) return apiError("Server authentication is not configured", 503)
     if (isAdminPage) return adminLogin(request, "configuration")
-    if (isCustomerDashboard || isCustomerWorkspace) return customerLogin(request)
+    if (isCustomerDashboard || isCustomerWorkspace || isBuilderPage) return customerLogin(request)
     return NextResponse.next()
   }
 
-  if (isCustomerDashboard || isCustomerWorkspace) {
+  if (isCustomerDashboard || isCustomerWorkspace || isBuilderPage) {
     if (!token) return customerLogin(request)
 
     try {
       const { payload } = await verifyToken(token, secret)
       const email = emailFromPayload(payload)
+
+      if (isBuilderPage) return NextResponse.next()
 
       if (email === ADMIN_EMAIL) {
         return NextResponse.redirect(new URL("/786-admin/chat", request.url))

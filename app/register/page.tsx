@@ -61,6 +61,10 @@ export default function RegisterPage() {
     try {
       const result = await register(`${firstName.trim()} ${lastName.trim()}`, email.trim(), password)
       if (!result.success) return setError(result.error || "We could not create your account. Please try again.")
+      if (result.verificationRequired) {
+        router.replace(`/verify-email?email=${encodeURIComponent(result.email || email.trim())}`)
+        return
+      }
       router.replace("/dashboard")
     } catch {
       setError("We could not create your account. Please try again.")

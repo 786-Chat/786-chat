@@ -1,115 +1,81 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
+
+import { ensureAccountSecuritySchema } from "@/lib/account-security"
+import { createToken, setAuthCookie, verifyPassword } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import { verifyPassword, createToken } from "@/lib/auth"
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown login error"
-}
-
-function isNeonQuotaError(message: string): boolean {
+function isNeonQuotaError(message: string) {
   const lower = message.toLowerCase()
-
-  return (
-    lower.includes("exceeded the data transfer quota") ||
-    lower.includes("data transfer quota") ||
-    lower.includes("upgrade your plan") ||
-    lower.includes("neon:retryable") ||
-    lower.includes("http status 402")
-  )
+  return lower.includes("data transfer quota") || lower.includes("neon:retryable") || lower.includes("http status 402")
 }
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
+    await ensureAccountSecuritySchema()
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const email = String(body.email || "").trim().toLowerCase()
+    const password = String(body.password || "")
 
-    const cleanEmail = String(email || "").trim().toLowerCase()
-
-    if (!cleanEmail || !password) {
-      return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
-      )
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const users = await sql`
-      SELECT id, name, email, password, plan, role
+    const users = (await sql`
+      SELECT id, name, email, password, plan, role, email_verified, session_version, account_status
       FROM users
-      WHERE email = ${cleanEmail}
+      WHERE email = ${email}
       LIMIT 1
-    `
-
-    if (users.length === 0) {
-      return NextResponse.json(
-        { error: "Invalid email or password" },
-        { status: 401 }
-      )
-    }
+    `) as unknown as Array<{
+      id: string
+      name: string
+      email: string
+      password: string
+      plan: string
+      role: string
+      email_verified: boolean
+      session_version: number
+      account_status: string
+    }>
 
     const user = users[0]
-
-    const isValidPassword = await verifyPassword(password, user.password)
-
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: "Invalid email or password" },
-        { status: 401 }
-      )
+    if (!user || !(await verifyPassword(password, user.password))) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
+    if (user.account_status !== "active") {
+      return NextResponse.json({ error: "This account is not active. Contact support." }, { status: 403 })
+    }
+    if (!user.email_verified) {
+      return NextResponse.json({
+        error: "Please verify your email before signing in.",
+        code: "EMAIL_NOT_VERIFIED",
+        email: user.email,
+      }, { status: 403 })
     }
 
-    let subscription = {
-      plan: user.plan || "starter",
-      tokens_used: 0,
-      tokens_limit: 10000,
-    }
-
+    let subscription = { plan: user.plan || "starter", tokens_used: 0, tokens_limit: 10000 }
     try {
-      const subscriptions = await sql`
+      const subscriptions = (await sql`
         SELECT plan, tokens_used, tokens_limit
         FROM subscriptions
         WHERE user_id = ${user.id}
         LIMIT 1
-      `
-
-      if (subscriptions[0]) {
-        subscription = {
-          plan: subscriptions[0].plan || user.plan || "starter",
-          tokens_used: Number(subscriptions[0].tokens_used || 0),
-          tokens_limit: Number(subscriptions[0].tokens_limit || 10000),
-        }
-      }
-    } catch (subscriptionError) {
-      /*
-        Keep login working if the optional subscriptions lookup fails.
-        The main user password is already verified. Other API routes can refresh
-        subscription info later when Neon quota/access is healthy.
-      */
-      console.warn("[MujeebProAI] Subscription lookup failed during login:", subscriptionError)
+      `) as unknown as Array<{ plan: string; tokens_used: number; tokens_limit: number }>
+      if (subscriptions[0]) subscription = subscriptions[0]
+    } catch {
+      console.warn("[786.Chat] Subscription lookup failed during login")
     }
 
-    const isOwnerAdmin = user.email?.toLowerCase().trim() === "mujeeb@job4u.com"
-    const userRole = isOwnerAdmin ? "admin" : user.role
-
+    const ownerEmail = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com").trim().toLowerCase()
+    const role = user.email.toLowerCase().trim() === ownerEmail ? "admin" : user.role
     const token = await createToken({
       id: user.id,
       email: user.email,
       name: user.name,
       plan: subscription.plan,
-      role: userRole,
+      role,
+      sessionVersion: Number(user.session_version),
     })
-
-    const cookieStore = await cookies()
-
-    const cookieOptions = {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none" as const,
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    }
-
-    cookieStore.set("auth_token", token, cookieOptions)
-    cookieStore.set("auth-token", token, cookieOptions)
+    await setAuthCookie(token)
 
     return NextResponse.json({
       message: "Login successful",
@@ -118,31 +84,19 @@ export async function POST(request: Request) {
         name: user.name,
         email: user.email,
         plan: subscription.plan,
-        role: userRole,
+        role,
+        credits: Math.max(0, Number(subscription.tokens_limit) - Number(subscription.tokens_used)),
       },
     })
   } catch (error) {
-    const message = getErrorMessage(error)
-    console.error("[MujeebProAI] Login error:", error)
-
+    const message = error instanceof Error ? error.message : "Unknown login error"
+    console.error("[786.Chat] Login failed", error)
     if (isNeonQuotaError(message)) {
       return NextResponse.json(
-        {
-          error: "NEON_QUOTA_EXCEEDED",
-          message:
-            "Database transfer quota is temporarily exceeded. Your account is not deleted. Upgrade/reset Neon quota, then try again.",
-          debug: message,
-        },
-        { status: 402 }
+        { error: "Database capacity is temporarily unavailable. Please try again shortly." },
+        { status: 503 },
       )
     }
-
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        debug: message,
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 500 })
   }
 }
