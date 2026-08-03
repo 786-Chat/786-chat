@@ -15,10 +15,12 @@ function requiredEnv(name: string): string {
 
 function trustedBaseUrl(value: string): string {
   const url = new URL(value)
-  const isProduction = url.protocol === "https:" && url.hostname === "786.chat"
+  const isProduction =
+    url.protocol === "https:" &&
+    (url.hostname === "786.chat" || url.hostname === "www.786.chat")
   const isVercelPreview = url.protocol === "https:" && url.hostname.endsWith(".vercel.app")
   if (!isProduction && !isVercelPreview) throw new Error("Untrusted build callback origin")
-  return url.origin
+  return isProduction ? "https://786.chat" : url.origin
 }
 
 export async function dispatchGeneratedProjectBuild(input: {
