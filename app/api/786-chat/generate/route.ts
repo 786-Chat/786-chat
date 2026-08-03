@@ -31,6 +31,8 @@ import {
   applicationEditBrief,
   classifyApplicationEdit,
 } from "@/lib/786-chat/edit-intent"
+import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
+import { screenBuilderPrompt } from "@/lib/786-chat/security"
 
 export const runtime = "nodejs"
 export const maxDuration = 180
@@ -49,6 +51,14 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const prompt = String(payload.message || "").trim()
   const ownerEmail = session.email.toLowerCase().trim()
+  const promptSecurity = screenBuilderPrompt(prompt)
+  if (!promptSecurity.allowed) {
+    return NextResponse.json({
+      success: false,
+      error: promptSecurity.message,
+      warning: promptSecurity.code,
+    }, { status: 403 })
+  }
   const editIntent = classifyApplicationEdit(prompt)
   if (editIntent.kind === "undo" && typeof payload.projectId === "string") {
     return NextResponse.json({
@@ -243,6 +253,12 @@ export async function POST(request: Request) {
     payload.visualEditorState,
   )
   let validation = validateGeneratedProject(specification, files)
+  let securityValidation = validateGeneratedSecurity(files)
+  validation.errors.push(...securityValidation.errors.map((issue) =>
+    `${issue.message}${issue.path ? ` (${issue.path})` : ""}`
+  ))
+  validation.warnings.push(...securityValidation.warnings.map((issue) => issue.message))
+  validation.valid = validation.errors.length === 0
   let repairAttempted = false
 
   if (!validation.valid && project) {
@@ -341,6 +357,12 @@ export async function POST(request: Request) {
         payload.visualEditorState,
       )
       validation = validateGeneratedProject(specification, files)
+      securityValidation = validateGeneratedSecurity(files)
+      validation.errors.push(...securityValidation.errors.map((issue) =>
+        `${issue.message}${issue.path ? ` (${issue.path})` : ""}`
+      ))
+      validation.warnings.push(...securityValidation.warnings.map((issue) => issue.message))
+      validation.valid = validation.errors.length === 0
       if (validation.valid && repairedProject) {
         project = repairedProject
         Object.assign(result, repaired)
@@ -359,6 +381,7 @@ export async function POST(request: Request) {
       specification,
       plan,
       validation,
+      securityValidation,
       providerStatus: result.providerStatus,
       fellBackToLocal: result.fellBackToLocal,
       repairAttempted,
@@ -376,6 +399,7 @@ export async function POST(request: Request) {
     specification,
     plan,
     validation,
+    securityValidation,
     repairAttempted,
   })
 }

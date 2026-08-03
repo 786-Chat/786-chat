@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { isStrongPassword, resetPasswordWithToken } from "@/lib/account-security"
 import { hashPassword } from "@/lib/auth"
+import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
@@ -15,6 +16,16 @@ export async function POST(request: Request) {
     )
   }
   try {
+    const limit = await consumeSecurityRateLimit({
+      namespace: "auth-reset-password",
+      identifier: `${requestIdentifier(request)}:${token}`,
+      limit: 8,
+      windowSeconds: 60 * 60,
+    })
+    if (!limit.allowed) {
+      const response = rateLimitResponse(limit)
+      return NextResponse.json(response.body, { status: response.status, headers: response.headers })
+    }
     const reset = await resetPasswordWithToken(token, await hashPassword(password))
     if (!reset) {
       return NextResponse.json({ error: "This reset link is invalid or expired." }, { status: 400 })

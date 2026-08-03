@@ -1,3 +1,5 @@
+import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
+
 export type BuildValidationIssue = {
   code: string
   message: string
@@ -164,6 +166,10 @@ export function validateGeneratedProject(
       }
     }
   }
+
+  const security = validateGeneratedSecurity(files)
+  errors.push(...security.errors)
+  warnings.push(...security.warnings)
 
   const packageManager: BuildValidationResult["packageManager"] = files["pnpm-lock.yaml"]
     ? "pnpm"
