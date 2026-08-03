@@ -4,13 +4,12 @@ import Link from "next/link"
 import { FormEvent, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Rocket, ShieldCheck, Sparkles, WandSparkles } from "lucide-react"
+import { AlertCircle, ArrowLeft, Check, Eye, EyeOff, Loader2, LockKeyhole, Rocket, ShieldCheck, Sparkles, WandSparkles } from "lucide-react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { MujeebProAILogo } from "@/components/mujeebproai-logo"
 
 const benefits = [
   { icon: WandSparkles, title: "Build with AI", text: "Generate complete, editable projects from a simple description." },
@@ -20,8 +19,11 @@ const benefits = [
 
 function BrandIdentity({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="inline-flex items-center gap-2" aria-label="786 Chat AI">
-      <MujeebProAILogo size={compact ? "sm" : "md"} animated={false} className={compact ? "-my-3" : "-my-5"} />
+    <div className="inline-flex items-center gap-3" aria-label="786.Chat">
+      <span className={`grid place-items-center rounded-full border border-violet-400/60 bg-violet-500/10 font-black text-violet-200 shadow-[0_0_24px_rgba(124,58,237,.35)] ${compact ? "h-9 w-9 text-[11px]" : "h-11 w-11 text-[12px]"}`}>
+        786
+      </span>
+      <span className={`${compact ? "text-lg" : "text-[22px]"} font-black tracking-[-.04em]`}>786.Chat</span>
     </div>
   )
 }
@@ -59,10 +61,14 @@ export default function RegisterPage() {
 
     setIsSubmitting(true)
     try {
-      const result = await register(`${firstName.trim()} ${lastName.trim()}`, email.trim(), password)
-      if (!result.success) return setError(result.error || "We could not create your account. Please try again.")
+      const normalizedEmail = email.trim().toLowerCase()
+      const result = await register(`${firstName.trim()} ${lastName.trim()}`, normalizedEmail, password)
+      if (!result.success) {
+        const message = result.error || "We could not create your account. Please try again."
+        return setError(/already exists/i.test(message) ? "This email already has a 786.Chat account." : message)
+      }
       if (result.verificationRequired) {
-        router.replace(`/verify-email?email=${encodeURIComponent(result.email || email.trim())}`)
+        router.replace(`/verify-email?email=${encodeURIComponent(result.email || normalizedEmail)}`)
         return
       }
       router.replace("/dashboard")
@@ -76,12 +82,12 @@ export default function RegisterPage() {
   if (authLoading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#050814] text-white">
-        <motion.div animate={{ opacity: [0.55, 1, 0.55] }} transition={{ duration: 1.8, repeat: Infinity }}>
-          <MujeebProAILogo size="lg" animated={false} />
-        </motion.div>
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
       </main>
     )
   }
+
+  const existingAccount = error === "This email already has a 786.Chat account."
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050814] text-white">
@@ -129,7 +135,21 @@ export default function RegisterPage() {
                 <p className="mt-3 text-slate-400">Start building free. No payment details required.</p>
               </div>
 
-              {error && <div role="alert" className="mb-6 flex items-start gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span></div>}
+              {error && (
+                <div role="alert" className="mb-6 flex items-start gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p>{error}</p>
+                    {existingAccount && (
+                      <p className="mt-2 text-red-50">
+                        <Link href={`/login?next=${encodeURIComponent("/786.chat")}`} className="font-bold underline underline-offset-4">Sign in</Link>
+                        <span className="px-2 text-red-200/70">or</span>
+                        <Link href="/forgot-password" className="font-bold underline underline-offset-4">reset your password</Link>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 <div className="grid gap-4 sm:grid-cols-2">
