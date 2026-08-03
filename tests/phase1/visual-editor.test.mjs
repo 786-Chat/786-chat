@@ -50,7 +50,7 @@ test("workspace exposes complete visual editing operations and safe publishing",
   }
   assert.match(workspace, /event\.source !== frame\.contentWindow/)
   assert.match(workspace, /event\.origin !== expectedOrigin/)
-  assert.match(workspace, /disabled=\{!project \|\| build\?\.status !== "passed" \|\| visualDirty\}/)
+  assert.match(workspace, /disabled=\{!project \|\| build\?\.status !== "passed" \|\| visualDirty \|\| codeDirty\}/)
   assert.match(workspace, /visualSaveQueue/)
   assert.doesNotMatch(workspace, /setDesignOpen\(nextOpen\)[\s\S]{0,120}setDesignOpen\(false\)/)
 })

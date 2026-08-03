@@ -25,6 +25,10 @@ export function createSystemArchitecturePlan(
 ): SystemArchitecturePlan {
   const blueprint = specification.systemBlueprint
   const modules = blueprint?.modules || []
+  const databaseTables = Array.from(new Set([
+    ...(blueprint?.entities || []),
+    ...(specification.databaseTables || []),
+  ]))
   return {
     applicationType: specification.projectType,
     platforms: specification.platforms,
@@ -32,7 +36,7 @@ export function createSystemArchitecturePlan(
       module,
       dependsOn: index === 0 ? [] : [modules[0]],
     })),
-    databaseTables: blueprint?.entities || [],
+    databaseTables,
     apiContracts: (blueprint?.apiResources || []).map((resource) => ({
       resource,
       collectionMethods: ["GET", "POST"],

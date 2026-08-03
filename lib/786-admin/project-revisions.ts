@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { sql, transaction } from "./db"
 import { getProjectWithData } from "./projects"
 
@@ -16,6 +16,22 @@ export type AdminProjectRevision = {
 
 function normalizeEmail(email: string) {
   return email.toLowerCase().trim()
+}
+
+function orderedRecord(value: Record<string, string>) {
+  return Object.fromEntries(Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b)))
+}
+
+function revisionFingerprint(input: {
+  files: Record<string, string>
+  preview_state: Record<string, unknown>
+  metadata: Record<string, unknown>
+}) {
+  return createHash("sha256").update(JSON.stringify({
+    files: orderedRecord(input.files || {}),
+    preview_state: input.preview_state || {},
+    metadata: input.metadata || {},
+  })).digest("hex")
 }
 
 export async function ensureProjectRevisionSchema() {
@@ -125,4 +141,76 @@ export async function restoreProjectRevision(input: {
 
   await transaction(queries)
   return revision
+}
+
+export async function undoLatestProjectChange(input: {
+  projectId: string
+  ownerEmail: string
+  message?: string
+}) {
+  await ensureProjectRevisionSchema()
+  const owner = normalizeEmail(input.ownerEmail)
+  const project = await getProjectWithData(input.projectId, owner)
+  if (!project) throw new Error("Project not found")
+
+  const currentFingerprint = revisionFingerprint({
+    files: project.files || {},
+    preview_state: project.preview_state || {},
+    metadata: project.metadata || {},
+  })
+  const revisions = await listProjectRevisions(input.projectId, owner, 100)
+  const target = revisions.find((revision) =>
+    !["undo-safety", "restore-safety"].includes(revision.source) &&
+    revisionFingerprint(revision) !== currentFingerprint
+  )
+  if (!target) return null
+
+  const currentFiles = project.files || {}
+  const currentFilesJson = JSON.stringify(currentFiles)
+  const currentPreviewJson = JSON.stringify(project.preview_state || {})
+  const currentMetadataJson = JSON.stringify(project.metadata || {})
+  const targetPreviewJson = JSON.stringify(target.preview_state || {})
+  const targetMetadataJson = JSON.stringify(target.metadata || {})
+  const userMessage = (input.message || "Undo the last change").trim().slice(0, 2_000)
+  const assistantMessage = `Undid the last saved change and restored “${target.label}”.`
+  const queries: unknown[] = [
+    sql`
+      INSERT INTO admin_project_revisions (
+        id, project_id, owner_email, label, source, files, preview_state, metadata
+      ) VALUES (
+        ${randomUUID()}, ${project.id}, ${owner}, 'Before undo', 'undo-safety',
+        ${currentFilesJson}::jsonb, ${currentPreviewJson}::jsonb,
+        ${currentMetadataJson}::jsonb
+      )
+    `,
+    sql`DELETE FROM admin_project_files WHERE project_id = ${project.id}`,
+  ]
+  for (const [path, content] of Object.entries(target.files || {})) {
+    queries.push(sql`
+      INSERT INTO admin_project_files (project_id, path, content, updated_at)
+      VALUES (${project.id}, ${path}, ${content}, NOW())
+    `)
+  }
+  queries.push(
+    sql`
+      UPDATE admin_projects
+      SET preview_state = ${targetPreviewJson}::jsonb,
+          metadata = ${targetMetadataJson}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${project.id} AND owner_email = ${owner}
+    `,
+    sql`
+      INSERT INTO admin_project_messages (project_id, role, content, created_at)
+      VALUES (${project.id}, 'user', ${userMessage}, NOW())
+    `,
+    sql`
+      INSERT INTO admin_project_messages (project_id, role, content, reason, created_at)
+      VALUES (${project.id}, 'assistant', ${assistantMessage}, 'deterministic-revision-undo', NOW())
+    `,
+  )
+
+  await transaction(queries)
+  const restoredProject = await getProjectWithData(project.id, owner)
+  if (!restoredProject) throw new Error("Undo completed but project could not be read back")
+  return { project: restoredProject, restoredRevision: target }
 }
