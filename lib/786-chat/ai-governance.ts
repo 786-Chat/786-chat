@@ -57,6 +57,7 @@ export async function reserveBuilderGeneration(input: {
   plan?: string
   prompt: string
   projectId?: string | null
+  bypassPlanLimits?: boolean
 }): Promise<BuilderGenerationReservation> {
   const owner = normalizedEmail(input.ownerEmail)
   const plan = normalizeBuilderPlan(input.plan)
@@ -91,7 +92,7 @@ export async function reserveBuilderGeneration(input: {
     RETURNING request_count, EXTRACT(EPOCH FROM (NOW() - window_start)) AS window_seconds
   ` as unknown as Array<{ request_count: number; window_seconds: number }>
   const rate = rateRows[0]
-  if (Number(rate?.request_count || 0) > limit.requestsPerMinute) {
+  if (!input.bypassPlanLimits && Number(rate?.request_count || 0) > limit.requestsPerMinute) {
     const retryAfter = Math.max(1, Math.ceil(60 - Number(rate?.window_seconds || 0)))
     return {
       allowed: false,
@@ -113,11 +114,11 @@ export async function reserveBuilderGeneration(input: {
           AND usage_date >= DATE_TRUNC('month', CURRENT_DATE)::date) AS tokens_month
   ` as unknown as Array<{ requests_today: number; requests_month: number; tokens_month: number }>
   const usage = usageRows[0]
-  if (Number(usage?.requests_today || 0) >= limit.requestsPerDay) {
+  if (!input.bypassPlanLimits && Number(usage?.requests_today || 0) >= limit.requestsPerDay) {
     return { allowed: false, error: `Daily AI generation limit reached for the ${plan} plan.`, errorCode: "AI_DAILY_LIMIT", limit }
   }
   let creditReserved = 0
-  if (Number(usage?.requests_month || 0) >= limit.requestsPerMonth || Number(usage?.tokens_month || 0) >= limit.tokensPerMonth) {
+  if (!input.bypassPlanLimits && (Number(usage?.requests_month || 0) >= limit.requestsPerMonth || Number(usage?.tokens_month || 0) >= limit.tokensPerMonth)) {
     const creditRows = (await sql`
       UPDATE subscriptions
       SET extra_credits = extra_credits - 1, updated_at = NOW()
