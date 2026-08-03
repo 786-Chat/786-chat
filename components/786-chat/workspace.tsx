@@ -44,7 +44,7 @@ import {
   X,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react"
 
 import { useAuth } from "@/contexts/auth-context"
 import { AnimatedWorldBackground } from "@/components/launch/animated-world-background"
@@ -70,6 +70,7 @@ import {
 } from "./api"
 import {
   BUILDER_DEVICES,
+  type BuilderAttachment,
   type BuilderBuild,
   type BuilderDeploymentLifecycle,
   type BuilderDeploymentResult,
@@ -94,6 +95,7 @@ const WORKSPACE_THEME_KEY = "786chat_workspace_theme"
 type WorkspaceTheme = "royal" | "ocean" | "midnight"
 
 type EditorSection = { id: string; label: string; hidden: boolean }
+type ComposerAttachment = BuilderAttachment & { preview: string; uploading: boolean }
 
 function copyEditorState(state: VisualEditorState): VisualEditorState {
   return JSON.parse(JSON.stringify(state)) as VisualEditorState
@@ -157,6 +159,7 @@ export function SevenEightSixWorkspace() {
   const [project, setProject] = useState<BuilderProject | null>(null)
   const [messages, setMessages] = useState<BuilderMessage[]>([])
   const [prompt, setPrompt] = useState("")
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [selectedFile, setSelectedFile] = useState("app/page.tsx")
   const [codeDraft, setCodeDraft] = useState("")
   const [codeDirty, setCodeDirty] = useState(false)
@@ -198,6 +201,7 @@ export function SevenEightSixWorkspace() {
   const drag = useRef<{ x: number; width: number } | null>(null)
   const sectionDrag = useRef<string | null>(null)
   const previewIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
   const visualSaveQueue = useRef<Promise<void>>(Promise.resolve())
   const visualSavePending = useRef(0)
 
@@ -221,6 +225,62 @@ export function SevenEightSixWorkspace() {
     }
     return ordered
   }, [editorSections, visualState.order])
+
+  const addImages = useCallback(async (filesToAdd: File[]) => {
+    const images = filesToAdd
+      .filter((file) => file.type.startsWith("image/") && file.size <= 10 * 1024 * 1024)
+      .slice(0, Math.max(0, 5 - attachments.length))
+    if (!images.length) {
+      setError("Paste or select a PNG, JPEG, WebP or GIF image up to 10MB.")
+      return
+    }
+    for (const file of images) {
+      const id = crypto.randomUUID()
+      const preview = URL.createObjectURL(file)
+      setAttachments((current) => [...current, {
+        id,
+        name: file.name || `pasted-image-${Date.now()}.png`,
+        mediaType: file.type,
+        size: file.size,
+        url: "",
+        preview,
+        uploading: true,
+      }])
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", "image")
+      try {
+        const response = await fetch("/api/upload", { method: "POST", body: formData })
+        const payload = (await response.json().catch(() => ({}))) as { url?: string }
+        if (!payload.url) throw new Error("Blob upload unavailable")
+        setAttachments((current) => current.map((item) => item.id === id
+          ? { ...item, url: payload.url || "", uploading: false }
+          : item))
+      } catch {
+        const reader = new FileReader()
+        reader.onload = () => setAttachments((current) => current.map((item) => item.id === id
+          ? { ...item, url: String(reader.result || ""), uploading: false }
+          : item))
+        reader.onerror = () => {
+          setAttachments((current) => current.filter((item) => item.id !== id))
+          setError(`Could not attach ${file.name || "the pasted image"}.`)
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+  }, [attachments.length])
+
+  const handleImagePaste = useCallback((event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const images = Array.from(event.clipboardData.items)
+      .filter((item) => item.type.startsWith("image/"))
+      .flatMap((item) => {
+        const file = item.getAsFile()
+        return file ? [file] : []
+      })
+    if (!images.length) return
+    event.preventDefault()
+    void addImages(images)
+  }, [addImages])
 
   useEffect(() => {
     setCodeDraft(selectedCode)
@@ -798,12 +858,16 @@ export function SevenEightSixWorkspace() {
 
   async function send() {
     const text = prompt.trim()
-    if (!text || busy) return
+    const readyAttachments = attachments.filter((item) => !item.uploading && item.url)
+    if ((!text && !readyAttachments.length) || busy || attachments.some((item) => item.uploading)) return
     if (codeDirty) {
       setError("Save or reset the open code file before asking the agent to edit this project.")
       return
     }
+    const submittedAttachments = attachments
+    const messageText = text || "Use the attached image as the design reference."
     setPrompt("")
+    setAttachments([])
     setError("")
     if (isUndoApplicationEdit(text)) {
       if (!project) {
@@ -816,13 +880,13 @@ export function SevenEightSixWorkspace() {
     setBusy(true)
     setMessages((current) => [
       ...current,
-      { id: `u-${Date.now()}`, role: "user", content: text },
+      { id: `u-${Date.now()}`, role: "user", content: `${messageText}${readyAttachments.length ? `\n\nAttached: ${readyAttachments.map((item) => item.name).join(", ")}` : ""}` },
     ])
     try {
       const generated = await generateBuilderProject({
-        message: text,
+        message: messageText,
         projectId: project?.id,
-        attachments: [],
+        attachments: readyAttachments.map(({ name, mediaType, url }) => ({ name, mediaType, url })),
         existing: project
           ? {
               title: project.title,
@@ -834,7 +898,7 @@ export function SevenEightSixWorkspace() {
       })
       const saved = await saveBuilderProject({
         currentProjectId: project?.id || null,
-        userPrompt: text,
+        userPrompt: messageText,
         generated,
       })
       localStorage.setItem(ACTIVE_PROJECT_KEY, saved.id)
@@ -864,6 +928,7 @@ export function SevenEightSixWorkspace() {
         setError(buildError instanceof Error ? buildError.message : "Build could not be queued.")
       }
     } catch (failure) {
+      setAttachments(submittedAttachments)
       const message = failure instanceof Error ? failure.message : "Generation failed."
       setError(message)
     } finally {
@@ -1108,10 +1173,23 @@ export function SevenEightSixWorkspace() {
 
               <div className="border-t border-[#1b2940] p-2">
                 {error && <p className="mb-1 rounded-lg bg-rose-500/10 px-2 py-1 text-[14px] text-rose-200">{error}</p>}
+                {attachments.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {attachments.map((item) => (
+                      <div key={item.id} className="relative h-14 w-14 overflow-hidden rounded-lg border border-violet-400/30 bg-[#0c1424]">
+                        <img src={item.preview} alt={item.name} className="h-full w-full object-cover" />
+                        {item.uploading ? <Loader2 className="absolute inset-0 m-auto h-4 w-4 animate-spin text-white" /> : (
+                          <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setAttachments((current) => current.filter((attachment) => attachment.id !== item.id))} className="absolute right-0 top-0 grid h-5 w-5 place-items-center rounded-bl bg-black/70 text-white"><X className="h-3 w-3" /></button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center rounded-lg border border-[#263550] bg-[#0c1424] px-2">
-                  <button type="button" className="text-slate-500"><Paperclip className="h-3.5 w-3.5" /></button>
-                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send() } }} rows={1} placeholder="Ask the agent anything…" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-3 text-[14px] outline-none placeholder:text-slate-500" />
-                  <button type="button" onClick={() => void send()} disabled={busy || !prompt.trim()} className="grid h-7 w-7 place-items-center rounded-full bg-violet-500 text-white disabled:opacity-40"><Send className="h-3.5 w-3.5" /></button>
+                  <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={(event) => { void addImages(Array.from(event.target.files || [])); event.target.value = "" }} />
+                  <button type="button" onClick={() => imageInputRef.current?.click()} aria-label="Attach image" title="Attach image or paste with Ctrl+V" className="text-slate-500 hover:text-violet-300"><Paperclip className="h-3.5 w-3.5" /></button>
+                  <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onPaste={handleImagePaste} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send() } }} rows={1} placeholder="Ask the agent anything… (Ctrl+V to paste image)" className="min-h-10 flex-1 resize-none bg-transparent px-2 py-3 text-[14px] outline-none placeholder:text-slate-500" />
+                  <button type="button" onClick={() => void send()} disabled={busy || attachments.some((item) => item.uploading) || (!prompt.trim() && !attachments.length)} className="grid h-7 w-7 place-items-center rounded-full bg-violet-500 text-white disabled:opacity-40"><Send className="h-3.5 w-3.5" /></button>
                 </div>
                 <div className="mt-2 grid grid-cols-4 gap-1 text-center text-[14px] text-slate-500">
                   <span className="rounded bg-violet-500/25 py-1 text-violet-200">Auto</span><span className="py-1">Plan</span><span className="py-1">Build</span><span className="py-1">Refactor</span>
