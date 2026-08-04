@@ -25,7 +25,7 @@ test("gateway requests include attribution, tags, privacy and plan budgets", () 
   assert.match(codegen, /deepseek\("deepseek-chat"\)/)
   assert.match(controller, /payload\._originalPrompt \|\| payload\.message/)
   assert.match(controller, /maxOutputTokens: useCompactProfile \? 10_000 : undefined/)
-  assert.match(controller, /compactEligible \? "gemini-flash"/)
+  assert.match(controller, /candidateModes: CodegenMode\[\] = \[primaryMode\]/)
 })
 
 test("builder code generation prefers connected direct provider keys before gateway", () => {
@@ -47,9 +47,10 @@ test("governance enforces prompt, minute, daily, monthly and token limits", () =
   assert.match(governance, /AI_MONTHLY_LIMIT/)
 })
 
-test("the verified owner session bypasses plan quotas without disabling governance", () => {
-  assert.match(route, /bypassPlanLimits: isAdminUser\(session\.email\)/)
-  assert.match(route, /import \{ isAdminUser \} from "@\/lib\/admin-config"/)
+test("every authenticated customer bypasses plan quotas without disabling governance", () => {
+  assert.match(route, /if \(!session\?\.email\)/)
+  assert.match(route, /bypassPlanLimits: true/)
+  assert.doesNotMatch(route, /import \{ isAdminUser \}/)
   assert.match(route, /bypassPlanLimits:/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(rate\?\.request_count/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(usage\?\.requests_today/)
