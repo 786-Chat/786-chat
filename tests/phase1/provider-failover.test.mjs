@@ -30,7 +30,7 @@ test("canonical generation rejects local fallback output", () => {
 })
 
 test("direct provider attempt is bounded inside the Vercel window", () => {
-  assert.match(providerController, /PRIMARY_ATTEMPT_TIMEOUT_MS = 150_000/)
+  assert.match(providerController, /PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000/)
   assert.match(providerController, /maxDuration = 180/)
   assert.match(providerController, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
   assert.match(providerController, /controller\.abort/)
