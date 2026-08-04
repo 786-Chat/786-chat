@@ -7,7 +7,7 @@ import {
 
 export const runtime = "nodejs"
 export const maxDuration = 180
-const PRIMARY_ATTEMPT_TIMEOUT_MS = 150_000
+const PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string; usage?: unknown }
