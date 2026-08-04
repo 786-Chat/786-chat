@@ -21,7 +21,7 @@ const canonicalGenerator = await readFile(
 
 test("canonical generation route leaves cleanup time after the DeepSeek budget", () => {
   assert.match(route, /maxDuration = 180/)
-  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 150_000/)
+  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000/)
 })
 
 test("timed-out provider work is aborted instead of running in the background", () => {

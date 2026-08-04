@@ -22,6 +22,8 @@ test("direct DeepSeek structured retries never switch to the free Gateway", () =
   assert.match(codegen, /https:\/\/api\.deepseek\.com\/chat\/completions/)
   assert.match(codegen, /response_format: \{ type: "json_object" \}/)
   assert.match(codegen, /parseDeepSeekProject\(content\)/)
+  assert.match(codegen, /HARD OUTPUT LIMIT: the complete JSON response must stay below 6,500 output tokens/)
+  assert.match(codegen, /truncated\|finish\.\?reason\.\*length/)
   assert.match(codegen, /The first DeepSeek structured response could not be parsed/)
   assert.match(codegen, /result = await run\(usedModel, true\)/)
   assert.doesNotMatch(codegen, /result = await run\(usedModel, true, retryThroughGateway\)/)

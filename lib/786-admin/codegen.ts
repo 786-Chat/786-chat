@@ -203,6 +203,9 @@ Your previous response could not be parsed into the required project object.
 Return exactly one schema-valid project object and nothing outside it.
 Keep title, description, and reply concise.
 Return complete file contents, but reduce duplication by using a small number of reusable shared components.
+HARD OUTPUT LIMIT: the complete JSON response must stay below 6,500 output tokens.
+For multi-page websites, create one compact shared page component and make route files thin wrappers that pass data or variants into it.
+Keep app/globals.css concise. Do not repeat navigation, footer, arrays, large SVG, or section JSX across route files.
 Do not use markdown fences, prose before the object, prose after the object, comments outside file contents, or partial files.
 Ensure every file entry has a non-empty path and complete string content.
 `
@@ -215,6 +218,7 @@ Return one valid JSON object only with this exact shape:
 The response must begin with { and end with }.
 Encode every newline, quote, backslash, tab, and control character inside file content as valid JSON.
 Do not use Markdown fences or write any text outside the JSON object.
+Keep the entire JSON response below 7,000 output tokens. Reuse compact shared components instead of repeating JSX or CSS between pages.
 `
 
 function errorMessage(error: unknown): string {
@@ -223,7 +227,7 @@ function errorMessage(error: unknown): string {
 }
 
 function isStructuredOutputError(error: unknown): boolean {
-  return /no object generated|could not parse|failed to parse|parse error|invalid json|json response|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
+  return /no object generated|could not parse|failed to parse|parse error|invalid json|json response|truncated|finish.?reason.*length|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
 }
 
 function parseDeepSeekProject(text: string) {
