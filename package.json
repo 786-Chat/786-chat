@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "python scripts/fix-codegen-provider-mode.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
