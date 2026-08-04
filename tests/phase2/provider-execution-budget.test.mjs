@@ -41,6 +41,11 @@ test("automatic generation uses one direct DeepSeek mode", () => {
   assert.match(controller, /const candidateModes: CodegenMode\[\] = \[primaryMode\]/)
 })
 
+test("compact websites send the original customer prompt instead of the full platform brief", () => {
+  assert.match(controller, /const originalMessage = String\(payload\._originalPrompt \|\| message\)/)
+  assert.match(controller, /prompt: `\$\{useCompactProfile \? originalMessage : message\}\$\{compactRules\}`/)
+})
+
 test("invalid full systems receive one strict validation-guided repair pass", () => {
   assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE/)
   assert.match(canonicalGenerator, /validation\.errors\.map/)
