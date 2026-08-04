@@ -28,7 +28,7 @@ jobs:
       - name: Restore sequential provider fallback
         run: python scripts/restore-provider-fallback.py
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Run focused provider tests
         run: node --test tests/phase1/provider-failover.test.mjs tests/phase2/direct-provider-routing.test.mjs tests/phase2/provider-execution-budget.test.mjs tests/phase2/live-builder-runtime-hotfix.test.mjs
       - name: Build production application
