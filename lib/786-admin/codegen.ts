@@ -207,13 +207,37 @@ Do not use markdown fences, prose before the object, prose after the object, com
 Ensure every file entry has a non-empty path and complete string content.
 `
 
+const DEEPSEEK_JSON_PROMPT = `
+
+DEEPSEEK JSON RESPONSE FORMAT — MANDATORY:
+Return one valid JSON object only with this exact shape:
+{"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}
+The response must begin with { and end with }.
+Encode every newline, quote, backslash, tab, and control character inside file content as valid JSON.
+Do not use Markdown fences or write any text outside the JSON object.
+`
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error) return `${error.name}: ${error.message}`
   return String(error)
 }
 
 function isStructuredOutputError(error: unknown): boolean {
-  return /no object generated|could not parse|failed to parse|parse error|invalid json|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
+  return /no object generated|could not parse|failed to parse|parse error|invalid json|json response|schema validation|did not match the schema|noobjectgenerated/i.test(errorMessage(error))
+}
+
+function parseDeepSeekProject(text: string) {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
+  const start = trimmed.indexOf("{")
+  const end = trimmed.lastIndexOf("}")
+  if (start < 0 || end <= start) {
+    throw new Error("DeepSeek JSON response did not contain a complete object.")
+  }
+  try {
+    return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1)))
+  } catch (error) {
+    throw new Error(`DeepSeek JSON response could not be parsed or validated: ${errorMessage(error)}`)
+  }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -305,7 +329,50 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   }
 
   async function run(modelName: string, structuredRetry = false, forceGateway = false) {
-    const prompt = structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt
+    const prompt = `${structuredRetry ? `${userPrompt}${STRUCTURED_RETRY_PROMPT}` : userPrompt}${DEEPSEEK_JSON_PROMPT}`
+    const directDeepSeekKey = process.env.DEEPSEEK_API_KEY?.trim()
+    if (!forceGateway && modelName.startsWith("deepseek/") && directDeepSeekKey) {
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${directDeepSeekKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: structuredRetry ? `${SYSTEM_PROMPT}${STRUCTURED_RETRY_PROMPT}` : SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: structuredRetry ? 0.05 : 0.18,
+          max_tokens: Math.min(input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan), 8_192),
+          stream: false,
+        }),
+        signal: input.abortSignal,
+      })
+      const payload = await response.json().catch(() => ({})) as {
+        error?: { message?: string }
+        choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+      }
+      if (!response.ok) {
+        throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
+      }
+      const choice = payload.choices?.[0]
+      const content = choice?.message?.content || ""
+      if (choice?.finish_reason === "length") {
+        throw new Error("DeepSeek JSON response was truncated before all project files were returned.")
+      }
+      return {
+        object: parseDeepSeekProject(content),
+        usage: {
+          inputTokens: payload.usage?.prompt_tokens || 0,
+          outputTokens: payload.usage?.completion_tokens || 0,
+          totalTokens: payload.usage?.total_tokens || 0,
+        },
+      }
+    }
     const model = providerModel(modelName, forceGateway)
     const request = {
       model,
