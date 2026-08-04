@@ -47,10 +47,10 @@ test("governance enforces prompt, minute, daily, monthly and token limits", () =
   assert.match(governance, /AI_MONTHLY_LIMIT/)
 })
 
-test("every authenticated customer bypasses plan quotas without disabling governance", () => {
+test("only the verified owner bypasses plan quotas without disabling governance", () => {
   assert.match(route, /if \(!session\?\.email\)/)
-  assert.match(route, /bypassPlanLimits: true/)
-  assert.doesNotMatch(route, /import \{ isAdminUser \}/)
+  assert.match(route, /bypassPlanLimits: isAdminUser\(session\.email\)/)
+  assert.match(route, /import \{ isAdminUser \} from "@\/lib\/admin-config"/)
   assert.match(route, /bypassPlanLimits:/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(rate\?\.request_count/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(usage\?\.requests_today/)
