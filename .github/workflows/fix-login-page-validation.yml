@@ -28,7 +28,7 @@ jobs:
       - name: Apply repair
         run: python scripts/fix-login-page-validation.py
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
       - name: Run focused validation tests
         run: node --test tests/phase2/login-page-ui-validation.test.mjs
       - name: Build production application
