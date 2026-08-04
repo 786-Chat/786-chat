@@ -7,8 +7,7 @@ import {
 
 export const runtime = "nodejs"
 export const maxDuration = 180
-const PRIMARY_ATTEMPT_TIMEOUT_MS = 105_000
-const FALLBACK_ATTEMPT_TIMEOUT_MS = 65_000
+const PRIMARY_ATTEMPT_TIMEOUT_MS = 150_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string; usage?: unknown }
@@ -35,8 +34,8 @@ function modeConfigured(mode: CodegenMode): boolean {
   return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY") || gatewayConfigured()
 }
 
-function attemptTimeout(position: number) {
-  return position === 0 ? PRIMARY_ATTEMPT_TIMEOUT_MS : FALLBACK_ATTEMPT_TIMEOUT_MS
+function attemptTimeout() {
+  return PRIMARY_ATTEMPT_TIMEOUT_MS
 }
 
 function missingConfigurationReason(mode: CodegenMode): string {
@@ -58,18 +57,6 @@ function attemptStatus(reason: unknown, success = false): ProviderAttempt["statu
   if (/quota|rate.?limit|resource exhausted|429|exceeded your current quota/.test(text)) return "quota_exhausted"
   if (/timed out|timeout|did not finish/.test(text)) return "timed_out"
   return "failed"
-}
-
-function alternateMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode {
-  if (hasAttachments) return mode === "gemini-flash" ? "gemini-pro" : "gemini-flash"
-  if (mode === "gemini-flash" || mode === "gemini-pro") return "deepseek-flash"
-  return "gemini-flash"
-}
-
-function resolvedPrimaryMode(requested: CodegenMode, hasAttachments: boolean): CodegenMode {
-  if (requested !== "auto") return requested
-  if (hasAttachments) return "gemini-flash"
-  return "deepseek-flash"
 }
 
 function isSimpleWebsiteRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
@@ -200,24 +187,24 @@ export async function POST(request: Request) {
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const compactEligible = isSimpleWebsiteRequest(payload, hasAttachments)
-  const primaryMode = requestedMode === "auto" && compactEligible
-    ? "deepseek-flash"
-    : resolvedPrimaryMode(requestedMode, hasAttachments)
-  const secondaryMode = compactEligible ? "gemini-flash" : alternateMode(primaryMode, hasAttachments)
-  const candidateModes = Array.from(new Set<CodegenMode>([primaryMode, secondaryMode]))
+  // DeepSeek owns all text/code generation. When attachments exist, codegen
+  // performs a short Gemini analysis first and passes that text to DeepSeek.
+  // Do not fall back to Gemini for text generation.
+  const primaryMode: CodegenMode = requestedMode === "deepseek-pro" ? "deepseek-pro" : "deepseek-flash"
+  const candidateModes: CodegenMode[] = [primaryMode]
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
     .map((mode) => ({ mode, reason: missingConfigurationReason(mode), fallback: false, configured: false, status: "missing" }))
 
-  // Run primary first. The alternate provider starts only after a real primary
-  // failure so successful requests never pay for two simultaneous generations.
+  // Run the one direct DeepSeek generation attempt. Gemini image analysis is
+  // performed inside codegen only when the request contains attachments.
   for (const [position, mode] of configuredModes.entries()) {
     const compact = compactEligible && providerForMode(mode) === "deepseek"
     const startedAt = Date.now()
     let result: GeneratorResult
     try {
-      result = await runAttempt(request, payload, mode, compact, attemptTimeout(position))
+      result = await runAttempt(request, payload, mode, compact, attemptTimeout())
     } catch (error) {
       const reason = safeReason(error instanceof Error ? error.message : error)
       attempts.push({

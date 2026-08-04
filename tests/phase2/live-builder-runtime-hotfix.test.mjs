@@ -12,21 +12,18 @@ test("production build callbacks accept both public aliases and use the canonica
   assert.match(runner, /url\.hostname\.endsWith\("\.vercel\.app"\)/)
 })
 
-test("unparseable direct DeepSeek output retries through the configured AI Gateway", async () => {
+test("unparseable direct DeepSeek output retries directly without the free Gateway", async () => {
   const codegen = await read("lib/786-admin/codegen.ts")
 
-  assert.match(codegen, /function gatewayConfigured\(\)/)
-  assert.match(codegen, /retryThroughGateway/)
-  assert.match(codegen, /result = await run\(usedModel, true, retryThroughGateway\)/)
-  assert.match(codegen, /retried through the Vercel AI Gateway with stricter output rules/)
+  assert.match(codegen, /result = await run\(usedModel, true\)/)
+  assert.match(codegen, /first DeepSeek structured response could not be parsed/)
+  assert.doesNotMatch(codegen, /retryThroughGateway/)
 })
 
-test("direct provider quota and billing failures retry through Gateway Flash models", async () => {
+test("Gemini only analyses attachments and DeepSeek generates project files", async () => {
   const codegen = await read("lib/786-admin/codegen.ts")
 
-  assert.match(codegen, /isProviderAccessError/)
-  assert.match(codegen, /retryDirectFailureThroughGateway/)
-  assert.match(codegen, /BUILDER_MODELS\["deepseek-flash"\]/)
-  assert.match(codegen, /BUILDER_MODELS\["gemini-flash"\]/)
-  assert.match(codegen, /result = await run\(usedModel, false, true\)/)
+  assert.match(codegen, /const imageAnalysis = await generateText/)
+  assert.match(codegen, /GEMINI IMAGE\/FILE ANALYSIS/)
+  assert.match(codegen, /const picked = pickModel\(generationMode, false\)/)
 })
