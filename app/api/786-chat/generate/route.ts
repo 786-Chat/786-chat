@@ -80,6 +80,8 @@ export async function POST(request: Request) {
       plan: session.plan,
       prompt,
       projectId: typeof payload.projectId === "string" ? payload.projectId : null,
+      // The verified owner is unlimited. All customers use the request and
+      // token allowances of the plan they purchased.
       bypassPlanLimits: isAdminUser(session.email),
     })
   } catch (error) {
