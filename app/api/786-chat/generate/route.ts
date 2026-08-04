@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 
 import { getSession } from "@/lib/auth"
-import { isAdminUser } from "@/lib/admin-config"
 import { POST as generateWithProviderFailover } from "@/lib/786-chat/provider-controller"
 import { createProjectPlan } from "@/lib/786-chat/planner"
 import { analyseProjectPrompt } from "@/lib/786-chat/specification"
@@ -80,7 +79,9 @@ export async function POST(request: Request) {
       plan: session.plan,
       prompt,
       projectId: typeof payload.projectId === "string" ? payload.projectId : null,
-      bypassPlanLimits: isAdminUser(session.email),
+      // Generation is currently unlimited for every authenticated customer.
+      // Usage is still recorded so purchase-based limits can be enabled later.
+      bypassPlanLimits: true,
     })
   } catch (error) {
     console.error("[786.Chat AI governance] Could not reserve generation", error)
