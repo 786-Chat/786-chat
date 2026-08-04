@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/login-page-validation
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
