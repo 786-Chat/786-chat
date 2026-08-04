@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# This script is intentionally run by the repair workflow after every change.
 path = Path('lib/786-chat/provider-controller.ts')
 source = path.read_text()
 source = source.replace('const PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000', 'const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000\nconst GEMINI_ATTEMPT_TIMEOUT_MS = 75_000')
