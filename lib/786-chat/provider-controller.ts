@@ -9,9 +9,10 @@ export const runtime = "nodejs"
 export const maxDuration = 180
 
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 45_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
-const COMPLEX_GEMINI_TIMEOUT_MS = 110_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 80_000
+const COMPLEX_GEMINI_TIMEOUT_MS = 85_000
 const COMPLEX_DEEPSEEK_TIMEOUT_MS = 55_000
+const TRANSIENT_RETRY_DELAY_MS = 2_500
 
 type GenerationProfile = "compact-website" | "compact-full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -87,6 +88,14 @@ function attemptStatus(reason: unknown, success = false): ProviderAttempt["statu
   if (/quota|rate.?limit|resource exhausted|429|exceeded your current quota/.test(text)) return "quota_exhausted"
   if (/timed out|timeout|did not finish/.test(text)) return "timed_out"
   return "failed"
+}
+
+function isTransientProviderError(reason: unknown): boolean {
+  return /high demand|temporar(?:y|ily)|overload|service unavailable|try again later|server busy|503|upstream/i.test(String(reason || ""))
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function requestText(payload: GeneratorPayload): string {
@@ -252,7 +261,9 @@ export async function POST(request: Request) {
   const fallbackMode: CodegenMode = providerForMode(primaryMode) === "deepseek"
     ? "gemini-flash"
     : "deepseek-flash"
-  const candidateModes: CodegenMode[] = [primaryMode, fallbackMode]
+  const candidateModes: CodegenMode[] = requestedMode === "auto" && isComplex && providerForMode(primaryMode) === "gemini"
+    ? [primaryMode, primaryMode, fallbackMode]
+    : [primaryMode, fallbackMode]
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
@@ -265,7 +276,13 @@ export async function POST(request: Request) {
       profile,
     }))
 
+  let retryPrimaryAfterTransientFailure = false
+
   for (const [position, mode] of configuredModes.entries()) {
+    const isRepeatedPrimary = position > 0 && mode === primaryMode && configuredModes[position - 1] === primaryMode
+    if (isRepeatedPrimary && !retryPrimaryAfterTransientFailure) continue
+    if (isRepeatedPrimary) await wait(TRANSIENT_RETRY_DELAY_MS)
+
     const startedAt = Date.now()
     let result: GeneratorResult
     try {
@@ -275,12 +292,13 @@ export async function POST(request: Request) {
       attempts.push({
         mode,
         reason,
-        fallback: position > 0,
+        fallback: mode !== primaryMode,
         configured: true,
         status: attemptStatus(reason),
         profile,
         durationMs: Date.now() - startedAt,
       })
+      retryPrimaryAfterTransientFailure = mode === primaryMode && providerForMode(mode) === "gemini" && isTransientProviderError(reason)
       continue
     }
 
@@ -289,7 +307,7 @@ export async function POST(request: Request) {
       mode,
       model: String(result.model || ""),
       reason,
-      fallback: position > 0,
+      fallback: mode !== primaryMode,
       configured: true,
       status: result.success && !result.fellBackToLocal ? "ok" : attemptStatus(reason),
       profile: String(result.generationProfile || profile),
@@ -306,6 +324,7 @@ export async function POST(request: Request) {
         providerAttempts: attempts,
         providerStatus: providerSummary(attempts),
         providerFailoverUsed: mode !== primaryMode,
+        providerTransientRetryUsed: isRepeatedPrimary,
         requestComplexity: isComplex ? "complex" : "simple",
       })
     }
@@ -323,7 +342,8 @@ export async function POST(request: Request) {
       warning: "EDIT_NOT_APPLIED_PROJECT_PRESERVED",
       providerAttempts: attempts,
       providerStatus: providerSummary(attempts),
-      providerFailoverUsed: attempts.length > 1,
+      providerFailoverUsed: attempts.some((attempt) => attempt.fallback),
+      providerTransientRetryUsed: attempts.filter((attempt) => attempt.mode === primaryMode).length > 1,
       projectPreserved: true,
       requestComplexity: isComplex ? "complex" : "simple",
     }, { status: 503 })
@@ -335,7 +355,8 @@ export async function POST(request: Request) {
     warning: "ALL_AI_PROVIDERS_FAILED",
     providerAttempts: attempts,
     providerStatus: providerSummary(attempts),
-    providerFailoverUsed: attempts.length > 1,
+    providerFailoverUsed: attempts.some((attempt) => attempt.fallback),
+    providerTransientRetryUsed: attempts.filter((attempt) => attempt.mode === primaryMode).length > 1,
     requestComplexity: isComplex ? "complex" : "simple",
   }, { status: 503 })
 }
