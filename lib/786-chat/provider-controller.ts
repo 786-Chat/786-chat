@@ -83,6 +83,7 @@ async function runAttempt(
   timeoutMs: number,
 ): Promise<GeneratorResult> {
   const message = String(payload.message || "").trim()
+  const originalMessage = String(payload._originalPrompt || message).trim()
   const compactRules = useCompactProfile
     ? [
         "",
@@ -114,7 +115,10 @@ async function runAttempt(
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const generated = await Promise.race([
     generateProjectCode({
-      prompt: `${message}${compactRules}`,
+      // The canonical route's full architecture brief is intentionally large.
+      // Small websites use the original customer prompt so DeepSeek can return
+      // complete files inside its 8,192-token output ceiling.
+      prompt: `${useCompactProfile ? originalMessage : message}${compactRules}`,
       mode,
       abortSignal: controller.signal,
       userId: String(payload._actorUserId || "anonymous-builder"),
