@@ -1,0 +1,43 @@
+name: Restore fast provider failover
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/restore-fast-provider-failover.py
+      - .github/workflows/restore-fast-provider-failover.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-test-build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply provider repair
+        run: python scripts/restore-fast-provider-failover.py
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+      - name: Run provider tests
+        run: node --test tests/phase1/provider-failover.test.mjs tests/phase2/provider-execution-budget.test.mjs tests/phase2/direct-provider-routing.test.mjs
+      - name: Build production application
+        run: pnpm build
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/786-chat/provider-controller.ts
+          git diff --cached --quiet || git commit -m "Restore fast DeepSeek to Gemini failover"
+          git pull --rebase origin main
+          git push origin HEAD:main
