@@ -7,7 +7,8 @@ import {
 
 export const runtime = "nodejs"
 export const maxDuration = 180
-const PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000
+const DEEPSEEK_ATTEMPT_TIMEOUT_MS = 45_000
+const GEMINI_ATTEMPT_TIMEOUT_MS = 75_000
 
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
 type GeneratorResult = Record<string, unknown> & { success?: boolean; response?: string; model?: string; reason?: string; fellBackToLocal?: boolean; generationProfile?: string; usage?: unknown }
@@ -34,8 +35,10 @@ function modeConfigured(mode: CodegenMode): boolean {
   return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY") || gatewayConfigured()
 }
 
-function attemptTimeout() {
-  return PRIMARY_ATTEMPT_TIMEOUT_MS
+function attemptTimeout(mode: CodegenMode) {
+  return providerForMode(mode) === "deepseek"
+    ? DEEPSEEK_ATTEMPT_TIMEOUT_MS
+    : GEMINI_ATTEMPT_TIMEOUT_MS
 }
 
 function missingConfigurationReason(mode: CodegenMode): string {
@@ -61,9 +64,6 @@ function attemptStatus(reason: unknown, success = false): ProviderAttempt["statu
 
 function isSimpleWebsiteRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
   if (hasAttachments || payload.existing) return false
-  // The public generation route expands the user's prompt with architecture
-  // and validation rules. Classify the original request so those internal
-  // rules do not accidentally force every simple site onto the slow profile.
   const message = String(payload._originalPrompt || payload.message || "").trim().toLowerCase()
   if (!message || message.length > 3_000) return false
   const complexTerms = [
@@ -115,9 +115,6 @@ async function runAttempt(
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const generated = await Promise.race([
     generateProjectCode({
-      // The canonical route's full architecture brief is intentionally large.
-      // Small websites use the original customer prompt so DeepSeek can return
-      // complete files inside its 8,192-token output ceiling.
       prompt: `${useCompactProfile ? originalMessage : message}${compactRules}`,
       mode,
       abortSignal: controller.signal,
@@ -191,24 +188,35 @@ export async function POST(request: Request) {
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const compactEligible = isSimpleWebsiteRequest(payload, hasAttachments)
-  // DeepSeek owns all text/code generation. When attachments exist, codegen
-  // performs a short Gemini analysis first and passes that text to DeepSeek.
-  // Do not fall back to Gemini for text generation.
-  const primaryMode: CodegenMode = requestedMode === "deepseek-pro" ? "deepseek-pro" : "deepseek-flash"
-  const candidateModes: CodegenMode[] = [primaryMode]
+
+  const primaryMode: CodegenMode = requestedMode === "gemini-pro"
+    ? "gemini-pro"
+    : requestedMode === "gemini-flash"
+      ? "gemini-flash"
+      : requestedMode === "deepseek-pro"
+        ? "deepseek-pro"
+        : "deepseek-flash"
+  const fallbackMode: CodegenMode = providerForMode(primaryMode) === "deepseek"
+    ? "gemini-flash"
+    : "deepseek-flash"
+  const candidateModes: CodegenMode[] = [primaryMode, fallbackMode]
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
-    .map((mode) => ({ mode, reason: missingConfigurationReason(mode), fallback: false, configured: false, status: "missing" }))
+    .map((mode, position) => ({
+      mode,
+      reason: missingConfigurationReason(mode),
+      fallback: position > 0,
+      configured: false,
+      status: "missing",
+    }))
 
-  // Run the one direct DeepSeek generation attempt. Gemini image analysis is
-  // performed inside codegen only when the request contains attachments.
   for (const [position, mode] of configuredModes.entries()) {
-    const compact = compactEligible && providerForMode(mode) === "deepseek"
+    const compact = compactEligible
     const startedAt = Date.now()
     let result: GeneratorResult
     try {
-      result = await runAttempt(request, payload, mode, compact, attemptTimeout())
+      result = await runAttempt(request, payload, mode, compact, attemptTimeout(mode))
     } catch (error) {
       const reason = safeReason(error instanceof Error ? error.message : error)
       attempts.push({
@@ -261,7 +269,7 @@ export async function POST(request: Request) {
       warning: "EDIT_NOT_APPLIED_PROJECT_PRESERVED",
       providerAttempts: attempts,
       providerStatus: providerSummary(attempts),
-      providerFailoverUsed: true,
+      providerFailoverUsed: attempts.length > 1,
       projectPreserved: true,
     }, { status: 503 })
   }
@@ -272,5 +280,6 @@ export async function POST(request: Request) {
     warning: "ALL_AI_PROVIDERS_FAILED",
     providerAttempts: attempts,
     providerStatus: providerSummary(attempts),
+    providerFailoverUsed: attempts.length > 1,
   }, { status: 503 })
 }
