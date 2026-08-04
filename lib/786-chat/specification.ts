@@ -62,7 +62,7 @@ function matches(prompt: string, candidates: Array<[RegExp, string]>) {
 
 function withoutNegativeRequirements(prompt: string) {
   return prompt.replace(
-    /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?)[^.!?\n]*/gi,
+    /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?|no)[^.!?\n]*/gi,
     " ",
   )
 }
@@ -176,12 +176,12 @@ export function analyseProjectPrompt(
       [/\bfaq\b/i, "faq"],
       [/\bpricing\b/i, "pricing-content"],
     ])),
-    backendRequirements: unique(matches(prompt, [
+    backendRequirements: unique(matches(positivePrompt, [
       [/\bdatabase|postgres|neon\b/i, "database"],
       [functionalAuthRequested ? /[\s\S]/ : /(?!)/, "authentication"],
       [/\bapi\b/i, "api"],
       [/\bpayment|stripe\b/i, "payments"],
-      [/\bemail\b/i, "email"],
+      [/\b(?:send|deliver|transactional|notification|contact)\s+emails?\b|\bemail service\b|\bresend\b/i, "email"],
       [/\bupload|attachment|file storage|blob\b/i, "file-storage"],
     ])),
     databaseTables: editIntent.requestedTable ? [editIntent.requestedTable] : [],
