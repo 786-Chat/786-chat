@@ -21,8 +21,7 @@ const canonicalGenerator = await readFile(
 
 test("canonical generation route leaves cleanup time after the DeepSeek budget", () => {
   assert.match(route, /maxDuration = 180/)
-  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 105_000/)
-  assert.match(controller, /FALLBACK_ATTEMPT_TIMEOUT_MS = 65_000/)
+  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 150_000/)
 })
 
 test("timed-out provider work is aborted instead of running in the background", () => {
@@ -37,10 +36,9 @@ test("the alternate provider is not started while the primary is running", () =>
   assert.doesNotMatch(controller, /coordinatorSignal|attemptsByMode/)
 })
 
-test("automatic generation prefers Gateway-compatible Flash modes", () => {
-  assert.match(controller, /if \(hasAttachments\) return "gemini-flash"/)
-  assert.match(controller, /return "deepseek-flash"/)
-  assert.match(controller, /return "gemini-flash"/)
+test("automatic generation uses one direct DeepSeek mode", () => {
+  assert.match(controller, /const primaryMode: CodegenMode = requestedMode === "deepseek-pro" \? "deepseek-pro" : "deepseek-flash"/)
+  assert.match(controller, /const candidateModes: CodegenMode\[\] = \[primaryMode\]/)
 })
 
 test("invalid full systems receive one strict validation-guided repair pass", () => {
