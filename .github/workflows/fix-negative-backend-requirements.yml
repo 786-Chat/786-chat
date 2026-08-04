@@ -1,0 +1,38 @@
+name: Fix negative backend requirements
+
+on:
+  push:
+    branches:
+      - fix/respect-negative-backend-requirements
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/respect-negative-backend-requirements
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - name: Apply parser repair
+        run: python scripts/fix-negative-backend-requirements.py
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+      - name: Run regression tests
+        run: node --test tests/phase2/negative-backend-requirements.test.mjs tests/phase2/login-page-ui-validation.test.mjs
+      - name: Build production application
+        run: pnpm build
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/786-chat/specification.ts
+          git diff --cached --quiet || git commit -m "Respect no-backend and no-API prompt requirements"
+          git push origin HEAD:fix/respect-negative-backend-requirements
