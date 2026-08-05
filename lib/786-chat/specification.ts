@@ -102,8 +102,12 @@ export function analyseProjectPrompt(
   ]).filter(Boolean)
   if (pages.length === 0) pages.push("Home")
 
-  const requiredComponents = matches(prompt, [
-    [/\bnav(?:igation)?|header\b/i, "navigation"],
+  const requiredComponents = matches(positivePrompt, [
+    // "Make navigation links work" validates route integrity; it does not mean
+    // the edited page must contain a header/nav container. Require a navigation
+    // component only when the customer explicitly asks for a nav, navbar,
+    // navigation menu, menu bar, or header.
+    [/\bnav\b|\bnavbar\b|\bnavigation\s+(?:bar|menu)\b|\bmenu\s+bar\b|\bheader\b/i, "navigation"],
     [/\bhero\b/i, "hero"],
     [/\bform\b|log[ -]?in|register|contact/i, "form"],
     [/\btable\b/i, "data-table"],
