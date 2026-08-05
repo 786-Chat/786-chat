@@ -1,0 +1,12 @@
+{
+  "projectId": "213786fd-dfe1-4f70-8460-b0c08bac166e",
+  "buildId": "48519041-a92c-4d85-8ae5-fdc3bbfdad0b",
+  "title": "Nova Ledger Login Application",
+  "sourceVersion": "dfba5a661762750f074b08d18a7f855dae1a76727b0b3730bf3c87eae3ec265b",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-07-29T21:20:59.552Z"
+}
