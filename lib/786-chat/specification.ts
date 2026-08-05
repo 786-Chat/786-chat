@@ -144,10 +144,11 @@ export function analyseProjectPrompt(
     `${prompt} ${industry || ""}`,
     familyHistory,
   )
+  const deliveryEmailRequested = /\b(?:send|deliver|transactional|notification|contact)\s+emails?\b|\bemail service\b|\bresend\b/i.test(positivePrompt)
   const platforms = unique([
     "web",
     ...(/\bmobile app|android|iphone|ipad|ios|expo|react native\b/i.test(positivePrompt) ? ["mobile"] : []),
-    ...(/\bapi|backend|server|saas|crm|erp|upload|attachment|email\b/i.test(positivePrompt) || functionalAuthRequested || systemBlueprint ? ["backend"] : []),
+    ...(/\bapi|backend|server|saas|crm|erp|upload|attachment\b/i.test(positivePrompt) || deliveryEmailRequested || functionalAuthRequested || systemBlueprint ? ["backend"] : []),
     ...(/\bdatabase|postgres|neon|relational|upload|attachment\b/i.test(positivePrompt) || functionalAuthRequested || systemBlueprint ? ["database"] : []),
     ...(/\biot|sensor|device|telemetry|mqtt|bluetooth|firmware\b/i.test(positivePrompt) ? ["iot"] : []),
   ]) as ProjectPlatform[]
