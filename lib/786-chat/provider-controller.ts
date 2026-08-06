@@ -84,10 +84,19 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
   if (hasAttachments || payload.existing) return true
   const message = requestText(payload)
   if (!message) return false
+
+  const explicitlyFrontendOnly = /\bfrontend[ -]?only\b|\bstatic (?:site|website|pages?)\b/.test(message)
+  const explicitlyNoBackend = /\bno (?:database|backend|api|authentication service|payment|email service)\b|\bdo not create (?:a )?(?:database|backend|api|authentication service|payment|email service)\b/.test(message)
+  const positiveBackendIntent = /\b(use|create|add|build|include|connect|implement)\b[^\n]{0,80}\b(database|backend|api|neon|postgres|authentication|stripe|payment|webhook)\b/.test(message)
+
+  // Login/register pages are often visual-only website routes. When the user explicitly
+  // requests frontend-only output and rejects backend services, keep the faster website path.
+  if (explicitlyFrontendOnly && explicitlyNoBackend && !positiveBackendIntent) return false
+
   const terms = [
     "database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing",
     "school management", "hospital management", "pos system", "warehouse", "authentication",
-    "registration", "register", "roles", "permissions", "subscription", "billing", "payment",
+    "roles", "permissions", "subscription", "billing", "payment",
     "stripe", "checkout", "online ordering", "order tracking", "customer dashboard",
     "admin dashboard", "driver app", "kitchen dashboard", "portal", "invoice", "quotation",
     "booking system", "table booking",
