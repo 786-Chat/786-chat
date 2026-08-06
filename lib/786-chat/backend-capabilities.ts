@@ -109,7 +109,7 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
   return [
     `Backend capabilities: ${capabilities.join(", ")}`,
     `Mandatory backend files: ${requiredBackendFiles(specification).join(", ")}`,
-    "backend/manifest.json must declare version 1, every resource provider, required environment variable name, migration path and API route without containing secret values.",
+    "backend/manifest.json must declare version 1 and may declare capabilities either as top-level provider objects or in a capabilities array. It must include every resource provider, required environment variable name, migration path and API route without containing secret values.",
     "lib/server/env.ts must be server-only, validate required environment variables with Zod and fail closed. Never use NEXT_PUBLIC_ for database, authentication, Blob or email secrets.",
     ...(capabilities.includes("database")
       ? [
@@ -165,6 +165,22 @@ function hasFile(files: Record<string, string>, path: string) {
   return typeof files[path] === "string" && Boolean(files[path].trim())
 }
 
+function manifestDeclaresCapability(manifest: Record<string, unknown>, capability: BackendCapability) {
+  if (manifest[capability]) return true
+
+  const declared = manifest.capabilities
+  if (Array.isArray(declared)) {
+    return declared.some((value) => String(value).toLowerCase() === capability)
+  }
+
+  if (declared && typeof declared === "object") {
+    const record = declared as Record<string, unknown>
+    return Boolean(record[capability])
+  }
+
+  return false
+}
+
 export function assessGeneratedBackend(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -183,7 +199,9 @@ export function assessGeneratedBackend(
     const manifest = JSON.parse(manifestSource) as Record<string, unknown>
     if (manifest.version !== 1) errors.push("Backend manifest must use version 1.")
     for (const capability of capabilities) {
-      if (!manifest[capability]) errors.push(`Backend manifest does not declare ${capability}.`)
+      if (!manifestDeclaresCapability(manifest, capability)) {
+        errors.push(`Backend manifest does not declare ${capability}.`)
+      }
     }
   } catch {
     errors.push("backend/manifest.json must contain valid JSON.")
