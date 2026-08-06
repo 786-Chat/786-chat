@@ -8,8 +8,8 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 180
 
-const SIMPLE_DEEPSEEK_TIMEOUT_MS = 45_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 80_000
+const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 50_000
 const COMPLEX_GEMINI_TIMEOUT_MS = 95_000
 const COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS = 75_000
 
@@ -80,26 +80,24 @@ function requestText(payload: GeneratorPayload): string {
   return String(payload._originalPrompt || payload.message || "").trim().toLowerCase()
 }
 
+function isExplicitFrontendOnly(message: string): boolean {
+  const saysFrontendOnly = /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message)
+  const forbidsBackend = /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message)
+  return saysFrontendOnly || forbidsBackend
+}
+
 function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
   if (hasAttachments || payload.existing) return true
   const message = requestText(payload)
   if (!message) return false
-
-  const explicitlyFrontendOnly = /\bfrontend[ -]?only\b|\bstatic (?:site|website|pages?)\b/.test(message)
-  const explicitlyNoBackend = /\bno (?:database|backend|api|authentication service|payment|email service)\b|\bdo not create (?:a )?(?:database|backend|api|authentication service|payment|email service)\b/.test(message)
-  const positiveBackendIntent = /\b(use|create|add|build|include|connect|implement)\b[^\n]{0,80}\b(database|backend|api|neon|postgres|authentication|stripe|payment|webhook)\b/.test(message)
-
-  // Login/register pages are often visual-only website routes. When the user explicitly
-  // requests frontend-only output and rejects backend services, keep the faster website path.
-  if (explicitlyFrontendOnly && explicitlyNoBackend && !positiveBackendIntent) return false
+  if (isExplicitFrontendOnly(message)) return false
 
   const terms = [
     "database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing",
     "school management", "hospital management", "pos system", "warehouse", "authentication",
-    "roles", "permissions", "subscription", "billing", "payment",
-    "stripe", "checkout", "online ordering", "order tracking", "customer dashboard",
-    "admin dashboard", "driver app", "kitchen dashboard", "portal", "invoice", "quotation",
-    "booking system", "table booking",
+    "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout",
+    "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app",
+    "kitchen dashboard", "portal", "invoice", "quotation", "booking system", "table booking",
   ]
   const routeCount = (message.match(/^\s*-\s*[a-z0-9][^\n]*$/gim) || []).length
   return message.length > 1_800 || routeCount >= 10 || terms.some((term) => message.includes(term))
@@ -118,8 +116,9 @@ function profileRules(profile: GenerationProfile): string {
   }
   return [
     "",
-    "Generate a complete runnable Next.js App Router website.",
+    "Generate a compact complete runnable Next.js App Router website.",
     "Create every requested route with working navigation and responsive design.",
+    "Use reusable shared components and keep the whole structured response below 6,500 output tokens.",
     "Return valid structured project output with no markdown outside the required object.",
   ].join("\n")
 }
@@ -157,7 +156,7 @@ async function runAttempt(
       userId: String(payload._actorUserId || "anonymous-builder"),
       userPlan: String(payload._actorPlan || "starter"),
       generationId: String(payload._generationId || ""),
-      maxOutputTokens: profile === "full-stack" ? 12_000 : 9_000,
+      maxOutputTokens: profile === "full-stack" ? 12_000 : 6_500,
       attachments,
       existing,
     }),
