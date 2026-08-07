@@ -10,6 +10,24 @@ export type ApplicationEditIntent = {
   requestedTable: string | null
 }
 
+const RESERVED_DATABASE_WORDS = new Set([
+  "exists",
+  "exist",
+  "fields",
+  "field",
+  "schema",
+  "database",
+  "table",
+  "tables",
+  "statement",
+  "statements",
+  "syntax",
+  "column",
+  "columns",
+  "postgresql",
+  "sql",
+])
+
 function databaseTableName(prompt: string) {
   const match = prompt.match(
     /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called|named)?\s*([a-z][a-z0-9_]*)\b/i,
@@ -20,8 +38,12 @@ function databaseTableName(prompt: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-  if (["exists", "exist", "fields", "field", "schema", "database", "table", "tables"].includes(value)) return null
+  if (RESERVED_DATABASE_WORDS.has(value)) return null
   return value || null
+}
+
+function hasExplicitDatabaseTableCreation(prompt: string) {
+  return /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called|named)?\s*[a-z][a-z0-9_]*\s*(?=\n|\r|\(|\bwith\b|\bfields?\b|$)/i.test(prompt)
 }
 
 export function isUndoApplicationEdit(prompt: string) {
@@ -37,7 +59,7 @@ export function classifyApplicationEdit(prompt: string): ApplicationEditIntent {
   if (/\b(?:add|create|build|make)\b[\s\S]{0,60}\b(?:booking|appointment)\b[\s\S]{0,30}\bform\b|\bbooking\s+form\b/i.test(prompt)) {
     return { kind: "booking-form", requestedTable: null }
   }
-  if (/\b(?:create|add|make)\b[\s\S]{0,60}\b(?:database\s+)?table\b/i.test(prompt)) {
+  if (hasExplicitDatabaseTableCreation(prompt)) {
     return { kind: "database-table", requestedTable: databaseTableName(prompt) }
   }
   return { kind: "general", requestedTable: null }
