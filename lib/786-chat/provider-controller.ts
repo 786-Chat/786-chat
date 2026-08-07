@@ -8,8 +8,8 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 180
 
-const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 50_000
+const SIMPLE_DEEPSEEK_TIMEOUT_MS = 125_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 45_000
 const COMPLEX_GEMINI_TIMEOUT_MS = 95_000
 const COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS = 75_000
 
@@ -117,8 +117,18 @@ function profileRules(profile: GenerationProfile): string {
   return [
     "",
     "Generate a compact complete runnable Next.js App Router website.",
-    "Create every requested route with working navigation and responsive design.",
-    "Use reusable shared components and keep the whole structured response below 6,500 output tokens.",
+    "HARD COMPACTNESS RULES:",
+    "- Return no more than 12 files total.",
+    "- Use one shared components/SitePage.tsx component for all visual sections.",
+    "- Every requested route file must be a thin wrapper under 12 lines that imports SitePage and passes a page key.",
+    "- Put navigation, footer, cards, forms, FAQ, testimonials and shared arrays only once in SitePage.tsx.",
+    "- Keep app/globals.css below 220 lines and do not include data URLs, base64 images, inline SVG artwork or repeated CSS.",
+    "- Use remote image URLs only as CSS background URLs or next/image src strings; never embed image bytes.",
+    "- Include package.json, tsconfig.json, next-env.d.ts, next.config.mjs, postcss.config.mjs, app/layout.tsx, app/page.tsx and app/globals.css.",
+    "- package.json must include next, react, react-dom, typescript, tailwindcss, postcss, autoprefixer and lucide-react with dev/build/start scripts.",
+    "- Implement requested interactions with compact React state in the shared component.",
+    "- Create every requested route with working navigation and responsive design.",
+    "- The entire JSON response must remain below 7,500 output tokens. Completeness is more important than decorative repetition.",
     "Return valid structured project output with no markdown outside the required object.",
   ].join("\n")
 }
@@ -156,7 +166,7 @@ async function runAttempt(
       userId: String(payload._actorUserId || "anonymous-builder"),
       userPlan: String(payload._actorPlan || "starter"),
       generationId: String(payload._generationId || ""),
-      maxOutputTokens: profile === "full-stack" ? 12_000 : 6_500,
+      maxOutputTokens: profile === "full-stack" ? 12_000 : 8_192,
       attachments,
       existing,
     }),
