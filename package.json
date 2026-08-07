@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "python scripts/fix-codegen-provider-mode.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -14,7 +13,6 @@
     "test:phase2": "node --test tests/phase2/*.test.mjs"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.78",
     "@ai-sdk/deepseek": "^2.0.35",
     "@ai-sdk/google": "^3.0.80",
     "@ai-sdk/react": "^3.0.185",
