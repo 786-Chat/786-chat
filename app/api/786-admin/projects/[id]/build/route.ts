@@ -27,6 +27,23 @@ function sourceVersion(files: Record<string, string>): string {
   return createHash("sha256").update(canonical).digest("hex")
 }
 
+function repairIsActive(build: Awaited<ReturnType<typeof getLatestBuildJob>>): boolean {
+  return Boolean(
+    build &&
+    build.status === "failed" &&
+    ["pending", "running", "repaired"].includes(build.repair_status),
+  )
+}
+
+function buildForClient(build: Awaited<ReturnType<typeof getLatestBuildJob>>) {
+  if (!build || !repairIsActive(build)) return build
+  return {
+    ...build,
+    status: "running" as const,
+    error_message: null,
+  }
+}
+
 async function repairMissingScaffold(
   projectId: string,
   files: Record<string, string>,
@@ -64,7 +81,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     success: true,
     project: { id: project.id, title: project.title, updated_at: project.updated_at },
     validation,
-    build,
+    build: buildForClient(build),
     scaffoldRepaired: repaired,
   })
 }
@@ -134,12 +151,13 @@ export async function POST(request: Request, { params }: Ctx) {
 
   const version = sourceVersion(project.files || {})
   const latest = await getLatestBuildJob(id, email)
-
-  if (
+  const latestIsActive = Boolean(
     latest &&
     latest.source_version === version &&
-    (latest.status === "queued" || latest.status === "running")
-  ) {
+    (["queued", "running"].includes(latest.status) || repairIsActive(latest)),
+  )
+
+  if (latestIsActive && latest) {
     return NextResponse.json({
       success: true,
       ready: true,
@@ -148,8 +166,10 @@ export async function POST(request: Request, { params }: Ctx) {
       project: { id: project.id, title: project.title },
       validation,
       scaffoldRepaired,
-      build: latest,
-      message: "An active build already exists for this project version.",
+      build: buildForClient(latest),
+      message: repairIsActive(latest)
+        ? "Automatic build repair is already running for this project version."
+        : "An active build already exists for this project version.",
     })
   }
 
