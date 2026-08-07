@@ -4,8 +4,9 @@ import { getSession } from "@/lib/auth"
 import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
-import { getProjectWithData } from "@/lib/786-admin/projects"
+import { getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
+import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -26,6 +27,16 @@ function sourceVersion(files: Record<string, string>): string {
   return createHash("sha256").update(canonical).digest("hex")
 }
 
+async function repairMissingScaffold(
+  projectId: string,
+  files: Record<string, string>,
+): Promise<boolean> {
+  const additions = scaffoldAdditions(files)
+  if (Object.keys(additions).length === 0) return false
+  await upsertFiles(projectId, additions)
+  return true
+}
+
 export async function GET(_request: Request, { params }: Ctx) {
   const email = await requireOwnerEmail()
   if (!email) {
@@ -33,9 +44,17 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 
   const { id } = await params
-  const project = await getProjectWithData(id, email)
+  let project = await getProjectWithData(id, email)
   if (!project) {
     return NextResponse.json({ success: false, error: "Project not found" }, { status: 404 })
+  }
+
+  const repaired = await repairMissingScaffold(id, project.files || {})
+  if (repaired) {
+    project = await getProjectWithData(id, email)
+    if (!project) {
+      return NextResponse.json({ success: false, error: "Project not found after scaffold repair" }, { status: 404 })
+    }
   }
 
   const validation = validateGeneratedProject(project.files || {})
@@ -46,6 +65,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     project: { id: project.id, title: project.title, updated_at: project.updated_at },
     validation,
     build,
+    scaffoldRepaired: repaired,
   })
 }
 
@@ -62,6 +82,15 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { confirm?: unknown }
+
+  const scaffoldRepaired = await repairMissingScaffold(id, project.files || {})
+  if (scaffoldRepaired) {
+    project = await getProjectWithData(id, email)
+    if (!project) {
+      return NextResponse.json({ success: false, error: "Project not found after scaffold repair" }, { status: 404 })
+    }
+  }
+
   if (body.confirm === true) {
     const migrated = await migrateUnsupportedNextConfig({
       projectId: id,
@@ -83,6 +112,7 @@ export async function POST(request: Request, { params }: Ctx) {
         success: false,
         error: "Project is not ready to build.",
         validation,
+        scaffoldRepaired,
       },
       { status: 422 },
     )
@@ -95,7 +125,10 @@ export async function POST(request: Request, { params }: Ctx) {
       queued: false,
       project: { id: project.id, title: project.title },
       validation,
-      message: "Static validation passed. Send confirm=true to queue the build.",
+      scaffoldRepaired,
+      message: scaffoldRepaired
+        ? "Missing Next.js scaffold files were repaired. Static validation passed. Send confirm=true to queue the build."
+        : "Static validation passed. Send confirm=true to queue the build.",
     })
   }
 
@@ -114,6 +147,7 @@ export async function POST(request: Request, { params }: Ctx) {
       reused: true,
       project: { id: project.id, title: project.title },
       validation,
+      scaffoldRepaired,
       build: latest,
       message: "An active build already exists for this project version.",
     })
@@ -164,6 +198,7 @@ export async function POST(request: Request, { params }: Ctx) {
         queued: false,
         error: message,
         validation,
+        scaffoldRepaired,
         build: { ...build, status: "failed", error_message: message },
       },
       { status: 503 },
@@ -178,8 +213,11 @@ export async function POST(request: Request, { params }: Ctx) {
       reused: false,
       project: { id: project.id, title: project.title },
       validation,
+      scaffoldRepaired,
       build,
-      message: "Build queued on the isolated GitHub Actions runner.",
+      message: scaffoldRepaired
+        ? "Missing Next.js scaffold files were repaired and the build was queued."
+        : "Build queued on the isolated GitHub Actions runner.",
     },
     { status: 202 },
   )
