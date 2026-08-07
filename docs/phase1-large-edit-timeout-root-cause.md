@@ -1,1 +1,0 @@
-Temporary note: production logs on 2026-08-07 showed POST /api/786-chat/generate reaching Vercel's 180s runtime ceiling during a large existing frontend edit. The provider controller must reserve runtime headroom and keep large edit output compact. Remove this note after rollout verification.
