@@ -22,9 +22,20 @@ BUSINESS APPLICATION ARCHITECTURE:
 - Create a shared workspace layout, navigation, dashboards, list/detail views, forms, filters, tables, charts, status badges, loading, empty and error states where required.
 - Create app/api/** route handlers for requested CRUD operations and actions.
 - Create typed models, Zod validation and a Neon/PostgreSQL-compatible schema or migration when persistent relational data is requested.
-- Enforce authentication and role/tenant authorisation in route handlers, not only in the UI.
+- Enforce authentication and role/tenant authorisation in route handlers when authentication or tenant separation is requested, not only in the UI.
 - Do not claim that database actions, notifications, payments, integrations or device commands are live unless the returned files implement them.
 - Prefer a complete working vertical slice over many fake modules. For a very large system, fully implement the requested core and create explicit extension points.
+
+BACKEND GENERATION ORDER — MANDATORY:
+- When the request includes Neon, PostgreSQL, database, API, CRUD, customers, orders, records or persistence, generate the backend files before validation. Never stop after generating only frontend files.
+- For database-backed requests, return sql/schema.sql and sql/migrations/001_initial.sql first, then lib/server/env.ts, lib/server/db.ts, backend/manifest.json, scripts/migrate.mjs, required app/api/** routes, and only then UI files that consume those APIs.
+- If the user names database tables such as customers and orders, CREATE TABLE statements for every named table must exist in sql/schema.sql and the initial migration in the same response.
+- If the user requests collection and item CRUD, create both app/api/<resource>/route.ts and app/api/<resource>/[id]/route.ts in the same response.
+- Never submit a generation response for validation while any mandatory backend file from the structured plan is absent.
+- For an existing project, preserve frontend files and focus the generation response on missing backend files instead of rewriting the whole application.
+- When the user explicitly says no authentication, do not invent auth, sessions, email verification or tenant guards. Implement the requested public backend safely with Zod validation, parameterized queries and explicit error handling.
+- When authentication is requested, enforce it server-side before database access.
+- A valid frontend preview does not count as completion of a backend request. Backend schema, APIs and required admin/data views must all be present before reporting success.
 
 MULTI-COMPANY SAAS:
 - When requested, model organisations/companies, factories/sites, branches, memberships, users, roles and scoped permissions.
