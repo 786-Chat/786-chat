@@ -106,19 +106,21 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
   if (capabilities.length === 0) return []
 
   const resources = backendApiResources(specification)
+  const requiresAuthentication = capabilities.includes("authentication")
   return [
     `Backend capabilities: ${capabilities.join(", ")}`,
     `Mandatory backend files: ${requiredBackendFiles(specification).join(", ")}`,
+    "When extending an existing project, mandatory backend files take priority over cosmetic rewrites. Return every missing backend file and only the frontend files that must change. Never omit schema, migration, manifest or API files to save output tokens.",
     "backend/manifest.json must declare version 1 and may declare capabilities either as top-level provider objects or in a capabilities array. It must include every resource provider, required environment variable name, migration path and API route without containing secret values.",
     "lib/server/env.ts must be server-only, validate required environment variables with Zod and fail closed. Never use NEXT_PUBLIC_ for database, authentication, Blob or email secrets.",
     ...(capabilities.includes("database")
       ? [
           "Use @neondatabase/serverless through a lazy getDb/getSql function in lib/server/db.ts; do not instantiate the connection at module load and do not use a Proxy.",
-          "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, ownership indexes and non-destructive IF NOT EXISTS statements.",
+          "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, indexes and non-destructive IF NOT EXISTS statements.",
           "scripts/migrate.mjs must read the checked-in migration and apply it only through DATABASE_URL. It must not run shell commands or silently ignore migration errors.",
         ]
       : []),
-    ...(capabilities.includes("authentication")
+    ...(requiresAuthentication
       ? [
           "Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.",
           "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.",
@@ -140,7 +142,9 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
     ...(capabilities.includes("api")
       ? [
           `API resources: ${resources.join(", ") || "authentication routes only"}`,
-          "Every data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses.",
+          ...(requiresAuthentication
+            ? ["Every data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses."]
+            : ["The request does not require authentication. Do not invent an auth dependency. Public data routes must still validate path/body/query input with Zod, use parameterized Neon queries, avoid exposing secrets and return explicit 400/404/409/429/500 responses."]),
         ]
       : []),
     "package.json must contain explicit non-latest semver ranges for every imported server package, including server-only, zod and each selected provider SDK.",
@@ -243,7 +247,7 @@ export function assessGeneratedBackend(
     }
     if (!/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?/i.test(schema) ||
         !/\bTIMESTAMPTZ\b/i.test(schema) || !/\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/i.test(schema)) {
-      errors.push("Neon schema must include tables, TIMESTAMPTZ columns and ownership indexes.")
+      errors.push("Neon schema must include tables, TIMESTAMPTZ columns and indexes.")
     }
     if (!/CREATE\s+TABLE/i.test(migration) || !/IF\s+NOT\s+EXISTS/i.test(migration)) {
       errors.push("Initial database migration must be repeatable and create the required tables.")
@@ -314,10 +318,11 @@ export function assessGeneratedBackend(
   }
 
   if (capabilities.includes("api")) {
+    const requiresAuthentication = capabilities.includes("authentication")
     for (const resource of backendApiResources(specification)) {
       const collection = files[`app/api/${resource}/route.ts`] || ""
       const item = files[`app/api/${resource}/[id]/route.ts`] || ""
-      if (!hasGuard(collection) || !hasGuard(item)) {
+      if (requiresAuthentication && (!hasGuard(collection) || !hasGuard(item))) {
         errors.push(`API resource ${resource} must authenticate and enforce ownership.`)
       }
       if (!/\bz\.(?:object|string|coerce)\b/.test(`${collection}\n${item}`)) {
