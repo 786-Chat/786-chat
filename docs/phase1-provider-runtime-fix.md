@@ -1,1 +1,0 @@
-Phase 1 provider runtime reliability fix: update direct DeepSeek generation to current V4 model IDs, allow larger structured edit outputs, and give Gemini fallback enough time for frontend edits. This file documents the rollout and can be removed after verification.
