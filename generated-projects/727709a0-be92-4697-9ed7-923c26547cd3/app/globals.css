@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --gold: #d4af37; --red: #8b0000; }
+body { font-family: Georgia, 'Times New Roman', serif; }
+.gold-text { background: linear-gradient(90deg, #f5d67b, #d4af37, #f5d67b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.btn { @apply inline-block px-6 py-3 rounded-full font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg; }
+.btn-gold { @apply bg-gold text-black hover:bg-yellow-300; }
+.btn-outline { @apply border-2 border-gold text-gold hover:bg-gold hover:text-black; }
+.card { @apply bg-[#1a1a1a] border border-gold/30 rounded-2xl p-6 transition-all duration-500 hover:border-gold hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:-translate-y-1; }
+.fade-in { animation: fadeIn 1s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.section-title { @apply text-4xl md:text-5xl font-bold text-center gold-text mb-8; }
+.input { @apply w-full bg-black border border-gold/40 rounded-lg px-4 py-3 text-gold placeholder-gold/50 focus:outline-none focus:border-gold; }
