@@ -6,7 +6,7 @@ import {
 } from "@/lib/786-admin/codegen"
 
 export const runtime = "nodejs"
-export const maxDuration = 180
+export const maxDuration = 300
 
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
