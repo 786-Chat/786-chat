@@ -45,6 +45,17 @@ const PAGE_ALIASES: Array<[RegExp, string, string]> = [
   [/\bcheckout\b/i, "Checkout", "/checkout"],
 ]
 
+const RESERVED_TABLE_WORDS = new Set([
+  "exists",
+  "exist",
+  "fields",
+  "field",
+  "schema",
+  "database",
+  "table",
+  "tables",
+])
+
 function unique(values: string[]) {
   return Array.from(new Set(values))
 }
@@ -58,16 +69,31 @@ function explicitRoutes(prompt: string) {
 
 function explicitDatabaseTables(prompt: string) {
   const tables = new Set<string>()
-  for (const match of prompt.matchAll(/\b(?:create\s+)?table\s*:?\s*([a-z][a-z0-9_]*)\b/gi)) {
-    tables.add(match[1].toLowerCase())
+  const add = (value: string | undefined) => {
+    const table = value?.trim().toLowerCase()
+    if (table && !RESERVED_TABLE_WORDS.has(table)) tables.add(table)
   }
-  const block = prompt.match(/\bcreate\s+(?:these\s+)?tables?\s*:\s*([\s\S]*?)(?:\n\s*\n|\bAPI\s+ROUTES?\b|\bADMIN\s+PAGE\b|\bREQUIREMENTS?\b|$)/i)?.[1]
-  if (block) {
-    for (const line of block.split(/\r?\n/)) {
-      const candidate = line.replace(/^\s*[-*•\d.)]+\s*/, "").trim().match(/^([a-z][a-z0-9_]*)\b/i)?.[1]
-      if (candidate) tables.add(candidate.toLowerCase())
+
+  // Only treat an explicit creation declaration as a table name. Phrases such as
+  // "confirm customers table exists" are validation prose, not schema requests.
+  for (const match of prompt.matchAll(
+    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\b/gi,
+  )) {
+    add(match[1])
+  }
+
+  // Support explicit plural lists, but only accept bullet/list entries. This keeps
+  // headings such as "Fields:" and column names from becoming fake table names.
+  const pluralBlock = prompt.match(
+    /\bcreate\s+(?:these\s+)?tables\s*:\s*([\s\S]*?)(?:\n\s*\n|\bAPI\s+ROUTES?\b|\bADMIN\s+PAGE\b|\bDATABASE\s+REQUIREMENTS?\b|\bREQUIREMENTS?\b|$)/i,
+  )?.[1]
+  if (pluralBlock) {
+    for (const line of pluralBlock.split(/\r?\n/)) {
+      const candidate = line.match(/^\s*[-*•]\s*([a-z][a-z0-9_]*)\s*$/i)?.[1]
+      add(candidate)
     }
   }
+
   return Array.from(tables)
 }
 
@@ -120,7 +146,7 @@ export function analyseProjectPrompt(
     [/\bnav\b|\bnavbar\b|\bnavigation\s+(?:bar|menu)\b|\bmenu\s+bar\b|\bheader\b/i, "navigation"],
     [/\bhero\b/i, "hero"],
     [/\bform\b|log[ -]?in|register|contact/i, "form"],
-    [/\btable\b/i, "data-table"],
+    [/(?:\bdata\s+table\b|\badmin\s+table\b|\bresponsive\s+table\b|\border\s+table\b|\bcustomer\s+table\b|\btable\s+(?:view|component|grid)\b)/i, "data-table"],
     [/\bchart|analytics\b/i, "chart"],
     [/\bfooter\b/i, "footer"],
   ])

@@ -12,15 +12,15 @@ export type ApplicationEditIntent = {
 
 function databaseTableName(prompt: string) {
   const match = prompt.match(
-    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table(?:\s+(?:called|named))?\s+([a-z][a-z0-9 _-]{1,40})/i,
+    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called|named)?\s*([a-z][a-z0-9_]*)\b/i,
   )
   if (!match?.[1]) return null
   const value = match[1]
-    .replace(/\b(?:with|for|and|that|to)\b[\s\S]*$/i, "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
+  if (["exists", "exist", "fields", "field", "schema", "database", "table", "tables"].includes(value)) return null
   return value || null
 }
 
@@ -38,7 +38,7 @@ export function classifyApplicationEdit(prompt: string): ApplicationEditIntent {
     return { kind: "booking-form", requestedTable: null }
   }
   if (/\b(?:create|add|make)\b[\s\S]{0,60}\b(?:database\s+)?table\b/i.test(prompt)) {
-    return { kind: "database-table", requestedTable: databaseTableName(prompt) || "records" }
+    return { kind: "database-table", requestedTable: databaseTableName(prompt) }
   }
   return { kind: "general", requestedTable: null }
 }
@@ -69,7 +69,9 @@ export function applicationEditBrief(
   if (intent.kind === "database-table") {
     return [
       ...common,
-      `Database edit: create the PostgreSQL table ${intent.requestedTable || "records"} in sql/schema.sql using CREATE TABLE IF NOT EXISTS.`,
+      ...(intent.requestedTable
+        ? [`Database edit: create the PostgreSQL table ${intent.requestedTable} in sql/schema.sql using CREATE TABLE IF NOT EXISTS.`]
+        : ["Database edit: create only the table explicitly named by the user. Do not invent a fallback table name."]),
       "Include a UUID primary key, created_at and updated_at timestamps, useful indexes and foreign keys where relationships exist.",
       "Keep DATABASE_URL and database operations server-only. Add tenant ownership fields and guards when the project is tenant-scoped.",
     ]
