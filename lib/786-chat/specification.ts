@@ -54,6 +54,13 @@ const RESERVED_TABLE_WORDS = new Set([
   "database",
   "table",
   "tables",
+  "statement",
+  "statements",
+  "syntax",
+  "column",
+  "columns",
+  "postgresql",
+  "sql",
 ])
 
 function unique(values: string[]) {
@@ -74,23 +81,30 @@ function explicitDatabaseTables(prompt: string) {
     if (table && !RESERVED_TABLE_WORDS.has(table)) tables.add(table)
   }
 
-  // Only treat an explicit creation declaration as a table name. Phrases such as
-  // "confirm customers table exists" are validation prose, not schema requests.
+  // Singular declarations must look like an actual table definition. This prevents
+  // prose such as "accept standard PostgreSQL CREATE TABLE syntax" from creating
+  // fake table requirements named "syntax" or "statement".
   for (const match of prompt.matchAll(
-    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\b/gi,
+    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\s*(?=\r?\n|\(|\bwith\b|\bfields?\b|$)/gi,
   )) {
     add(match[1])
   }
 
-  // Support explicit plural lists, but only accept bullet/list entries. This keeps
-  // headings such as "Fields:" and column names from becoming fake table names.
-  const pluralBlock = prompt.match(
-    /\bcreate\s+(?:these\s+)?tables\s*:\s*([\s\S]*?)(?:\n\s*\n|\bAPI\s+ROUTES?\b|\bADMIN\s+PAGE\b|\bDATABASE\s+REQUIREMENTS?\b|\bREQUIREMENTS?\b|$)/i,
-  )?.[1]
-  if (pluralBlock) {
-    for (const line of pluralBlock.split(/\r?\n/)) {
-      const candidate = line.match(/^\s*[-*•]\s*([a-z][a-z0-9_]*)\s*$/i)?.[1]
-      add(candidate)
+  // Plural table lists may use plain resource headings followed by field bullets.
+  // Only accept a heading when the next non-empty line is a field bullet. This
+  // distinguishes customers/orders from columns such as full_name/email.
+  const pluralStart = /\bcreate\s+(?:these\s+)?tables\s*:\s*/ig
+  for (const start of prompt.matchAll(pluralStart)) {
+    const tail = prompt.slice((start.index || 0) + start[0].length)
+    const lines = tail.split(/\r?\n/)
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index].trim()
+      if (/^(?:API\s+ROUTES?|ADMIN\s+PAGE|DATABASE\s+REQUIREMENTS?|REQUIREMENTS?|VALIDATION|DO\s+NOT)\b/i.test(line)) break
+      if (!line || /^[-*•]/.test(line)) continue
+      const candidate = line.match(/^([a-z][a-z0-9_]*)\s*:?$/i)?.[1]
+      if (!candidate) continue
+      const nextNonEmpty = lines.slice(index + 1).find((entry) => entry.trim())?.trim() || ""
+      if (/^[-*•]\s+/.test(nextNonEmpty)) add(candidate)
     }
   }
 
