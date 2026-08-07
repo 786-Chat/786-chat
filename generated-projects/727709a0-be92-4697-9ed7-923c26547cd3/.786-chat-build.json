@@ -1,0 +1,12 @@
+{
+  "projectId": "727709a0-be92-4697-9ed7-923c26547cd3",
+  "buildId": "eea6a54a-f83a-489b-ac0d-580b19bad9d3",
+  "title": "Royal Spice",
+  "sourceVersion": "3de042c42e3d1fed83dc14115b690196b4e06a56c099540e04e1ba0abad2aaeb",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-07T00:14:08.512Z"
+}
