@@ -1,0 +1,12 @@
+{
+  "projectId": "79ac67f6-322f-4cda-adf5-8227694f6edb",
+  "buildId": "c67d0c06-8a94-42fe-9f28-9bbce11a9c90",
+  "title": "786 Coffee",
+  "sourceVersion": "101ad3ec8a2e806c774473a159b2c22b6348bec71b7f8fd6ed77c15d77f0e6b4",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-04T15:32:24.142Z"
+}
