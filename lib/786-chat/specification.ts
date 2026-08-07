@@ -56,6 +56,21 @@ function explicitRoutes(prompt: string) {
   )
 }
 
+function explicitDatabaseTables(prompt: string) {
+  const tables = new Set<string>()
+  for (const match of prompt.matchAll(/\b(?:create\s+)?table\s*:?\s*([a-z][a-z0-9_]*)\b/gi)) {
+    tables.add(match[1].toLowerCase())
+  }
+  const block = prompt.match(/\bcreate\s+(?:these\s+)?tables?\s*:\s*([\s\S]*?)(?:\n\s*\n|\bAPI\s+ROUTES?\b|\bADMIN\s+PAGE\b|\bREQUIREMENTS?\b|$)/i)?.[1]
+  if (block) {
+    for (const line of block.split(/\r?\n/)) {
+      const candidate = line.replace(/^\s*[-*•\d.)]+\s*/, "").trim().match(/^([a-z][a-z0-9_]*)\b/i)?.[1]
+      if (candidate) tables.add(candidate.toLowerCase())
+    }
+  }
+  return Array.from(tables)
+}
+
 function matches(prompt: string, candidates: Array<[RegExp, string]>) {
   return candidates.filter(([pattern]) => pattern.test(prompt)).map(([, value]) => value)
 }
@@ -77,22 +92,21 @@ export function analyseProjectPrompt(
   const editIntent = classifyApplicationEdit(positivePrompt)
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
-  // A request for a login/register page can be a visual UI request only. Do not
-  // force a complete database-backed authentication system unless the customer
-  // explicitly asks for functional authentication, accounts, sessions or a backend.
   const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
+  const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
+  const explicitTables = explicitDatabaseTables(prompt)
   const routes = unique([
     "/",
     ...pageMatches.map(([, , route]) => route),
-    ...requestedRoutes,
+    ...requestedPageRoutes,
     ...(systemBlueprint?.routes || []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
     "Home",
     ...pageMatches.map(([, page]) => page),
-    ...requestedRoutes.map((route) =>
+    ...requestedPageRoutes.map((route) =>
       route
         .split("/")
         .filter(Boolean)
@@ -103,10 +117,6 @@ export function analyseProjectPrompt(
   if (pages.length === 0) pages.push("Home")
 
   const requiredComponents = matches(positivePrompt, [
-    // "Make navigation links work" validates route integrity; it does not mean
-    // the edited page must contain a header/nav container. Require a navigation
-    // component only when the customer explicitly asks for a nav, navbar,
-    // navigation menu, menu bar, or header.
     [/\bnav\b|\bnavbar\b|\bnavigation\s+(?:bar|menu)\b|\bmenu\s+bar\b|\bheader\b/i, "navigation"],
     [/\bhero\b/i, "hero"],
     [/\bform\b|log[ -]?in|register|contact/i, "form"],
@@ -189,7 +199,10 @@ export function analyseProjectPrompt(
       [/\b(?:send|deliver|transactional|notification|contact)\s+emails?\b|\bemail service\b|\bresend\b/i, "email"],
       [/\bupload|attachment|file storage|blob\b/i, "file-storage"],
     ])),
-    databaseTables: editIntent.requestedTable ? [editIntent.requestedTable] : [],
+    databaseTables: unique([
+      ...(editIntent.requestedTable ? [editIntent.requestedTable] : []),
+      ...explicitTables,
+    ]),
     designFamily,
     designVariant: designVariantNumber(designFamily.id, familyHistory),
     platforms,
