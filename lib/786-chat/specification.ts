@@ -102,18 +102,12 @@ function explicitDatabaseTables(prompt: string) {
     if (table && !RESERVED_TABLE_WORDS.has(table)) tables.add(table)
   }
 
-  // Singular declarations must look like an actual table definition. This prevents
-  // prose such as "accept standard PostgreSQL CREATE TABLE syntax" from creating
-  // fake table requirements named "syntax" or "statement".
   for (const match of prompt.matchAll(
     /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\s*(?=\s*:|\r?\n|\(|\bwith\b|\bfields?\b|$)/gi,
   )) {
     add(match[1])
   }
 
-  // Plural table lists may use plain resource headings followed by field bullets.
-  // Only accept a heading when the next non-empty line is a field bullet. This
-  // distinguishes customers/orders from columns such as full_name/email.
   const pluralStart = /\bcreate\s+(?:these\s+)?tables\s*:\s*/ig
   for (const start of prompt.matchAll(pluralStart)) {
     const tail = prompt.slice((start.index || 0) + start[0].length)
@@ -137,10 +131,32 @@ function matches(prompt: string, candidates: Array<[RegExp, string]>) {
 }
 
 function withoutNegativeRequirements(prompt: string) {
-  return prompt.replace(
-    /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?|no)[^.!?\n]*/gi,
-    " ",
-  )
+  const lines = prompt.split(/\r?\n/)
+  const kept: string[] = []
+  let skippingNegativeList = false
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    const startsNegativeList = /^(?:important\s*:\s*)?(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?|no)\b[^\n]*:\s*$/i.test(line)
+    if (startsNegativeList) {
+      skippingNegativeList = true
+      continue
+    }
+
+    if (skippingNegativeList) {
+      if (!line) continue
+      if (/^[-*•]\s+/.test(line)) continue
+      skippingNegativeList = false
+    }
+
+    const cleaned = rawLine.replace(
+      /\b(?:do not|don't|must not|should not|exclude|without|no need(?:\s+for)?|no)\b[^.!?\n]*/gi,
+      " ",
+    )
+    kept.push(cleaned)
+  }
+
+  return kept.join("\n")
 }
 
 export function analyseProjectPrompt(
@@ -154,10 +170,10 @@ export function analyseProjectPrompt(
   const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
   const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
-  const requestedRoutes = explicitRoutes(prompt)
+  const requestedRoutes = explicitRoutes(positivePrompt)
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
-  const requestedApiResources = explicitApiResources(prompt)
-  const explicitTables = explicitDatabaseTables(prompt)
+  const requestedApiResources = explicitApiResources(positivePrompt)
+  const explicitTables = explicitDatabaseTables(positivePrompt)
   const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(positivePrompt)
   const routes = unique([
     "/",
@@ -237,7 +253,7 @@ export function analyseProjectPrompt(
     pages,
     routes,
     requiredComponents: unique(requiredComponents),
-    requiredInteractions: unique(matches(prompt, [
+    requiredInteractions: unique(matches(positivePrompt, [
       [/\blog[ -]?in|sign[ -]?in\b/i, "submit-login"],
       [/\bbooking|appointment\b/i, "submit-booking"],
       [/\bsearch\b/i, "search"],
@@ -248,7 +264,7 @@ export function analyseProjectPrompt(
     ])),
     designDirection,
     colours: unique(Array.from(prompt.matchAll(/\b(?:red|orange|yellow|green|emerald|blue|cyan|purple|violet|pink|black|white|gold|silver|navy|teal)\b/gi), (match) => match[0].toLowerCase())),
-    contentRequirements: unique(matches(prompt, [
+    contentRequirements: unique(matches(positivePrompt, [
       [/\bimage|photo|gallery\b/i, "project-specific-images"],
       [/\btestimonial\b/i, "testimonials"],
       [/\bfaq\b/i, "faq"],
