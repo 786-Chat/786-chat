@@ -63,6 +63,14 @@ const RESERVED_TABLE_WORDS = new Set([
   "sql",
 ])
 
+const NON_RESOURCE_API_SEGMENTS = new Set([
+  "auth",
+  "email",
+  "uploads",
+  "health",
+  "status",
+])
+
 function unique(values: string[]) {
   return Array.from(new Set(values))
 }
@@ -72,6 +80,19 @@ function explicitRoutes(prompt: string) {
     prompt.matchAll(/(?:^|\s)(\/[a-z0-9][a-z0-9/_-]*)/gi),
     (match) => match[1].replace(/\/+$/, "") || "/",
   )
+}
+
+function explicitApiResources(prompt: string) {
+  const resources = new Set<string>()
+  const add = (value: string | undefined) => {
+    const resource = value?.trim().toLowerCase()
+    if (resource && !NON_RESOURCE_API_SEGMENTS.has(resource)) resources.add(resource)
+  }
+
+  for (const match of prompt.matchAll(/(?:^|\s)\/api\/([a-z][a-z0-9_-]*)\b/gi)) add(match[1])
+  for (const match of prompt.matchAll(/\bapp\/api\/([a-z][a-z0-9_-]*)\/(?:\[id\]\/)?route\.tsx?\b/gi)) add(match[1])
+
+  return Array.from(resources)
 }
 
 function explicitDatabaseTables(prompt: string) {
@@ -85,7 +106,7 @@ function explicitDatabaseTables(prompt: string) {
   // prose such as "accept standard PostgreSQL CREATE TABLE syntax" from creating
   // fake table requirements named "syntax" or "statement".
   for (const match of prompt.matchAll(
-    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\s*(?=\r?\n|\(|\bwith\b|\bfields?\b|$)/gi,
+    /\b(?:create|add|make)\s+(?:a\s+|an\s+)?(?:database\s+)?table\s*:?\s*(?:called\s+|named\s+)?([a-z][a-z0-9_]*)\s*(?=\s*:|\r?\n|\(|\bwith\b|\bfields?\b|$)/gi,
   )) {
     add(match[1])
   }
@@ -135,7 +156,9 @@ export function analyseProjectPrompt(
   const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(prompt)
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
+  const requestedApiResources = explicitApiResources(prompt)
   const explicitTables = explicitDatabaseTables(prompt)
+  const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(positivePrompt)
   const routes = unique([
     "/",
     ...pageMatches.map(([, , route]) => route),
@@ -199,7 +222,7 @@ export function analyseProjectPrompt(
     "web",
     ...(/\bmobile app|android|iphone|ipad|ios|expo|react native\b/i.test(positivePrompt) ? ["mobile"] : []),
     ...(/\bapi|backend|server|saas|crm|erp|upload|attachment\b/i.test(positivePrompt) || deliveryEmailRequested || functionalAuthRequested || systemBlueprint ? ["backend"] : []),
-    ...(/\bdatabase|postgres|neon|relational|upload|attachment\b/i.test(positivePrompt) || functionalAuthRequested || systemBlueprint ? ["database"] : []),
+    ...(databaseRequested || functionalAuthRequested || systemBlueprint ? ["database"] : []),
     ...(/\biot|sensor|device|telemetry|mqtt|bluetooth|firmware\b/i.test(positivePrompt) ? ["iot"] : []),
   ]) as ProjectPlatform[]
 
@@ -242,6 +265,7 @@ export function analyseProjectPrompt(
     databaseTables: unique([
       ...(editIntent.requestedTable ? [editIntent.requestedTable] : []),
       ...explicitTables,
+      ...(databaseRequested ? requestedApiResources : []),
     ]),
     designFamily,
     designVariant: designVariantNumber(designFamily.id, familyHistory),
