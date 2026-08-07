@@ -8,8 +8,10 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 180
 
-const SIMPLE_DEEPSEEK_TIMEOUT_MS = 125_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 45_000
+const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
+const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
+const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
 const COMPLEX_GEMINI_TIMEOUT_MS = 95_000
 const COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS = 75_000
 
@@ -96,15 +98,27 @@ function asksForBackendCapability(message: string): boolean {
   ].some((term) => message.includes(term))
 }
 
+function frontendEditWeight(message: string): number {
+  const routeWords = [
+    "page", "pages", "menu", "gallery", "about", "contact", "services", "destinations", "packages",
+    "testimonials", "faq", "newsletter", "footer", "navigation", "team", "timeline", "lightbox",
+  ]
+  const listItems = (message.match(/^\s*-\s*[^\n]+$/gim) || []).length
+  const matchedTerms = routeWords.filter((term) => message.includes(term)).length
+  return listItems + matchedTerms + Math.floor(message.length / 700)
+}
+
+function isLargeFrontendEdit(payload: GeneratorPayload, isComplex: boolean): boolean {
+  if (!payload.existing || isComplex) return false
+  const message = requestText(payload)
+  return frontendEditWeight(message) >= 12
+}
+
 function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
   const message = requestText(payload)
   if (!message) return Boolean(hasAttachments)
   if (isExplicitFrontendOnly(message)) return false
 
-  // Editing an existing website must not automatically become a full-stack generation.
-  // Only route existing edits to the large profile when the new request explicitly asks
-  // for backend/data capabilities. This keeps normal page/design/content edits compact
-  // and avoids unnecessary provider timeouts.
   if (payload.existing) return asksForBackendCapability(message)
   if (hasAttachments) return true
 
@@ -119,7 +133,7 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
   return message.length > 1_800 || routeCount >= 10 || terms.some((term) => message.includes(term))
 }
 
-function profileRules(profile: GenerationProfile, isExistingEdit: boolean): string {
+function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLargeEdit: boolean): string {
   if (profile === "full-stack") {
     return [
       "",
@@ -142,9 +156,12 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean): stri
       "- Preserve all existing files, pages, styles, navigation and functionality not requested to change.",
       "- When adding routes, create thin app/<route>/page.tsx wrappers and reuse the existing shared visual component where possible.",
       "- Prefer modifying the existing shared component/data arrays instead of duplicating large JSX or CSS.",
-      "- Keep the response under 6,500 output tokens.",
+      isLargeEdit
+        ? "- This is a multi-page frontend edit. Keep route wrappers extremely small and centralize shared sections/data so the response stays compact."
+        : "- Keep the response compact and targeted.",
       "- Do NOT return package.json, tsconfig.json, Next.js config, layout or global CSS unless the requested change genuinely requires modifying that file.",
       "- Every returned file must be complete and syntactically valid.",
+      "- Never return an unchanged file just to provide context.",
       "Return valid structured project output with no markdown outside the required object.",
     ].join("\n")
   }
@@ -174,6 +191,7 @@ async function runAttempt(
   mode: CodegenMode,
   profile: GenerationProfile,
   timeoutMs: number,
+  largeFrontendEdit: boolean,
 ): Promise<GeneratorResult> {
   const message = String(payload.message || "").trim()
   const originalMessage = String(payload._originalPrompt || message).trim()
@@ -193,15 +211,21 @@ async function runAttempt(
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
 
+  const maxOutputTokens = profile === "full-stack"
+    ? 12_000
+    : existing
+      ? (largeFrontendEdit && providerForMode(mode) === "gemini" ? 14_000 : 8_000)
+      : 8_192
+
   const generated = await Promise.race([
     generateProjectCode({
-      prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing))}`,
+      prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`,
       mode,
       abortSignal: controller.signal,
       userId: String(payload._actorUserId || "anonymous-builder"),
       userPlan: String(payload._actorPlan || "starter"),
       generationId: String(payload._generationId || ""),
-      maxOutputTokens: profile === "full-stack" ? 12_000 : existing ? 7_000 : 8_192,
+      maxOutputTokens,
       attachments,
       existing,
     }),
@@ -264,6 +288,7 @@ export async function POST(request: Request) {
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const isComplex = isComplexApplicationRequest(payload, hasAttachments)
+  const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
   const profile: GenerationProfile = isComplex ? "full-stack" : "website"
 
   let candidateModes: CodegenMode[]
@@ -271,6 +296,11 @@ export async function POST(request: Request) {
     const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
     candidateModes = [requestedMode, fallback]
   } else if (isComplex) {
+    candidateModes = ["gemini-flash", "deepseek-flash"]
+  } else if (largeFrontendEdit) {
+    // Large existing website edits were repeatedly exhausting DeepSeek's structured JSON
+    // response before Gemini had enough time to finish. Give Gemini the first attempt and
+    // retain DeepSeek Flash as the fallback. Small edits still use DeepSeek first.
     candidateModes = ["gemini-flash", "deepseek-flash"]
   } else {
     candidateModes = ["deepseek-flash", "gemini-flash"]
@@ -282,12 +312,15 @@ export async function POST(request: Request) {
     .map((mode, index) => ({ mode, reason: "Provider configuration is missing.", fallback: index > 0, configured: false, status: "missing", profile }))
 
   for (const [position, mode] of configuredModes.entries()) {
+    const provider = providerForMode(mode)
     const timeoutMs = isComplex
-      ? (providerForMode(mode) === "gemini" ? COMPLEX_GEMINI_TIMEOUT_MS : COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS)
-      : (providerForMode(mode) === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
+      ? (provider === "gemini" ? COMPLEX_GEMINI_TIMEOUT_MS : COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS)
+      : largeFrontendEdit
+        ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS)
+        : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
     const startedAt = Date.now()
     try {
-      const result = await runAttempt(request, payload, mode, profile, timeoutMs)
+      const result = await runAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit)
       attempts.push({
         mode,
         model: String(result.model || ""),
@@ -307,7 +340,7 @@ export async function POST(request: Request) {
         providerAttempts: attempts,
         providerStatus: providerSummary(attempts),
         providerFailoverUsed: position > 0,
-        requestComplexity: isComplex ? "complex" : "simple",
+        requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple",
       })
     } catch (error) {
       const reason = safeReason(error instanceof Error ? error.message : error)
@@ -334,7 +367,7 @@ export async function POST(request: Request) {
     providerStatus: providerSummary(attempts),
     providerFailoverUsed: attempts.some((attempt) => attempt.fallback),
     projectPreserved: isExistingEdit,
-    requestComplexity: isComplex ? "complex" : "simple",
+    requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple",
   }
   return NextResponse.json(body, { status: 503 })
 }
