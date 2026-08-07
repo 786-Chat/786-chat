@@ -86,11 +86,27 @@ function isExplicitFrontendOnly(message: string): boolean {
   return saysFrontendOnly || forbidsBackend
 }
 
+function asksForBackendCapability(message: string): boolean {
+  return [
+    "database", "backend", "api route", "api endpoint", "neon", "postgres", "authentication",
+    "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout",
+    "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app",
+    "kitchen dashboard", "invoice", "quotation", "crm", "erp", "inventory", "manufacturing",
+    "school management", "hospital management", "pos system", "warehouse", "saas",
+  ].some((term) => message.includes(term))
+}
+
 function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
-  if (hasAttachments || payload.existing) return true
   const message = requestText(payload)
-  if (!message) return false
+  if (!message) return Boolean(hasAttachments)
   if (isExplicitFrontendOnly(message)) return false
+
+  // Editing an existing website must not automatically become a full-stack generation.
+  // Only route existing edits to the large profile when the new request explicitly asks
+  // for backend/data capabilities. This keeps normal page/design/content edits compact
+  // and avoids unnecessary provider timeouts.
+  if (payload.existing) return asksForBackendCapability(message)
+  if (hasAttachments) return true
 
   const terms = [
     "database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing",
@@ -103,17 +119,36 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
   return message.length > 1_800 || routeCount >= 10 || terms.some((term) => message.includes(term))
 }
 
-function profileRules(profile: GenerationProfile): string {
+function profileRules(profile: GenerationProfile, isExistingEdit: boolean): string {
   if (profile === "full-stack") {
     return [
       "",
-      "Generate the complete requested application.",
+      isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.",
       "Use shared layouts and reusable components so every requested page and workflow fits in one valid structured response.",
-      "Return complete runnable files only. Do not omit routes, navigation, forms or core requested features.",
+      isExistingEdit
+        ? "For an edit, return ONLY new or modified files. Preserve all unrelated existing files and behavior."
+        : "Return complete runnable files only. Do not omit routes, navigation, forms or core requested features.",
       "Where external credentials are unavailable, use safe test adapters and document the required environment variables.",
       "Return valid structured project output with no markdown outside the required object.",
     ].join("\n")
   }
+
+  if (isExistingEdit) {
+    return [
+      "",
+      "Apply this request as a compact edit to the EXISTING Next.js website.",
+      "EDIT RELIABILITY RULES:",
+      "- Return ONLY files that are new or actually modified; never regenerate the whole project.",
+      "- Preserve all existing files, pages, styles, navigation and functionality not requested to change.",
+      "- When adding routes, create thin app/<route>/page.tsx wrappers and reuse the existing shared visual component where possible.",
+      "- Prefer modifying the existing shared component/data arrays instead of duplicating large JSX or CSS.",
+      "- Keep the response under 6,500 output tokens.",
+      "- Do NOT return package.json, tsconfig.json, Next.js config, layout or global CSS unless the requested change genuinely requires modifying that file.",
+      "- Every returned file must be complete and syntactically valid.",
+      "Return valid structured project output with no markdown outside the required object.",
+    ].join("\n")
+  }
+
   return [
     "",
     "Generate a compact complete runnable Next.js App Router website.",
@@ -160,13 +195,13 @@ async function runAttempt(
 
   const generated = await Promise.race([
     generateProjectCode({
-      prompt: `${originalMessage || message}${profileRules(profile)}`,
+      prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing))}`,
       mode,
       abortSignal: controller.signal,
       userId: String(payload._actorUserId || "anonymous-builder"),
       userPlan: String(payload._actorPlan || "starter"),
       generationId: String(payload._generationId || ""),
-      maxOutputTokens: profile === "full-stack" ? 12_000 : 8_192,
+      maxOutputTokens: profile === "full-stack" ? 12_000 : existing ? 7_000 : 8_192,
       attachments,
       existing,
     }),
