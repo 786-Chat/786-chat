@@ -44,24 +44,37 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       path,
       purpose: `Production ${capabilities.join("/")} backend implementation`,
     }))
+
+  // Backend files deliberately come before page files. Provider responses can be
+  // truncated on large full-stack requests, so schema, manifest, server adapters
+  // and API routes must be emitted before cosmetic/frontend work. Validation then
+  // has the mandatory backend artifacts even when a provider reaches its output cap.
   const files = [
     { path: "package.json", purpose: "Allowed dependencies and build scripts" },
     { path: "tsconfig.json", purpose: "TypeScript compiler configuration" },
     { path: "next.config.mjs", purpose: "Next.js runtime configuration" },
+    ...backendFiles,
+    ...systemFiles,
     { path: "app/layout.tsx", purpose: "Application shell and metadata" },
     { path: "app/globals.css", purpose: "Project-specific design system and responsive styles" },
     ...specification.routes.map((route) => ({
       path: routeFile(route),
       purpose: `${route} route`,
     })),
-    ...systemFiles,
-    ...backendFiles,
     ...mobileFiles,
   ]
+
+  const requiresAuthentication = capabilities.includes("authentication")
 
   return {
     files,
     steps: [
+      ...(capabilities.length > 0
+        ? [
+            "Generate every mandatory backend file before any cosmetic or frontend rewrite",
+            "Implement database schema, migrations, manifest, server adapters and requested API routes",
+          ]
+        : []),
       "Create the application shell and design tokens",
       "Implement every requested route",
       "Add required controls and interactions",
@@ -69,7 +82,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       "Validate syntax, imports, requirements and project specificity",
       "Build the project in the isolated runner",
       ...(capabilities.length > 0
-        ? ["Implement and validate every declared backend capability through real server routes and provider adapters"]
+        ? ["Validate every declared backend capability through real server routes and provider adapters"]
         : []),
       ...(specification.systemBlueprint
         ? [
@@ -89,7 +102,12 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       "Project content is specific to the request",
       "No generic fallback homepage is accepted as a verified build",
       ...(capabilities.length > 0
-        ? ["Backend manifest, migrations, server adapters and authenticated APIs pass production acceptance"]
+        ? [
+            "Backend manifest, migrations, server adapters and API routes pass production acceptance",
+            requiresAuthentication
+              ? "Authentication routes and protected data APIs are complete before frontend acceptance"
+              : "Public data APIs remain functional without inventing authentication dependencies",
+          ]
         : []),
       ...(specification.systemBlueprint
         ? [
