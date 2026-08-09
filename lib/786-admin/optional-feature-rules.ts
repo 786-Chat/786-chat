@@ -98,6 +98,12 @@ Currency:
 - Use Intl.NumberFormat when practical.
 - Do not describe project conversion rates as live rates.
 
+Booking:
+- When the user requests Booking, Reservations, Appointments, or a /booking route, create app/booking/page.tsx as a functional booking page.
+- app/booking/page.tsx itself must contain a real <form> with submit handling using onSubmit, action, or formAction, plus date/time or appointment/booking controls.
+- Do not make app/booking/page.tsx only a thin wrapper around a shared component when submit-booking is required; keep the functional form and its submit handler in the booking route file so requirement validation can verify it directly.
+- The submit action must update visible state, call a real requested API/action, or otherwise perform a concrete booking action. Do not render a decorative form with no submit behaviour.
+
 Real pages:
 - When requested, create real App Router files such as app/booking/page.tsx, app/checkout/page.tsx, app/payment-method/page.tsx, app/language/page.tsx, and app/currency/page.tsx.
 - Navigation must point to matching real routes.
