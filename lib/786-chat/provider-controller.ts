@@ -12,8 +12,8 @@ const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 60_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 60_000
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 75_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 75_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -139,7 +139,7 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLar
       "",
       isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.",
       "FULL-STACK COMPACTNESS RULES — MANDATORY:",
-      "- Keep the complete structured response below 7,000 output tokens while preserving every required route and backend capability.",
+      "- Keep the complete structured response below 8,000 output tokens while preserving every required route and backend capability.",
       "- Use one shared frontend component for navigation, footer, cards and page sections. Requested page files must be thin wrappers whenever possible.",
       "- Do not duplicate JSX, navigation arrays, footer markup, product data, forms, or CSS between routes.",
       "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG art, data URLs or base64 assets.",
@@ -220,7 +220,7 @@ async function runAttempt(
   request.signal.addEventListener("abort", abortFromClient, { once: true })
 
   const maxOutputTokens = profile === "full-stack"
-    ? 7_000
+    ? 8_192
     : existing
       ? (largeFrontendEdit && providerForMode(mode) === "gemini" ? 14_000 : 8_000)
       : 8_192
@@ -304,14 +304,8 @@ export async function POST(request: Request) {
     const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
     candidateModes = [requestedMode, fallback]
   } else if (isComplex) {
-    // DeepSeek Flash is the production primary for full-stack generation.
-    // Keep Gemini Flash as fallback, but bound both attempts so one slow provider
-    // cannot consume almost the entire request lifetime before failover starts.
     candidateModes = ["deepseek-flash", "gemini-flash"]
   } else if (largeFrontendEdit) {
-    // Large existing website edits were repeatedly exhausting DeepSeek's structured JSON
-    // response before Gemini had enough time to finish. Give Gemini the first attempt and
-    // retain DeepSeek Flash as the fallback. Small edits still use DeepSeek first.
     candidateModes = ["gemini-flash", "deepseek-flash"]
   } else {
     candidateModes = ["deepseek-flash", "gemini-flash"]
