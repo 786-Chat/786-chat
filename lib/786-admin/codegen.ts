@@ -117,9 +117,9 @@ function selectedModel(mode: CodegenMode): { model: string; reason: string } {
     return { model: BUILDER_MODELS["gemini-pro"], reason: "Gemini Pro selected manually." }
   }
   if (mode === "deepseek-pro") {
-    return { model: BUILDER_MODELS["deepseek-pro"], reason: "DeepSeek Pro selected manually." }
+    return { model: "deepseek-v4-pro", reason: "DeepSeek V4 Pro selected manually." }
   }
-  return { model: BUILDER_MODELS["deepseek-flash"], reason: "DeepSeek Flash selected." }
+  return { model: "deepseek-v4-flash", reason: "DeepSeek V4 Flash selected." }
 }
 
 function extractProjectJson(text: string): ProjectObject {
@@ -192,11 +192,12 @@ function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Ar
   return content
 }
 
-async function runDeepSeek(input: CodegenInput, prompt: string) {
+async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
   if (!apiKey) throw new Error("DeepSeek direct API key is not configured.")
 
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
+  const model = mode === "deepseek-pro" ? "deepseek-v4-pro" : "deepseek-v4-flash"
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -204,14 +205,15 @@ async function runDeepSeek(input: CodegenInput, prompt: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
+      thinking: { type: "disabled" },
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: Math.min(requestedTokens, 8_192),
+      max_tokens: Math.min(requestedTokens, 48_000),
       stream: false,
     }),
     signal: input.abortSignal,
@@ -299,7 +301,7 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const prompt = buildPrompt(input)
 
   const result = mode === "deepseek-flash" || mode === "deepseek-pro"
-    ? await runDeepSeek(input, prompt)
+    ? await runDeepSeek(input, prompt, mode)
     : await runGemini(input, prompt, picked.model)
 
   const files: Record<string, string> = {}
