@@ -12,8 +12,8 @@ const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-const COMPLEX_GEMINI_TIMEOUT_MS = 95_000
-const COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS = 75_000
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 60_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 60_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -296,7 +296,10 @@ export async function POST(request: Request) {
     const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
     candidateModes = [requestedMode, fallback]
   } else if (isComplex) {
-    candidateModes = ["gemini-flash", "deepseek-flash"]
+    // DeepSeek Flash is the production primary for full-stack generation.
+    // Keep Gemini Flash as fallback, but bound both attempts so one slow provider
+    // cannot consume almost the entire request lifetime before failover starts.
+    candidateModes = ["deepseek-flash", "gemini-flash"]
   } else if (largeFrontendEdit) {
     // Large existing website edits were repeatedly exhausting DeepSeek's structured JSON
     // response before Gemini had enough time to finish. Give Gemini the first attempt and
@@ -314,7 +317,7 @@ export async function POST(request: Request) {
   for (const [position, mode] of configuredModes.entries()) {
     const provider = providerForMode(mode)
     const timeoutMs = isComplex
-      ? (provider === "gemini" ? COMPLEX_GEMINI_TIMEOUT_MS : COMPLEX_DEEPSEEK_FALLBACK_TIMEOUT_MS)
+      ? (provider === "deepseek" ? COMPLEX_DEEPSEEK_TIMEOUT_MS : COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS)
       : largeFrontendEdit
         ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS)
         : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
