@@ -138,11 +138,19 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLar
     return [
       "",
       isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.",
-      "Use shared layouts and reusable components so every requested page and workflow fits in one valid structured response.",
+      "FULL-STACK COMPACTNESS RULES — MANDATORY:",
+      "- Keep the complete structured response below 7,000 output tokens while preserving every required route and backend capability.",
+      "- Use one shared frontend component for navigation, footer, cards and page sections. Requested page files must be thin wrappers whenever possible.",
+      "- Do not duplicate JSX, navigation arrays, footer markup, product data, forms, or CSS between routes.",
+      "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG art, data URLs or base64 assets.",
+      "- Centralize reusable server concerns such as query helpers, Zod schemas and response helpers in lib/server instead of repeating boilerplate in every API route.",
+      "- API collection/item files may be thin adapters to shared validated handlers when that preserves the required HTTP methods and security rules.",
+      "- Keep backend docs, manifest, schema and migration concise but complete. Never omit a mandatory file to save tokens.",
+      "- Prefer compact TypeScript expressions and reusable helpers over repeated handler bodies.",
       isExistingEdit
-        ? "For an edit, return ONLY new or modified files. Preserve all unrelated existing files and behavior."
-        : "Return complete runnable files only. Do not omit routes, navigation, forms or core requested features.",
-      "Where external credentials are unavailable, use safe test adapters and document the required environment variables.",
+        ? "- For an edit, return ONLY new or modified files. Preserve all unrelated existing files and behavior."
+        : "- Return complete runnable files only. Do not omit routes, navigation, forms or core requested features.",
+      "- Where external credentials are unavailable, document required environment variable names only; never create mock providers or secret values.",
       "Return valid structured project output with no markdown outside the required object.",
     ].join("\n")
   }
@@ -212,7 +220,7 @@ async function runAttempt(
   request.signal.addEventListener("abort", abortFromClient, { once: true })
 
   const maxOutputTokens = profile === "full-stack"
-    ? 12_000
+    ? 7_000
     : existing
       ? (largeFrontendEdit && providerForMode(mode) === "gemini" ? 14_000 : 8_000)
       : 8_192
