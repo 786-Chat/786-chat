@@ -1,5 +1,5 @@
 import "server-only"
-import { generateText, type FilePart, type ImagePart, type TextPart } from "ai"
+import { generateText, Output, type FilePart, type ImagePart, type TextPart } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 
@@ -258,6 +258,11 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const result = await generateText({
     model,
     system: SYSTEM_PROMPT,
+    output: Output.object({
+      schema: ProjectSchema,
+      name: "project",
+      description: "Complete runnable Next.js project with full file contents.",
+    }),
     ...(input.attachments?.length
       ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] }
       : { prompt }),
@@ -282,7 +287,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   })
 
   return {
-    object: extractProjectJson(result.text),
+    object: result.output,
     usage: result.usage,
   }
 }
