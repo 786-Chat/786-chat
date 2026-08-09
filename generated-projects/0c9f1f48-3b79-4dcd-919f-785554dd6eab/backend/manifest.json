@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "name": "saffron-reservations-backend",
+  "description": "Backend for Saffron Reservations",
+  "capabilities": ["database", "api"],
+  "database": {
+    "provider": "neon-postgres",
+    "schema": "sql/schema.sql",
+    "migrations": ["sql/migrations/001_initial.sql"]
+  },
+  "api": {
+    "reservations": {
+      "path": "/api/reservations",
+      "methods": ["GET", "POST"]
+    },
+    "reservation": {
+      "path": "/api/reservations/[id]",
+      "methods": ["GET", "PATCH", "DELETE"]
+    }
+  },
+  "env": ["DATABASE_URL"]
+}
