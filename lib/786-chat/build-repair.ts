@@ -251,20 +251,29 @@ function deterministicClientBoundaryRepair(context: RepairContext, logs: string)
 }
 
 function deterministicNeonResultRepair(context: RepairContext, logs: string) {
-  if (!/Property ['"]0['"] does not exist on type|FullQueryResults|QueryResult.*not.*index/i.test(logs)) {
+  if (!/Property ['"](?:0|length)['"] does not exist on type|FullQueryResults|QueryResult.*not.*index/i.test(logs)) {
     return null
   }
+
   const files: Record<string, string> = {}
   for (const [path, content] of Object.entries(context.files)) {
     if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path)) continue
+
     const repaired = content.replace(
-      /\b([A-Za-z_$][\w$]*)\[0\]/g,
-      "($1 as unknown as Array<Record<string, unknown>>)[0]",
+      /\b(const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+sql(`[^`]*`)\s*;/g,
+      (_statement, declaration: string, name: string, query: string) =>
+        `${declaration} ${name} = (await sql${query}) as unknown as Array<Record<string, any>>;`,
     )
+
     if (repaired !== content) files[path] = repaired
   }
   if (!Object.keys(files).length) return null
-  return { files, removedPaths: [], model: "deterministic-neon-result-index" }
+
+  return {
+    files,
+    removedPaths: [],
+    model: "deterministic-neon-query-result-array",
+  }
 }
 
 async function persistRepair(
