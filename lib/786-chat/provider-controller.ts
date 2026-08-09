@@ -13,7 +13,7 @@ const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
 const COMPLEX_DEEPSEEK_TIMEOUT_MS = 75_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 110_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 170_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -129,9 +129,6 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
     "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app",
     "kitchen dashboard", "portal", "invoice", "quotation", "booking system", "table booking",
   ]
-  // Bullet count is deliberately NOT a complexity signal. A normal website prompt
-  // often uses many bullets for pages/design/features and must stay on the website
-  // generation profile unless it actually asks for backend/system capabilities.
   return message.length > 2_800 || terms.some((term) => message.includes(term))
 }
 
@@ -224,7 +221,7 @@ async function runAttempt(
 
   const provider = providerForMode(mode)
   const maxOutputTokens = profile === "full-stack"
-    ? (provider === "gemini" ? 16_000 : 8_192)
+    ? (provider === "gemini" ? 48_000 : 8_192)
     : existing
       ? (provider === "gemini" ? 14_000 : 8_000)
       : (provider === "gemini" ? 14_000 : 8_192)
