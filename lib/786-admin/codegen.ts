@@ -80,6 +80,7 @@ Rules:
 - Keep CSS compact and CSS-first for animation.
 - Every identifier used in JSX must be declared or imported.
 - For Neon, initialize the connection lazily inside getSql/getDb and never require DATABASE_URL during module import.
+- For Neon query results, never call .length or [0] on the raw tagged-template return type. Either use a query() helper that returns { rows } and access result.rows, or explicitly normalize the awaited result to a typed row array before indexing.
 - Use parameterized database queries.
 - Every requested backend API/schema/migration file must be real code, not mock data.
 - Return JSON only, with no markdown fences or prose outside the JSON object.`
