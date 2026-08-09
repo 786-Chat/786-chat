@@ -191,6 +191,13 @@ function hasRouteMethod(content: string, method: "GET" | "POST" | "PATCH" | "DEL
   return functionExport.test(content) || constExport.test(content)
 }
 
+function hasZodValidation(content: string) {
+  const directSchema = /\bz\.(?:object|string|coerce|array|union|enum|number|boolean|date)\b/.test(content)
+  const importsZod = /from\s+["']zod["']/.test(content)
+  const parsesInput = /\.(?:safeParse|parse|parseAsync)\s*\(/.test(content)
+  return directSchema || (importsZod && parsesInput) || parsesInput
+}
+
 export function assessGeneratedBackend(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -331,7 +338,7 @@ export function assessGeneratedBackend(
       if (requiresAuthentication && (!hasGuard(collection) || !hasGuard(item))) {
         errors.push(`API resource ${resource} must authenticate and enforce ownership.`)
       }
-      if (!/\bz\.(?:object|string|coerce)\b/.test(`${collection}\n${item}`)) {
+      if (!hasZodValidation(`${collection}\n${item}`)) {
         errors.push(`API resource ${resource} must validate input with Zod.`)
       }
       if (!hasRouteMethod(collection, "GET") ||
