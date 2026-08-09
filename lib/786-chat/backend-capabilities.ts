@@ -185,6 +185,12 @@ function manifestDeclaresCapability(manifest: Record<string, unknown>, capabilit
   return false
 }
 
+function hasRouteMethod(content: string, method: "GET" | "POST" | "PATCH" | "DELETE") {
+  const functionExport = new RegExp(`export\\s+async\\s+function\\s+${method}\\b`)
+  const constExport = new RegExp(`export\\s+const\\s+${method}\\s*=`)
+  return functionExport.test(content) || constExport.test(content)
+}
+
 export function assessGeneratedBackend(
   specification: ProjectSpecification,
   files: Record<string, string>,
@@ -328,11 +334,11 @@ export function assessGeneratedBackend(
       if (!/\bz\.(?:object|string|coerce)\b/.test(`${collection}\n${item}`)) {
         errors.push(`API resource ${resource} must validate input with Zod.`)
       }
-      if (!/export\s+async\s+function\s+GET/.test(collection) ||
-          !/export\s+async\s+function\s+POST/.test(collection) ||
-          !/export\s+async\s+function\s+GET/.test(item) ||
-          !/export\s+async\s+function\s+PATCH/.test(item) ||
-          !/export\s+async\s+function\s+DELETE/.test(item)) {
+      if (!hasRouteMethod(collection, "GET") ||
+          !hasRouteMethod(collection, "POST") ||
+          !hasRouteMethod(item, "GET") ||
+          !hasRouteMethod(item, "PATCH") ||
+          !hasRouteMethod(item, "DELETE")) {
         errors.push(`Backend CRUD API is incomplete: ${resource}`)
       }
     }
