@@ -1,0 +1,12 @@
+{
+  "projectId": "185e6dfb-7ac5-4605-b27d-727b5fcc6627",
+  "buildId": "0bcf675a-8580-4847-8111-610073ca6d7b",
+  "title": "Saffron Reservations",
+  "sourceVersion": "16ebbae22787647b33323e53817b4ad2ca3434bf9437034b1ed9c162898407dd",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-09T22:16:46.346Z"
+}
