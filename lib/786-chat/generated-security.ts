@@ -44,13 +44,28 @@ function parsePackageJson(source: string | undefined) {
   }
 }
 
+function isPlaceholderEnvExample(path: string, content: string) {
+  if (!/(?:^|\/)\.env\.example$/i.test(path)) return false
+  const meaningfulLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+  if (meaningfulLines.length === 0) return true
+  return meaningfulLines.every((line) => {
+    const match = line.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/)
+    if (!match) return false
+    const value = match[2].trim().replace(/^['"]|['"]$/g, "")
+    return value === "" || /^(?:your[_-].*|change[_-]?me|example|placeholder|<.*>|\$\{.*\})$/i.test(value)
+  })
+}
+
 export function validateGeneratedSecurity(files: Record<string, string>): GeneratedSecurityResult {
   const errors: GeneratedSecurityIssue[] = []
   const warnings: GeneratedSecurityIssue[] = []
 
   for (const [path, content] of Object.entries(files)) {
     const normalizedPath = path.replace(/\\/g, "/").replace(/^\.\//, "")
-    if (SECRET_PATH.test(normalizedPath)) {
+    if (SECRET_PATH.test(normalizedPath) && !isPlaceholderEnvExample(normalizedPath, content)) {
       errors.push({ code: "SECRET_FILE", path, message: "Credential and private-key files cannot be saved or deployed." })
     }
     for (const [kind, pattern] of EMBEDDED_SECRET) {
