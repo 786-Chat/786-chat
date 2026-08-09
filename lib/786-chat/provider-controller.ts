@@ -9,11 +9,11 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
 const COMPLEX_DEEPSEEK_TIMEOUT_MS = 75_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 75_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 110_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -129,8 +129,10 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
     "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app",
     "kitchen dashboard", "portal", "invoice", "quotation", "booking system", "table booking",
   ]
-  const routeCount = (message.match(/^\s*-\s*[a-z0-9][^\n]*$/gim) || []).length
-  return message.length > 1_800 || routeCount >= 10 || terms.some((term) => message.includes(term))
+  // Bullet count is deliberately NOT a complexity signal. A normal website prompt
+  // often uses many bullets for pages/design/features and must stay on the website
+  // generation profile unless it actually asks for backend/system capabilities.
+  return message.length > 2_800 || terms.some((term) => message.includes(term))
 }
 
 function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLargeEdit: boolean): string {
@@ -139,7 +141,7 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLar
       "",
       isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.",
       "FULL-STACK COMPACTNESS RULES — MANDATORY:",
-      "- Keep the complete structured response below 8,000 output tokens while preserving every required route and backend capability.",
+      "- Keep the complete structured response compact while preserving every required route and backend capability.",
       "- Use one shared frontend component for navigation, footer, cards and page sections. Requested page files must be thin wrappers whenever possible.",
       "- Do not duplicate JSX, navigation arrays, footer markup, product data, forms, or CSS between routes.",
       "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG art, data URLs or base64 assets.",
@@ -178,17 +180,15 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLar
     "",
     "Generate a compact complete runnable Next.js App Router website.",
     "HARD COMPACTNESS RULES:",
-    "- Return no more than 12 files total.",
-    "- Use one shared components/SitePage.tsx component for all visual sections.",
-    "- Every requested route file must be a thin wrapper under 12 lines that imports SitePage and passes a page key.",
+    "- Use one shared components/SitePage.tsx component for all visual sections and shared data.",
+    "- Every requested route file must be a thin wrapper under 8 lines that imports SitePage and passes a page key.",
     "- Put navigation, footer, cards, forms, FAQ, testimonials and shared arrays only once in SitePage.tsx.",
-    "- Keep app/globals.css below 220 lines and do not include data URLs, base64 images, inline SVG artwork or repeated CSS.",
+    "- Keep app/globals.css below 150 lines and do not include data URLs, base64 images, inline SVG artwork or repeated CSS.",
     "- Use remote image URLs only as CSS background URLs or next/image src strings; never embed image bytes.",
-    "- Include package.json, tsconfig.json, next-env.d.ts, next.config.mjs, postcss.config.mjs, app/layout.tsx, app/page.tsx and app/globals.css.",
-    "- package.json must include next, react, react-dom, typescript, tailwindcss, postcss, autoprefixer and lucide-react with dev/build/start scripts.",
+    "- Include only the configuration files needed for a runnable Next.js project; keep each configuration file minimal.",
     "- Implement requested interactions with compact React state in the shared component.",
     "- Create every requested route with working navigation and responsive design.",
-    "- The entire JSON response must remain below 7,500 output tokens. Completeness is more important than decorative repetition.",
+    "- Avoid repeated copy and decorative boilerplate. Completeness is more important than decorative repetition.",
     "Return valid structured project output with no markdown outside the required object.",
   ].join("\n")
 }
@@ -219,11 +219,12 @@ async function runAttempt(
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
 
+  const provider = providerForMode(mode)
   const maxOutputTokens = profile === "full-stack"
-    ? 8_192
+    ? (provider === "gemini" ? 16_000 : 8_192)
     : existing
-      ? (largeFrontendEdit && providerForMode(mode) === "gemini" ? 14_000 : 8_000)
-      : 8_192
+      ? (provider === "gemini" ? 14_000 : 8_000)
+      : (provider === "gemini" ? 14_000 : 8_192)
 
   const generated = await Promise.race([
     generateProjectCode({
