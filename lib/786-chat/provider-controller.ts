@@ -12,8 +12,8 @@ const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 75_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 170_000
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 20_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 145_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -305,7 +305,7 @@ export async function POST(request: Request) {
     const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
     candidateModes = [requestedMode, fallback]
   } else if (isComplex) {
-    candidateModes = ["deepseek-flash", "gemini-flash"]
+    candidateModes = ["gemini-flash", "deepseek-flash"]
   } else if (largeFrontendEdit) {
     candidateModes = ["gemini-flash", "deepseek-flash"]
   } else {
