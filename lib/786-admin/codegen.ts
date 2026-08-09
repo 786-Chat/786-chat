@@ -104,7 +104,6 @@ function gatewayConfigured() {
 }
 
 function selectedMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode {
-  // Images/files always use Gemini Flash. Never silently upgrade to a paid Pro model.
   if (hasAttachments) return "gemini-flash"
   return mode === "auto" ? "deepseek-flash" : mode
 }
@@ -130,13 +129,11 @@ function extractProjectJson(text: string): ProjectObject {
   const start = trimmed.indexOf("{")
   if (start < 0) throw new Error("Provider response did not contain a JSON object.")
 
-  // Find the last complete closing brace. This tolerates provider preambles or
-  // trailing text while still validating the resulting project with Zod.
   for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
     try {
       return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1)))
     } catch {
-      // Try an earlier closing brace. If none parse, report a structured error.
+      // Try an earlier complete object boundary.
     }
   }
 
@@ -198,6 +195,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
   if (!apiKey) throw new Error("DeepSeek direct API key is not configured.")
 
+  const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -212,7 +210,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string) {
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: Math.min(input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan), 7_000),
+      max_tokens: Math.min(requestedTokens, 8_192),
       stream: false,
     }),
     signal: input.abortSignal,
@@ -255,6 +253,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
     throw new Error("Gemini is not configured.")
   }
 
+  const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const result = await generateText({
     model,
     system: SYSTEM_PROMPT,
@@ -262,7 +261,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
       ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] }
       : { prompt }),
     temperature: 0.1,
-    maxOutputTokens: Math.min(input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan), 7_000),
+    maxOutputTokens: requestedTokens,
     maxRetries: 0,
     abortSignal: input.abortSignal,
     ...(typeof model === "string" ? {
@@ -293,9 +292,6 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const picked = selectedModel(mode)
   const prompt = buildPrompt(input)
 
-  // Run exactly the provider selected by provider-controller. Provider failover
-  // belongs to the outer controller so one codegen call cannot silently consume
-  // a second provider's timeout budget.
   const result = mode === "deepseek-flash" || mode === "deepseek-pro"
     ? await runDeepSeek(input, prompt)
     : await runGemini(input, prompt, picked.model)
