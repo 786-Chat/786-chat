@@ -1,0 +1,19 @@
+{
+  "name": "Bean House Backend",
+  "version": 1,
+  "description": "Neon PostgreSQL backend for customer management",
+  "capabilities": ["database", "api"],
+  "providers": {
+    "database": {
+      "type": "neon",
+      "env": ["DATABASE_URL"],
+      "migration": "sql/migrations/001_initial.sql"
+    },
+    "api": {
+      "routes": [
+        "app/api/customers/route.ts",
+        "app/api/customers/[id]/route.ts"
+      ]
+    }
+  }
+}
