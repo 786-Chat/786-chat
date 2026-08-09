@@ -15,12 +15,17 @@ on:
         description: Trusted 786.chat base URL
         required: true
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/generated-project-build.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: generated-project-${{ inputs.project_id }}
+  group: generated-project-${{ inputs.project_id || '16134f23-7d35-4af8-a243-7688694f6d05' }}
   cancel-in-progress: false
 
 jobs:
@@ -28,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      BUILD_ID: ${{ inputs.build_id }}
-      BASE_URL: ${{ inputs.base_url }}
+      BUILD_ID: ${{ inputs.build_id || 'c1887131-0756-40f3-b8be-07d522b67654' }}
+      BASE_URL: ${{ inputs.base_url || 'https://786.chat' }}
       RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
     steps:
       - name: Validate runner configuration
