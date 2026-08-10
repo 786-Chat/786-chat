@@ -16,3 +16,10 @@ test("singular create table syntax accepts a trailing colon", async () => {
   const source = await read("lib/786-chat/specification.ts")
   assert.match(source, /\?=\\s\*:/)
 })
+
+test("backend API validation never invents a records resource", async () => {
+  const source = await read("lib/786-chat/backend-capabilities.ts")
+  assert.doesNotMatch(source, /\? \["records"\]/)
+  assert.doesNotMatch(source, /return resource \|\| "records"/)
+  assert.match(source, /\.filter\(Boolean\)/)
+})
