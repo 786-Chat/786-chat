@@ -25,7 +25,7 @@ function normalizedResource(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-  return resource || "records"
+  return resource
 }
 
 export function backendCapabilities(specification: ProjectSpecification): BackendCapability[] {
@@ -48,12 +48,9 @@ export function backendApiResources(specification: ProjectSpecification) {
   return unique([
     ...(specification.systemBlueprint?.apiResources || []),
     ...(specification.databaseTables || []),
-    ...(specification.backendRequirements.includes("api") &&
-    !specification.systemBlueprint?.apiResources.length &&
-    !specification.databaseTables.length
-      ? ["records"]
-      : []),
-  ]).map(normalizedResource)
+  ])
+    .map(normalizedResource)
+    .filter(Boolean)
 }
 
 export function requiredBackendFiles(specification: ProjectSpecification) {
