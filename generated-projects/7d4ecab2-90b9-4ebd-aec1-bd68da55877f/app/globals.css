@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #05070a;
+  --cyan: #00f0ff;
+  --magenta: #ff00e5;
+  --acid: #c8ff00;
+  --panel: #0a0f14;
+  --line: #1a2a33;
+}
+
+body {
+  background: var(--bg);
+  color: #d0e0e8;
+  font-family: 'Courier New', monospace;
+}
+
+/* Cyberpunk neon utilities */
+.neon-text {
+  text-shadow: 0 0 5px var(--cyan), 0 0 10px var(--cyan);
+}
+
+.neon-border {
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 5px var(--cyan), inset 0 0 5px rgba(0, 240, 255, 0.2);
+}
+
+.clip-corner {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 240, 255, 0.03) 2px,
+    rgba(0, 240, 255, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scan-sweep::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 20%;
+  background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.1), transparent);
+  animation: scan 3s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(2px, -2px); }
+  60% { transform: translate(-1px, -1px); }
+  80% { transform: translate(1px, 1px); }
+  100% { transform: translate(0); }
+}
+
+.glitch:hover {
+  animation: glitch 0.3s infinite;
+}
+
+/* Grid background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Form inputs */
+.terminal-input {
+  background: #0a0f14;
+  border: 1px solid #1a2a33;
+  color: #d0e0e8;
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.terminal-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 5px rgba(0, 240, 255, 0.3);
+}
+
+.terminal-input::placeholder {
+  color: #4a5a63;
+}
+
+/* Buttons */
+.neon-button {
+  background: transparent;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 0.5rem 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.neon-button:hover {
+  background: rgba(0, 240, 255, 0.1);
+  box-shadow: 0 0 10px var(--cyan);
+}
+
+.neon-button:active {
+  transform: scale(0.95);
+}
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--cyan);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+}
+
+.data-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #0f1a20;
+}
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+
+.badge-cyan {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.badge-magenta {
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+
+.badge-acid {
+  border-color: var(--acid);
+  color: var(--acid);
+}
