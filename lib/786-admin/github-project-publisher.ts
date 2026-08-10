@@ -68,8 +68,9 @@ export async function publishGeneratedProjectToGitHub(input: {
   const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
   const baseBranch = process.env.GITHUB_GENERATED_BASE_BRANCH?.trim() || DEFAULT_BASE_BRANCH
   const projectSegment = cleanSegment(input.projectId) || "project"
-  const buildSegment = cleanSegment(input.buildId).slice(0, 20) || Date.now().toString()
-  const branch = `generated/${projectSegment}/${buildSegment}`
+  const buildSegment = cleanSegment(input.buildId).slice(0, 20) || "build"
+  const attemptSegment = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+  const branch = `generated/${projectSegment}/${buildSegment}-${attemptSegment}`
   const directory = `generated-projects/${projectSegment}`
 
   const baseRef = await githubRequest<GitHubRef>(
