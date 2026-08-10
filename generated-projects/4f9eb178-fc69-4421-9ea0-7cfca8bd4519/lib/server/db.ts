@@ -12,6 +12,8 @@ export function getSql() {
 
 export async function query<T = any>(text: string, params: unknown[] = []): Promise<{ rows: T[] }> {
   const sql = getSql();
-  const rows = await sql.query(text, params);
+  const rows = params.length > 0
+    ? await sql(text, params, { arrayMode: false, fullResults: false })
+    : await sql(text, [], { arrayMode: false, fullResults: false });
   return { rows: rows as T[] };
 }
