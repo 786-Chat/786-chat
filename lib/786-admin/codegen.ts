@@ -81,6 +81,7 @@ Rules:
 - Every identifier used in JSX must be declared or imported.
 - For Neon, initialize the connection lazily inside getSql/getDb and never require DATABASE_URL during module import.
 - For Neon query results, never call .length or [0] on the raw tagged-template return type. Either use a query() helper that returns { rows } and access result.rows, or explicitly normalize the awaited result to a typed row array before indexing.
+- When using neon() as a query function with a SQL string, pass bind parameters as ONE array: await sql(text, params || []). NEVER spread params into positional arguments such as sql(text, ...params); that is invalid for @neondatabase/serverless and can fail at runtime with errors such as "t.map is not a function".
 - Use parameterized database queries.
 - Every requested backend API/schema/migration file must be real code, not mock data.
 - Return JSON only, with no markdown fences or prose outside the JSON object.`
@@ -218,105 +219,51 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
     }),
     signal: input.abortSignal,
   })
-
-  const payload = await response.json().catch(() => ({})) as {
-    error?: { message?: string }
-    choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
-    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-  }
-
-  if (!response.ok) {
-    throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
-  }
-
-  const choice = payload.choices?.[0]
-  if (choice?.finish_reason === "length") {
-    throw new Error("DeepSeek JSON response was truncated before all project files were returned.")
-  }
-
-  return {
-    object: extractProjectJson(choice?.message?.content || ""),
-    usage: {
-      inputTokens: payload.usage?.prompt_tokens || 0,
-      outputTokens: payload.usage?.completion_tokens || 0,
-      totalTokens: payload.usage?.total_tokens || 0,
-    },
-  }
+  if (!response.ok) throw new Error(`DeepSeek failed (${response.status})`)
+  const data = await response.json()
+  const text = data?.choices?.[0]?.message?.content || ""
+  return { text, model, usage: data?.usage }
 }
 
-async function runGemini(input: CodegenInput, prompt: string, modelName: string) {
-  const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
-  const directModel = modelName.replace(/^google\//, "")
-
-  const model = googleApiKey
-    ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel)
-    : modelName
-
-  if (!googleApiKey && !gatewayConfigured()) {
-    throw new Error("Gemini is not configured.")
-  }
-
-  const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
-  const result = await generateText({
-    model,
+async function runGemini(input: CodegenInput, prompt: string, mode: CodegenMode) {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim()
+  if (!apiKey && !gatewayConfigured()) throw new Error("Gemini API access is not configured.")
+  const google = createGoogleGenerativeAI(apiKey ? { apiKey } : undefined)
+  const selected = selectedModel(mode)
+  const response = await generateText({
+    model: google(selected.model),
     system: SYSTEM_PROMPT,
-    output: Output.object({
-      schema: ProjectSchema,
-      name: "project",
-      description: "Complete runnable Next.js project with full file contents.",
-    }),
-    ...(input.attachments?.length
-      ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] }
-      : { prompt }),
-    temperature: 0.1,
-    maxOutputTokens: requestedTokens,
-    maxRetries: 0,
+    messages: [{ role: "user", content: attachmentContent(prompt, input.attachments || []) }],
+    maxOutputTokens: input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan),
     abortSignal: input.abortSignal,
-    ...(typeof model === "string" ? {
-      providerOptions: {
-        gateway: {
-          user: input.userId || "anonymous-builder",
-          tags: [
-            "feature:builder-codegen",
-            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
-            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
-            ...(input.generationId ? [`generation:${input.generationId}`] : []),
-          ],
-          zeroDataRetention: true,
-        },
-      },
-    } : {}),
   })
-
-  return {
-    object: result.output,
-    usage: result.usage,
-  }
+  return { text: response.text, model: selected.model, usage: response.usage }
 }
 
-export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
-  const attachments = input.attachments || []
-  const mode = selectedMode(input.mode ?? "auto", attachments.length > 0)
-  const picked = selectedModel(mode)
+export async function generateProjectFiles(input: CodegenInput): Promise<CodegenResult> {
+  const mode = selectedMode(input.mode || "auto", Boolean(input.attachments?.length))
   const prompt = buildPrompt(input)
+  const selected = selectedModel(mode)
+  let generated: { text: string; model: string; usage: any }
 
-  const result = mode === "deepseek-flash" || mode === "deepseek-pro"
-    ? await runDeepSeek(input, prompt, mode)
-    : await runGemini(input, prompt, picked.model)
-
-  const files: Record<string, string> = {}
-  for (const file of result.object.files) {
-    if (file.path && file.content) files[file.path] = file.content
+  try {
+    generated = mode.startsWith("gemini")
+      ? await runGemini(input, prompt, mode)
+      : await runDeepSeek(input, prompt, mode)
+  } catch (primaryError) {
+    if (mode !== "deepseek-flash") throw primaryError
+    generated = await runGemini(input, prompt, "gemini-flash")
   }
-  if (!Object.keys(files).length) throw new Error("Codegen returned zero usable files.")
 
+  const project = extractProjectJson(generated.text)
+  const files = Object.fromEntries(project.files.map((file) => [file.path, file.content]))
   return {
-    title: result.object.title,
-    description: result.object.description,
-    reply: result.object.reply,
+    title: project.title,
+    description: project.description,
+    reply: project.reply,
     files,
-    model: picked.model,
-    reason: picked.reason,
-    usage: normalizeGenerationUsage(result.usage, picked.model),
+    model: generated.model,
+    reason: selected.reason,
+    usage: normalizeGenerationUsage(generated.usage),
   }
 }
