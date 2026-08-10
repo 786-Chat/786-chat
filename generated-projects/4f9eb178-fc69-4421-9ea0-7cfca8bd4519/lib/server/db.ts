@@ -10,8 +10,8 @@ export function getSql() {
   return sql;
 }
 
-export async function query<T = any>(text: string, params?: any[]): Promise<{ rows: T[] }> {
+export async function query<T = any>(text: string, params: unknown[] = []): Promise<{ rows: T[] }> {
   const sql = getSql();
-  const result = await sql(text, params || []);
-  return { rows: result as T[] };
+  const rows = await sql.query(text, params);
+  return { rows: rows as T[] };
 }
