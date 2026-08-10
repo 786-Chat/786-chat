@@ -82,6 +82,48 @@ function explicitRoutes(prompt: string) {
   )
 }
 
+function explicitPageSection(prompt: string): { pages: string[]; routes: string[] } | null {
+  const lines = prompt.split(/\r?\n/)
+  const start = lines.findIndex((line) => /^\s*pages?\s*:\s*$/i.test(line))
+  if (start < 0) return null
+
+  const pages: string[] = []
+  const routes: string[] = []
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const raw = lines[index]
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      if (pages.length) break
+      continue
+    }
+    if (/^[a-z][a-z0-9 &/_-]{1,50}:\s*$/i.test(trimmed)) break
+    const item = trimmed.match(/^[-*•]\s+(.+)$/)?.[1]?.trim()
+    if (!item) {
+      if (pages.length) break
+      continue
+    }
+
+    const clean = item.replace(/\s*\([^)]*\)\s*$/, "").trim()
+    if (!clean) continue
+    if (clean.startsWith("/")) {
+      const route = clean.split(/\s+/)[0].replace(/\/+$/, "") || "/"
+      if (!route.startsWith("/api/")) {
+        routes.push(route)
+        pages.push(route === "/" ? "Home" : route.slice(1).replaceAll("-", " "))
+      }
+      continue
+    }
+
+    const label = clean.replace(/\s+page$/i, "").trim()
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    if (!slug) continue
+    pages.push(label)
+    routes.push(/^home(?:page)?$/i.test(label) ? "/" : `/${slug}`)
+  }
+
+  return pages.length ? { pages: unique(pages), routes: unique(routes) } : null
+}
+
 function explicitApiResources(prompt: string) {
   const resources = new Set<string>()
   const add = (value: string | undefined) => {
@@ -167,8 +209,11 @@ export function analyseProjectPrompt(
   const positivePrompt = withoutNegativeRequirements(prompt)
   const systemBlueprint = selectSystemBlueprint(positivePrompt)
   const editIntent = classifyApplicationEdit(positivePrompt)
-  const pageMatches = PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
-  const loginRequested = /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
+  const explicitPages = explicitPageSection(positivePrompt)
+  const pageMatches = explicitPages ? [] : PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
+  const loginRequested = explicitPages
+    ? explicitPages.routes.includes("/login")
+    : /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(positivePrompt)
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
@@ -177,14 +222,14 @@ export function analyseProjectPrompt(
   const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(positivePrompt)
   const routes = unique([
     "/",
-    ...pageMatches.map(([, , route]) => route),
+    ...(explicitPages?.routes || pageMatches.map(([, , route]) => route)),
     ...requestedPageRoutes,
-    ...(systemBlueprint?.routes || []),
+    ...(!explicitPages ? (systemBlueprint?.routes || []) : []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
     "Home",
-    ...pageMatches.map(([, page]) => page),
+    ...(explicitPages?.pages || pageMatches.map(([, page]) => page)),
     ...requestedPageRoutes.map((route) =>
       route
         .split("/")
@@ -255,7 +300,7 @@ export function analyseProjectPrompt(
     requiredComponents: unique(requiredComponents),
     requiredInteractions: unique(matches(positivePrompt, [
       [/\blog[ -]?in|sign[ -]?in\b/i, "submit-login"],
-      [/\bbooking|appointment\b/i, "submit-booking"],
+      [routes.includes("/booking") ? /\bbooking|appointment\b/i : /(?!)/, "submit-booking"],
       [/\bsearch\b/i, "search"],
       [/\bfilter\b/i, "filter"],
       [/\bmodal|dialog\b/i, "modal"],

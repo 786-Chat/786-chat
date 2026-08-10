@@ -27,7 +27,17 @@ test("every web project requires the Next.js root route even for a login-only pr
 test("negated page names are excluded before route analysis", () => {
   assert.match(specification, /withoutNegativeRequirements/)
   assert.match(specification, /const positivePrompt = withoutNegativeRequirements\(prompt\)/)
-  assert.match(specification, /PAGE_ALIASES\.filter\(\(\[pattern\]\) => pattern\.test\(positivePrompt\)\)/)
+  assert.match(specification, /explicitPages \? \[\] : PAGE_ALIASES\.filter/)
+})
+
+test("an explicit Pages section is authoritative over inferred CRM blueprint routes", () => {
+  assert.match(specification, /function explicitPageSection/)
+  assert.match(specification, /\.\.\.\(explicitPages\?\.routes \|\| pageMatches\.map/)
+  assert.match(specification, /\.\.\.\(!explicitPages \? \(systemBlueprint\?\.routes \|\| \[\]\) : \[\]\)/)
+})
+
+test("booking interaction validation only applies when booking is a required UI route", () => {
+  assert.match(specification, /routes\.includes\("\/booking"\) \? \/\\bbooking\|appointment\\b\/i : \/\(\?!\)\//)
 })
 
 test("authentication links are normalized onto the requested login route", () => {
