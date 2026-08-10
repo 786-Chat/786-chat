@@ -1,0 +1,30 @@
+# Backend Setup
+
+## Environment Variables
+
+- `DATABASE_URL`: Neon PostgreSQL connection string (required at runtime, not at build time)
+
+## Database Setup
+
+1. Create a Neon PostgreSQL database.
+2. Run `npm run migrate` to apply `sql/migrations/001_initial.sql`.
+
+## API Endpoints
+
+### Customers
+- `GET /api/customers` - List all customers
+- `POST /api/customers` - Create a customer
+- `GET /api/customers/:id` - Get a customer
+- `PATCH /api/customers/:id` - Update a customer
+- `DELETE /api/customers/:id` - Delete a customer
+
+### Reservations
+- `GET /api/reservations` - List all reservations (with customer name)
+- `POST /api/reservations` - Create a reservation
+- `GET /api/reservations/:id` - Get a reservation
+- `PATCH /api/reservations/:id` - Update a reservation
+- `DELETE /api/reservations/:id` - Delete a reservation
+
+## Validation
+
+All POST and PATCH endpoints use Zod schemas defined in `lib/server/validation.ts`.
