@@ -69,9 +69,11 @@ export async function POST(request: Request) {
         projectId: bundle.projectId,
         branch: published.branch,
         commitSha: published.commitSha,
+        files: bundle.files,
       })
       deploymentUrl = deployment.url
       lifecycleLogs.push(
+        "[runtime] Generated database namespace prepared and migration applied when required.",
         `[vercel] Deployment ${deployment.id} queued with state ${deployment.readyState}.`,
         `[vercel] Preview ${deployment.url}.`,
       )
