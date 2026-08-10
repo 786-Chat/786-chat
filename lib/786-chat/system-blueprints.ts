@@ -151,6 +151,10 @@ function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 }
 
+function hasCrmSalesIntent(prompt: string) {
+  return /\b(?:sales\s+pipeline|sales\s+funnel|lead(?:s|\s+capture)?|opportunit(?:y|ies)|pipeline\s+stage|sales\s+stage|follow[-\s]?up|conversion|campaign\s+attribution|sales\s+notification)\b/i.test(prompt)
+}
+
 export function selectSystemBlueprint(prompt: string): SystemBlueprint | null {
   const request = normalize(prompt)
   const match = SYSTEM_BLUEPRINTS
@@ -158,7 +162,9 @@ export function selectSystemBlueprint(prompt: string): SystemBlueprint | null {
       candidate,
       alias: normalize(alias),
     })))
-    .filter(({ alias }) => request.includes(alias))
+    .filter(({ candidate, alias }) =>
+      request.includes(alias) && (candidate.id !== "crm" || hasCrmSalesIntent(prompt))
+    )
     .sort((left, right) => right.alias.length - left.alias.length)[0]
   return match?.candidate || null
 }
