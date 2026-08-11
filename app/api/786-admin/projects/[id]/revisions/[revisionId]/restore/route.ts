@@ -5,6 +5,7 @@ import {
   restoreProjectRevision,
 } from "@/lib/786-admin/project-revisions"
 import { getProjectWithData } from "@/lib/786-admin/projects"
+import { queueRevisionRebuild } from "@/lib/786-admin/revision-build-refresh"
 
 async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
@@ -15,7 +16,7 @@ async function requireOwnerEmail(): Promise<string | null> {
 
 type Ctx = { params: Promise<{ id: string; revisionId: string }> }
 
-export async function POST(_request: Request, { params }: Ctx) {
+export async function POST(request: Request, { params }: Ctx) {
   const email = await requireOwnerEmail()
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -33,7 +34,23 @@ export async function POST(_request: Request, { params }: Ctx) {
       ownerEmail: email,
     })
     const project = await getProjectWithData(id, email)
-    return NextResponse.json({ project, restoredRevision })
+    if (!project) throw new Error("Project not found after restore")
+
+    const buildResponse = await queueRevisionRebuild({ request, projectId: id })
+    const buildPayload = await buildResponse.json().catch(() => ({}))
+    if (!buildResponse.ok) {
+      const buildError = typeof buildPayload?.error === "string"
+        ? buildPayload.error
+        : "Restored project could not be queued for rebuild"
+      throw new Error(buildError)
+    }
+
+    return NextResponse.json({
+      project,
+      restoredRevision,
+      build: buildPayload?.build || null,
+      rebuildQueued: Boolean(buildPayload?.queued),
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not restore revision"
     return NextResponse.json({ error: message }, { status: message.includes("not found") ? 404 : 500 })

@@ -34,19 +34,30 @@ test("booking and database requests become verifiable project requirements", asy
   assert.match(validation, /Missing requested database table/)
 })
 
-test("undo restores the latest different revision atomically and skips safety snapshots", async () => {
-  const [revisions, route] = await Promise.all([
-    read("lib/786-admin/project-revisions.ts"),
+test("undo targets the latest user edit, skips automatic build repair snapshots and queues rebuild", async () => {
+  const [route, refresh] = await Promise.all([
     read("app/api/786-chat/projects/[id]/revisions/undo/route.ts"),
+    read("lib/786-admin/revision-build-refresh.ts"),
   ])
-  assert.match(revisions, /undoLatestProjectChange/)
-  assert.match(revisions, /revisionFingerprint/)
-  assert.match(revisions, /\["undo-safety", "restore-safety"\]/)
-  assert.match(revisions, /revisionFingerprint\(revision\) !== currentFingerprint/)
-  assert.match(revisions, /await transaction\(queries\)/)
-  assert.match(revisions, /deterministic-revision-undo/)
-  assert.match(route, /session\?\.email/)
-  assert.match(route, /There is no earlier saved change to undo/)
+  assert.match(route, /UNDOABLE_SOURCES/)
+  assert.match(route, /"ai-edit"/)
+  assert.match(route, /"code-editor"/)
+  assert.match(route, /"visual-editor"/)
+  assert.doesNotMatch(route, /build-repair/)
+  assert.match(route, /source: "undo-safety"/)
+  assert.match(route, /restoreProjectRevision/)
+  assert.match(route, /queueRevisionRebuild/)
+  assert.match(route, /rebuildQueued/)
+  assert.match(refresh, /confirm: true/)
+  assert.match(refresh, /build\/route/)
+})
+
+test("manual restore queues a fresh build so live preview can move to restored source", async () => {
+  const route = await read("app/api/786-admin/projects/[id]/revisions/[revisionId]/restore/route.ts")
+  assert.match(route, /source: "restore-safety"/)
+  assert.match(route, /restoreProjectRevision/)
+  assert.match(route, /queueRevisionRebuild/)
+  assert.match(route, /rebuildQueued/)
 })
 
 test("Code, Design, revisions and chat share one saved project state", async () => {
