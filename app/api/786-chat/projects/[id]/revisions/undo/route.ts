@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server"
 
 import { getSession } from "@/lib/auth"
-import { undoLatestProjectChange } from "@/lib/786-admin/project-revisions"
+import {
+  createProjectRevision,
+  listProjectRevisions,
+  restoreProjectRevision,
+} from "@/lib/786-admin/project-revisions"
+import { getProjectWithData } from "@/lib/786-admin/projects"
 import { queueRevisionRebuild } from "@/lib/786-admin/revision-build-refresh"
 
 type Context = { params: Promise<{ id: string }> }
+
+const UNDOABLE_SOURCES = new Set(["ai-edit", "code-editor", "visual-editor", "manual"])
 
 export async function POST(request: Request, { params }: Context) {
   const session = await getSession()
@@ -12,16 +19,26 @@ export async function POST(request: Request, { params }: Context) {
   if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   try {
-    const result = await undoLatestProjectChange({
+    const revisions = await listProjectRevisions(id, owner, 100)
+    const target = revisions.find((revision) => UNDOABLE_SOURCES.has(revision.source))
+    if (!target) {
+      return NextResponse.json({ error: "There is no earlier user change to undo." }, { status: 409 })
+    }
+
+    await createProjectRevision({
       projectId: id,
       ownerEmail: owner,
-      message: typeof body.message === "string" ? body.message : undefined,
+      label: "Before undo",
+      source: "undo-safety",
     })
-    if (!result) {
-      return NextResponse.json({ error: "There is no earlier saved change to undo." }, { status: 409 })
-    }
+    const restoredRevision = await restoreProjectRevision({
+      revisionId: target.id,
+      projectId: id,
+      ownerEmail: owner,
+    })
+    const project = await getProjectWithData(id, owner)
+    if (!project) throw new Error("Project not found after undo")
 
     const buildResponse = await queueRevisionRebuild({ request, projectId: id })
     const buildPayload = await buildResponse.json().catch(() => ({}))
@@ -33,7 +50,8 @@ export async function POST(request: Request, { params }: Context) {
     }
 
     return NextResponse.json({
-      ...result,
+      project,
+      restoredRevision,
       build: buildPayload?.build || null,
       rebuildQueued: Boolean(buildPayload?.queued),
     })
