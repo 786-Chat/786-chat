@@ -27,13 +27,20 @@ test("every web project requires the Next.js root route even for a login-only pr
 test("negated page names are excluded before route analysis", () => {
   assert.match(specification, /withoutNegativeRequirements/)
   assert.match(specification, /const positivePrompt = withoutNegativeRequirements\(prompt\)/)
-  assert.match(specification, /explicitPages \? \[\] : PAGE_ALIASES\.filter/)
 })
 
-test("an explicit Pages section is authoritative over inferred CRM blueprint routes", () => {
+test("an explicit Pages section is authoritative over inferred blueprint routes", () => {
   assert.match(specification, /function explicitPageSection/)
   assert.match(specification, /\.\.\.\(explicitPages\?\.routes \|\| pageMatches\.map/)
-  assert.match(specification, /\.\.\.\(!explicitPages \? \(systemBlueprint\?\.routes \|\| \[\]\) : \[\]\)/)
+  assert.match(specification, /!explicitPages && !targetedExistingEdit/)
+})
+
+test("targeted existing edits do not invent blueprint or alias routes", () => {
+  assert.match(specification, /function isTargetedExistingEdit/)
+  assert.match(specification, /const targetedExistingEdit = isTargetedExistingEdit\(positivePrompt\)/)
+  assert.match(specification, /const systemBlueprint = targetedExistingEdit \? null : selectSystemBlueprint/)
+  assert.match(specification, /explicitPages \|\| targetedExistingEdit/)
+  assert.match(specification, /!explicitPages && !targetedExistingEdit/)
 })
 
 test("booking interaction validation only applies when booking is a required UI route", () => {
