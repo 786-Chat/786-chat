@@ -201,19 +201,27 @@ function withoutNegativeRequirements(prompt: string) {
   return kept.join("\n")
 }
 
+function isTargetedExistingEdit(prompt: string) {
+  return /\b(?:update|change|fix|adjust|align|redesign|edit|remove|keep|make|add)\b[\s\S]{0,180}\b(?:existing|current)\b|\b(?:existing|current)\b[\s\S]{0,180}\b(?:project|application|app|page|screen|feature|layout|design|button|form|table|card|product|stock|reservation|customer)\b/i
+    .test(prompt)
+}
+
 export function analyseProjectPrompt(
   prompt: string,
   seed = prompt,
   familyHistory: readonly string[] = [],
 ): ProjectSpecification {
   const positivePrompt = withoutNegativeRequirements(prompt)
-  const systemBlueprint = selectSystemBlueprint(positivePrompt)
+  const targetedExistingEdit = isTargetedExistingEdit(positivePrompt)
+  const systemBlueprint = targetedExistingEdit ? null : selectSystemBlueprint(positivePrompt)
   const editIntent = classifyApplicationEdit(positivePrompt)
   const explicitPages = explicitPageSection(positivePrompt)
-  const pageMatches = explicitPages ? [] : PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
+  const pageMatches = explicitPages || targetedExistingEdit
+    ? []
+    : PAGE_ALIASES.filter(([pattern]) => pattern.test(positivePrompt))
   const loginRequested = explicitPages
     ? explicitPages.routes.includes("/login")
-    : /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
+    : !targetedExistingEdit && /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
   const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
   const requestedRoutes = explicitRoutes(positivePrompt)
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
@@ -224,7 +232,7 @@ export function analyseProjectPrompt(
     "/",
     ...(explicitPages?.routes || pageMatches.map(([, , route]) => route)),
     ...requestedPageRoutes,
-    ...(!explicitPages ? (systemBlueprint?.routes || []) : []),
+    ...(!explicitPages && !targetedExistingEdit ? (systemBlueprint?.routes || []) : []),
   ])
   if (routes.length === 0) routes.push("/")
   const pages = unique([
