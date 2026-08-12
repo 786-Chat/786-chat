@@ -47,15 +47,15 @@ test("governance enforces prompt, minute, daily, monthly and token limits", () =
   assert.match(governance, /AI_MONTHLY_LIMIT/)
 })
 
-test("only the verified owner bypasses plan quotas without disabling governance", () => {
+test("only the verified owner bypasses all plan quotas without disabling governance", () => {
   assert.match(route, /if \(!session\?\.email\)/)
   assert.match(route, /bypassPlanLimits: isAdminUser\(session\.email\)/)
   assert.match(route, /import \{ isAdminUser \} from "@\/lib\/admin-config"/)
   assert.match(route, /bypassPlanLimits:/)
+  assert.match(governance, /!input\.bypassPlanLimits && prompt\.length > limit\.maxPromptCharacters/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(rate\?\.request_count/)
   assert.match(governance, /!input\.bypassPlanLimits && Number\(usage\?\.requests_today/)
   assert.match(governance, /!input\.bypassPlanLimits && \(Number\(usage\?\.requests_month/)
-  assert.match(governance, /prompt\.length > limit\.maxPromptCharacters/)
 })
 
 test("generation records store prompt hashes, token usage, cost and latency", () => {

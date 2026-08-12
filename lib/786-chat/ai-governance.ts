@@ -67,7 +67,7 @@ export async function reserveBuilderGeneration(input: {
   if (!prompt) {
     return { allowed: false, error: "Describe what you want to build first.", errorCode: "PROMPT_REQUIRED", limit }
   }
-  if (prompt.length > limit.maxPromptCharacters) {
+  if (!input.bypassPlanLimits && prompt.length > limit.maxPromptCharacters) {
     return {
       allowed: false,
       error: `This request is too long for the ${plan} plan. Keep it under ${limit.maxPromptCharacters.toLocaleString()} characters.`,
