@@ -70,7 +70,7 @@ Return a real runnable Next.js App Router project as JSON.
 
 Rules:
 - Return FULL file content, never diffs or placeholders.
-- app/page.tsx is mandatory.
+- app/page.tsx is mandatory for new projects; for existing-project edits, return it only when the requested change actually modifies it.
 - Use TypeScript and Tailwind CSS.
 - Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge.
 - Backend files may also use @neondatabase/serverless and zod when requested.
@@ -95,6 +95,8 @@ Escape newlines, quotes, backslashes, tabs and control characters correctly insi
 Do not use markdown fences.
 Keep title, description and reply concise.
 Avoid duplicated JSX, CSS and backend helpers so the complete response fits within the output budget.`
+
+const TRUNCATION_MESSAGE = "DeepSeek JSON response was truncated before all project files were returned."
 
 function gatewayConfigured() {
   return Boolean(
@@ -175,6 +177,10 @@ function buildPrompt(input: CodegenInput) {
   return `${parts.join("\n")}${JSON_FORMAT_PROMPT}`
 }
 
+function compactRetryPrompt(prompt: string) {
+  return `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — EXISTING PROJECT EDIT ONLY:\nThe previous response exceeded the provider output limit. Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged app/page.tsx, routes, shared styles, package files, schema files, helpers, components or APIs. Include any backend/schema file only when this exact edit requires it. Return complete content for each changed file, but keep title, description and reply extremely short. Preserve all unrelated existing files implicitly.`
+}
+
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> {
   const content: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]
   for (const attachment of attachments) {
@@ -231,7 +237,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
 
   const choice = payload.choices?.[0]
   if (choice?.finish_reason === "length") {
-    throw new Error("DeepSeek JSON response was truncated before all project files were returned.")
+    throw new Error(TRUNCATION_MESSAGE)
   }
 
   return {
@@ -300,9 +306,18 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const picked = selectedModel(mode)
   const prompt = buildPrompt(input)
 
-  const result = mode === "deepseek-flash" || mode === "deepseek-pro"
-    ? await runDeepSeek(input, prompt, mode)
-    : await runGemini(input, prompt, picked.model)
+  let result
+  if (mode === "deepseek-flash" || mode === "deepseek-pro") {
+    try {
+      result = await runDeepSeek(input, prompt, mode)
+    } catch (error) {
+      const truncated = error instanceof Error && error.message === TRUNCATION_MESSAGE
+      if (!truncated || !input.existing) throw error
+      result = await runDeepSeek(input, compactRetryPrompt(prompt), mode)
+    }
+  } else {
+    result = await runGemini(input, prompt, picked.model)
+  }
 
   const files: Record<string, string> = {}
   for (const file of result.object.files) {
