@@ -12,8 +12,10 @@ const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 125_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 40_000
+// Complex/full-stack generation needs more time for long owner prompts. Keep both
+// attempts inside the 300s route budget so the fallback still has time to run.
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 165_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 95_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -221,7 +223,7 @@ async function runAttempt(
 
   const provider = providerForMode(mode)
   const maxOutputTokens = profile === "full-stack"
-    ? (provider === "gemini" ? 32_000 : 48_000)
+    ? (provider === "gemini" ? 20_000 : 24_000)
     : existing
       ? (provider === "gemini" ? 14_000 : 8_000)
       : (provider === "gemini" ? 14_000 : 8_192)
