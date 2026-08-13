@@ -94,11 +94,11 @@ function relevantFiles(files: Record<string, string>, logs: string) {
 
 function configuredRepairModes(): CodegenMode[] {
   const modes: CodegenMode[] = []
-  if (process.env.DEEPSEEK_API_KEY?.trim()) modes.push("deepseek-pro")
+  if (process.env.DEEPSEEK_API_KEY?.trim()) modes.push("deepseek-flash")
   if (
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     process.env.GEMINI_API_KEY?.trim()
-  ) modes.push("gemini-pro")
+  ) modes.push("gemini-flash")
   return modes
 }
 
