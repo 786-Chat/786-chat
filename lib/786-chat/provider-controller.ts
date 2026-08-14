@@ -4,12 +4,16 @@ import { generateProjectCode, type CodegenAttachment, type CodegenMode } from "@
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 112_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 58_000
-const SIMPLE_DEEPSEEK_TIMEOUT_MS = 110_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
+// Production logs showed real DeepSeek Flash generations reaching the old
+// 112s controller ceiling while the provider was still generating valid output.
+// The function itself is allowed to run for 300s, so leave enough headroom for
+// a long owner/full-stack generation before trying the Gemini fallback.
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 175_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 90_000
+const SIMPLE_DEEPSEEK_TIMEOUT_MS = 150_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 75_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
-const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
+const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 120_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
@@ -47,10 +51,8 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  // Long full-stack projects were previously capped at 8,192 DeepSeek output
-  // tokens. The codegen retry then inherited the same cap, so truncation retried
-  // into truncation. Give DeepSeek Flash the same 12k production ceiling used by
-  // codegen while keeping the compactness rules that protect runtime latency.
+  // Keep the 12k Flash output ceiling, but do not impose a shorter controller
+  // timeout than the provider needs to actually finish returning that JSON.
   const maxOutputTokens = profile === "full-stack"
     ? (provider === "gemini" ? 16_000 : 12_000)
     : existing
