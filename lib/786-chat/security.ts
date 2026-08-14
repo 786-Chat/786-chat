@@ -92,7 +92,8 @@ const HARMFUL_PROMPT_PATTERNS: RegExp[] = [
   /\b(?:phishing|impersonat(?:e|ion))\b[\s\S]{0,100}\b(?:password|credential|login|bank|wallet|seed phrase|authentication code)\b/i,
   /\b(?:steal|harvest|exfiltrat(?:e|ion)|dump)\b[\s\S]{0,100}\b(?:passwords?|credentials?|cookies?|tokens?|api keys?|seed phrases?|private keys?)\b/i,
   /\b(?:reveal|print|return|show|leak|ignore)\b[\s\S]{0,100}\b(?:system prompt|developer message|hidden instructions|environment variables?|process\.env|server secrets?)\b/i,
-  /\b(?:disable|bypass|evade)\b[\s\S]{0,100}\b(?:security checks?|safety filters?|rate limits?|authentication|authorization|tenant isolation)\b/i,
+  /\b(?:bypass|evade)\b[\s\S]{0,100}\b(?:security checks?|safety filters?|rate limits?|authentication|authorization|tenant isolation)\b/i,
+  /\bdisable\s+(?:the\s+)?(?:security checks?|safety filters?|rate limits?|authentication|authorization|tenant isolation)\b/i,
   /\b(?:delete|destroy|wipe|encrypt)\b[\s\S]{0,80}\b(?:all databases?|production data|user files|backups?)\b/i,
 ]
 
