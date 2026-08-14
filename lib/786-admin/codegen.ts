@@ -68,9 +68,54 @@ function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Ar
 
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
-  if (!apiKey) throw new Error("DeepSeek direct API key is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const model = mode === "deepseek-pro" ? "deepseek-v4-pro" : "deepseek-v4-flash"
+
+  if (!apiKey) {
+    if (!gatewayConfigured()) throw new Error("DeepSeek direct API key and Vercel AI Gateway are not configured.")
+
+    // Vercel production may intentionally use OIDC/AI Gateway instead of a
+    // provider API key. Previously the controller treated the Gateway as a
+    // configured DeepSeek provider, but runDeepSeek then required a direct
+    // DEEPSEEK_API_KEY and failed immediately. Auto mode therefore failed before
+    // DeepSeek ever reached a model. Use the AI SDK Gateway when no direct key
+    // exists so DeepSeek Flash actually runs on Vercel.
+    const gatewayModel = model === "deepseek-v4-pro"
+      ? BUILDER_MODELS["deepseek-pro"]
+      : BUILDER_MODELS["deepseek-flash"]
+    const result = await generateText({
+      model: gatewayModel,
+      system: SYSTEM_PROMPT,
+      prompt,
+      temperature: 0.1,
+      maxOutputTokens: Math.min(requestedTokens, 12000),
+      maxRetries: 0,
+      abortSignal: input.abortSignal,
+      providerOptions: {
+        gateway: {
+          user: input.userId || "anonymous-builder",
+          tags: [
+            "feature:builder-codegen",
+            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
+            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
+            ...(input.generationId ? [`generation:${input.generationId}`] : []),
+          ],
+          zeroDataRetention: true,
+        },
+        deepseek: {
+          thinking: { type: "disabled" },
+        },
+      },
+    })
+    if (!result.text?.trim()) throw new Error("DeepSeek Gateway returned no output text.")
+    let object: ProjectObject
+    try { object = extractProjectJson(result.text) } catch (error) {
+      if (/JSON response could not be parsed|did not contain a JSON object/i.test(error instanceof Error ? error.message : String(error))) throw new Error(TRUNCATION_MESSAGE)
+      throw error
+    }
+    return { object, usage: result.usage }
+  }
+
   const response = await fetch("https://api.deepseek.com/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], thinking: { type: "disabled" }, response_format: { type: "json_object" }, temperature: 0.1, max_tokens: Math.min(requestedTokens, 12000), stream: false }), signal: input.abortSignal })
   const payload = await response.json().catch(() => ({})) as { error?: { message?: string }; choices?: Array<{ finish_reason?: string; message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
   if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
@@ -107,10 +152,6 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     catch (error) {
       const retryable = error instanceof Error && (error.message === TRUNCATION_MESSAGE || /JSON response could not be parsed|did not contain a JSON object/i.test(error.message))
       if (!retryable) throw error
-      // Long NEW projects previously retried with the same 8,192-token cap.
-      // That made the retry fail for exactly the same reason as the first call.
-      // The retry now explicitly gets the maximum production budget and a compact
-      // instruction set so it has materially more room to return every required file.
       result = await runDeepSeek({ ...input, maxOutputTokens: 12000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
