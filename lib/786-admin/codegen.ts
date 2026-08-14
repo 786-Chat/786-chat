@@ -73,38 +73,22 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
 
   if (!apiKey) {
     if (!gatewayConfigured()) throw new Error("DeepSeek direct API key and Vercel AI Gateway are not configured.")
-
-    // Vercel production may intentionally use OIDC/AI Gateway instead of a
-    // provider API key. Previously the controller treated the Gateway as a
-    // configured DeepSeek provider, but runDeepSeek then required a direct
-    // DEEPSEEK_API_KEY and failed immediately. Auto mode therefore failed before
-    // DeepSeek ever reached a model. Use the AI SDK Gateway when no direct key
-    // exists so DeepSeek Flash actually runs on Vercel.
-    const gatewayModel = model === "deepseek-v4-pro"
-      ? BUILDER_MODELS["deepseek-pro"]
-      : BUILDER_MODELS["deepseek-flash"]
+    const gatewayModel = model === "deepseek-v4-pro" ? BUILDER_MODELS["deepseek-pro"] : BUILDER_MODELS["deepseek-flash"]
     const result = await generateText({
       model: gatewayModel,
       system: SYSTEM_PROMPT,
       prompt,
       temperature: 0.1,
-      maxOutputTokens: Math.min(requestedTokens, 12000),
+      maxOutputTokens: Math.min(requestedTokens, 24000),
       maxRetries: 0,
       abortSignal: input.abortSignal,
       providerOptions: {
         gateway: {
           user: input.userId || "anonymous-builder",
-          tags: [
-            "feature:builder-codegen",
-            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
-            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
-            ...(input.generationId ? [`generation:${input.generationId}`] : []),
-          ],
+          tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])],
           zeroDataRetention: true,
         },
-        deepseek: {
-          thinking: { type: "disabled" },
-        },
+        deepseek: { thinking: { type: "disabled" } },
       },
     })
     if (!result.text?.trim()) throw new Error("DeepSeek Gateway returned no output text.")
@@ -116,7 +100,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
     return { object, usage: result.usage }
   }
 
-  const response = await fetch("https://api.deepseek.com/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], thinking: { type: "disabled" }, response_format: { type: "json_object" }, temperature: 0.1, max_tokens: Math.min(requestedTokens, 12000), stream: false }), signal: input.abortSignal })
+  const response = await fetch("https://api.deepseek.com/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], thinking: { type: "disabled" }, response_format: { type: "json_object" }, temperature: 0.1, max_tokens: Math.min(requestedTokens, 24000), stream: false }), signal: input.abortSignal })
   const payload = await response.json().catch(() => ({})) as { error?: { message?: string }; choices?: Array<{ finish_reason?: string; message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
   if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
   const choice = payload.choices?.[0]
@@ -136,7 +120,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const model = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel) : modelName
   if (!googleApiKey && !gatewayConfigured()) throw new Error("Gemini is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
-  const result = await generateText({ model, system: SYSTEM_PROMPT, ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 12000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
+  const result = await generateText({ model, system: SYSTEM_PROMPT, ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 24000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
   if (!result.text?.trim()) throw new Error("Gemini returned no output text.")
   return { object: extractProjectJson(result.text), usage: result.usage }
 }
@@ -150,9 +134,9 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try { result = await runDeepSeek(input, prompt, mode) }
     catch (error) {
-      const retryable = error instanceof Error && (error.message === TRUNCATION_MESSAGE || /JSON response could not be parsed|did not contain a JSON object/i.test(error.message))
-      if (!retryable) throw error
-      result = await runDeepSeek({ ...input, maxOutputTokens: 12000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+      const retryable = error instanceof Error && /JSON response could not be parsed|did not contain a JSON object/i.test(error.message)
+      if (!retryable || input.existing) throw error
+      result = await runDeepSeek({ ...input, maxOutputTokens: Math.min((input.maxOutputTokens ?? 24000) + 4000, 24000) }, compactRetryPrompt(prompt, false), mode)
     }
   } else {
     try { result = await runGemini(input, prompt, picked.model) }
