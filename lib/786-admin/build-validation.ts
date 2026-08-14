@@ -44,6 +44,21 @@ function isSafePath(path: string): boolean {
   return !parts.some((part) => FORBIDDEN_PATH_PARTS.includes(part))
 }
 
+function isPlaceholderEnvFile(path: string, content: string): boolean {
+  if (!/(?:^|\/)\.env(?:\..+)?$/i.test(path)) return false
+  const meaningfulLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"))
+  if (meaningfulLines.length === 0) return true
+  return meaningfulLines.every((line) => {
+    const match = line.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/)
+    if (!match) return false
+    const value = match[2].trim().replace(/^['"]|['"]$/g, "")
+    return value === "" || /^(?:your[_-].*|change[_-]?me|example|placeholder|<.*>|\$\{.*\}|REPLACE_ME)$/i.test(value)
+  })
+}
+
 function parsePackageJson(value: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(value)
@@ -90,11 +105,11 @@ export function validateGeneratedProject(
     if (!isSafePath(path)) {
       errors.push({ code: "UNSAFE_PATH", path: rawPath, message: "Unsafe project path." })
     }
-    if (SECRET_FILE_NAMES.has(path.toLowerCase()) || path.toLowerCase().startsWith(".env.")) {
+    if ((SECRET_FILE_NAMES.has(path.toLowerCase()) || path.toLowerCase().startsWith(".env.")) && !isPlaceholderEnvFile(path, content)) {
       errors.push({
         code: "SECRET_FILE",
         path,
-        message: "Environment and credential files cannot be published.",
+        message: "Environment and credential files cannot be published unless they contain placeholders only.",
       })
     }
     if (bytes > MAX_FILE_BYTES) {
