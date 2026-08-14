@@ -40,7 +40,7 @@ import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
 import { screenBuilderPrompt } from "@/lib/786-chat/security"
 
 export const runtime = "nodejs"
-export const maxDuration = 180
+export const maxDuration = 300
 
 function attemptsFrom(value: unknown) {
   return Array.isArray(value) ? value : []
