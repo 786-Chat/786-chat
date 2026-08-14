@@ -48,7 +48,7 @@ function profileRules(profile: GenerationProfile, existing: boolean, largeEdit: 
     "- Return only complete runnable project files required by the request. No markdown outside the JSON object."
   ].join("\n")
   if (existing) return ["", "Apply this request as a compact edit to the EXISTING Next.js website.", "- Return ONLY new or actually modified complete files.", "- Preserve unrelated files and functionality.", largeEdit ? "- This is a multi-page frontend edit: centralize shared sections/data and keep route wrappers tiny." : "- Keep the response compact and targeted.", "- Do not return package.json, tsconfig, Next config, layout or global CSS unless genuinely required.", "- Return valid structured project output with no markdown outside the JSON object."].join("\n")
-  return ["", "Generate a compact complete runnable Next.js App Router website.", "- Use shared components and thin route wrappers.", "- Keep CSS and configuration concise; no data URLs, base64, inline SVG artwork or repeated CSS.", "- Create every requested route and keep navigation valid.", "- Return valid structured project output with no markdown outside the JSON object."].join("\n")
+  return ["", "Generate a compact complete runnable Next.js App Router website.", "- Use shared components and thin route wrappers.", "- Keep CSS and configuration concise; no data URLs, base64, inline SVG artwork or repeated CSS.", "- Create every requested route and keep navigation valid.", "- Return valid structured project output with no markdown outside the JSON object."] .join("\n")
 }
 
 async function runAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, profile: GenerationProfile, timeoutMs: number, largeFrontendEdit: boolean): Promise<GeneratorResult> {
@@ -62,7 +62,8 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  const maxOutputTokens = profile === "full-stack" ? 32_000 : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
+  const isValidationRepair = /\bVALIDATION-GUIDED REPAIR\b/i.test(originalMessage)
+  const maxOutputTokens = profile === "full-stack" ? 32_000 : isValidationRepair ? 20_000 : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
   const generated = await Promise.race([
     generateProjectCode({ prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
     new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
