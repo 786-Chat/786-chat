@@ -13,7 +13,8 @@ const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 120_000
 const BATCH_DEEPSEEK_TIMEOUT_MS = 42_000
 const BATCH_GEMINI_TIMEOUT_MS = 28_000
-const MAX_GENERATION_BATCHES = 4
+const MAX_GENERATION_BATCHES = 8
+const MAX_FILES_PER_BATCH = 5
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & { mode?: CodegenMode; attachments?: unknown[]; existing?: unknown }
@@ -38,38 +39,13 @@ function isLargeFrontendEdit(payload: GeneratorPayload, complex: boolean) { retu
 function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean) { const message = requestText(payload); if (!message) return hasAttachments; if (isExplicitFrontendOnly(message)) return false; if (payload.existing) return asksForBackendCapability(message); if (hasAttachments) return true; const terms = ["database","backend","api","saas","erp","crm","inventory","manufacturing","school management","hospital management","pos system","warehouse","authentication","roles","permissions","subscription","billing","payment","stripe","checkout","online ordering","order tracking","customer dashboard","admin dashboard","driver app","kitchen dashboard","portal","invoice","quotation","booking system","table booking"]; return message.length > 2800 || terms.some((term) => message.includes(term)) }
 
 function profileRules(profile: GenerationProfile, existing: boolean, largeEdit: boolean) {
-  if (profile === "full-stack") return [
-    "",
-    existing ? "EDIT the existing application." : "NEW PROJECT: generate the requested complete runnable full-stack app.",
-    "ULTRA-COMPACT FULL-STACK OUTPUT — MANDATORY:",
-    "- Preserve EVERY explicit requested requirement, route, backend capability and security rule, but implement them with the fewest files and least code possible.",
-    "- Target a compact response that fits the provider output budget. Do not write long prose, documentation, tests, README files, examples, duplicate components, duplicate data, decorative SVG, base64/data URLs or unnecessary config.",
-    "- Use shared components for all dashboard/page UI, one shared navigation/footer, shared types/data helpers, and thin route page.tsx wrappers.",
-    "- Keep API handlers compact and shared; use thin adapters only where separate resource routes are required.",
-    "- Keep SQL schema/migration concise and complete. Keep server DB access in lib/server/db.ts and never expose secrets.",
-    "- Use real validation/security patterns; never create fake secrets, fake authentication, fake dependencies or validation-only placeholder files.",
-    "- Return every required file with complete content. Missing a required schema, migration, auth route, API route or page is a generation failure and must not be accepted.",
-    "- Use realistic sample data only as a small fallback when database data is unavailable.",
-    "- Keep title, description and reply extremely short.",
-    "- Return only complete runnable project files required by the request. No markdown outside the JSON object."
-  ].join("\n")
+  if (profile === "full-stack") return ["", existing ? "EDIT the existing application." : "NEW PROJECT: generate the requested complete runnable full-stack app.", "ULTRA-COMPACT FULL-STACK OUTPUT — MANDATORY:", "- Preserve EVERY explicit requested requirement, route, backend capability and security rule, but implement them with the fewest files and least code possible.", "- Target a compact response that fits the provider output budget. Do not write long prose, documentation, tests, README files, examples, duplicate components, duplicate data, decorative SVG, base64/data URLs or unnecessary config.", "- Use shared components for all dashboard/page UI, one shared navigation/footer, shared types/data helpers, and thin route page.tsx wrappers.", "- Keep API handlers compact and shared; use thin adapters only where separate resource routes are required.", "- Keep SQL schema/migration concise and complete. Keep server DB access in lib/server/db.ts and never expose secrets.", "- Use real validation/security patterns; never create fake secrets, fake authentication, fake dependencies or validation-only placeholder files.", "- Return every required file with complete content. Missing a required schema, migration, auth route, API route or page is a generation failure and must not be accepted.", "- Use realistic sample data only as a small fallback when database data is unavailable.", "- Keep title, description and reply extremely short.", "- Return only complete runnable project files required by the request. No markdown outside the JSON object."].join("\n")
   if (existing) return ["", "Apply this request as a compact edit to the EXISTING Next.js website.", "- Return ONLY new or actually modified complete files.", "- Preserve unrelated files and functionality.", largeEdit ? "- This is a multi-page frontend edit: centralize shared sections/data and keep route wrappers tiny." : "- Keep the response compact and targeted.", "- Do not return package.json, tsconfig, Next config, layout or global CSS unless genuinely required.", "- Return valid structured project output with no markdown outside the JSON object."].join("\n")
   return ["", "Generate a compact complete runnable Next.js App Router website.", "- Use shared components and thin route wrappers.", "- Keep CSS and configuration concise; no data URLs, base64, inline SVG artwork or repeated CSS.", "- Create every requested route and keep navigation valid.", "- Return valid structured project output with no markdown outside the JSON object."].join("\n")
 }
 
-function plannedFilesFromPrompt(prompt: string) {
-  const match = prompt.match(/(?:^|\n)\s*-?\s*Planned files:\s*([^\n]+)/i)
-  if (!match?.[1]) return []
-  return [...new Set(match[1].split(",").map((value) => value.trim()).filter(Boolean))]
-}
-
-function batchBucket(path: string) {
-  if (/^(package\.json|tsconfig|next\.config|app\/layout|app\/globals|lib\/server\/(env|db|auth|tenant|validation)|sql\/|app\/api\/auth\/|middleware)/i.test(path)) return 0
-  if (/^app\/api\//i.test(path) || /^(lib\/server|shared\/)/i.test(path)) return 2
-  if (/report|inventory|invoice|quotation|job|staff|customer|dashboard/i.test(path)) return 3
-  return 1
-}
-
+function plannedFilesFromPrompt(prompt: string) { const match = prompt.match(/(?:^|\n)\s*-?\s*Planned files:\s*([^\n]+)/i); if (!match?.[1]) return []; return [...new Set(match[1].split(",").map((value) => value.trim()).filter(Boolean))] }
+function batchBucket(path: string) { if (/^(package\.json|tsconfig|next\.config|app\/layout|app\/globals|lib\/server\/(env|db|auth|tenant|validation)|sql\/|app\/api\/auth\/|middleware)/i.test(path)) return 0; if (/^app\/api\//i.test(path) || /^(lib\/server|shared\/)/i.test(path)) return 2; if (/report|inventory|invoice|quotation|job|staff|customer|dashboard/i.test(path)) return 3; return 1 }
 function createBatches(files: string[]): GenerationBatch[] {
   const buckets = [
     { name: "foundation-config-auth-database", files: [] as string[] },
@@ -78,190 +54,41 @@ function createBatches(files: string[]): GenerationBatch[] {
     { name: "business-modules-and-secondary-pages", files: [] as string[] },
   ]
   for (const file of files) buckets[batchBucket(file)].files.push(file)
-  const nonEmpty = buckets.filter((batch) => batch.files.length)
-  return nonEmpty.slice(0, MAX_GENERATION_BATCHES)
-}
-
-function mergeRawUsage(target: Record<string, number>, usage: unknown) {
-  if (!usage || typeof usage !== "object") return target
-  for (const [key, value] of Object.entries(usage as Record<string, unknown>)) {
-    if (typeof value === "number" && Number.isFinite(value)) target[key] = (target[key] || 0) + value
+  const batches: GenerationBatch[] = []
+  for (const bucket of buckets) {
+    for (let offset = 0; offset < bucket.files.length; offset += MAX_FILES_PER_BATCH) {
+      const filesForBatch = bucket.files.slice(offset, offset + MAX_FILES_PER_BATCH)
+      if (filesForBatch.length) batches.push({ name: `${bucket.name}-${Math.floor(offset / MAX_FILES_PER_BATCH) + 1}`, files: filesForBatch })
+    }
   }
-  return target
+  return batches.slice(0, MAX_GENERATION_BATCHES)
 }
-
-function batchPrompt(basePrompt: string, batch: GenerationBatch, batchIndex: number, batchCount: number) {
-  const withoutPlan = basePrompt.replace(/(?:^|\n)\s*-?\s*Planned files:\s*[^\n]+/i, "")
-  return [
-    withoutPlan.trim(),
-    "",
-    `BATCHED FULL-STACK GENERATION ${batchIndex + 1}/${batchCount}: ${batch.name}`,
-    `Required system files (return every file in this batch): ${batch.files.join(", ")}`,
-    "Generate ONLY the files listed for this batch. Return complete file contents, not patches.",
-    "Use the existing files supplied from earlier batches as authoritative shared contracts and do not rewrite them unless this batch explicitly lists them.",
-    "Auth bootstrap endpoints register/login/forgot-password/reset-password/verify-email are public bootstrap routes: validate input and credentials securely, but do not require a pre-existing authenticated session.",
-    "All normal business/database API routes must enforce authentication, tenant/company ownership and server-side authorization.",
-    "sql/migrations/001_initial.sql must be safely repeatable, using CREATE TABLE IF NOT EXISTS and equivalent idempotent patterns where appropriate.",
-    "Never delete, reset or overwrite existing Neon data.",
-  ].join("\n")
-}
-
-function attachmentsFrom(payload: GeneratorPayload): CodegenAttachment[] {
-  return Array.isArray(payload.attachments) ? payload.attachments.filter((attachment): attachment is CodegenAttachment => {
-    if (!attachment || typeof attachment !== "object") return false
-    const value = attachment as Record<string, unknown>
-    return typeof value.url === "string" && typeof value.mediaType === "string"
-  }) : []
-}
+function mergeRawUsage(target: Record<string, number>, usage: unknown) { if (!usage || typeof usage !== "object") return target; for (const [key, value] of Object.entries(usage as Record<string, unknown>)) if (typeof value === "number" && Number.isFinite(value)) target[key] = (target[key] || 0) + value; return target }
+function batchPrompt(basePrompt: string, batch: GenerationBatch, batchIndex: number, batchCount: number) { const withoutPlan = basePrompt.replace(/(?:^|\n)\s*-?\s*Planned files:\s*[^\n]+/i, ""); return [withoutPlan.trim(), "", `BATCHED FULL-STACK GENERATION ${batchIndex + 1}/${batchCount}: ${batch.name}`, `Required system files (return every file in this batch): ${batch.files.join(", ")}`, "Generate ONLY the files listed for this batch. Return complete file contents, not patches.", "Use the existing files supplied from earlier batches as authoritative shared contracts and do not rewrite them unless this batch explicitly lists them.", "Auth bootstrap endpoints register/login/forgot-password/reset-password/verify-email are public bootstrap routes: validate input and credentials securely, but do not require a pre-existing authenticated session.", "All normal business/database API routes must enforce authentication, tenant/company ownership and server-side authorization.", "sql/migrations/001_initial.sql must be safely repeatable, using CREATE TABLE IF NOT EXISTS and equivalent idempotent patterns where appropriate.", "Never delete, reset or overwrite existing Neon data."].join("\n") }
+function attachmentsFrom(payload: GeneratorPayload): CodegenAttachment[] { return Array.isArray(payload.attachments) ? payload.attachments.filter((attachment): attachment is CodegenAttachment => { if (!attachment || typeof attachment !== "object") return false; const value = attachment as Record<string, unknown>; return typeof value.url === "string" && typeof value.mediaType === "string" }) : [] }
 
 async function runProviderAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, profile: GenerationProfile, timeoutMs: number, largeFrontendEdit: boolean, promptOverride?: string, existingOverride?: ExistingProject): Promise<GeneratedCode> {
-  const message = String(promptOverride || payload.message || "").trim()
-  const explicitNewProject = isExplicitNewProjectRequest(payload)
-  const payloadExisting = explicitNewProject ? undefined : payload.existing && typeof payload.existing === "object" ? payload.existing as ExistingProject : undefined
-  const existing = existingOverride || payloadExisting
-  const attachments = attachmentsFrom(payload)
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const controller = new AbortController()
-  const abortFromClient = () => controller.abort(request.signal.reason)
-  request.signal.addEventListener("abort", abortFromClient, { once: true })
-  const provider = providerForMode(mode)
-  const isValidationRepair = /\bVALIDATION-GUIDED REPAIR\b/i.test(message)
-  const maxOutputTokens = profile === "full-stack" ? 32_000 : isValidationRepair ? 20_000 : provider === "gemini" ? 14_000 : 12_000
-  const generated = await Promise.race([
-    generateProjectCode({ prompt: `${message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
-    new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
-  ]).finally(() => { if (timer) clearTimeout(timer); request.signal.removeEventListener("abort", abortFromClient) })
-  assertGeneratedProjectCompleteness(message, generated.files, Boolean(existing))
-  return generated
+  const message = String(promptOverride || payload.message || "").trim(); const explicitNewProject = isExplicitNewProjectRequest(payload); const payloadExisting = explicitNewProject ? undefined : payload.existing && typeof payload.existing === "object" ? payload.existing as ExistingProject : undefined; const existing = existingOverride || payloadExisting; const attachments = attachmentsFrom(payload); let timer: ReturnType<typeof setTimeout> | undefined; const controller = new AbortController(); const abortFromClient = () => controller.abort(request.signal.reason); request.signal.addEventListener("abort", abortFromClient, { once: true }); const provider = providerForMode(mode); const isValidationRepair = /\bVALIDATION-GUIDED REPAIR\b/i.test(message); const maxOutputTokens = profile === "full-stack" ? 32_000 : isValidationRepair ? 20_000 : provider === "gemini" ? 14_000 : 12_000
+  const generated = await Promise.race([generateProjectCode({ prompt: `${message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }), new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) })]).finally(() => { if (timer) clearTimeout(timer); request.signal.removeEventListener("abort", abortFromClient) }); assertGeneratedProjectCompleteness(message, generated.files, Boolean(existing)); return generated
 }
 
 async function runBatchedGeneration(request: Request, payload: GeneratorPayload, candidateModes: CodegenMode[], profile: GenerationProfile, basePrompt: string, attempts: ProviderAttempt[]) {
-  const plannedFiles = plannedFilesFromPrompt(basePrompt)
-  const batches = createBatches(plannedFiles)
-  if (batches.length < 2) return null
-
-  let files: Record<string, string> = {}
-  let title = "Generated application"
-  let description = ""
-  let reply = ""
-  let model = ""
-  let reason = ""
-  const usage: Record<string, number> = {}
-
-  for (const [batchIndex, batch] of batches.entries()) {
-    let completed = false
-    const prompt = batchPrompt(basePrompt, batch, batchIndex, batches.length)
-    for (const [position, mode] of candidateModes.entries()) {
-      if (!modeConfigured(mode)) continue
-      const startedAt = Date.now()
-      const timeoutMs = providerForMode(mode) === "deepseek" ? BATCH_DEEPSEEK_TIMEOUT_MS : BATCH_GEMINI_TIMEOUT_MS
-      try {
-        const existing: ExistingProject | undefined = Object.keys(files).length ? { title, description, fileTree: Object.keys(files), keyFiles: files } : undefined
-        const generated = await runProviderAttempt(request, payload, mode, profile, timeoutMs, false, prompt, existing)
-        files = { ...files, ...generated.files }
-        title = generated.title || title
-        description = generated.description || description
-        reply = generated.reply || reply
-        model = generated.model || model
-        reason = generated.reason || reason
-        mergeRawUsage(usage, generated.usage)
-        attempts.push({ mode, model: generated.model, reason: safeReason(generated.reason || generated.reply || "Batch completed."), fallback: position > 0, configured: true, status: "ok", profile, durationMs: Date.now() - startedAt, usage: generated.usage, batch: batch.name })
-        completed = true
-        break
-      } catch (error) {
-        const batchReason = safeReason(error instanceof Error ? error.message : error)
-        attempts.push({ mode, reason: batchReason, fallback: position > 0, configured: true, status: attemptStatus(batchReason), profile, durationMs: Date.now() - startedAt, batch: batch.name })
-      }
-    }
-    if (!completed) {
-      throw new Error(`Batch ${batch.name} failed with all configured Flash providers.`)
-    }
-  }
-
-  const now = new Date().toISOString()
-  const explicitNewProject = isExplicitNewProjectRequest(payload)
-  return {
-    success: true,
-    response: reply,
-    model,
-    reason,
-    usage,
-    project: {
-      id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(),
-      title,
-      description,
-      prompt: String(payload._originalPrompt || payload.message || "").trim(),
-      createdAt: now,
-      updatedAt: now,
-      files,
-    },
-    batchedGeneration: true,
-    generationBatches: batches.map((batch) => ({ name: batch.name, files: batch.files })),
-  } satisfies GeneratorResult
+  const plannedFiles = plannedFilesFromPrompt(basePrompt); const batches = createBatches(plannedFiles); if (batches.length < 2) return null
+  let files: Record<string, string> = {}; let title = "Generated application"; let description = ""; let reply = ""; let model = ""; let reason = ""; const usage: Record<string, number> = {}
+  for (const [batchIndex, batch] of batches.entries()) { let completed = false; const prompt = batchPrompt(basePrompt, batch, batchIndex, batches.length); for (const [position, mode] of candidateModes.entries()) { if (!modeConfigured(mode)) continue; const startedAt = Date.now(); const timeoutMs = providerForMode(mode) === "deepseek" ? BATCH_DEEPSEEK_TIMEOUT_MS : BATCH_GEMINI_TIMEOUT_MS; try { const existing: ExistingProject | undefined = Object.keys(files).length ? { title, description, fileTree: Object.keys(files), keyFiles: files } : undefined; const generated = await runProviderAttempt(request, payload, mode, profile, timeoutMs, false, prompt, existing); files = { ...files, ...generated.files }; title = generated.title || title; description = generated.description || description; reply = generated.reply || reply; model = generated.model || model; reason = generated.reason || reason; mergeRawUsage(usage, generated.usage); attempts.push({ mode, model: generated.model, reason: safeReason(generated.reason || generated.reply || "Batch completed."), fallback: position > 0, configured: true, status: "ok", profile, durationMs: Date.now() - startedAt, usage: generated.usage, batch: batch.name }); completed = true; break } catch (error) { const batchReason = safeReason(error instanceof Error ? error.message : error); attempts.push({ mode, reason: batchReason, fallback: position > 0, configured: true, status: attemptStatus(batchReason), profile, durationMs: Date.now() - startedAt, batch: batch.name }) } } if (!completed) throw new Error(`Batch ${batch.name} failed with all configured Flash providers.`) }
+  const now = new Date().toISOString(); const explicitNewProject = isExplicitNewProjectRequest(payload); return { success: true, response: reply, model, reason, usage, project: { id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title, description, prompt: String(payload._originalPrompt || payload.message || "").trim(), createdAt: now, updatedAt: now, files }, batchedGeneration: true, generationBatches: batches.map((batch) => ({ name: batch.name, files: batch.files })) } satisfies GeneratorResult
 }
 
-async function runAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, profile: GenerationProfile, timeoutMs: number, largeFrontendEdit: boolean): Promise<GeneratorResult> {
-  const message = String(payload.message || "").trim()
-  const explicitNewProject = isExplicitNewProjectRequest(payload)
-  const existing = explicitNewProject ? undefined : payload.existing && typeof payload.existing === "object" ? payload.existing as ExistingProject : undefined
-  const generated = await runProviderAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit, message, existing)
-  const now = new Date().toISOString()
-  return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, project: { id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: String(payload._originalPrompt || message).trim(), createdAt: now, updatedAt: now, files: generated.files } }
-}
-
+async function runAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, profile: GenerationProfile, timeoutMs: number, largeFrontendEdit: boolean): Promise<GeneratorResult> { const message = String(payload.message || "").trim(); const explicitNewProject = isExplicitNewProjectRequest(payload); const existing = explicitNewProject ? undefined : payload.existing && typeof payload.existing === "object" ? payload.existing as ExistingProject : undefined; const generated = await runProviderAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit, message, existing); const now = new Date().toISOString(); return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, project: { id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: String(payload._originalPrompt || message).trim(), createdAt: now, updatedAt: now, files: generated.files } } }
 function providerSummary(attempts: ProviderAttempt[]) { const summary: Record<string, string> = {}; for (const attempt of attempts) summary[providerForMode(attempt.mode)] = attempt.status; return summary }
 function compactFailure(attempts: ProviderAttempt[], preserved: boolean) { const statuses = providerSummary(attempts); const parts = [statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "", statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : ""].filter(Boolean); const summary = parts.length ? parts.join("; ") : "The configured AI providers are unavailable"; return preserved ? `${summary}. Your existing project was kept unchanged.` : `${summary}. No project was created.` }
 
 export async function POST(request: Request) {
-  const payload = (await request.json().catch(() => ({}))) as GeneratorPayload
-  const explicitNewProject = isExplicitNewProjectRequest(payload)
-  if (explicitNewProject) {
-    delete payload.projectId
-    delete payload.existing
-  }
-  const requested = String(payload.mode || "auto") as CodegenMode
-  const requestedMode: CodegenMode = ["auto","deepseek-flash","deepseek-pro","gemini-flash","gemini-pro"].includes(requested) ? requested : "auto"
-  const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
-  const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
-  const isComplex = isComplexApplicationRequest(payload, hasAttachments)
-  const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
-  const profile: GenerationProfile = isComplex ? "full-stack" : "website"
-  let candidateModes: CodegenMode[]
-  if (hasAttachments) candidateModes = ["gemini-flash"]
-  else if (requestedMode !== "auto") candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]
-  else candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
-  const configuredModes = candidateModes.filter(modeConfigured)
-  const attempts: ProviderAttempt[] = candidateModes.filter((mode) => !modeConfigured(mode)).map((mode, index) => ({ mode, reason: "Provider configuration is missing.", fallback: index > 0, configured: false, status: "missing", profile }))
-
-  if (profile === "full-stack" && !isExistingEdit && !hasAttachments && plannedFilesFromPrompt(String(payload.message || "")).length > 8) {
-    try {
-      const result = await runBatchedGeneration(request, payload, configuredModes, profile, String(payload.message || ""), attempts)
-      if (result) {
-        return NextResponse.json({ ...result, providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback && attempt.status === "ok"), requestComplexity: "complex" })
-      }
-    } catch (error) {
-      const reason = safeReason(error instanceof Error ? error.message : error)
-      console.error(`[786.Chat batched generation failure] ${reason}`)
-      const diagnostic = attempts.map((attempt) => `${attempt.mode}${attempt.batch ? `/${attempt.batch}` : ""} (${attempt.status}): ${safeReason(attempt.reason)}`).join(" | ")
-      console.error(`[786.Chat provider failure] ${diagnostic}`)
-      return NextResponse.json({ success: false, error: compactFailure(attempts, false), warning: "ALL_AI_PROVIDERS_FAILED", providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback), projectPreserved: false, requestComplexity: "complex", batchedGeneration: true }, { status: 503 })
-    }
-  }
-
-  for (const [position, mode] of configuredModes.entries()) {
-    const provider = providerForMode(mode)
-    const timeoutMs = hasAttachments ? SIMPLE_GEMINI_TIMEOUT_MS : isComplex ? (provider === "deepseek" ? COMPLEX_DEEPSEEK_TIMEOUT_MS : COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS) : largeFrontendEdit ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS) : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
-    const startedAt = Date.now()
-    try {
-      const result = await runAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit)
-      attempts.push({ mode, model: String(result.model || ""), reason: safeReason(result.reason || result.response || "Provider completed."), fallback: position > 0, configured: true, status: "ok", profile, durationMs: Date.now() - startedAt, usage: result.usage })
-      return NextResponse.json({ ...result, response: position === 0 ? result.response : `Primary provider did not complete. 786.Chat completed this project with ${result.model || mode}.\n\n${result.response || ""}`.trim(), providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: position > 0, requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple" })
-    } catch (error) {
-      const reason = safeReason(error instanceof Error ? error.message : error)
-      attempts.push({ mode, reason, fallback: position > 0, configured: true, status: attemptStatus(reason), profile, durationMs: Date.now() - startedAt })
-    }
-  }
-  const diagnostic = attempts.map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason)}`).join(" | ")
-  console.error(`[786.Chat provider failure] ${diagnostic}`)
-  return NextResponse.json({ success: false, error: compactFailure(attempts, isExistingEdit), warning: isExistingEdit ? "EDIT_NOT_APPLIED_PROJECT_PRESERVED" : "ALL_AI_PROVIDERS_FAILED", providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback), projectPreserved: isExistingEdit, requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple" }, { status: 503 })
+  const payload = (await request.json().catch(() => ({}))) as GeneratorPayload; const explicitNewProject = isExplicitNewProjectRequest(payload); if (explicitNewProject) { delete payload.projectId; delete payload.existing }
+  const requested = String(payload.mode || "auto") as CodegenMode; const requestedMode: CodegenMode = ["auto","deepseek-flash","deepseek-pro","gemini-flash","gemini-pro"].includes(requested) ? requested : "auto"; const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0; const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object"); const isComplex = isComplexApplicationRequest(payload, hasAttachments); const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex); const profile: GenerationProfile = isComplex ? "full-stack" : "website"; let candidateModes: CodegenMode[]
+  if (hasAttachments) candidateModes = ["gemini-flash"]; else if (requestedMode !== "auto") candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]; else candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
+  const configuredModes = candidateModes.filter(modeConfigured); const attempts: ProviderAttempt[] = candidateModes.filter((mode) => !modeConfigured(mode)).map((mode, index) => ({ mode, reason: "Provider configuration is missing.", fallback: index > 0, configured: false, status: "missing", profile }))
+  if (profile === "full-stack" && !isExistingEdit && !hasAttachments && plannedFilesFromPrompt(String(payload.message || "")).length > 8) { try { const result = await runBatchedGeneration(request, payload, configuredModes, profile, String(payload.message || ""), attempts); if (result) return NextResponse.json({ ...result, providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback && attempt.status === "ok"), requestComplexity: "complex" }) } catch (error) { const reason = safeReason(error instanceof Error ? error.message : error); console.error(`[786.Chat batched generation failure] ${reason}`); const diagnostic = attempts.map((attempt) => `${attempt.mode}${attempt.batch ? `/${attempt.batch}` : ""} (${attempt.status}): ${safeReason(attempt.reason)}`).join(" | "); console.error(`[786.Chat provider failure] ${diagnostic}`); return NextResponse.json({ success: false, error: compactFailure(attempts, false), warning: "ALL_AI_PROVIDERS_FAILED", providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback), projectPreserved: false, requestComplexity: "complex", batchedGeneration: true }, { status: 503 }) } }
+  for (const [position, mode] of configuredModes.entries()) { const provider = providerForMode(mode); const timeoutMs = hasAttachments ? SIMPLE_GEMINI_TIMEOUT_MS : isComplex ? (provider === "deepseek" ? COMPLEX_DEEPSEEK_TIMEOUT_MS : COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS) : largeFrontendEdit ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS) : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS); const startedAt = Date.now(); try { const result = await runAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit); attempts.push({ mode, model: String(result.model || ""), reason: safeReason(result.reason || result.response || "Provider completed."), fallback: position > 0, configured: true, status: "ok", profile, durationMs: Date.now() - startedAt, usage: result.usage }); return NextResponse.json({ ...result, response: position === 0 ? result.response : `Primary provider did not complete. 786.Chat completed this project with ${result.model || mode}.\n\n${result.response || ""}`.trim(), providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: position > 0, requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple" }) } catch (error) { const reason = safeReason(error instanceof Error ? error.message : error); attempts.push({ mode, reason, fallback: position > 0, configured: true, status: attemptStatus(reason), profile, durationMs: Date.now() - startedAt }) } }
+  const diagnostic = attempts.map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason)}`).join(" | "); console.error(`[786.Chat provider failure] ${diagnostic}`); return NextResponse.json({ success: false, error: compactFailure(attempts, isExistingEdit), warning: isExistingEdit ? "EDIT_NOT_APPLIED_PROJECT_PRESERVED" : "ALL_AI_PROVIDERS_FAILED", providerAttempts: attempts, providerStatus: providerSummary(attempts), providerFailoverUsed: attempts.some((attempt) => attempt.fallback), projectPreserved: isExistingEdit, requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple" }, { status: 503 })
 }
