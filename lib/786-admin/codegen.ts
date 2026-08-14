@@ -1,5 +1,5 @@
 import "server-only"
-import { generateText, Output, type FilePart, type ImagePart, type TextPart } from "ai"
+import { generateText, type FilePart, type ImagePart, type TextPart } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 import { BUILDER_MODELS, maxOutputTokensForPlan, normalizeGenerationUsage, type BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
@@ -60,7 +60,10 @@ function buildPrompt(input: CodegenInput) {
   if (!input.existing) return [`MODE: NEW PROJECT`, `USER REQUEST:`, input.prompt.trim(), `Generate the complete requested project using shared components and compact route wrappers.`].join("\n") + JSON_FORMAT_PROMPT
   return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "KEY FILE CONTENTS:", Object.entries(input.existing.keyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
 }
-function compactRetryPrompt(prompt: string, existing: boolean) { return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\n${existing ? "Return only the smallest set of complete files directly changed by the request; do not resend unchanged files." : "Generate the smallest complete runnable project satisfying every explicit requirement; use shared components and compact CSS."}` }
+function compactRetryPrompt(prompt: string, existing: boolean) {
+  if (existing) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return ONLY the smallest set of complete files directly changed by the request. Do not resend unchanged files. Keep title, description and reply extremely short.`
+  return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nNEW PROJECT RETRY: Generate the smallest COMPLETE runnable project satisfying EVERY explicit requirement. Keep every requested route, API, schema and functional control. Use shared components, thin route wrappers and one concise stylesheet. Do not include documentation, tests, duplicate data, decorative SVG, base64 images or unnecessary configuration. Keep title, description and reply extremely short.`
+}
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> { const c: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]; for (const a of attachments) c.push(a.mediaType.startsWith("image/") ? { type: "image", image: a.url, mediaType: a.mediaType } : { type: "file", data: a.url, mediaType: a.mediaType, filename: a.name || "attachment" }); return c }
 
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
@@ -73,14 +76,15 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
   if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
   const choice = payload.choices?.[0]
   const text = choice?.message?.content || ""
-  // IMPORTANT: a length finish_reason can still contain many complete file objects.
-  // Try normal parsing/recovery BEFORE treating the response as unusable.
-  try {
-    return { object: extractProjectJson(text), usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
-  } catch (error) {
+  let object: ProjectObject
+  try { object = extractProjectJson(text) } catch (error) {
     if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
     throw error
   }
+  // A truncated NEW project must never be accepted merely because a few complete
+  // file objects were recoverable. It must get the compact complete-project retry.
+  if (choice?.finish_reason === "length" && !input.existing) throw new Error(TRUNCATION_MESSAGE)
+  return { object, usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
 }
 
 async function runGemini(input: CodegenInput, prompt: string, modelName: string) {
@@ -89,8 +93,9 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const model = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel) : modelName
   if (!googleApiKey && !gatewayConfigured()) throw new Error("Gemini is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
-  const result = await generateText({ model, system: SYSTEM_PROMPT, output: Output.object({ schema: ProjectSchema, name: "project", description: "Complete runnable Next.js project with full file contents." }), ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 12000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
-  return { object: result.output, usage: result.usage }
+  const result = await generateText({ model, system: SYSTEM_PROMPT, ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 12000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
+  if (!result.text?.trim()) throw new Error("Gemini returned no output text.")
+  return { object: extractProjectJson(result.text), usage: result.usage }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -102,10 +107,20 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try { result = await runDeepSeek(input, prompt, mode) }
     catch (error) {
-      if (!(error instanceof Error) || error.message !== TRUNCATION_MESSAGE) throw error
-      result = await runDeepSeek({ ...input, maxOutputTokens: 8000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+      const retryable = error instanceof Error && (error.message === TRUNCATION_MESSAGE || /JSON response could not be parsed|did not contain a JSON object/i.test(error.message))
+      if (!retryable) throw error
+      // Keep the retry within the existing production runtime budget while giving
+      // a long NEW project a real chance to finish all required files.
+      result = await runDeepSeek({ ...input, maxOutputTokens: Math.min(input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan), 12000) }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
-  } else result = await runGemini(input, prompt, picked.model)
+  } else {
+    try { result = await runGemini(input, prompt, picked.model) }
+    catch (error) {
+      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object/i.test(error.message)
+      if (!retryable) throw error
+      result = await runGemini(input, compactRetryPrompt(prompt, Boolean(input.existing)), picked.model)
+    }
+  }
   const files: Record<string, string> = {}
   for (const file of result.object.files) if (file.path && file.content) files[file.path] = file.content
   if (!Object.keys(files).length) throw new Error("Codegen returned zero usable files.")
