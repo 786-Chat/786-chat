@@ -12,10 +12,13 @@ const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-// Complex/full-stack generation needs more time for long owner prompts. Keep both
-// attempts inside the 300s route budget so the fallback still has time to run.
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 165_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 95_000
+// Vercel is currently enforcing an approximately 180s runtime limit on the
+// production function. Keep the two complex Flash attempts below that limit.
+// The smaller output budgets in runAttempt are intentional: they leave enough
+// time for the Gemini fallback instead of letting the first attempt consume the
+// whole request window.
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 105_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 70_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -223,7 +226,7 @@ async function runAttempt(
 
   const provider = providerForMode(mode)
   const maxOutputTokens = profile === "full-stack"
-    ? (provider === "gemini" ? 20_000 : 24_000)
+    ? (provider === "gemini" ? 14_000 : 16_000)
     : existing
       ? (provider === "gemini" ? 14_000 : 8_000)
       : (provider === "gemini" ? 14_000 : 8_192)
