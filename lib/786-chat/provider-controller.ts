@@ -8,17 +8,15 @@ import {
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-const SIMPLE_DEEPSEEK_TIMEOUT_MS = 115_000
-const SIMPLE_GEMINI_TIMEOUT_MS = 90_000
+// Production is currently enforcing an approximately 180s runtime ceiling.
+// Keep the two sequential Flash attempts safely below it while giving the
+// primary provider enough time to finish a large structured project response.
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 112_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 58_000
+const SIMPLE_DEEPSEEK_TIMEOUT_MS = 110_000
+const SIMPLE_GEMINI_TIMEOUT_MS = 60_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
 const LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS = 65_000
-// Vercel is currently enforcing an approximately 180s runtime limit on the
-// production function. Keep the two complex Flash attempts below that limit.
-// The smaller output budgets in runAttempt are intentional: they leave enough
-// time for the Gemini fallback instead of letting the first attempt consume the
-// whole request window.
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 105_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 70_000
 
 type GenerationProfile = "website" | "full-stack"
 type GeneratorPayload = Record<string, unknown> & {
@@ -88,9 +86,8 @@ function requestText(payload: GeneratorPayload): string {
 }
 
 function isExplicitFrontendOnly(message: string): boolean {
-  const saysFrontendOnly = /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message)
-  const forbidsBackend = /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message)
-  return saysFrontendOnly || forbidsBackend
+  return /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message) ||
+    /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message)
 }
 
 function asksForBackendCapability(message: string): boolean {
@@ -109,24 +106,20 @@ function frontendEditWeight(message: string): number {
     "testimonials", "faq", "newsletter", "footer", "navigation", "team", "timeline", "lightbox",
   ]
   const listItems = (message.match(/^\s*-\s*[^\n]+$/gim) || []).length
-  const matchedTerms = routeWords.filter((term) => message.includes(term)).length
-  return listItems + matchedTerms + Math.floor(message.length / 700)
+  return listItems + routeWords.filter((term) => message.includes(term)).length + Math.floor(message.length / 700)
 }
 
 function isLargeFrontendEdit(payload: GeneratorPayload, isComplex: boolean): boolean {
   if (!payload.existing || isComplex) return false
-  const message = requestText(payload)
-  return frontendEditWeight(message) >= 12
+  return frontendEditWeight(requestText(payload)) >= 12
 }
 
 function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
   const message = requestText(payload)
   if (!message) return Boolean(hasAttachments)
   if (isExplicitFrontendOnly(message)) return false
-
   if (payload.existing) return asksForBackendCapability(message)
   if (hasAttachments) return true
-
   const terms = [
     "database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing",
     "school management", "hospital management", "pos system", "warehouse", "authentication",
@@ -143,57 +136,45 @@ function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLar
       "",
       isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.",
       "FULL-STACK COMPACTNESS RULES — MANDATORY:",
-      "- Keep the complete structured response compact while preserving every required route and backend capability.",
-      "- Use one shared frontend component for navigation, footer, cards and page sections. Requested page files may be thin wrappers only when the route has no required interaction that validation must verify directly.",
-      "- Interactive routes such as booking, contact, login, checkout or other requested forms must contain the functional controls and handlers in the route file when the requirement validator checks that route directly.",
-      "- Do not duplicate JSX, navigation arrays, footer markup, product data or CSS between routes; functional route-specific forms are an allowed exception.",
+      "- Keep the structured response compact while preserving every requested route and backend capability.",
+      "- Use one shared frontend component for navigation, footer, cards and page sections.",
+      "- Interactive routes such as booking, contact, login, checkout and requested forms must contain their functional controls and handlers in the route file when validation checks that route directly.",
+      "- Do not duplicate JSX, navigation arrays, footer markup, product data or CSS between routes.",
       "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG art, data URLs or base64 assets.",
-      "- Centralize reusable server concerns such as query helpers, Zod schemas and response helpers in lib/server instead of repeating boilerplate in every API route.",
-      "- API collection/item files may be thin adapters to shared validated handlers when that preserves the required HTTP methods and security rules.",
-      "- Keep backend docs, manifest, schema and migration concise but complete. Never omit a mandatory file to save tokens.",
-      "- Prefer compact TypeScript expressions and reusable helpers over repeated handler bodies.",
-      isExistingEdit
-        ? "- For an edit, return ONLY new or modified files. Preserve all unrelated existing files and behavior."
-        : "- Return complete runnable files only. Do not omit routes, navigation, forms or core requested features.",
-      "- Where external credentials are unavailable, document required environment variable names only; never create mock providers or secret values.",
+      "- Centralize reusable server concerns such as query helpers, Zod schemas and response helpers in lib/server.",
+      "- API collection/item files may be thin adapters to shared validated handlers when required HTTP methods and security are preserved.",
+      "- Keep backend docs, manifest, schema and migration concise but complete. Never omit a mandatory file.",
+      isExistingEdit ? "- For an edit, return ONLY new or modified files." : "- Return complete runnable files only.",
+      "- Where external credentials are unavailable, document environment variable names only; never create mock secrets.",
       "Return valid structured project output with no markdown outside the required object.",
     ].join("\n")
   }
-
   if (isExistingEdit) {
     return [
       "",
       "Apply this request as a compact edit to the EXISTING Next.js website.",
       "EDIT RELIABILITY RULES:",
-      "- Return ONLY files that are new or actually modified; never regenerate the whole project.",
-      "- Preserve all existing files, pages, styles, navigation and functionality not requested to change.",
-      "- When adding routes, create thin app/<route>/page.tsx wrappers where possible, but never use a thin wrapper when the requested route itself must contain a functional form or interaction for validation.",
-      "- Prefer modifying the existing shared component/data arrays instead of duplicating large JSX or CSS.",
-      isLargeEdit
-        ? "- This is a multi-page frontend edit. Keep non-interactive route wrappers extremely small and centralize shared sections/data so the response stays compact."
-        : "- Keep the response compact and targeted.",
-      "- Do NOT return package.json, tsconfig.json, Next.js config, layout or global CSS unless the requested change genuinely requires modifying that file.",
+      "- Return ONLY files that are new or actually modified; preserve all unrelated files and functionality.",
+      "- When adding routes, create thin app/<route>/page.tsx wrappers where possible, but keep required functional forms in the route file.",
+      "- Prefer modifying shared components/data arrays instead of duplicating JSX or CSS.",
+      isLargeEdit ? "- This is a multi-page frontend edit. Keep route wrappers small and centralize shared sections/data." : "- Keep the response compact and targeted.",
+      "- Do NOT return package.json, tsconfig.json, Next.js config, layout or global CSS unless genuinely required.",
       "- Every returned file must be complete and syntactically valid.",
-      "- Never return an unchanged file just to provide context.",
       "Return valid structured project output with no markdown outside the required object.",
     ].join("\n")
   }
-
   return [
     "",
     "Generate a compact complete runnable Next.js App Router website.",
     "HARD COMPACTNESS RULES:",
     "- Use one shared components/SitePage.tsx component for shared visual sections and shared data.",
-    "- Ordinary informational route files should be thin wrappers that import the shared SitePage component.",
-    "- Do NOT use a thin wrapper for a route with a required functional interaction. If Booking/Reservations/Appointments are requested, app/booking/page.tsx itself must contain the real form, submit handling via onSubmit/action/formAction, and date/time or booking controls so validation can verify it.",
-    "- The same principle applies to other validator-checked interactive routes: keep the required controls and handlers in the route file instead of hiding them only in a shared component.",
-    "- Put navigation, footer, cards and shared arrays only once in SitePage.tsx; route-specific functional forms are allowed outside SitePage when required for validation.",
+    "- Ordinary informational route files should be thin wrappers.",
+    "- Functional routes must contain the required controls and handlers in the route file so validation can verify them.",
+    "- Put navigation, footer, cards and shared arrays only once; route-specific functional forms are allowed outside SitePage.",
     "- Keep app/globals.css below 150 lines and do not include data URLs, base64 images, inline SVG artwork or repeated CSS.",
-    "- Use remote image URLs only as CSS background URLs or next/image src strings; never embed image bytes.",
-    "- Include only the configuration files needed for a runnable Next.js project; keep each configuration file minimal.",
-    "- Implement requested interactions where the route validator can verify them; use compact React state and avoid decorative no-op forms.",
+    "- Use remote image URLs only; never embed image bytes.",
+    "- Include only configuration files needed for a runnable project.",
     "- Create every requested route with working navigation and responsive design.",
-    "- Avoid repeated copy and decorative boilerplate. Completeness is more important than decorative repetition.",
     "Return valid structured project output with no markdown outside the required object.",
   ].join("\n")
 }
@@ -218,19 +199,19 @@ async function runAttempt(
         return typeof value.url === "string" && typeof value.mediaType === "string"
       })
     : []
-
   let timer: ReturnType<typeof setTimeout> | undefined
   const controller = new AbortController()
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
-
   const provider = providerForMode(mode)
+  // Long owner generations need a little more response headroom. The output
+  // budget is still bounded per request; "unlimited owner" means unlimited
+  // plan/rate/prompt limits, not an unbounded provider response.
   const maxOutputTokens = profile === "full-stack"
-    ? (provider === "gemini" ? 14_000 : 16_000)
+    ? (provider === "gemini" ? 16_000 : 20_000)
     : existing
       ? (provider === "gemini" ? 14_000 : 8_000)
       : (provider === "gemini" ? 14_000 : 8_192)
-
   const generated = await Promise.race([
     generateProjectCode({
       prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`,
@@ -253,7 +234,6 @@ async function runAttempt(
     if (timer) clearTimeout(timer)
     request.signal.removeEventListener("abort", abortFromClient)
   })
-
   const now = new Date().toISOString()
   return {
     success: true,
@@ -284,27 +264,22 @@ function providerSummary(attempts: ProviderAttempt[]) {
 function compactFailure(attempts: ProviderAttempt[], preserved: boolean) {
   const statuses = providerSummary(attempts)
   const parts = [
-    statuses.deepseek === "timed_out" ? "DeepSeek reached the server time limit" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "",
+    statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "",
     statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : "",
   ].filter(Boolean)
   const summary = parts.length ? parts.join("; ") : "The configured AI providers are unavailable"
-  return preserved
-    ? `${summary}. Your existing project was kept unchanged.`
-    : `${summary}. No project was created.`
+  return preserved ? `${summary}. Your existing project was kept unchanged.` : `${summary}. No project was created.`
 }
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as GeneratorPayload
   const requested = String(payload.mode || "auto") as CodegenMode
-  const requestedMode: CodegenMode = ["auto", "deepseek-flash", "deepseek-pro", "gemini-flash", "gemini-pro"].includes(requested)
-    ? requested
-    : "auto"
+  const requestedMode: CodegenMode = ["auto", "deepseek-flash", "deepseek-pro", "gemini-flash", "gemini-pro"].includes(requested) ? requested : "auto"
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
   const isExistingEdit = Boolean(payload.existing && typeof payload.existing === "object")
   const isComplex = isComplexApplicationRequest(payload, hasAttachments)
   const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
   const profile: GenerationProfile = isComplex ? "full-stack" : "website"
-
   let candidateModes: CodegenMode[]
   if (requestedMode !== "auto") {
     const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
@@ -316,7 +291,6 @@ export async function POST(request: Request) {
   } else {
     candidateModes = ["deepseek-flash", "gemini-flash"]
   }
-
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes
     .filter((mode) => !modeConfigured(mode))
@@ -332,22 +306,10 @@ export async function POST(request: Request) {
     const startedAt = Date.now()
     try {
       const result = await runAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit)
-      attempts.push({
-        mode,
-        model: String(result.model || ""),
-        reason: safeReason(result.reason || result.response || "Provider completed."),
-        fallback: position > 0,
-        configured: true,
-        status: "ok",
-        profile,
-        durationMs: Date.now() - startedAt,
-        usage: result.usage,
-      })
+      attempts.push({ mode, model: String(result.model || ""), reason: safeReason(result.reason || result.response || "Provider completed."), fallback: position > 0, configured: true, status: "ok", profile, durationMs: Date.now() - startedAt, usage: result.usage })
       return NextResponse.json({
         ...result,
-        response: position === 0
-          ? result.response
-          : `Primary provider did not complete. 786.Chat completed this project with ${result.model || mode}.\n\n${result.response || ""}`.trim(),
+        response: position === 0 ? result.response : `Primary provider did not complete. 786.Chat completed this project with ${result.model || mode}.\n\n${result.response || ""}`.trim(),
         providerAttempts: attempts,
         providerStatus: providerSummary(attempts),
         providerFailoverUsed: position > 0,
@@ -355,22 +317,12 @@ export async function POST(request: Request) {
       })
     } catch (error) {
       const reason = safeReason(error instanceof Error ? error.message : error)
-      attempts.push({
-        mode,
-        reason,
-        fallback: position > 0,
-        configured: true,
-        status: attemptStatus(reason),
-        profile,
-        durationMs: Date.now() - startedAt,
-      })
+      attempts.push({ mode, reason, fallback: position > 0, configured: true, status: attemptStatus(reason), profile, durationMs: Date.now() - startedAt })
     }
   }
-
   const diagnostic = attempts.map((attempt) => `${attempt.mode} (${attempt.status}): ${safeReason(attempt.reason)}`).join(" | ")
   console.error(`[786.Chat provider failure] ${diagnostic}`)
-
-  const body = {
+  return NextResponse.json({
     success: false,
     error: compactFailure(attempts, isExistingEdit),
     warning: isExistingEdit ? "EDIT_NOT_APPLIED_PROJECT_PRESERVED" : "ALL_AI_PROVIDERS_FAILED",
@@ -379,6 +331,5 @@ export async function POST(request: Request) {
     providerFailoverUsed: attempts.some((attempt) => attempt.fallback),
     projectPreserved: isExistingEdit,
     requestComplexity: isComplex ? "complex" : largeFrontendEdit ? "large-frontend-edit" : "simple",
-  }
-  return NextResponse.json(body, { status: 503 })
+  }, { status: 503 })
 }
