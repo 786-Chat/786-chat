@@ -13,6 +13,11 @@ async function ownerEmail() {
   return session?.email ? session.email.toLowerCase().trim() : null
 }
 
+function isExplicitNewProjectPrompt(prompt: string) {
+  const text = prompt.toLowerCase().trim()
+  return /\bnew project\b|completely new|create (?:a |an )?new project|this is a new project/.test(text)
+}
+
 export async function GET(_request: Request, { params }: Context) {
   const owner = await ownerEmail()
   if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -28,17 +33,21 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const current = await getProjectWithData(id, owner)
-  if (!current) return NextResponse.json({ error: "Project not found." }, { status: 404 })
+  const prompt = typeof body.prompt === "string" ? body.prompt : ""
+  const explicitNewProject = isExplicitNewProjectPrompt(prompt)
+  const current = explicitNewProject ? null : await getProjectWithData(id, owner)
+  if (!explicitNewProject && !current) return NextResponse.json({ error: "Project not found." }, { status: 404 })
+
   const files = body.files && typeof body.files === "object"
     ? body.files as Record<string, string>
     : null
   if (!files || Object.keys(files).length === 0) {
     return NextResponse.json({ error: "A complete generated file set is required." }, { status: 400 })
   }
+
   const metadata = body.metadata && typeof body.metadata === "object"
     ? body.metadata as Record<string, unknown>
-    : current.metadata
+    : current?.metadata || {}
   const validation = validatePersistedGeneration(metadata, files)
   if (validation && !validation.valid) {
     return NextResponse.json({
@@ -53,17 +62,24 @@ export async function PATCH(request: Request, { params }: Context) {
       securityValidation,
     }, { status: 422 })
   }
+
   try {
     const project = await saveGeneratedProjectAtomic({
-      projectId: id,
+      // A prompt that explicitly requests a NEW PROJECT must never PATCH the
+      // currently open project, even if the browser sent its active project ID.
+      projectId: explicitNewProject ? null : id,
       ownerEmail: owner,
-      title: typeof body.title === "string" ? body.title : current.title,
-      description: typeof body.description === "string" ? body.description : current.description,
-      prompt: typeof body.prompt === "string" ? body.prompt : current.prompt,
+      title: typeof body.title === "string" && body.title.trim()
+        ? body.title
+        : current?.title || "New AI Project",
+      description: typeof body.description === "string"
+        ? body.description
+        : current?.description || "",
+      prompt,
       files,
       previewState: body.preview_state && typeof body.preview_state === "object"
         ? body.preview_state as Record<string, unknown>
-        : current.preview_state,
+        : current?.preview_state || { active_file: "app/page.tsx", entry_path: "app/page.tsx" },
       metadata,
       messages: Array.isArray(body.messages)
         ? body.messages as Array<{ role: "user" | "assistant" | "system"; content: string; model?: string | null; reason?: string | null }>
