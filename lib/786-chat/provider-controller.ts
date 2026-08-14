@@ -79,13 +79,21 @@ export async function POST(request: Request) {
   const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
   const profile: GenerationProfile = isComplex ? "full-stack" : "website"
   let candidateModes: CodegenMode[]
-  if (requestedMode !== "auto") candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]
-  else candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
+  if (hasAttachments) {
+    // Images must be sent to a vision-capable provider. Do not run DeepSeek first
+    // and then silently force the request back to Gemini inside codegen; that made
+    // the logs claim "DeepSeek failed" while Gemini was actually being called twice.
+    candidateModes = ["gemini-flash"]
+  } else if (requestedMode !== "auto") {
+    candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]
+  } else {
+    candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
+  }
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes.filter((mode) => !modeConfigured(mode)).map((mode, index) => ({ mode, reason: "Provider configuration is missing.", fallback: index > 0, configured: false, status: "missing", profile }))
   for (const [position, mode] of configuredModes.entries()) {
     const provider = providerForMode(mode)
-    const timeoutMs = isComplex ? (provider === "deepseek" ? COMPLEX_DEEPSEEK_TIMEOUT_MS : COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS) : largeFrontendEdit ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS) : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
+    const timeoutMs = hasAttachments ? SIMPLE_GEMINI_TIMEOUT_MS : isComplex ? (provider === "deepseek" ? COMPLEX_DEEPSEEK_TIMEOUT_MS : COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS) : largeFrontendEdit ? (provider === "gemini" ? LARGE_EDIT_GEMINI_TIMEOUT_MS : LARGE_EDIT_DEEPSEEK_FALLBACK_TIMEOUT_MS) : (provider === "deepseek" ? SIMPLE_DEEPSEEK_TIMEOUT_MS : SIMPLE_GEMINI_TIMEOUT_MS)
     const startedAt = Date.now()
     try {
       const result = await runAttempt(request, payload, mode, profile, timeoutMs, largeFrontendEdit)
