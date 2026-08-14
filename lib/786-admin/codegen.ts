@@ -2,219 +2,84 @@ import "server-only"
 import { generateText, Output, type FilePart, type ImagePart, type TextPart } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
+import { BUILDER_MODELS, maxOutputTokensForPlan, normalizeGenerationUsage, type BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
 
-import {
-  BUILDER_MODELS,
-  maxOutputTokensForPlan,
-  normalizeGenerationUsage,
-  type BuilderGenerationUsage,
-} from "@/lib/786-chat/ai-provider-config"
-
-export type CodegenMode =
-  | "auto"
-  | "deepseek-flash"
-  | "deepseek-pro"
-  | "gemini-flash"
-  | "gemini-pro"
-
+export type CodegenMode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 export type CodegenAttachment = { url: string; mediaType: string; name?: string }
-
-export type CodegenInput = {
-  prompt: string
-  mode?: CodegenMode
-  abortSignal?: AbortSignal
-  userId?: string
-  userPlan?: string
-  generationId?: string
-  maxOutputTokens?: number
-  attachments?: CodegenAttachment[]
-  existing?: { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> }
-}
-
-export type CodegenResult = {
-  title: string
-  description: string
-  reply: string
-  files: Record<string, string>
-  model: string
-  reason: string
-  usage: BuilderGenerationUsage
-}
+export type CodegenInput = { prompt: string; mode?: CodegenMode; abortSignal?: AbortSignal; userId?: string; userPlan?: string; generationId?: string; maxOutputTokens?: number; attachments?: CodegenAttachment[]; existing?: { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> } }
+export type CodegenResult = { title: string; description: string; reply: string; files: Record<string, string>; model: string; reason: string; usage: BuilderGenerationUsage }
 
 const FileSchema = z.object({ path: z.string().min(1), content: z.string(), language: z.string().optional() })
-const ProjectSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-  reply: z.string().min(1),
-  files: z.array(FileSchema).min(1),
-})
+const ProjectSchema = z.object({ title: z.string().min(1), description: z.string().min(1), reply: z.string().min(1), files: z.array(FileSchema).min(1) })
 type ProjectObject = z.infer<typeof ProjectSchema>
 
-const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator.
-Return a real runnable Next.js App Router project as JSON.
-
-Rules:
-- Return FULL file content, never diffs or placeholders.
-- app/page.tsx is mandatory for new projects; for existing-project edits, return it only when the requested change modifies it.
-- Use TypeScript and Tailwind CSS.
-- Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge.
-- Backend files may also use @neondatabase/serverless and zod when requested.
-- Preserve existing files and behavior for edits; emit only new or modified files.
-- Every internal slash href must have a matching app/**/page.tsx route.
-- Keep shared UI in reusable components and route wrappers thin.
-- Keep CSS compact and CSS-first for animation.
-- Every identifier used in JSX must be declared or imported.
-- For Neon, initialize the connection lazily inside getSql/getDb and never require DATABASE_URL during module import.
-- For Neon query results, never call .length or [0] on the raw tagged-template return type. Normalize awaited results to typed rows before indexing.
-- Use parameterized database queries.
-- Every requested backend API/schema/migration file must be real code, not mock data.
-- Return JSON only, with no markdown fences or prose outside the JSON object.`
-
-const JSON_FORMAT_PROMPT = `
-
-OUTPUT FORMAT — MANDATORY:
-Return exactly one JSON object with this shape:
-{"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}
-The response must begin with { and end with }.
-Escape newlines, quotes, backslashes, tabs and control characters correctly inside file content.
-Do not use markdown fences.
-Keep title, description and reply concise.
-Avoid duplicated JSX, CSS and backend helpers so the complete response fits within the output budget.`
-
+const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator. Return a real runnable Next.js App Router project as JSON.
+Rules: Return FULL file content, never diffs or placeholders. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Preserve existing files for edits and emit only new or modified files. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. Return JSON only.`
+const JSON_FORMAT_PROMPT = `\nReturn exactly one JSON object: {"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}. Begin with { and end with }. Escape JSON control characters. Keep metadata concise. Avoid duplicated code so the response fits the output budget.`
 const TRUNCATION_MESSAGE = "DeepSeek JSON response was truncated before all project files were returned."
 const COMPACT_RETRY_MESSAGE = "Provider response was too large or incomplete; retrying with compact project output."
 
-function gatewayConfigured() {
-  return Boolean(process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || process.env.VERCEL === "1")
-}
-
-function selectedMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode {
-  if (hasAttachments) return "gemini-flash"
-  return mode === "auto" ? "deepseek-flash" : mode
-}
-
-function selectedModel(mode: CodegenMode): { model: string; reason: string } {
+function gatewayConfigured() { return Boolean(process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || process.env.VERCEL === "1") }
+function selectedMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode { return hasAttachments ? "gemini-flash" : mode === "auto" ? "deepseek-flash" : mode }
+function selectedModel(mode: CodegenMode) {
   if (mode === "gemini-flash") return { model: BUILDER_MODELS["gemini-flash"], reason: "Gemini Flash selected." }
   if (mode === "gemini-pro") return { model: BUILDER_MODELS["gemini-pro"], reason: "Gemini Pro selected manually." }
   if (mode === "deepseek-pro") return { model: "deepseek-v4-pro", reason: "DeepSeek V4 Pro selected manually." }
   return { model: "deepseek-v4-flash", reason: "DeepSeek V4 Flash selected." }
 }
 
+function decodeJsonString(value: string, fallback: string) { try { return JSON.parse(`"${value}"`) } catch { return fallback } }
+
 function recoverTruncatedProject(text: string): ProjectObject | null {
   const files: Array<{ path: string; content: string; language?: string }> = []
-  const filePattern = /\{"path"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"content"\s*:\s*"((?:\\.|[^"\\])*)"(?:\s*,\s*"language"\s*:\s*"((?:\\.|[^"\\])*)")?\}/g
-  let match: RegExpExecArray | null
-  while ((match = filePattern.exec(text)) !== null) {
-    try {
-      const path = JSON.parse(`"${match[1]}"`)
-      const content = JSON.parse(`"${match[2]}"`)
-      const language = match[3] ? JSON.parse(`"${match[3]}"`) : undefined
-      const parsed = FileSchema.safeParse({ path, content, language })
-      if (parsed.success) files.push(parsed.data)
-    } catch {
-      // Ignore an incomplete file object at the end of a truncated response.
-    }
+  const re = /\{"path"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"content"\s*:\s*"((?:\\.|[^"\\])*)"(?:\s*,\s*"language"\s*:\s*"((?:\\.|[^"\\])*)")?\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const parsed = FileSchema.safeParse({ path: decodeJsonString(m[1], ""), content: decodeJsonString(m[2], ""), language: m[3] ? decodeJsonString(m[3], "") : undefined })
+    if (parsed.success) files.push(parsed.data)
   }
   if (!files.length) return null
-  const titleMatch = /"title"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)
-  const descriptionMatch = /"description"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)
-  const replyMatch = /"reply"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)
-  const decode = (value: string | undefined, fallback: string) => {
-    if (!value) return fallback
-    try { return JSON.parse(`"${value}"`) } catch { return fallback }
-  }
-  return {
-    title: decode(titleMatch?.[1], "Generated Project"),
-    description: decode(descriptionMatch?.[1], "Generated by 786.Chat"),
-    reply: decode(replyMatch?.[1], "Project generated successfully."),
-    files,
-  }
+  const title = /"title"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)?.[1]
+  const description = /"description"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)?.[1]
+  const reply = /"reply"\s*:\s*"((?:\\.|[^"\\])*)"/.exec(text)?.[1]
+  return { title: decodeJsonString(title || "", "Generated Project"), description: decodeJsonString(description || "", "Generated by 786.Chat"), reply: decodeJsonString(reply || "", "Project generated successfully."), files }
 }
 
 function extractProjectJson(text: string): ProjectObject {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
   const start = trimmed.indexOf("{")
-  if (start >= 0) {
-    for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
-      try { return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1))) } catch { /* try earlier boundary */ }
-    }
+  if (start >= 0) for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
+    try { return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1))) } catch {}
   }
   const recovered = recoverTruncatedProject(trimmed)
   if (recovered) return recovered
-  if (start < 0) throw new Error("Provider response did not contain a JSON object.")
   throw new Error("Provider JSON response could not be parsed or validated.")
 }
 
 function buildPrompt(input: CodegenInput) {
-  const parts: string[] = []
-  if (input.existing) {
-    parts.push(
-      "MODE: EDIT EXISTING PROJECT",
-      `EXISTING TITLE: ${input.existing.title}`,
-      `EXISTING DESCRIPTION: ${input.existing.description}`,
-      "",
-      "ALL EXISTING FILE PATHS:",
-      [...input.existing.fileTree].sort().join("\n"),
-      "",
-      "KEY FILE CONTENTS:",
-      Object.entries(input.existing.keyFiles).map(([path, content]) => `--- FILE: ${path} ---\n${content}\n--- END FILE ---`).join("\n\n"),
-      "",
-      "USER REQUEST:",
-      input.prompt.trim(),
-      "",
-      "Emit only files that are new or modified. Preserve unrelated files and functionality.",
-    )
-  } else {
-    parts.push("MODE: NEW PROJECT", "", "USER REQUEST:", input.prompt.trim(), "", "Generate the complete requested project. Use shared components and compact route wrappers.")
-  }
-  return `${parts.join("\n")}${JSON_FORMAT_PROMPT}`
+  if (!input.existing) return [`MODE: NEW PROJECT`, `USER REQUEST:`, input.prompt.trim(), `Generate the complete requested project using shared components and compact route wrappers.`].join("\n") + JSON_FORMAT_PROMPT
+  return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "KEY FILE CONTENTS:", Object.entries(input.existing.keyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
 }
-
-function compactRetryPrompt(prompt: string, existing: boolean) {
-  return existing
-    ? `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged routes, shared styles, package files, schema files, helpers, components or APIs. Return complete content for each changed file.`
-    : `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nNEW PROJECT RETRY: Generate the smallest complete runnable project that satisfies the explicit request. Use shared components, thin route wrappers and compact CSS. Do not include documentation, tests, duplicate data, base64 images or unnecessary config. Keep title, description and reply extremely short.`
-}
-
-function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> {
-  const content: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]
-  for (const attachment of attachments) {
-    if (attachment.mediaType.startsWith("image/")) content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
-    else content.push({ type: "file", data: attachment.url, mediaType: attachment.mediaType, filename: attachment.name || "attachment" })
-  }
-  return content
-}
+function compactRetryPrompt(prompt: string, existing: boolean) { return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\n${existing ? "Return only the smallest set of complete files directly changed by the request; do not resend unchanged files." : "Generate the smallest complete runnable project satisfying every explicit requirement; use shared components and compact CSS."}` }
+function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> { const c: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]; for (const a of attachments) c.push(a.mediaType.startsWith("image/") ? { type: "image", image: a.url, mediaType: a.mediaType } : { type: "file", data: a.url, mediaType: a.mediaType, filename: a.name || "attachment" }); return c }
 
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
   if (!apiKey) throw new Error("DeepSeek direct API key is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const model = mode === "deepseek-pro" ? "deepseek-v4-pro" : "deepseek-v4-flash"
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }],
-      thinking: { type: "disabled" },
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-      max_tokens: Math.min(requestedTokens, 12_000),
-      stream: false,
-    }),
-    signal: input.abortSignal,
-  })
-  const payload = await response.json().catch(() => ({})) as {
-    error?: { message?: string }
-    choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
-    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-  }
+  const response = await fetch("https://api.deepseek.com/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], thinking: { type: "disabled" }, response_format: { type: "json_object" }, temperature: 0.1, max_tokens: Math.min(requestedTokens, 12000), stream: false }), signal: input.abortSignal })
+  const payload = await response.json().catch(() => ({})) as { error?: { message?: string }; choices?: Array<{ finish_reason?: string; message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
   if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
   const choice = payload.choices?.[0]
-  if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
-  return {
-    object: extractProjectJson(choice?.message?.content || ""),
-    usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 },
+  const text = choice?.message?.content || ""
+  // IMPORTANT: a length finish_reason can still contain many complete file objects.
+  // Try normal parsing/recovery BEFORE treating the response as unusable.
+  try {
+    return { object: extractProjectJson(text), usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
+  } catch (error) {
+    if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
+    throw error
   }
 }
 
@@ -224,17 +89,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const model = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel) : modelName
   if (!googleApiKey && !gatewayConfigured()) throw new Error("Gemini is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
-  const result = await generateText({
-    model,
-    system: SYSTEM_PROMPT,
-    output: Output.object({ schema: ProjectSchema, name: "project", description: "Complete runnable Next.js project with full file contents." }),
-    ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }),
-    temperature: 0.1,
-    maxOutputTokens: Math.min(requestedTokens, 12_000),
-    maxRetries: 0,
-    abortSignal: input.abortSignal,
-    ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}),
-  })
+  const result = await generateText({ model, system: SYSTEM_PROMPT, output: Output.object({ schema: ProjectSchema, name: "project", description: "Complete runnable Next.js project with full file contents." }), ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 12000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
   return { object: result.output, usage: result.usage }
 }
 
@@ -245,17 +100,12 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const prompt = buildPrompt(input)
   let result
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
-    try {
-      result = await runDeepSeek(input, prompt, mode)
-    } catch (error) {
-      const truncated = error instanceof Error && error.message === TRUNCATION_MESSAGE
-      if (!truncated) throw error
-      const retryInput: CodegenInput = { ...input, maxOutputTokens: 8_000 }
-      result = await runDeepSeek(retryInput, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+    try { result = await runDeepSeek(input, prompt, mode) }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== TRUNCATION_MESSAGE) throw error
+      result = await runDeepSeek({ ...input, maxOutputTokens: 8000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
-  } else {
-    result = await runGemini(input, prompt, picked.model)
-  }
+  } else result = await runGemini(input, prompt, picked.model)
   const files: Record<string, string> = {}
   for (const file of result.object.files) if (file.path && file.content) files[file.path] = file.content
   if (!Object.keys(files).length) throw new Error("Codegen returned zero usable files.")
