@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server"
-import {
-  generateProjectCode,
-  type CodegenAttachment,
-  type CodegenMode,
-} from "@/lib/786-admin/codegen"
+import { generateProjectCode, type CodegenAttachment, type CodegenMode } from "@/lib/786-admin/codegen"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -27,41 +23,16 @@ function modeConfigured(mode: CodegenMode): boolean {
   if (providerForMode(mode) === "deepseek") return configured("DEEPSEEK_API_KEY") || gatewayConfigured()
   return configured("GOOGLE_GENERATIVE_AI_API_KEY") || configured("GEMINI_API_KEY") || gatewayConfigured()
 }
-function safeReason(value: unknown): string {
-  const text = String(value || "Provider failed.").replace(/https?:\/\/\S+/gi, "provider documentation").replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim()
-  return text.slice(0, 500) || "Provider failed."
-}
-function attemptStatus(reason: unknown, success = false): ProviderAttempt["status"] {
-  if (success) return "ok"
-  const text = String(reason || "").toLowerCase()
-  if (/quota|rate.?limit|resource exhausted|429|exceeded your current quota/.test(text)) return "quota_exhausted"
-  if (/timed out|timeout|did not finish/.test(text)) return "timed_out"
-  return "failed"
-}
+function safeReason(value: unknown): string { const text = String(value || "Provider failed.").replace(/https?:\/\/\S+/gi, "provider documentation").replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim(); return text.slice(0, 500) || "Provider failed." }
+function attemptStatus(reason: unknown, success = false): ProviderAttempt["status"] { if (success) return "ok"; const text = String(reason || "").toLowerCase(); if (/quota|rate.?limit|resource exhausted|429|exceeded your current quota/.test(text)) return "quota_exhausted"; if (/timed out|timeout|did not finish/.test(text)) return "timed_out"; return "failed" }
 function requestText(payload: GeneratorPayload): string { return String(payload._originalPrompt || payload.message || "").trim().toLowerCase() }
-function isExplicitFrontendOnly(message: string): boolean {
-  return /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message) || /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message)
-}
-function asksForBackendCapability(message: string): boolean {
-  return ["database", "backend", "api route", "api endpoint", "neon", "postgres", "authentication", "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout", "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app", "kitchen dashboard", "invoice", "quotation", "crm", "erp", "inventory", "manufacturing", "school management", "hospital management", "pos system", "warehouse", "saas"].some((term) => message.includes(term))
-}
-function frontendEditWeight(message: string): number {
-  const routeWords = ["page", "pages", "menu", "gallery", "about", "contact", "services", "destinations", "packages", "testimonials", "faq", "newsletter", "footer", "navigation", "team", "timeline", "lightbox"]
-  const listItems = (message.match(/^\s*-\s*[^\n]+$/gim) || []).length
-  return listItems + routeWords.filter((term) => message.includes(term)).length + Math.floor(message.length / 700)
-}
+function isExplicitFrontendOnly(message: string): boolean { return /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message) || /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message) }
+function asksForBackendCapability(message: string): boolean { return ["database", "backend", "api route", "api endpoint", "neon", "postgres", "authentication", "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout", "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app", "kitchen dashboard", "invoice", "quotation", "crm", "erp", "inventory", "manufacturing", "school management", "hospital management", "pos system", "warehouse", "saas"].some((term) => message.includes(term)) }
+function frontendEditWeight(message: string): number { const routeWords = ["page", "pages", "menu", "gallery", "about", "contact", "services", "destinations", "packages", "testimonials", "faq", "newsletter", "footer", "navigation", "team", "timeline", "lightbox"]; const listItems = (message.match(/^\s*-\s*[^\n]+$/gim) || []).length; return listItems + routeWords.filter((term) => message.includes(term)).length + Math.floor(message.length / 700) }
 function isLargeFrontendEdit(payload: GeneratorPayload, isComplex: boolean): boolean { return Boolean(payload.existing) && !isComplex && frontendEditWeight(requestText(payload)) >= 12 }
-function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean {
-  const message = requestText(payload)
-  if (!message) return Boolean(hasAttachments)
-  if (isExplicitFrontendOnly(message)) return false
-  if (payload.existing) return asksForBackendCapability(message)
-  if (hasAttachments) return true
-  const terms = ["database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing", "school management", "hospital management", "pos system", "warehouse", "authentication", "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout", "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app", "kitchen dashboard", "portal", "invoice", "quotation", "booking system", "table booking"]
-  return message.length > 2_800 || terms.some((term) => message.includes(term))
-}
+function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: boolean): boolean { const message = requestText(payload); if (!message) return Boolean(hasAttachments); if (isExplicitFrontendOnly(message)) return false; if (payload.existing) return asksForBackendCapability(message); if (hasAttachments) return true; const terms = ["database", "backend", "api", "saas", "erp", "crm", "inventory", "manufacturing", "school management", "hospital management", "pos system", "warehouse", "authentication", "roles", "permissions", "subscription", "billing", "payment", "stripe", "checkout", "online ordering", "order tracking", "customer dashboard", "admin dashboard", "driver app", "kitchen dashboard", "portal", "invoice", "quotation", "booking system", "table booking"]; return message.length > 2_800 || terms.some((term) => message.includes(term)) }
 function profileRules(profile: GenerationProfile, isExistingEdit: boolean, isLargeEdit: boolean): string {
-  if (profile === "full-stack") return ["", isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.", "FULL-STACK COMPACTNESS RULES — MANDATORY:", "- Keep the structured response compact while preserving every requested route and backend capability.", "- Use one shared frontend component for navigation, footer, cards and page sections.", "- Interactive routes such as booking, contact, login, checkout and requested forms must contain their functional controls and handlers in the route file when validation checks that route directly.", "- Do not duplicate JSX, navigation arrays, footer markup, product data or CSS between routes.", "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG art, data URLs or base64 assets.", "- Centralize reusable server concerns such as query helpers, Zod schemas and response helpers in lib/server.", "- API collection/item files may be thin adapters to shared validated handlers when required HTTP methods and security are preserved.", "- Keep backend docs, manifest, schema and migration concise but complete. Never omit a mandatory file.", isExistingEdit ? "- For an edit, return ONLY new or modified files." : "- Return complete runnable files only.", "- Where external credentials are unavailable, document environment variable names only; never create mock secrets.", "Return valid structured project output with no markdown outside the required object."].join("\n")
+  if (profile === "full-stack") return ["", isExistingEdit ? "Extend the existing application with the requested full-stack capabilities." : "Generate the complete requested application.", "FULL-STACK COMPACTNESS RULES — MANDATORY:", "- Keep the structured response compact while preserving every requested route and backend capability.", "- Use one shared frontend component for navigation, footer, cards and page sections.", "- Interactive routes such as booking, contact, login, checkout and requested forms must contain their functional controls and handlers in the route file when validation checks that route directly.", "- Do not duplicate JSX, navigation arrays, footer markup, product data or CSS between routes.", "- Keep app/globals.css concise and avoid decorative repetition, embedded SVG, data URLs or base64 assets.", "- Centralize reusable server concerns such as query helpers, Zod schemas and response helpers in lib/server.", "- API collection/item files may be thin adapters to shared validated handlers when required HTTP methods and security are preserved.", "- Keep backend docs, manifest, schema and migration concise but complete. Never omit a mandatory file.", isExistingEdit ? "- For an edit, return ONLY new or modified files." : "- Return complete runnable files only.", "- Where external credentials are unavailable, document environment variable names only; never create mock secrets.", "Return valid structured project output with no markdown outside the required object."].join("\n")
   if (isExistingEdit) return ["", "Apply this request as a compact edit to the EXISTING Next.js website.", "EDIT RELIABILITY RULES:", "- Return ONLY files that are new or actually modified; preserve all unrelated files and functionality.", "- When adding routes, create thin app/<route>/page.tsx wrappers where possible, but keep required functional forms in the route file.", "- Prefer modifying shared components/data arrays instead of duplicating JSX or CSS.", isLargeEdit ? "- This is a multi-page frontend edit. Keep route wrappers small and centralize shared sections/data." : "- Keep the response compact and targeted.", "- Do NOT return package.json, tsconfig.json, Next.js config, layout or global CSS unless genuinely required.", "- Every returned file must be complete and syntactically valid.", "Return valid structured project output with no markdown outside the required object."].join("\n")
   return ["", "Generate a compact complete runnable Next.js App Router website.", "HARD COMPACTNESS RULES:", "- Use one shared components/SitePage.tsx component for shared visual sections and shared data.", "- Ordinary informational route files should be thin wrappers.", "- Functional routes must contain the required controls and handlers in the route file so validation can verify them.", "- Put navigation, footer, cards and shared arrays only once; route-specific functional forms are allowed outside SitePage.", "- Keep app/globals.css below 150 lines and do not include data URLs, base64 images, inline SVG artwork or repeated CSS.", "- Use remote image URLs only; never embed image bytes.", "- Include only configuration files needed for a runnable project.", "- Create every requested route with working navigation and responsive design.", "Return valid structured project output with no markdown outside the required object."].join("\n")
 }
@@ -70,46 +41,30 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const message = String(payload.message || "").trim()
   const originalMessage = String(payload._originalPrompt || message).trim()
   const existing = payload.existing && typeof payload.existing === "object" ? payload.existing as { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> } : undefined
-  const attachments = Array.isArray(payload.attachments) ? payload.attachments.filter((attachment): attachment is CodegenAttachment => {
-    if (!attachment || typeof attachment !== "object") return false
-    const value = attachment as Record<string, unknown>
-    return typeof value.url === "string" && typeof value.mediaType === "string"
-  }) : []
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments.filter((attachment): attachment is CodegenAttachment => { if (!attachment || typeof attachment !== "object") return false; const value = attachment as Record<string, unknown>; return typeof value.url === "string" && typeof value.mediaType === "string" }) : []
   let timer: ReturnType<typeof setTimeout> | undefined
   const controller = new AbortController()
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  // Keep DeepSeek's structured response below the size that has repeatedly caused
-  // 100s+ generation latency and truncation. Completeness is preserved by the
-  // compactness rules above rather than by allowing an oversized JSON response.
+  // Long full-stack projects were previously capped at 8,192 DeepSeek output
+  // tokens. The codegen retry then inherited the same cap, so truncation retried
+  // into truncation. Give DeepSeek Flash the same 12k production ceiling used by
+  // codegen while keeping the compactness rules that protect runtime latency.
   const maxOutputTokens = profile === "full-stack"
-    ? (provider === "gemini" ? 16_000 : 8_192)
+    ? (provider === "gemini" ? 16_000 : 12_000)
     : existing
-      ? (provider === "gemini" ? 14_000 : 8_000)
-      : (provider === "gemini" ? 14_000 : 8_192)
+      ? (provider === "gemini" ? 14_000 : 12_000)
+      : (provider === "gemini" ? 14_000 : 12_000)
   const generated = await Promise.race([
     generateProjectCode({ prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`))
-        reject(new Error(`${mode} timed out after ${timeoutMs}ms`))
-      }, timeoutMs)
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer)
-    request.signal.removeEventListener("abort", abortFromClient)
-  })
+    new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
+  ]).finally(() => { if (timer) clearTimeout(timer); request.signal.removeEventListener("abort", abortFromClient) })
   const now = new Date().toISOString()
   return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, fellBackToLocal: false, generationProfile: profile, project: { id: typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: message, createdAt: now, updatedAt: now, files: generated.files } }
 }
 function providerSummary(attempts: ProviderAttempt[]) { const summary: Record<string, string> = {}; for (const attempt of attempts) summary[providerForMode(attempt.mode)] = attempt.status; return summary }
-function compactFailure(attempts: ProviderAttempt[], preserved: boolean) {
-  const statuses = providerSummary(attempts)
-  const parts = [statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "", statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : ""].filter(Boolean)
-  const summary = parts.length ? parts.join("; ") : "The configured AI providers are unavailable"
-  return preserved ? `${summary}. Your existing project was kept unchanged.` : `${summary}. No project was created.`
-}
+function compactFailure(attempts: ProviderAttempt[], preserved: boolean) { const statuses = providerSummary(attempts); const parts = [statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "", statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : ""].filter(Boolean); const summary = parts.length ? parts.join("; ") : "The configured AI providers are unavailable"; return preserved ? `${summary}. Your existing project was kept unchanged.` : `${summary}. No project was created.` }
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as GeneratorPayload
   const requested = String(payload.mode || "auto") as CodegenMode
@@ -120,10 +75,8 @@ export async function POST(request: Request) {
   const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
   const profile: GenerationProfile = isComplex ? "full-stack" : "website"
   let candidateModes: CodegenMode[]
-  if (requestedMode !== "auto") {
-    const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"
-    candidateModes = [requestedMode, fallback]
-  } else if (isComplex) candidateModes = ["deepseek-flash", "gemini-flash"]
+  if (requestedMode !== "auto") { const fallback: CodegenMode = providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"; candidateModes = [requestedMode, fallback] }
+  else if (isComplex) candidateModes = ["deepseek-flash", "gemini-flash"]
   else if (largeFrontendEdit) candidateModes = ["gemini-flash", "deepseek-flash"]
   else candidateModes = ["deepseek-flash", "gemini-flash"]
   const configuredModes = candidateModes.filter(modeConfigured)
