@@ -1,5 +1,5 @@
 import "server-only"
-import { generateText, type FilePart, type ImagePart, type TextPart } from "ai"
+import { generateText, Output, type FilePart, type ImagePart, type TextPart } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 
@@ -136,10 +136,9 @@ function buildPrompt(input: CodegenInput) {
 }
 
 function compactRetryPrompt(prompt: string, existing: boolean) {
-  if (existing) {
-    return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged routes, shared styles, package files, schema files, helpers, components or APIs. Return complete content for each changed file. Keep title, description and reply extremely short.`
-  }
-  return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nNEW PROJECT RETRY: Generate the smallest complete runnable project that satisfies every explicit requirement. Use one shared SitePage/component, thin route wrappers, one concise stylesheet and no unnecessary documentation/tests/config. Do not duplicate navigation, cards, footer, CSS or data. Every requested route and functional control must still be present. Keep title, description and reply extremely short.`
+  return existing
+    ? `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — EXISTING PROJECT EDIT:\nThe previous response exceeded the provider output limit. Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged routes, shared styles, package files, schema files, helpers, components or APIs. Include backend/schema files only when this exact edit requires them. Return complete content for each changed file. Preserve all unrelated existing files implicitly.`
+    : `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — NEW PROJECT:\nThe previous response exceeded the provider output limit. Generate the smallest COMPLETE runnable project that still satisfies every explicit requirement in the user request. Use one shared component for navigation, footer, cards and repeated sections; use thin route wrappers; centralize CSS and server helpers. Do not include documentation, tests, duplicate data, decorative SVG, base64 images or unnecessary config. Every explicitly requested route and required backend/schema file must still be present and valid. Keep title, description and reply extremely short.`
 }
 
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> {
@@ -165,7 +164,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
       thinking: { type: "disabled" },
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: Math.min(requestedTokens, 48_000),
+      max_tokens: Math.min(requestedTokens, 12_000),
       stream: false,
     }),
     signal: input.abortSignal,
@@ -193,23 +192,15 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const result = await generateText({
     model,
     system: SYSTEM_PROMPT,
+    output: Output.object({ schema: ProjectSchema, name: "project", description: "Complete runnable Next.js project with full file contents." }),
     ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }),
     temperature: 0.1,
-    maxOutputTokens: requestedTokens,
+    maxOutputTokens: Math.min(requestedTokens, 12_000),
     maxRetries: 0,
     abortSignal: input.abortSignal,
-    ...(typeof model === "string" ? {
-      providerOptions: {
-        gateway: {
-          user: input.userId || "anonymous-builder",
-          tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])],
-          zeroDataRetention: true,
-        },
-      },
-    } : {}),
+    ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}),
   })
-  if (!result.text?.trim()) throw new Error("Gemini returned no output text.")
-  return { object: extractProjectJson(result.text), usage: result.usage }
+  return { object: result.output, usage: result.usage }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -218,36 +209,20 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const picked = selectedModel(mode)
   const prompt = buildPrompt(input)
   let result
-
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try {
       result = await runDeepSeek(input, prompt, mode)
     } catch (error) {
-      const retryable = error instanceof Error && (error.message === TRUNCATION_MESSAGE || /JSON response could not be parsed|did not contain a JSON object/i.test(error.message))
-      if (!retryable) throw error
-      result = await runDeepSeek(input, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+      const truncated = error instanceof Error && error.message === TRUNCATION_MESSAGE
+      if (!truncated) throw error
+      const retryInput: CodegenInput = { ...input, maxOutputTokens: 8_000 }
+      result = await runDeepSeek(retryInput, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
-    try {
-      result = await runGemini(input, prompt, picked.model)
-    } catch (error) {
-      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object/i.test(error.message)
-      if (!retryable) throw error
-      result = await runGemini(input, compactRetryPrompt(prompt, Boolean(input.existing)), picked.model)
-    }
+    result = await runGemini(input, prompt, picked.model)
   }
-
   const files: Record<string, string> = {}
   for (const file of result.object.files) if (file.path && file.content) files[file.path] = file.content
   if (!Object.keys(files).length) throw new Error("Codegen returned zero usable files.")
-
-  return {
-    title: result.object.title,
-    description: result.object.description,
-    reply: result.object.reply,
-    files,
-    model: picked.model,
-    reason: picked.reason,
-    usage: normalizeGenerationUsage(result.usage, picked.model),
-  }
+  return { title: result.object.title, description: result.object.description, reply: result.object.reply, files, model: picked.model, reason: picked.reason, usage: normalizeGenerationUsage(result.usage, picked.model) }
 }
