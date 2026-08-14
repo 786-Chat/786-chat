@@ -23,6 +23,7 @@ function modeConfigured(mode: CodegenMode) { return providerForMode(mode) === "d
 function safeReason(value: unknown) { return String(value || "Provider failed.").replace(/https?:\/\/\S+/gi, "provider documentation").replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim().slice(0, 500) || "Provider failed." }
 function attemptStatus(reason: unknown, success = false): ProviderAttempt["status"] { if (success) return "ok"; const text = String(reason || "").toLowerCase(); if (/quota|rate.?limit|resource exhausted|429|exceeded your current quota/.test(text)) return "quota_exhausted"; if (/timed out|timeout|did not finish/.test(text)) return "timed_out"; return "failed" }
 function requestText(payload: GeneratorPayload) { return String(payload._originalPrompt || payload.message || "").trim().toLowerCase() }
+function isExplicitNewProjectRequest(payload: GeneratorPayload) { const message = requestText(payload); return /\bnew project\b|completely new|create (?:a |an )?new project|this is a new project/.test(message) }
 function isExplicitFrontendOnly(message: string) { return /front[ -]?end\s*-?\s*only|frontend-only|frontend only/.test(message) || /do not create[^\n]*(database|backend|api)|no\s+(database|backend|api)|without\s+(a\s+)?(database|backend|api)/.test(message) }
 function asksForBackendCapability(message: string) { return ["database","backend","api route","api endpoint","neon","postgres","authentication","roles","permissions","subscription","billing","payment","stripe","checkout","online ordering","order tracking","customer dashboard","admin dashboard","driver app","kitchen dashboard","invoice","quotation","crm","erp","inventory","manufacturing","school management","hospital management","pos system","warehouse","saas"].some((term) => message.includes(term)) }
 function frontendEditWeight(message: string) { const words = ["page","pages","menu","gallery","about","contact","services","destinations","packages","testimonials","faq","newsletter","footer","navigation","team","timeline","lightbox"]; return (message.match(/^\s*-\s*[^\n]+$/gim) || []).length + words.filter((term) => message.includes(term)).length + Math.floor(message.length / 700) }
@@ -51,7 +52,8 @@ function profileRules(profile: GenerationProfile, existing: boolean, largeEdit: 
 async function runAttempt(request: Request, payload: GeneratorPayload, mode: CodegenMode, profile: GenerationProfile, timeoutMs: number, largeFrontendEdit: boolean): Promise<GeneratorResult> {
   const message = String(payload.message || "").trim()
   const originalMessage = String(payload._originalPrompt || message).trim()
-  const existing = payload.existing && typeof payload.existing === "object" ? payload.existing as { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> } : undefined
+  const explicitNewProject = isExplicitNewProjectRequest(payload)
+  const existing = explicitNewProject ? undefined : payload.existing && typeof payload.existing === "object" ? payload.existing as { title: string; description: string; fileTree: string[]; keyFiles: Record<string, string> } : undefined
   const attachments = Array.isArray(payload.attachments) ? payload.attachments.filter((attachment): attachment is CodegenAttachment => { if (!attachment || typeof attachment !== "object") return false; const value = attachment as Record<string, unknown>; return typeof value.url === "string" && typeof value.mediaType === "string" }) : []
   let timer: ReturnType<typeof setTimeout> | undefined
   const controller = new AbortController()
@@ -64,13 +66,18 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
     new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
   ]).finally(() => { if (timer) clearTimeout(timer); request.signal.removeEventListener("abort", abortFromClient) })
   const now = new Date().toISOString()
-  return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, project: { id: typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: message, createdAt: now, updatedAt: now, files: generated.files } }
+  return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, project: { id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: message, createdAt: now, updatedAt: now, files: generated.files } }
 }
 function providerSummary(attempts: ProviderAttempt[]) { const summary: Record<string, string> = {}; for (const attempt of attempts) summary[providerForMode(attempt.mode)] = attempt.status; return summary }
 function compactFailure(attempts: ProviderAttempt[], preserved: boolean) { const statuses = providerSummary(attempts); const parts = [statuses.deepseek === "timed_out" ? "DeepSeek timed out" : statuses.deepseek ? `DeepSeek ${statuses.deepseek.replaceAll("_", " ")}` : "", statuses.gemini === "quota_exhausted" ? "Gemini quota is exhausted" : statuses.gemini ? `Gemini ${statuses.gemini.replaceAll("_", " ")}` : ""].filter(Boolean); const summary = parts.length ? parts.join("; ") : "The configured AI providers are unavailable"; return preserved ? `${summary}. Your existing project was kept unchanged.` : `${summary}. No project was created.` }
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as GeneratorPayload
+  const explicitNewProject = isExplicitNewProjectRequest(payload)
+  if (explicitNewProject) {
+    delete payload.projectId
+    delete payload.existing
+  }
   const requested = String(payload.mode || "auto") as CodegenMode
   const requestedMode: CodegenMode = ["auto","deepseek-flash","deepseek-pro","gemini-flash","gemini-pro"].includes(requested) ? requested : "auto"
   const hasAttachments = Array.isArray(payload.attachments) && payload.attachments.length > 0
