@@ -4,8 +4,8 @@ import { generateProjectCode, type CodegenAttachment, type CodegenMode } from "@
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 175_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 90_000
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 235_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 55_000
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 150_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 75_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
@@ -58,7 +58,7 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  const maxOutputTokens = profile === "full-stack" ? (provider === "gemini" ? 16_000 : 12_000) : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
+  const maxOutputTokens = profile === "full-stack" ? (provider === "gemini" ? 16_000 : 22_000) : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
   const generated = await Promise.race([
     generateProjectCode({ prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
     new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
