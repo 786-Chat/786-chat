@@ -11,9 +11,11 @@ export type GeneratedSecurityResult = {
 }
 
 const SECRET_PATH = /(?:^|\/)(?:\.env(?:\..+)?|\.npmrc|\.yarnrc|credentials\.json|service-account\.json|id_rsa|id_ed25519|.*\.(?:pem|p12|pfx|key))$/i
+const ENV_PATH = /(?:^|\/)\.env(?:\..+)?$/i
 const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
 const CLIENT_FILE = /^(?:src\/)?app\/.+\.(?:[cm]?[jt]sx?)$/i
+const ACCESS_GUARD = /\b(?:requireTenant|requireCompany|assertTenant|requireUser|requireAuth|getSession|getCurrentUser|getAuthenticatedUser|requireSession|getUser|auth|session)\s*\(/i
 const DANGEROUS_CODE: Array<[string, RegExp, string]> = [
   ["DANGEROUS_PROCESS_EXECUTION", /(?:from\s+["']node:child_process["']|require\s*\(\s*["'](?:node:)?child_process["']\s*\)|\b(?:execSync|spawnSync|execFileSync|Bun\.spawn|Deno\.Command)\s*\()/, "Generated projects cannot execute operating-system commands."],
   ["DYNAMIC_CODE_EXECUTION", /\b(?:eval|Function)\s*\(|\bnew\s+Function\s*\(|from\s+["']node:vm["']/, "Generated projects cannot evaluate dynamic server code."],
@@ -44,8 +46,8 @@ function parsePackageJson(source: string | undefined) {
   }
 }
 
-function isPlaceholderEnvExample(path: string, content: string) {
-  if (!/(?:^|\/)\.env\.example$/i.test(path)) return false
+function isPlaceholderEnvFile(path: string, content: string) {
+  if (!ENV_PATH.test(path)) return false
   const meaningfulLines = content
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -55,7 +57,7 @@ function isPlaceholderEnvExample(path: string, content: string) {
     const match = line.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/)
     if (!match) return false
     const value = match[2].trim().replace(/^['"]|['"]$/g, "")
-    return value === "" || /^(?:your[_-].*|change[_-]?me|example|placeholder|<.*>|\$\{.*\})$/i.test(value)
+    return value === "" || /^(?:your[_-].*|change[_-]?me|example|placeholder|<.*>|\$\{.*\}|REPLACE_ME)$/i.test(value)
   })
 }
 
@@ -65,12 +67,15 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
 
   for (const [path, content] of Object.entries(files)) {
     const normalizedPath = path.replace(/\\/g, "/").replace(/^\.\//, "")
-    if (SECRET_PATH.test(normalizedPath) && !isPlaceholderEnvExample(normalizedPath, content)) {
+    const placeholderEnv = isPlaceholderEnvFile(normalizedPath, content)
+    if (SECRET_PATH.test(normalizedPath) && !placeholderEnv) {
       errors.push({ code: "SECRET_FILE", path, message: "Credential and private-key files cannot be saved or deployed." })
     }
-    for (const [kind, pattern] of EMBEDDED_SECRET) {
-      if (pattern.test(content)) {
-        errors.push({ code: `EMBEDDED_${kind}`, path, message: "A secret-like value is embedded in generated source. Store it as an encrypted project secret instead." })
+    if (!placeholderEnv) {
+      for (const [kind, pattern] of EMBEDDED_SECRET) {
+        if (pattern.test(content)) {
+          errors.push({ code: `EMBEDDED_${kind}`, path, message: "A secret-like value is embedded in generated source. Store it as an encrypted project secret instead." })
+        }
       }
     }
     if (!CODE_PATH.test(normalizedPath)) continue
@@ -90,7 +95,7 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
       }
     }
     if (SERVER_ROUTE.test(normalizedPath) && /\b(?:DATABASE_URL|neon\s*\(|sql`)/.test(content)) {
-      if (!/\b(?:requireTenant|requireCompany|assertTenant|requireUser|getSession|auth)\s*\(/.test(content)) {
+      if (!ACCESS_GUARD.test(content)) {
         errors.push({ code: "DATABASE_ROUTE_WITHOUT_ACCESS_GUARD", path, message: "Database API routes must authenticate the user or enforce tenant ownership before querying data." })
       }
     }
