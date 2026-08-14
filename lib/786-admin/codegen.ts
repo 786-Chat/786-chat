@@ -81,8 +81,6 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
     if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
     throw error
   }
-  // A truncated NEW project must never be accepted merely because a few complete
-  // file objects were recoverable. It must get the compact complete-project retry.
   if (choice?.finish_reason === "length" && !input.existing) throw new Error(TRUNCATION_MESSAGE)
   return { object, usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
 }
@@ -109,9 +107,11 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     catch (error) {
       const retryable = error instanceof Error && (error.message === TRUNCATION_MESSAGE || /JSON response could not be parsed|did not contain a JSON object/i.test(error.message))
       if (!retryable) throw error
-      // Keep the retry within the existing production runtime budget while giving
-      // a long NEW project a real chance to finish all required files.
-      result = await runDeepSeek({ ...input, maxOutputTokens: Math.min(input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan), 12000) }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+      // Long NEW projects previously retried with the same 8,192-token cap.
+      // That made the retry fail for exactly the same reason as the first call.
+      // The retry now explicitly gets the maximum production budget and a compact
+      // instruction set so it has materially more room to return every required file.
+      result = await runDeepSeek({ ...input, maxOutputTokens: 12000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
     try { result = await runGemini(input, prompt, picked.model) }
