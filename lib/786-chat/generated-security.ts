@@ -15,7 +15,7 @@ const ENV_PATH = /(?:^|\/)\.env(?:\..+)?$/i
 const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
 const CLIENT_FILE = /^(?:src\/)?app\/.+\.(?:[cm]?[jt]sx?)$/i
-const ACCESS_GUARD = /\b(?:requireTenant|requireCompany|assertTenant|requireUser|requireAuth|getSession|getCurrentUser|getAuthenticatedUser|requireSession|getUser|auth|session)\s*\(/i
+const ACCESS_GUARD = /\b(?:requireTenant|requireCompany|assertTenant|requireUser|requireAuth|requireSession|getSession|getCurrentUser|getAuthenticatedUser|getUser|auth|session)\s*\(/i
 const DANGEROUS_CODE: Array<[string, RegExp, string]> = [
   ["DANGEROUS_PROCESS_EXECUTION", /(?:from\s+["']node:child_process["']|require\s*\(\s*["'](?:node:)?child_process["']\s*\)|\b(?:execSync|spawnSync|execFileSync|Bun\.spawn|Deno\.Command)\s*\()/, "Generated projects cannot execute operating-system commands."],
   ["DYNAMIC_CODE_EXECUTION", /\b(?:eval|Function)\s*\(|\bnew\s+Function\s*\(|from\s+["']node:vm["']/, "Generated projects cannot evaluate dynamic server code."],
