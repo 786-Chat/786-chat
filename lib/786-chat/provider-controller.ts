@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server"
 import { generateProjectCode, type CodegenAttachment, type CodegenMode } from "@/lib/786-admin/codegen"
+import { assertGeneratedProjectCompleteness } from "@/lib/786-chat/project-output-integrity"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-// Keep the two complex attempts inside Vercel's 300s function ceiling.
-// DeepSeek V4 Flash is allowed enough time/output to finish a large JSON project;
-// Gemini Flash gets a real fallback window instead of the old 55s cutoff.
 const COMPLEX_DEEPSEEK_TIMEOUT_MS = 185_000
 const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 105_000
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 150_000
@@ -36,7 +34,7 @@ function isComplexApplicationRequest(payload: GeneratorPayload, hasAttachments: 
 function profileRules(profile: GenerationProfile, existing: boolean, largeEdit: boolean) {
   if (profile === "full-stack") return [
     "",
-    existing ? "EDIT the existing application." : "NEW PROJECT: generate GreenDesk Operations as a complete runnable full-stack app.",
+    existing ? "EDIT the existing application." : "NEW PROJECT: generate the requested complete runnable full-stack app.",
     "ULTRA-COMPACT FULL-STACK OUTPUT — MANDATORY:",
     "- Preserve EVERY explicit requested requirement, route, backend capability and security rule, but implement them with the fewest files and least code possible.",
     "- Target a compact response that fits the provider output budget. Do not write long prose, documentation, tests, README files, examples, duplicate components, duplicate data, decorative SVG, base64/data URLs or unnecessary config.",
@@ -44,8 +42,9 @@ function profileRules(profile: GenerationProfile, existing: boolean, largeEdit: 
     "- Keep API handlers compact and shared; use thin adapters only where separate resource routes are required.",
     "- Keep SQL schema/migration concise and complete. Keep server DB access in lib/server/db.ts and never expose secrets.",
     "- Use real validation/security patterns; never create fake secrets, fake authentication, fake dependencies or validation-only placeholder files.",
+    "- Return every planned file with complete content. Missing a planned schema, migration, auth route, API route or required page is a generation failure and must not be accepted.",
     "- Use realistic sample data only as a small fallback when database data is unavailable.",
-    "- Do not include language fields unless useful. Keep title, description and reply extremely short.",
+    "- Keep title, description and reply extremely short.",
     "- Return only complete runnable project files required by the request. No markdown outside the JSON object."
   ].join("\n")
   if (existing) return ["", "Apply this request as a compact edit to the EXISTING Next.js website.", "- Return ONLY new or actually modified complete files.", "- Preserve unrelated files and functionality.", largeEdit ? "- This is a multi-page frontend edit: centralize shared sections/data and keep route wrappers tiny." : "- Keep the response compact and targeted.", "- Do not return package.json, tsconfig, Next config, layout or global CSS unless genuinely required.", "- Return valid structured project output with no markdown outside the JSON object."].join("\n")
@@ -63,14 +62,12 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  // Large full-stack JSON projects need more than the old 22k ceiling.
-  // DeepSeek V4 Flash and Gemini 3.5 Flash both support substantially larger
-  // output budgets, so the builder can finish instead of cutting JSON mid-file.
   const maxOutputTokens = profile === "full-stack" ? 32_000 : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
   const generated = await Promise.race([
     generateProjectCode({ prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
     new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
   ]).finally(() => { if (timer) clearTimeout(timer); request.signal.removeEventListener("abort", abortFromClient) })
+  assertGeneratedProjectCompleteness(originalMessage || message, generated.files, Boolean(existing))
   const now = new Date().toISOString()
   return { success: true, response: generated.reply, model: generated.model, reason: generated.reason, usage: generated.usage, project: { id: explicitNewProject ? crypto.randomUUID() : typeof payload.projectId === "string" && payload.projectId.trim() ? payload.projectId.trim() : crypto.randomUUID(), title: generated.title, description: generated.description, prompt: message, createdAt: now, updatedAt: now, files: generated.files } }
 }
@@ -92,16 +89,9 @@ export async function POST(request: Request) {
   const largeFrontendEdit = isLargeFrontendEdit(payload, isComplex)
   const profile: GenerationProfile = isComplex ? "full-stack" : "website"
   let candidateModes: CodegenMode[]
-  if (hasAttachments) {
-    // Images must be sent to a vision-capable provider. Do not run DeepSeek first
-    // and then silently force the request back to Gemini inside codegen; that made
-    // the logs claim "DeepSeek failed" while Gemini was actually being called twice.
-    candidateModes = ["gemini-flash"]
-  } else if (requestedMode !== "auto") {
-    candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]
-  } else {
-    candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
-  }
+  if (hasAttachments) candidateModes = ["gemini-flash"]
+  else if (requestedMode !== "auto") candidateModes = [requestedMode, providerForMode(requestedMode) === "deepseek" ? "gemini-flash" : "deepseek-flash"]
+  else candidateModes = isComplex ? ["deepseek-flash","gemini-flash"] : largeFrontendEdit ? ["gemini-flash","deepseek-flash"] : ["deepseek-flash","gemini-flash"]
   const configuredModes = candidateModes.filter(modeConfigured)
   const attempts: ProviderAttempt[] = candidateModes.filter((mode) => !modeConfigured(mode)).map((mode, index) => ({ mode, reason: "Provider configuration is missing.", fallback: index > 0, configured: false, status: "missing", profile }))
   for (const [position, mode] of configuredModes.entries()) {
