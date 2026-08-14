@@ -112,34 +112,19 @@ function selectedMode(mode: CodegenMode, hasAttachments: boolean): CodegenMode {
 }
 
 function selectedModel(mode: CodegenMode): { model: string; reason: string } {
-  if (mode === "gemini-flash") {
-    return { model: BUILDER_MODELS["gemini-flash"], reason: "Gemini Flash selected." }
-  }
-  if (mode === "gemini-pro") {
-    return { model: BUILDER_MODELS["gemini-pro"], reason: "Gemini Pro selected manually." }
-  }
-  if (mode === "deepseek-pro") {
-    return { model: "deepseek-v4-pro", reason: "DeepSeek V4 Pro selected manually." }
-  }
+  if (mode === "gemini-flash") return { model: BUILDER_MODELS["gemini-flash"], reason: "Gemini Flash selected." }
+  if (mode === "gemini-pro") return { model: BUILDER_MODELS["gemini-pro"], reason: "Gemini Pro selected manually." }
+  if (mode === "deepseek-pro") return { model: "deepseek-v4-pro", reason: "DeepSeek V4 Pro selected manually." }
   return { model: "deepseek-v4-flash", reason: "DeepSeek V4 Flash selected." }
 }
 
 function extractProjectJson(text: string): ProjectObject {
-  const trimmed = text.trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
   const start = trimmed.indexOf("{")
   if (start < 0) throw new Error("Provider response did not contain a JSON object.")
-
   for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
-    try {
-      return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1)))
-    } catch {
-      // Try an earlier complete object boundary.
-    }
+    try { return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1))) } catch { /* try an earlier boundary */ }
   }
-
   throw new Error("Provider JSON response could not be parsed or validated.")
 }
 
@@ -155,9 +140,7 @@ function buildPrompt(input: CodegenInput) {
       [...input.existing.fileTree].sort().join("\n"),
       "",
       "KEY FILE CONTENTS:",
-      Object.entries(input.existing.keyFiles)
-        .map(([path, content]) => `--- FILE: ${path} ---\n${content}\n--- END FILE ---`)
-        .join("\n\n"),
+      Object.entries(input.existing.keyFiles).map(([path, content]) => `--- FILE: ${path} ---\n${content}\n--- END FILE ---`).join("\n\n"),
       "",
       "USER REQUEST:",
       input.prompt.trim(),
@@ -177,23 +160,17 @@ function buildPrompt(input: CodegenInput) {
   return `${parts.join("\n")}${JSON_FORMAT_PROMPT}`
 }
 
-function compactRetryPrompt(prompt: string) {
-  return `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — EXISTING PROJECT EDIT ONLY:\nThe previous response exceeded the provider output limit. Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged app/page.tsx, routes, shared styles, package files, schema files, helpers, components or APIs. Include any backend/schema file only when this exact edit requires it. Return complete content for each changed file, but keep title, description and reply extremely short. Preserve all unrelated existing files implicitly.`
+function compactRetryPrompt(prompt: string, existing: boolean) {
+  return existing
+    ? `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — EXISTING PROJECT EDIT:\nThe previous response exceeded the provider output limit. Return ONLY the smallest set of files directly changed by the current user request. Do not resend unchanged routes, shared styles, package files, schema files, helpers, components or APIs. Include backend/schema files only when this exact edit requires them. Return complete content for each changed file. Preserve all unrelated existing files implicitly.`
+    : `${prompt}\n\nRETRY AFTER OUTPUT LIMIT — NEW PROJECT:\nThe previous response exceeded the provider output limit. Generate the smallest COMPLETE runnable project that still satisfies every explicit requirement in the user request. Use one shared component for navigation, footer, cards and repeated sections; use thin route wrappers; centralize CSS and server helpers. Do not include documentation, tests, duplicate data, decorative SVG, base64 images or unnecessary config. Every explicitly requested route and required backend/schema file must still be present and valid. Keep title, description and reply extremely short.`
 }
 
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> {
   const content: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]
   for (const attachment of attachments) {
-    if (attachment.mediaType.startsWith("image/")) {
-      content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
-    } else {
-      content.push({
-        type: "file",
-        data: attachment.url,
-        mediaType: attachment.mediaType,
-        filename: attachment.name || "attachment",
-      })
-    }
+    if (attachment.mediaType.startsWith("image/")) content.push({ type: "image", image: attachment.url, mediaType: attachment.mediaType })
+    else content.push({ type: "file", data: attachment.url, mediaType: attachment.mediaType, filename: attachment.name || "attachment" })
   }
   return content
 }
@@ -201,103 +178,54 @@ function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Ar
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
   if (!apiKey) throw new Error("DeepSeek direct API key is not configured.")
-
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const model = mode === "deepseek-pro" ? "deepseek-v4-pro" : "deepseek-v4-flash"
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: prompt },
-      ],
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }],
       thinking: { type: "disabled" },
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: Math.min(requestedTokens, 48_000),
+      max_tokens: Math.min(requestedTokens, 12_000),
       stream: false,
     }),
     signal: input.abortSignal,
   })
-
   const payload = await response.json().catch(() => ({})) as {
     error?: { message?: string }
     choices?: Array<{ finish_reason?: string; message?: { content?: string } }>
     usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
   }
-
-  if (!response.ok) {
-    throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
-  }
-
+  if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
   const choice = payload.choices?.[0]
-  if (choice?.finish_reason === "length") {
-    throw new Error(TRUNCATION_MESSAGE)
-  }
-
+  if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
   return {
     object: extractProjectJson(choice?.message?.content || ""),
-    usage: {
-      inputTokens: payload.usage?.prompt_tokens || 0,
-      outputTokens: payload.usage?.completion_tokens || 0,
-      totalTokens: payload.usage?.total_tokens || 0,
-    },
+    usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 },
   }
 }
 
 async function runGemini(input: CodegenInput, prompt: string, modelName: string) {
   const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
   const directModel = modelName.replace(/^google\//, "")
-
-  const model = googleApiKey
-    ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel)
-    : modelName
-
-  if (!googleApiKey && !gatewayConfigured()) {
-    throw new Error("Gemini is not configured.")
-  }
-
+  const model = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel) : modelName
+  if (!googleApiKey && !gatewayConfigured()) throw new Error("Gemini is not configured.")
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const result = await generateText({
     model,
     system: SYSTEM_PROMPT,
-    output: Output.object({
-      schema: ProjectSchema,
-      name: "project",
-      description: "Complete runnable Next.js project with full file contents.",
-    }),
-    ...(input.attachments?.length
-      ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] }
-      : { prompt }),
+    output: Output.object({ schema: ProjectSchema, name: "project", description: "Complete runnable Next.js project with full file contents." }),
+    ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }),
     temperature: 0.1,
-    maxOutputTokens: requestedTokens,
+    maxOutputTokens: Math.min(requestedTokens, 12_000),
     maxRetries: 0,
     abortSignal: input.abortSignal,
-    ...(typeof model === "string" ? {
-      providerOptions: {
-        gateway: {
-          user: input.userId || "anonymous-builder",
-          tags: [
-            "feature:builder-codegen",
-            `plan:${String(input.userPlan || "starter").toLowerCase()}`,
-            `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`,
-            ...(input.generationId ? [`generation:${input.generationId}`] : []),
-          ],
-          zeroDataRetention: true,
-        },
-      },
-    } : {}),
+    ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}),
   })
-
-  return {
-    object: result.output,
-    usage: result.usage,
-  }
+  return { object: result.output, usage: result.usage }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -305,33 +233,21 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   const mode = selectedMode(input.mode ?? "auto", attachments.length > 0)
   const picked = selectedModel(mode)
   const prompt = buildPrompt(input)
-
   let result
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try {
       result = await runDeepSeek(input, prompt, mode)
     } catch (error) {
       const truncated = error instanceof Error && error.message === TRUNCATION_MESSAGE
-      if (!truncated || !input.existing) throw error
-      result = await runDeepSeek(input, compactRetryPrompt(prompt), mode)
+      if (!truncated) throw error
+      const retryInput: CodegenInput = { ...input, maxOutputTokens: 8_000 }
+      result = await runDeepSeek(retryInput, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
     result = await runGemini(input, prompt, picked.model)
   }
-
   const files: Record<string, string> = {}
-  for (const file of result.object.files) {
-    if (file.path && file.content) files[file.path] = file.content
-  }
+  for (const file of result.object.files) if (file.path && file.content) files[file.path] = file.content
   if (!Object.keys(files).length) throw new Error("Codegen returned zero usable files.")
-
-  return {
-    title: result.object.title,
-    description: result.object.description,
-    reply: result.object.reply,
-    files,
-    model: picked.model,
-    reason: picked.reason,
-    usage: normalizeGenerationUsage(result.usage, picked.model),
-  }
+  return { title: result.object.title, description: result.object.description, reply: result.object.reply, files, model: picked.model, reason: picked.reason, usage: normalizeGenerationUsage(result.usage, picked.model) }
 }
