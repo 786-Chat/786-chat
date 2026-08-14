@@ -4,8 +4,11 @@ import { generateProjectCode, type CodegenAttachment, type CodegenMode } from "@
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-const COMPLEX_DEEPSEEK_TIMEOUT_MS = 235_000
-const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 55_000
+// Keep the two complex attempts inside Vercel's 300s function ceiling.
+// DeepSeek V4 Flash is allowed enough time/output to finish a large JSON project;
+// Gemini Flash gets a real fallback window instead of the old 55s cutoff.
+const COMPLEX_DEEPSEEK_TIMEOUT_MS = 185_000
+const COMPLEX_GEMINI_FALLBACK_TIMEOUT_MS = 105_000
 const SIMPLE_DEEPSEEK_TIMEOUT_MS = 150_000
 const SIMPLE_GEMINI_TIMEOUT_MS = 75_000
 const LARGE_EDIT_GEMINI_TIMEOUT_MS = 105_000
@@ -60,7 +63,10 @@ async function runAttempt(request: Request, payload: GeneratorPayload, mode: Cod
   const abortFromClient = () => controller.abort(request.signal.reason)
   request.signal.addEventListener("abort", abortFromClient, { once: true })
   const provider = providerForMode(mode)
-  const maxOutputTokens = profile === "full-stack" ? (provider === "gemini" ? 16_000 : 22_000) : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
+  // Large full-stack JSON projects need more than the old 22k ceiling.
+  // DeepSeek V4 Flash and Gemini 3.5 Flash both support substantially larger
+  // output budgets, so the builder can finish instead of cutting JSON mid-file.
+  const maxOutputTokens = profile === "full-stack" ? 32_000 : existing ? (provider === "gemini" ? 14_000 : 12_000) : (provider === "gemini" ? 14_000 : 12_000)
   const generated = await Promise.race([
     generateProjectCode({ prompt: `${originalMessage || message}${profileRules(profile, Boolean(existing), largeFrontendEdit)}`, mode, abortSignal: controller.signal, userId: String(payload._actorUserId || "anonymous-builder"), userPlan: String(payload._actorPlan || "starter"), generationId: String(payload._generationId || ""), maxOutputTokens, attachments, existing }),
     new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(new Error(`${mode} timed out after ${timeoutMs}ms`)); reject(new Error(`${mode} timed out after ${timeoutMs}ms`)) }, timeoutMs) }),
