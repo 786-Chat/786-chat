@@ -1,6 +1,8 @@
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com")
-  .trim()
-  .toLowerCase()
+const DEFAULT_ADMIN_EMAIL = "mujeeb@job4u.com"
+
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL)
+  .replace(/\s+/g, "")
+  .toLowerCase() || DEFAULT_ADMIN_EMAIL
 
 export function isAdminUser(email: string | null | undefined): boolean {
   return Boolean(email && email.trim().toLowerCase() === ADMIN_EMAIL)
