@@ -8,6 +8,7 @@ import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { generateProjectCode, type CodegenMode } from "@/lib/786-admin/codegen"
 import { sql, transaction } from "@/lib/786-admin/db"
 import { normalizeGeneratedMetadataBoundaries } from "@/lib/786-chat/validation"
+import { deterministicGeneratedBuildRepair } from "@/lib/786-chat/deterministic-build-repair"
 
 const MAX_REPAIR_ATTEMPTS = 2
 const REPAIR_PROVIDER_TIMEOUT_MS = 65_000
@@ -364,7 +365,8 @@ export async function repairFailedBuild(input: {
   `
 
   try {
-    const repair = deterministicCompatibilityRepair(context, input.logs)
+    const repair = deterministicGeneratedBuildRepair(context.files, input.logs)
+      ?? deterministicCompatibilityRepair(context, input.logs)
       ?? deterministicLucideImportRepair(context, input.logs)
       ?? deterministicClientMetadataRepair(context, input.logs)
       ?? deterministicClientBoundaryRepair(context, input.logs)
