@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { createToken, setAuthCookie } from "@/lib/auth"
-
-const OWNER_EMAIL = "mujeeb@job4u.com"
+import { ADMIN_EMAIL } from "@/lib/admin-config"
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +23,7 @@ export async function POST(request: Request) {
       )
     }
 
-    if (email !== OWNER_EMAIL || secret !== expectedSecret) {
+    if (email !== ADMIN_EMAIL || secret !== expectedSecret) {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -34,7 +33,7 @@ export async function POST(request: Request) {
     const owner = {
       id: "786-admin-owner",
       name: "Mujeeb",
-      email: OWNER_EMAIL,
+      email: ADMIN_EMAIL,
       plan: "owner-unlimited",
       credits: 999999999,
       role: "admin",
