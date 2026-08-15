@@ -23,7 +23,7 @@ test("long full-stack generation retains completed files and never truncates the
 test("a truncated individual file is compacted and retried without accepting partial JSON", () => {
   assert.match(codegen, /ONE FILE RETRY/)
   assert.match(codegen, /FILE_UNIT_RETRY_MAX_TOKENS = 8_000/)
-  assert.match(codegen, /extractProjectJson\(text, !\/\\bFILE-LEVEL/)
+  assert.match(codegen, /parseFileUnitOutput\(text, target\)/)
   assert.match(codegen, /JSON response \(\?:could not be parsed\|was truncated\)/)
   assert.match(codegen, /Never return a prefix, continuation, patch, or partial file/)
   assert.match(controller, /Provider error:/)
