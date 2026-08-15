@@ -3,6 +3,7 @@ import { generateText, type FilePart, type ImagePart, type TextPart } from "ai"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 import { BUILDER_MODELS, maxOutputTokensForPlan, normalizeGenerationUsage, type BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
+import { fileUnitTargetFromPrompt, parseFileUnitOutput } from "@/lib/786-chat/file-unit-output"
 
 export type CodegenMode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 export type CodegenAttachment = { url: string; mediaType: string; name?: string }
@@ -16,6 +17,7 @@ type ProjectObject = z.infer<typeof ProjectSchema>
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator. Return a real runnable Next.js App Router project as JSON.
 Rules: Return FULL file content, never diffs or placeholders. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Preserve existing files for edits and emit only new or modified files. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. Return JSON only.`
 const JSON_FORMAT_PROMPT = `\nReturn exactly one JSON object: {"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}. Begin with { and end with }. Escape JSON control characters. Keep metadata concise. Avoid duplicated code so the response fits the output budget.`
+const FILE_UNIT_JSON_FORMAT_PROMPT = `\nReturn ONLY this tiny JSON object with no markdown or prose: {"path":"exact requested path","content":"complete file content"}. Do not return title, description, reply, a files array, or any other key. Begin with { and end with }.`
 const TRUNCATION_MESSAGE = "DeepSeek JSON response was truncated before all project files were returned."
 const COMPACT_RETRY_MESSAGE = "Provider response was too large or incomplete; retrying with compact project output."
 const FILE_UNIT_RETRY_MAX_TOKENS = 8_000
@@ -58,15 +60,24 @@ function extractProjectJson(text: string, allowRecovery = true): ProjectObject {
 }
 
 function buildPrompt(input: CodegenInput) {
+  const fileUnitTarget = fileUnitTargetFromPrompt(input.prompt)
+  if (fileUnitTarget) return ["MODE: FILE UNIT", `EXACT TARGET PATH: ${fileUnitTarget}`, "USER REQUEST:", input.prompt.trim(), "Generate only the exact target file with complete content."].join("\n") + FILE_UNIT_JSON_FORMAT_PROMPT
   if (!input.existing) return [`MODE: NEW PROJECT`, `USER REQUEST:`, input.prompt.trim(), `Generate the complete requested project using shared components and compact route wrappers.`].join("\n") + JSON_FORMAT_PROMPT
   return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "KEY FILE CONTENTS:", Object.entries(input.existing.keyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
 }
 function compactRetryPrompt(prompt: string, existing: boolean) {
-  if (/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nONE FILE RETRY — HARD OUTPUT BOUND: Return the same single requested file as one complete JSON file object in at most 6,000 output tokens. Make the implementation materially more compact with shared helpers and concise data definitions, but do not omit behavior, security, validation, routes, or database requirements. Never return a prefix, continuation, patch, or partial file. If repeated data would exceed the bound, replace it with concise deterministic code that produces the same behavior.`
+  if (/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nONE FILE RETRY — HARD OUTPUT BOUND: Output ONLY {"path":"exact requested path","content":"complete file content"} with no markdown, prose, metadata, files array, or extra keys, in at most 6,000 output tokens. Never return a prefix, continuation, patch, or partial file. If repeated data would exceed the bound, replace it with concise deterministic code that produces the same behavior.`
   if (existing) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return ONLY the smallest set of complete files directly changed by the request. Do not resend unchanged files. Keep title, description and reply extremely short.`
   return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nNEW PROJECT RETRY: Generate the smallest COMPLETE runnable project satisfying EVERY explicit requirement. Keep every requested route, API, schema and functional control. Use shared components, thin route wrappers and one concise stylesheet. Do not include documentation, tests, duplicate data, decorative SVG, base64 images or unnecessary configuration. Keep title, description and reply extremely short.`
 }
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> { const c: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]; for (const a of attachments) c.push(a.mediaType.startsWith("image/") ? { type: "image", image: a.url, mediaType: a.mediaType } : { type: "file", data: a.url, mediaType: a.mediaType, filename: a.name || "attachment" }); return c }
+
+function extractGeneratedObject(text: string, input: CodegenInput): ProjectObject {
+  const target = fileUnitTargetFromPrompt(input.prompt)
+  if (!target) return extractProjectJson(text)
+  const file = parseFileUnitOutput(text, target)
+  return { title: "Generated application", description: "Generated by 786.Chat", reply: "File generated.", files: [file] }
+}
 
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {
   const apiKey = process.env.DEEPSEEK_API_KEY?.trim()
@@ -95,7 +106,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
     })
     if (!result.text?.trim()) throw new Error("DeepSeek Gateway returned no output text.")
     let object: ProjectObject
-    try { object = extractProjectJson(result.text, !/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)) } catch (error) {
+    try { object = extractGeneratedObject(result.text, input) } catch (error) {
       if (/JSON response could not be parsed|did not contain a JSON object/i.test(error instanceof Error ? error.message : String(error))) throw new Error(TRUNCATION_MESSAGE)
       throw error
     }
@@ -108,11 +119,11 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
   const choice = payload.choices?.[0]
   const text = choice?.message?.content || ""
   let object: ProjectObject
-  try { object = extractProjectJson(text, !/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)) } catch (error) {
+  try { object = extractGeneratedObject(text, input) } catch (error) {
     if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
     throw error
   }
-  if (choice?.finish_reason === "length" && !input.existing) throw new Error(TRUNCATION_MESSAGE)
+  if (choice?.finish_reason === "length" && (fileUnitTargetFromPrompt(input.prompt) || !input.existing)) throw new Error(TRUNCATION_MESSAGE)
   return { object, usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
 }
 
@@ -124,7 +135,7 @@ async function runGemini(input: CodegenInput, prompt: string, modelName: string)
   const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
   const result = await generateText({ model, system: SYSTEM_PROMPT, ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 24000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
   if (!result.text?.trim()) throw new Error("Gemini returned no output text.")
-  return { object: extractProjectJson(result.text, !/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)), usage: result.usage }
+  return { object: extractGeneratedObject(result.text, input), usage: result.usage }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
@@ -137,14 +148,14 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
     try { result = await runDeepSeek(input, prompt, mode) }
     catch (error) {
       const fileLevelUnit = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)
-      const retryable = error instanceof Error && /JSON response (?:could not be parsed|was truncated)|did not contain a JSON object/i.test(error.message)
+      const retryable = error instanceof Error && /JSON response (?:could not be parsed|was truncated)|did not contain a JSON object|File unit returned the wrong path/i.test(error.message)
       if (!retryable || (input.existing && !fileLevelUnit)) throw error
       result = await runDeepSeek({ ...input, maxOutputTokens: Math.min(input.maxOutputTokens ?? FILE_UNIT_RETRY_MAX_TOKENS, FILE_UNIT_RETRY_MAX_TOKENS) }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
     try { result = await runGemini(input, prompt, picked.model) }
     catch (error) {
-      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object/i.test(error.message)
+      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object|File unit returned the wrong path/i.test(error.message)
       if (!retryable) throw error
       result = await runGemini(input, compactRetryPrompt(prompt, Boolean(input.existing)), picked.model)
     }

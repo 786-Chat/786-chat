@@ -23,7 +23,7 @@ test("long full-stack generation retains completed files and never truncates the
 test("a truncated individual file is compacted and retried without accepting partial JSON", () => {
   assert.match(codegen, /ONE FILE RETRY/)
   assert.match(codegen, /FILE_UNIT_RETRY_MAX_TOKENS = 8_000/)
-  assert.match(codegen, /extractProjectJson\(text, !\/\\bFILE-LEVEL/)
+  assert.match(codegen, /parseFileUnitOutput\(text, target\)/)
   assert.match(codegen, /JSON response \(\?:could not be parsed\|was truncated\)/)
   assert.match(codegen, /Never return a prefix, continuation, patch, or partial file/)
   assert.match(controller, /Provider error:/)
@@ -39,7 +39,8 @@ test("file-unit production timeouts are realistic and bounded by the route deadl
   assert.ok(deepSeek > 30_000)
   assert.ok(gemini > 20_000)
   assert.ok(deepSeek + gemini < deadline)
-  assert.ok(deadline < 300_000)
+  assert.equal(deadline, 170_000)
+  assert.ok(deadline < 180_000)
   assert.match(controller, /Math\.min\(providerTimeoutMs, remainingMs\)/)
   assert.match(controller, /isFileUnit \? 8_000/)
 })
