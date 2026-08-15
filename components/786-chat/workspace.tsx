@@ -135,6 +135,25 @@ const toneClasses = {
   amber: "border-amber-300 text-amber-200 shadow-[0_0_25px_rgba(251,191,36,.28)]",
 }
 
+function getBuildProgress(build: BuilderBuild | null) {
+  if (!build) return { label: "Build not queued", detail: "Generate and save a project to start verification." }
+  if (build.status === "passed") return { label: "Preview ready", detail: "Verified build passed and the live preview is ready." }
+  if (build.status === "failed") return { label: "Build failed", detail: build.error_message || "The isolated build failed. Review the captured logs and retry." }
+  if (build.status === "cancelled") return { label: "Build cancelled", detail: "Verification was cancelled before completion." }
+  if (build.status === "queued") return { label: "Queued for verification", detail: "Preparing the isolated build environment." }
+
+  const logs = (build.logs || "").toLowerCase()
+  if (logs.includes("[vercel]")) return { label: "Creating preview", detail: "Build passed. Waiting for the verified Vercel preview to become ready." }
+  if (logs.includes("[runtime]")) return { label: "Preparing runtime", detail: "Build passed. Preparing the generated runtime and database namespace." }
+  if (logs.includes("[publisher]")) return { label: "Publishing preview", detail: "Build passed. Publishing the verified source and preview branch." }
+  if (logs.includes("collecting build traces") || logs.includes("finalizing page optimization")) return { label: "Finalizing build", detail: "Next.js compiled successfully. Finalizing the production build." }
+  if (logs.includes("creating an optimized production build") || logs.includes("$ npm run build")) return { label: "Building Next.js", detail: "Running the optimized production Next.js build." }
+  if (logs.includes("$ npx tsc --noemit")) return { label: "Type-checking", detail: "Dependencies installed. Checking TypeScript before the production build." }
+  if (logs.includes("$ npm install")) return { label: "Installing dependencies", detail: "Installing the generated project's dependencies in the isolated sandbox." }
+  if (logs.includes("source bundle downloaded")) return { label: "Preparing sandbox", detail: "Generated source downloaded. Starting isolated verification." }
+  return { label: "Starting verification", detail: "The isolated build runner is starting." }
+}
+
 function planItems(project: BuilderProject | null) {
   if (!project) {
     return [
@@ -212,6 +231,7 @@ export function SevenEightSixWorkspace() {
     : BUILDER_DEVICES[device]
   const phonePreview = ["mobile", "iphone15", "iphoneSE", "pixel8", "galaxyS24"].includes(device)
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
+  const buildProgress = useMemo(() => getBuildProgress(build), [build])
   const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
   const selectedCode = project?.files[selectedFile] || ""
   const orderedSections = useMemo(() => {
@@ -350,7 +370,7 @@ export function SevenEightSixWorkspace() {
         setBuild(next)
         if (next?.status === "passed") setVisualDirty(false)
       }).catch(() => undefined)
-    }, 5_000)
+    }, 2_000)
     return () => window.clearInterval(timer)
   }, [project?.id, build])
 
@@ -1074,7 +1094,7 @@ export function SevenEightSixWorkspace() {
               )}
             </span>
             <span className={`rounded-lg border px-3 py-1.5 text-[14px] font-semibold ${build?.status === "failed" ? "border-rose-400/20 bg-rose-500/10 text-rose-200" : "border-emerald-400/15 bg-emerald-500/10 text-emerald-200"}`}>
-              {codeDirty ? "○ Unsaved code" : visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ Build ${build.status}` : "○ Build not queued"}
+              {codeDirty ? "○ Unsaved code" : visualDirty ? "○ Rebuild required" : build?.status === "passed" ? "✓ Build passed" : build ? `○ ${buildProgress.label}` : "○ Build not queued"}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-1 xl:hidden">
@@ -1131,7 +1151,7 @@ export function SevenEightSixWorkspace() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className={`text-[16px] font-bold ${active ? "text-white" : "text-slate-500"}`}><span className="mr-2 text-slate-500">{index + 1}</span>{stage.label}</p>
-                        <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{stage.detail}</p>
+                        <p className="mt-1 break-words text-[14px] leading-[18px] text-slate-500">{index === 3 && build ? buildProgress.detail : stage.detail}</p>
                       </div>
                     </div>
                   )
@@ -1280,8 +1300,8 @@ export function SevenEightSixWorkspace() {
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className="grid min-h-full place-items-center rounded-md border border-[#1f2d45] bg-[radial-gradient(circle_at_50%_30%,rgba(30,64,175,.10),transparent_38%),#08111f] px-6 text-center">
                       <div>
                         {build && ["queued", "running"].includes(build.status) ? <Loader2 className="mx-auto h-9 w-9 animate-spin text-cyan-300" /> : <Monitor className="mx-auto h-9 w-9 text-cyan-300" />}
-                        <h2 className="mt-4 text-[14px] font-black">{build?.status === "failed" ? "Build failed" : build ? "Building verified preview" : "Your application will appear here"}</h2>
-                        <p className="mt-2 max-w-sm text-[14px] leading-5 text-slate-500">{build?.error_message || (build ? "Preview becomes available only after the isolated Next.js build passes." : "Describe the production application you want to create.")}</p>
+                        <h2 className="mt-4 text-[14px] font-black">{build ? buildProgress.label : "Your application will appear here"}</h2>
+                        <p className="mt-2 max-w-sm text-[14px] leading-5 text-slate-500">{build ? buildProgress.detail : "Describe the production application you want to create."}</p>
                       </div>
                     </div>
                   )}
@@ -1401,13 +1421,11 @@ export function SevenEightSixWorkspace() {
                 <div className="mt-3 flex min-h-0 flex-1 items-center overflow-hidden rounded-lg border border-dashed border-[#263550] px-4">
                   <span className="mr-4 grid h-10 w-10 place-items-center rounded-full border border-[#345078] text-cyan-300"><TerminalSquare className="h-4 w-4" /></span>
                   <div>
-                    <b className="text-[14px]">{build ? `Build ${build.status}` : "No build has run"}</b>
+                    <b className="text-[14px]">{build ? buildProgress.label : "No build has run"}</b>
                     <p className="mt-1 text-[14px] text-slate-500">
-                      {build?.status === "failed"
-                        ? build.error_message || "The isolated build failed. Review the captured logs and retry."
-                        : build?.status === "passed"
-                          ? "Install, type-check and Next.js build completed successfully."
-                          : "The isolated build sandbox starts after validated files are saved."}
+                      {build
+                        ? buildProgress.detail
+                        : "The isolated build sandbox starts after validated files are saved."}
                     </p>
                   </div>
                 </div>
