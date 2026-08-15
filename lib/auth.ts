@@ -3,8 +3,7 @@ import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
 
 import { getAccountSessionState } from "@/lib/account-security"
-
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com").trim().toLowerCase()
+import { ADMIN_EMAIL } from "@/lib/admin-config"
 
 function jwtSecret() {
   const value = process.env.JWT_SECRET?.trim()
