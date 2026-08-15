@@ -50,7 +50,7 @@ jobs:
           test.write_text('''import assert from "node:assert/strict"\nimport test from "node:test"\nimport { readFile } from "node:fs/promises"\n\nconst route = await readFile(new URL("../../app/api/786-chat/generate/route.ts", import.meta.url), "utf8")\nconst controller = await readFile(new URL("../../lib/786-chat/provider-controller.ts", import.meta.url), "utf8")\n\ntest("named create-app prompts are treated as fresh projects server-side", () => {\n  assert.match(route, /isExplicitNewApplicationPrompt\\(prompt\\)/)\n  assert.match(route, /delete payload\\.projectId/)\n  assert.match(route, /delete payload\\.existing/)\n  assert.match(route, /application\\|app\\|website\\|system/)\n  assert.match(controller, /application\\|app\\|website\\|system/)\n})\n\ntest("fresh named full-stack apps can reach file-level generation", () => {\n  assert.match(controller, /if \\(explicitNewProject\\) \\{ delete payload\\.projectId; delete payload\\.existing \\}/)\n  assert.match(controller, /plannedFilesFromPrompt\\(String\\(payload\\.message \\|\\| ""\\)\\)\\.length > 1/)\n})\n''')
           PY
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Run focused tests
         run: node --test tests/phase2/new-project-dispatch.test.mjs tests/phase2/generation-continuation.test.mjs tests/phase2/batched-generation-completeness.test.mjs
       - name: Build
