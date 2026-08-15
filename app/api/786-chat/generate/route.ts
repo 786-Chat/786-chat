@@ -45,8 +45,14 @@ import { screenBuilderPrompt } from "@/lib/786-chat/security"
 export const runtime = "nodejs"
 export const maxDuration = 300
 
+const MAX_CONTINUATION_PROVIDER_RETRIES = 2
+
 function attemptsFrom(value: unknown) {
   return Array.isArray(value) ? value : []
+}
+
+function uniquePaths(paths: string[]) {
+  return Array.from(new Set(paths.filter(Boolean)))
 }
 
 export async function POST(request: Request) {
@@ -57,9 +63,11 @@ export async function POST(request: Request) {
   }
 
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const continuationRetryCount = Math.max(0, Number(payload.continuationRetryCount || 0))
   const suppliedContinuation = typeof payload.continuationToken === "string"
   const continuationState = suppliedContinuation ? verifyGenerationContinuation(String(payload.continuationToken)) : null
   if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
+  const repairPass = Math.max(0, Number(continuationState?.repairPass || 0))
   const prompt = String(continuationState?.prompt || payload.message || "").trim()
   const ownerEmail = session.email.toLowerCase().trim()
   const promptSecurity = screenBuilderPrompt(prompt)
@@ -78,6 +86,7 @@ export async function POST(request: Request) {
       warning: "UNDO_REQUIRES_REVISION_ENDPOINT",
     }, { status: 409 })
   }
+
   let generationId: string
   if (continuationState) {
     generationId = String(continuationState.generationId || "")
@@ -87,14 +96,12 @@ export async function POST(request: Request) {
     let reservation
     try {
       reservation = await reserveBuilderGeneration({
-      ownerEmail,
-      userId: session.id,
-      plan: session.plan,
-      prompt,
-      projectId: typeof payload.projectId === "string" ? payload.projectId : null,
-      // The verified owner is unlimited. All customers use the request and
-      // token allowances of the plan they purchased.
-      bypassPlanLimits: isAdminUser(session.email),
+        ownerEmail,
+        userId: session.id,
+        plan: session.plan,
+        prompt,
+        projectId: typeof payload.projectId === "string" ? payload.projectId : null,
+        bypassPlanLimits: isAdminUser(session.email),
       })
     } catch (error) {
       console.error("[786.Chat AI governance] Could not reserve generation", error)
@@ -106,6 +113,7 @@ export async function POST(request: Request) {
     }
     generationId = reservation.generationId
   }
+
   let aggregateUsage: BuilderGenerationUsage = mergeGenerationUsage(continuationState?.usage as BuilderGenerationUsage | undefined)
   let aggregateAttempts: unknown[] = attemptsFrom(continuationState?.providerAttempts)
 
@@ -143,6 +151,7 @@ export async function POST(request: Request) {
       console.error("[786.Chat AI governance] Could not record generation usage", trackingError)
     }
   }
+
   const familyHistory = continuationState ? [] : payload.projectId
     ? []
     : (await listProjects(ownerEmail)).flatMap((project) => {
@@ -156,8 +165,12 @@ export async function POST(request: Request) {
   const analysisSeed = typeof continuationState?.analysisSeed === "string" ? continuationState.analysisSeed : typeof payload.projectId === "string" && payload.projectId.trim()
     ? payload.projectId.trim()
     : crypto.randomUUID()
-  const specification = continuationState?.specification && typeof continuationState.specification === "object" ? continuationState.specification as ReturnType<typeof analyseProjectPrompt> : analyseProjectPrompt(prompt, analysisSeed, familyHistory)
-  const plan = continuationState?.plan && typeof continuationState.plan === "object" ? continuationState.plan as ReturnType<typeof createProjectPlan> : createProjectPlan(specification)
+  const specification = continuationState?.specification && typeof continuationState.specification === "object"
+    ? continuationState.specification as ReturnType<typeof analyseProjectPrompt>
+    : analyseProjectPrompt(prompt, analysisSeed, familyHistory)
+  const plan = continuationState?.plan && typeof continuationState.plan === "object"
+    ? continuationState.plan as ReturnType<typeof createProjectPlan>
+    : createProjectPlan(specification)
   const generationBrief = typeof continuationState?.generationBrief === "string" ? continuationState.generationBrief : [
     prompt,
     "",
@@ -177,6 +190,10 @@ export async function POST(request: Request) {
     "- When the user requests one nested page, app/page.tsx may render or redirect to that page, but it must still exist.",
     "- Navigation links must point only to routes included above.",
     "- Do not replace this request with a generic homepage.",
+    "- Public auth bootstrap APIs register/login/forgot-password/reset-password/verify-email validate input securely but MUST NOT require an already-authenticated session.",
+    "- If remember-me is required, render a real checkbox/control containing the words remember me in the login UI.",
+    "- backend/manifest.json must declare every requested backend capability, including api when API routes are required.",
+    "- If email is required, package.json must include an explicit resend dependency and lib/server/email.ts must be server-only, use RESEND_API_KEY and EMAIL_FROM, and send with an idempotency key.",
     ...applicationEditBrief(editIntent, typeof payload.projectId === "string"),
     "",
     "ACTIVE APPLICATION AND PLATFORM RULES:",
@@ -191,6 +208,7 @@ export async function POST(request: Request) {
         ]
       : []),
   ].join("\n")
+
   const delegatedRequest = new Request(request.url, {
     method: "POST",
     headers: request.headers,
@@ -214,11 +232,24 @@ export async function POST(request: Request) {
 
   if (response.ok && result.success === true && result.continuationRequired === true && result.continuation && typeof result.continuation === "object") {
     await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-    const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief, fileContinuation: result.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+    const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief, fileContinuation: result.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass })
     return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((result.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: plan.files.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage })
   }
 
   if (!response.ok || result.success !== true) {
+    if (continuationState && continuationRetryCount < MAX_CONTINUATION_PROVIDER_RETRIES) {
+      await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+      return NextResponse.json({
+        ...result,
+        success: false,
+        retryableContinuation: true,
+        continuationToken: String(payload.continuationToken || ""),
+        continuationRetryCount: continuationRetryCount + 1,
+        generationId,
+        specification,
+        plan,
+      }, { status: response.status })
+    }
     await recordFailure(String(result.warning || "AI_PROVIDER_FAILURE"), result.error)
     return NextResponse.json(
       { ...result, generationId, specification, plan },
@@ -273,15 +304,15 @@ export async function POST(request: Request) {
   ))
   validation.warnings.push(...securityValidation.warnings.map((issue) => issue.message))
   validation.valid = validation.errors.length === 0
-  let repairAttempted = false
+  let repairAttempted = repairPass > 0
 
-  if (!validation.valid && project) {
+  if (!validation.valid && project && repairPass < 1) {
     repairAttempted = true
     const backendRepairFiles = requiredBackendFiles(specification)
     const focusedSystemRepair = validation.errors.every((error) =>
       /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence|CRUD/i.test(error)
     )
-    const requiredRepairFiles = [
+    const requiredRepairFiles = uniquePaths([
       ...specification.routes.map((route) =>
         route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
       ),
@@ -298,7 +329,7 @@ export async function POST(request: Request) {
         ]
         : []),
       ...backendRepairFiles,
-    ]
+    ])
     const repairKeyFiles = focusedSystemRepair
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
           path === "lib/server/tenant.ts" ||
@@ -313,13 +344,18 @@ export async function POST(request: Request) {
     const repairBrief = [
       prompt,
       "",
-      "VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE:",
+      "VALIDATION-GUIDED REPAIR — FILE-BY-FILE AND RESUMABLE:",
       "The previous generated project was rejected. Correct every error below without removing working features.",
       ...validation.errors.map((error) => `- ${error}`),
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
+      `Planned files: ${requiredRepairFiles.join(", ")}`,
       `Required system files (create any that are absent and replace every rejected one): ${requiredRepairFiles.join(", ")}`,
       ...backendCapabilityBrief(specification).map((line) => `- ${line}`),
+      "Public auth bootstrap APIs register/login/forgot-password/reset-password/verify-email must validate inputs securely but do not require a pre-existing authenticated session.",
+      "If remember-me is required, the login UI must include a real checkbox/control containing the words remember me.",
+      "backend/manifest.json must declare every requested capability including api when API routes are required.",
+      "If email is required, package.json must include resend and lib/server/email.ts must import server-only, use Resend with RESEND_API_KEY and EMAIL_FROM, and provide an idempotency key.",
       "app/page.tsx is mandatory. If it is missing, create it and wire it to the requested application or requested nested route.",
       "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
       "Every collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard or assertTenant before reading or mutating data.",
@@ -328,9 +364,19 @@ export async function POST(request: Request) {
       "Every required operational page must contain a real form, table or interactive control with onSubmit, onClick, useState or a data mutation action. Static marketing cards do not count.",
       "Implement every missing workflow evidence term in functional page, API or schema code. For CRM this includes an explicit sales follow-up task and notification.",
       "Return every missing or rejected file from the required system file list. Do not omit a collection route, item route or operational page to save output tokens.",
-      "Emit only files that must change, but return their full replacement contents.",
+      "Generate the repair one file at a time. Return complete replacement content, never a patch.",
       "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
     ].join("\n")
+    const repairSeed = {
+      nextUnitIndex: 0,
+      completedFiles: files,
+      projectId: typeof project.id === "string" ? project.id : crypto.randomUUID(),
+      title: String(project.title || "Generated application"),
+      description: String(project.description || ""),
+      reply: String(result.response || ""),
+      model: String(result.model || ""),
+      reason: String(result.reason || ""),
+    }
     const repairResponse = await generateWithProviderFailover(new Request(request.url, {
       method: "POST",
       headers: request.headers,
@@ -338,6 +384,7 @@ export async function POST(request: Request) {
         ...payload,
         projectId: typeof project.id === "string" ? project.id : payload.projectId,
         message: repairBrief,
+        _originalPrompt: prompt,
         existing: {
           title: String(project.title || "Generated application"),
           description: String(project.description || ""),
@@ -347,6 +394,7 @@ export async function POST(request: Request) {
         _actorUserId: session.id,
         _actorPlan: session.plan || "starter",
         _generationId: generationId,
+        _fileContinuation: repairSeed,
       }),
     }))
     const repaired = (await repairResponse.json().catch(() => ({}))) as Record<string, unknown>
@@ -355,7 +403,30 @@ export async function POST(request: Request) {
       aggregateUsage,
       normalizeGenerationUsage(repaired.usage, String(repaired.model || "")),
     )
-    if (repairResponse.ok && repaired.success === true && repaired.fellBackToLocal !== true) {
+
+    if (repairResponse.ok && repaired.success === true && repaired.continuationRequired === true && repaired.continuation && typeof repaired.continuation === "object") {
+      await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repaired.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: 1 })
+      return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((repaired.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: Object.keys(files).length + requiredRepairFiles.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairAttempted: true })
+    }
+
+    if (!repairResponse.ok || repaired.success !== true) {
+      await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repairSeed, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: 1 })
+      return NextResponse.json({
+        success: true,
+        continuationRequired: true,
+        generationId,
+        continuationToken,
+        repairAttempted: true,
+        warning: "VALIDATION_REPAIR_RETRY_QUEUED",
+        progress: { completedFiles: Object.keys(files).length, totalFiles: Object.keys(files).length + requiredRepairFiles.length },
+        providerAttempts: aggregateAttempts,
+        usage: aggregateUsage,
+      })
+    }
+
+    if (repaired.fellBackToLocal !== true) {
       const repairedProject = repaired.project && typeof repaired.project === "object"
         ? repaired.project as Record<string, unknown>
         : null
