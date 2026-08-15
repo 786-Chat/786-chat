@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless"
+import { sql } from "./db"
 
 const DEFAULT_REPOSITORY_ID = "1250394192"
 const GIT_REF_RETRY_ATTEMPTS = 5
@@ -55,6 +56,29 @@ function safeSchemaName(projectId: string): string {
   return `generated_${projectSuffix(projectId)}`
 }
 
+function isExactGeneratedSchema(schema: string, projectId: string): boolean {
+  return /^generated_[a-z0-9]{1,12}$/.test(schema) && schema === safeSchemaName(projectId)
+}
+
+async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
+  const rows = (await sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM admin_project_builds
+      WHERE project_id = ${projectId}
+        AND status = 'passed'
+        AND deployment_url IS NOT NULL
+        AND deployment_url <> ''
+    ) AS deployed
+  `) as unknown as Array<{ deployed: boolean }>
+  return rows[0]?.deployed === true
+}
+
+function isRecoverablePartialSchemaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || "")
+  return /(?:column|relation|constraint|index).*(?:does not exist|already exists)|duplicate (?:column|table|object)|undefined (?:column|table)/i.test(message)
+}
+
 function scopedDatabaseUrl(baseUrl: string, schema: string): string {
   const url = new URL(baseUrl)
   url.searchParams.set("options", `-csearch_path=${schema}`)
@@ -86,18 +110,41 @@ async function prepareGeneratedRuntimeDatabase(input: {
 
   const runtimeUrl = scopedDatabaseUrl(baseUrl, schema)
   const runtimeSql = neon(runtimeUrl)
-  const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""
-  for (const statement of migrationStatements(schemaSource)) {
-    await runtimeSql.query(statement, [])
-  }
 
-  const extraMigrations = Object.entries(input.files)
-    .filter(([path]) => /^sql\/migrations\/(?!001_initial\.sql$).+\.sql$/i.test(path))
-    .sort(([left], [right]) => left.localeCompare(right))
-  for (const [, source] of extraMigrations) {
-    for (const statement of migrationStatements(source)) {
+  const applyMigrations = async () => {
+    const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""
+    for (const statement of migrationStatements(schemaSource)) {
       await runtimeSql.query(statement, [])
     }
+
+    const extraMigrations = Object.entries(input.files)
+      .filter(([path]) => /^sql\/migrations\/(?!001_initial\.sql$).+\.sql$/i.test(path))
+      .sort(([left], [right]) => left.localeCompare(right))
+    for (const [, source] of extraMigrations) {
+      for (const statement of migrationStatements(source)) {
+        await runtimeSql.query(statement, [])
+      }
+    }
+  }
+
+  try {
+    await applyMigrations()
+  } catch (error) {
+    const deployed = await hasSuccessfulDeployment(input.projectId)
+    const mayRecover =
+      !deployed &&
+      isExactGeneratedSchema(schema, input.projectId) &&
+      isRecoverablePartialSchemaError(error)
+
+    if (!mayRecover) throw error
+
+    // This project has never had a successful deployment. A failed earlier publish may
+    // have left a partial generated-only schema behind. Reset only this exact isolated
+    // namespace, once, then rerun the repeatable migrations. Existing deployed apps are
+    // never reset by this path.
+    await adminSql.query(`DROP SCHEMA "${schema}" CASCADE`, [])
+    await adminSql.query(`CREATE SCHEMA "${schema}"`, [])
+    await applyMigrations()
   }
 
   return runtimeUrl
