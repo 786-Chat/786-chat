@@ -21,8 +21,8 @@ export function assertGeneratedProjectCompleteness(prompt: string, files: Record
   const planned = extractRequiredFiles(prompt)
   // Ordinary existing-project edits intentionally return only changed files.
   // Validation-guided repairs are different: they contain an explicit required
-  // file list and must not silently return only part of that list. Batched
-  // generations validate only the current batch's explicit file list.
+  // file list and must not silently return only part of that list. File-level
+  // generations validate only the current unit's explicit file list.
   if (existing && !planned.length) return
   if (!planned.length) return
   const missing = planned.filter((path) => !files[path] || !files[path].trim())
