@@ -260,7 +260,7 @@ export function analyseProjectPrompt(
   const requiredComponents = matches(positivePrompt, [
     [/\bnav\b|\bnavbar\b|\bnavigation\s+(?:bar|menu)\b|\bmenu\s+bar\b|\bheader\b/i, "navigation"],
     [/\bhero\b/i, "hero"],
-    [/\bform\b|log[ -]?in|register|contact/i, "form"],
+    [/\bform\b|log[ -]?in|register|sign[ -]?up/i, "form"],
     [/(?:\bdata\s+table\b|\badmin\s+table\b|\bresponsive\s+table\b|\border\s+table\b|\bcustomer\s+table\b|\btable\s+(?:view|component|grid)\b)/i, "data-table"],
     [/\bchart|analytics\b/i, "chart"],
     [/\bfooter\b/i, "footer"],
