@@ -105,27 +105,45 @@ export async function loadBuilderProject(projectId: string) {
 }
 
 export async function generateBuilderProject(request: GenerationRequest) {
-  const MAX_GENERATION_CONTINUATIONS = 20
+  const MAX_GENERATION_CONTINUATIONS = 60
+  const MAX_RETRIES_PER_CONTINUATION = 2
   let continuationToken: string | undefined
+  let continuationRetryCount = 0
   let payload: Partial<GenerationResult> & {
     success?: boolean
     validation?: { errors?: string[] }
     continuationRequired?: boolean
     continuationToken?: string
+    retryableContinuation?: boolean
+    continuationRetryCount?: number
     error?: string
   } = {}
   for (let round = 0; round <= MAX_GENERATION_CONTINUATIONS; round++) {
     const response = await fetch("/api/786-chat/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(continuationToken ? { continuationToken } : { ...request, mode: "auto" }),
+      body: JSON.stringify(continuationToken
+        ? { continuationToken, continuationRetryCount }
+        : { ...request, mode: "auto" }),
     })
     payload = (await response.json().catch(() => ({}))) as typeof payload
     if (!response.ok || !payload.success) {
+      if (
+        continuationToken &&
+        payload.retryableContinuation === true &&
+        continuationRetryCount < MAX_RETRIES_PER_CONTINUATION
+      ) {
+        continuationRetryCount = Math.max(
+          continuationRetryCount + 1,
+          Number(payload.continuationRetryCount || 0),
+        )
+        continue
+      }
       const validationErrors = payload.validation?.errors?.filter(Boolean) || []
       const detail = validationErrors.length ? ` Missing: ${validationErrors.slice(0, 4).join("; ")}` : ""
       throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
     }
+    continuationRetryCount = 0
     if (!payload.continuationRequired) break
     if (!payload.continuationToken || round === MAX_GENERATION_CONTINUATIONS) throw new Error("Project generation exceeded its safe continuation limit.")
     continuationToken = payload.continuationToken
