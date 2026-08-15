@@ -25,8 +25,11 @@ import {
 import {
   completeBuilderGeneration,
   failBuilderGeneration,
+  recordBuilderGenerationProgress,
   reserveBuilderGeneration,
+  verifyPendingBuilderGeneration,
 } from "@/lib/786-chat/ai-governance"
+import { signGenerationContinuation, verifyGenerationContinuation } from "@/lib/786-chat/generation-continuation"
 import {
   mergeGenerationUsage,
   normalizeGenerationUsage,
@@ -54,7 +57,10 @@ export async function POST(request: Request) {
   }
 
   const payload = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const prompt = String(payload.message || "").trim()
+  const suppliedContinuation = typeof payload.continuationToken === "string"
+  const continuationState = suppliedContinuation ? verifyGenerationContinuation(String(payload.continuationToken)) : null
+  if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
+  const prompt = String(continuationState?.prompt || payload.message || "").trim()
   const ownerEmail = session.email.toLowerCase().trim()
   const promptSecurity = screenBuilderPrompt(prompt)
   if (!promptSecurity.allowed) {
@@ -72,9 +78,15 @@ export async function POST(request: Request) {
       warning: "UNDO_REQUIRES_REVISION_ENDPOINT",
     }, { status: 409 })
   }
-  let reservation
-  try {
-    reservation = await reserveBuilderGeneration({
+  let generationId: string
+  if (continuationState) {
+    generationId = String(continuationState.generationId || "")
+    const resumable = generationId && await verifyPendingBuilderGeneration({ generationId, ownerEmail, prompt })
+    if (!resumable) return NextResponse.json({ success: false, error: "Generation continuation is invalid, expired or belongs to another account." }, { status: 403 })
+  } else {
+    let reservation
+    try {
+      reservation = await reserveBuilderGeneration({
       ownerEmail,
       userId: session.id,
       plan: session.plan,
@@ -83,34 +95,19 @@ export async function POST(request: Request) {
       // The verified owner is unlimited. All customers use the request and
       // token allowances of the plan they purchased.
       bypassPlanLimits: isAdminUser(session.email),
-    })
-  } catch (error) {
-    console.error("[786.Chat AI governance] Could not reserve generation", error)
-    return NextResponse.json({
-      success: false,
-      error: "AI usage checks are temporarily unavailable. Please try again.",
-      warning: "AI_GOVERNANCE_UNAVAILABLE",
-    }, { status: 503 })
+      })
+    } catch (error) {
+      console.error("[786.Chat AI governance] Could not reserve generation", error)
+      return NextResponse.json({ success: false, error: "AI usage checks are temporarily unavailable. Please try again.", warning: "AI_GOVERNANCE_UNAVAILABLE" }, { status: 503 })
+    }
+    if (!reservation.allowed || !reservation.generationId) {
+      const status = reservation.errorCode === "PROMPT_REQUIRED" ? 400 : reservation.errorCode === "PROMPT_TOO_LONG" ? 413 : 429
+      return NextResponse.json({ success: false, error: reservation.error || "AI generation limit reached.", warning: reservation.errorCode || "AI_USAGE_LIMIT", retryAfter: reservation.retryAfter }, { status, headers: reservation.retryAfter ? { "Retry-After": String(reservation.retryAfter) } : undefined })
+    }
+    generationId = reservation.generationId
   }
-  if (!reservation.allowed || !reservation.generationId) {
-    const status = reservation.errorCode === "PROMPT_REQUIRED"
-      ? 400
-      : reservation.errorCode === "PROMPT_TOO_LONG"
-        ? 413
-        : 429
-    return NextResponse.json({
-      success: false,
-      error: reservation.error || "AI generation limit reached.",
-      warning: reservation.errorCode || "AI_USAGE_LIMIT",
-      retryAfter: reservation.retryAfter,
-    }, {
-      status,
-      headers: reservation.retryAfter ? { "Retry-After": String(reservation.retryAfter) } : undefined,
-    })
-  }
-  const generationId = reservation.generationId
-  let aggregateUsage: BuilderGenerationUsage = mergeGenerationUsage()
-  let aggregateAttempts: unknown[] = []
+  let aggregateUsage: BuilderGenerationUsage = mergeGenerationUsage(continuationState?.usage as BuilderGenerationUsage | undefined)
+  let aggregateAttempts: unknown[] = attemptsFrom(continuationState?.providerAttempts)
 
   async function recordFailure(errorCode: string, error: unknown) {
     try {
@@ -146,7 +143,7 @@ export async function POST(request: Request) {
       console.error("[786.Chat AI governance] Could not record generation usage", trackingError)
     }
   }
-  const familyHistory = payload.projectId
+  const familyHistory = continuationState ? [] : payload.projectId
     ? []
     : (await listProjects(ownerEmail)).flatMap((project) => {
         const specification = project.metadata?.specification
@@ -156,12 +153,12 @@ export async function POST(request: Request) {
         const id = (family as Record<string, unknown>).id
         return typeof id === "string" ? [id] : []
       })
-  const analysisSeed = typeof payload.projectId === "string" && payload.projectId.trim()
+  const analysisSeed = typeof continuationState?.analysisSeed === "string" ? continuationState.analysisSeed : typeof payload.projectId === "string" && payload.projectId.trim()
     ? payload.projectId.trim()
     : crypto.randomUUID()
-  const specification = analyseProjectPrompt(prompt, analysisSeed, familyHistory)
-  const plan = createProjectPlan(specification)
-  const generationBrief = [
+  const specification = continuationState?.specification && typeof continuationState.specification === "object" ? continuationState.specification as ReturnType<typeof analyseProjectPrompt> : analyseProjectPrompt(prompt, analysisSeed, familyHistory)
+  const plan = continuationState?.plan && typeof continuationState.plan === "object" ? continuationState.plan as ReturnType<typeof createProjectPlan> : createProjectPlan(specification)
+  const generationBrief = typeof continuationState?.generationBrief === "string" ? continuationState.generationBrief : [
     prompt,
     "",
     "MANDATORY STRUCTURED REQUIREMENTS:",
@@ -204,15 +201,22 @@ export async function POST(request: Request) {
       _actorUserId: session.id,
       _actorPlan: session.plan || "starter",
       _generationId: generationId,
+      _fileContinuation: continuationState?.fileContinuation,
     }),
   })
   const response = await generateWithProviderFailover(delegatedRequest)
   const result = (await response.json().catch(() => ({}))) as Record<string, unknown>
-  aggregateAttempts = attemptsFrom(result.providerAttempts)
+  aggregateAttempts = [...aggregateAttempts, ...attemptsFrom(result.providerAttempts)]
   aggregateUsage = mergeGenerationUsage(
     aggregateUsage,
     normalizeGenerationUsage(result.usage, String(result.model || "")),
   )
+
+  if (response.ok && result.success === true && result.continuationRequired === true && result.continuation && typeof result.continuation === "object") {
+    await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+    const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief, fileContinuation: result.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+    return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((result.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: plan.files.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage })
+  }
 
   if (!response.ok || result.success !== true) {
     await recordFailure(String(result.warning || "AI_PROVIDER_FAILURE"), result.error)
