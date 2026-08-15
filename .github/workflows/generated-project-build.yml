@@ -89,6 +89,16 @@ jobs:
         continue-on-error: true
         working-directory: ${{ runner.temp }}/generated-project
         shell: bash
+        env:
+          # Generated applications must compile without requiring customer runtime secrets.
+          # These values are non-secret build-only placeholders. Real runtime values are
+          # supplied later by the generated deployment environment.
+          DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
+          AUTH_SECRET: 786-chat-isolated-build-placeholder-auth-secret-not-for-runtime
+          RESEND_API_KEY: re_786_chat_isolated_build_placeholder
+          EMAIL_FROM: build@example.com
+          APP_URL: https://example.com
+          NEXT_PUBLIC_APP_URL: https://example.com
         run: |
           set -o pipefail
           LOG_FILE="$RUNNER_TEMP/build.log"
