@@ -55,6 +55,11 @@ function uniquePaths(paths: string[]) {
   return Array.from(new Set(paths.filter(Boolean)))
 }
 
+function isExplicitNewApplicationPrompt(prompt: string) {
+  const message = prompt.toLowerCase()
+  return /\bnew project\b|completely new|create (?:a |an )?new project|this is a new project|\b(?:create|build|develop)\s+(?:a|an)\s+(?:production-ready\s+)?[^\n]{0,140}\b(?:application|app|website|system)\s+called\b/.test(message)
+}
+
 export async function POST(request: Request) {
   const generationStartedAt = Date.now()
   const session = await getSession()
@@ -69,6 +74,11 @@ export async function POST(request: Request) {
   if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
   const repairPass = Math.max(0, Number(continuationState?.repairPass || 0))
   const prompt = String(continuationState?.prompt || payload.message || "").trim()
+  const explicitNewApplication = isExplicitNewApplicationPrompt(prompt)
+  if (explicitNewApplication) {
+    delete payload.projectId
+    delete payload.existing
+  }
   const ownerEmail = session.email.toLowerCase().trim()
   const promptSecurity = screenBuilderPrompt(prompt)
   if (!promptSecurity.allowed) {
