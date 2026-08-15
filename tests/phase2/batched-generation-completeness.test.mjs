@@ -28,3 +28,18 @@ test("a truncated individual file is compacted and retried without accepting par
   assert.match(codegen, /Never return a prefix, continuation, patch, or partial file/)
   assert.match(controller, /Provider error:/)
 })
+
+test("file-unit production timeouts are realistic and bounded by the route deadline", () => {
+  const number = (name) => Number(controller.match(new RegExp(`const ${name} = ([0-9_]+)`))?.[1].replaceAll("_", ""))
+  const deepSeek = number("UNIT_DEEPSEEK_TIMEOUT_MS")
+  const gemini = number("UNIT_GEMINI_TIMEOUT_MS")
+  const deadline = number("FILE_LEVEL_GENERATION_DEADLINE_MS")
+  assert.equal(deepSeek, 75_000)
+  assert.equal(gemini, 60_000)
+  assert.ok(deepSeek > 30_000)
+  assert.ok(gemini > 20_000)
+  assert.ok(deepSeek + gemini < deadline)
+  assert.ok(deadline < 300_000)
+  assert.match(controller, /Math\.min\(providerTimeoutMs, remainingMs\)/)
+  assert.match(controller, /isFileUnit \? 8_000/)
+})
