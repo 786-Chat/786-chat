@@ -3,9 +3,9 @@ import "server-only"
 export const INCOMPLETE_PROJECT_OUTPUT = "AI project output was incomplete and did not contain every planned file."
 
 function extractRequiredFiles(prompt: string) {
-  const isBatchedGeneration = /\bBATCHED FULL-STACK GENERATION\b/i.test(prompt)
+  const isBatchedGeneration = /\b(?:BATCHED|FILE-LEVEL) FULL-STACK GENERATION\b/i.test(prompt)
   const matches = isBatchedGeneration
-    ? [...prompt.matchAll(/Required system files \(return every file in this batch\):\s*([^\n]+)/gi)]
+    ? [...prompt.matchAll(/Required system files \(return every file in this (?:batch|unit)\):\s*([^\n]+)/gi)]
     : [...prompt.matchAll(/(?:Planned files|Required system files[^:]*):\s*([^\n]+)/gi)]
   const paths = new Set<string>()
   for (const match of matches) {
