@@ -1,0 +1,54 @@
+name: Apply generated runtime recovery patch
+on:
+  push:
+    branches: [fix/generated-runtime-first-deploy-recovery]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/generated-runtime-first-deploy-recovery
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch generated runtime recovery
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('lib/786-admin/vercel-project-deployer.ts')
+          s = p.read_text()
+          s = s.replace('import { neon } from "@neondatabase/serverless"\n', 'import { neon } from "@neondatabase/serverless"\nimport { sql } from "./db"\n', 1)
+
+          marker = '''function safeSchemaName(projectId: string): string {\n  return `generated_${projectSuffix(projectId)}`\n}\n'''
+          helper = marker + '''\nfunction isExactGeneratedSchema(schema: string, projectId: string): boolean {\n  return /^generated_[a-z0-9]{1,12}$/.test(schema) && schema === safeSchemaName(projectId)\n}\n\nasync function hasSuccessfulDeployment(projectId: string): Promise<boolean> {\n  const rows = (await sql`\n    SELECT EXISTS (\n      SELECT 1\n      FROM admin_project_builds\n      WHERE project_id = ${projectId}\n        AND status = 'passed'\n        AND deployment_url IS NOT NULL\n        AND deployment_url <> ''\n    ) AS deployed\n  `) as unknown as Array<{ deployed: boolean }>\n  return rows[0]?.deployed === true\n}\n\nfunction isRecoverablePartialSchemaError(error: unknown): boolean {\n  const message = error instanceof Error ? error.message : String(error || "")\n  return /(?:column|relation|constraint|index).*(?:does not exist|already exists)|duplicate (?:column|table|object)|undefined (?:column|table)/i.test(message)\n}\n'''
+          if marker not in s:
+              raise SystemExit('safeSchemaName marker not found')
+          s = s.replace(marker, helper, 1)
+
+          old = '''  const runtimeUrl = scopedDatabaseUrl(baseUrl, schema)\n  const runtimeSql = neon(runtimeUrl)\n  const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""\n  for (const statement of migrationStatements(schemaSource)) {\n    await runtimeSql.query(statement, [])\n  }\n\n  const extraMigrations = Object.entries(input.files)\n    .filter(([path]) => /^sql\\/migrations\\/(?!001_initial\\.sql$).+\\.sql$/i.test(path))\n    .sort(([left], [right]) => left.localeCompare(right))\n  for (const [, source] of extraMigrations) {\n    for (const statement of migrationStatements(source)) {\n      await runtimeSql.query(statement, [])\n    }\n  }\n\n  return runtimeUrl\n'''
+          new = '''  const runtimeUrl = scopedDatabaseUrl(baseUrl, schema)\n  const runtimeSql = neon(runtimeUrl)\n\n  const applyMigrations = async () => {\n    const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""\n    for (const statement of migrationStatements(schemaSource)) {\n      await runtimeSql.query(statement, [])\n    }\n\n    const extraMigrations = Object.entries(input.files)\n      .filter(([path]) => /^sql\\/migrations\\/(?!001_initial\\.sql$).+\\.sql$/i.test(path))\n      .sort(([left], [right]) => left.localeCompare(right))\n    for (const [, source] of extraMigrations) {\n      for (const statement of migrationStatements(source)) {\n        await runtimeSql.query(statement, [])\n      }\n    }\n  }\n\n  try {\n    await applyMigrations()\n  } catch (error) {\n    const deployed = await hasSuccessfulDeployment(input.projectId)\n    const mayRecover =\n      !deployed &&\n      isExactGeneratedSchema(schema, input.projectId) &&\n      isRecoverablePartialSchemaError(error)\n\n    if (!mayRecover) throw error\n\n    // This project has never had a successful deployment. A failed earlier publish may\n    // have left a partial generated-only schema behind. Reset only this exact isolated\n    // namespace, once, then rerun the repeatable migrations. Existing deployed apps are\n    // never reset by this path.\n    await adminSql.query(`DROP SCHEMA "${schema}" CASCADE`, [])\n    await adminSql.query(`CREATE SCHEMA "${schema}"`, [])\n    await applyMigrations()\n  }\n\n  return runtimeUrl\n'''
+          if old not in s:
+              raise SystemExit('migration block marker not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          test = Path('tests/phase2/generated-runtime-recovery.test.mjs')
+          test.write_text('''import assert from "node:assert/strict"\nimport test from "node:test"\nimport { readFile } from "node:fs/promises"\n\nconst source = await readFile(new URL("../../lib/786-admin/vercel-project-deployer.ts", import.meta.url), "utf8")\n\ntest("generated runtime recovery is limited to never-deployed project namespaces", () => {\n  assert.match(source, /function isExactGeneratedSchema/)\n  assert.match(source, /schema === safeSchemaName\\(projectId\\)/)\n  assert.match(source, /FROM admin_project_builds/)\n  assert.match(source, /status = 'passed'/)\n  assert.match(source, /deployment_url IS NOT NULL/)\n  assert.match(source, /!deployed/)\n})\n\ntest("partial generated schema recovery drops only the exact namespace and retries once", () => {\n  assert.match(source, /isRecoverablePartialSchemaError\\(error\\)/)\n  assert.match(source, /DROP SCHEMA \\"\\$\\{schema\\}\\" CASCADE/)\n  assert.match(source, /CREATE SCHEMA \\"\\$\\{schema\\}\\"/)\n  const calls = source.match(/await applyMigrations\\(\\)/g) || []\n  assert.equal(calls.length, 2)\n})\n\ntest("deployed projects fail closed instead of resetting data", () => {\n  assert.match(source, /if \\(!mayRecover\\) throw error/)\n  assert.doesNotMatch(source, /DROP SCHEMA public/i)\n  assert.doesNotMatch(source, /DROP DATABASE/i)\n})\n''')
+          PY
+      - name: Verify recovery patch
+        run: |
+          node --test tests/phase2/generated-runtime-recovery.test.mjs
+          git diff --check
+          npm install --ignore-scripts
+          npm run build
+      - name: Commit patch and remove temporary workflow
+        run: |
+          rm .github/workflows/tmp-runtime-recovery-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/786-admin/vercel-project-deployer.ts tests/phase2/generated-runtime-recovery.test.mjs .github/workflows/tmp-runtime-recovery-patch.yml
+          git commit -m "fix: recover stale first-deploy runtime schemas safely"
+          git push origin HEAD:fix/generated-runtime-first-deploy-recovery
