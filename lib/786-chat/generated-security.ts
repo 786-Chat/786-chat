@@ -14,6 +14,7 @@ const SECRET_PATH = /(?:^|\/)(?:\.env(?:\..+)?|\.npmrc|\.yarnrc|credentials\.jso
 const ENV_PATH = /(?:^|\/)\.env(?:\..+)?$/i
 const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
+const PUBLIC_AUTH_BOOTSTRAP_ROUTE = /^(?:src\/)?app\/api\/auth\/(?:register|login|forgot-password|reset-password|verify-email)\/route\.(?:[cm]?[jt]s)$/i
 const CLIENT_FILE = /^(?:src\/)?app\/.+\.(?:[cm]?[jt]sx?)$/i
 const ACCESS_GUARD = /\b(?:requireTenant|requireCompany|assertTenant|requireUser|requireAuth|requireSession|getSession|getCurrentUser|getAuthenticatedUser|getUser|auth|session)\s*\(/i
 const DANGEROUS_CODE: Array<[string, RegExp, string]> = [
@@ -94,7 +95,11 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
         errors.push({ code: "PUBLIC_SECRET_REFERENCE", path, message: "Secrets cannot use a NEXT_PUBLIC_ environment variable." })
       }
     }
-    if (SERVER_ROUTE.test(normalizedPath) && /\b(?:DATABASE_URL|neon\s*\(|sql`)/.test(content)) {
+    if (
+      SERVER_ROUTE.test(normalizedPath) &&
+      !PUBLIC_AUTH_BOOTSTRAP_ROUTE.test(normalizedPath) &&
+      /\b(?:DATABASE_URL|neon\s*\(|sql`)/.test(content)
+    ) {
       if (!ACCESS_GUARD.test(content)) {
         errors.push({ code: "DATABASE_ROUTE_WITHOUT_ACCESS_GUARD", path, message: "Database API routes must authenticate the user or enforce tenant ownership before querying data." })
       }
