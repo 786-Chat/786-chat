@@ -105,22 +105,32 @@ export async function loadBuilderProject(projectId: string) {
 }
 
 export async function generateBuilderProject(request: GenerationRequest) {
-  const response = await fetch("/api/786-chat/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...request, mode: "auto" }),
-  })
-  const payload = (await response.json().catch(() => ({}))) as Partial<GenerationResult> & {
+  const MAX_GENERATION_CONTINUATIONS = 20
+  let continuationToken: string | undefined
+  let payload: Partial<GenerationResult> & {
     success?: boolean
     validation?: { errors?: string[] }
+    continuationRequired?: boolean
+    continuationToken?: string
+    error?: string
+  } = {}
+  for (let round = 0; round <= MAX_GENERATION_CONTINUATIONS; round++) {
+    const response = await fetch("/api/786-chat/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(continuationToken ? { continuationToken } : { ...request, mode: "auto" }),
+    })
+    payload = (await response.json().catch(() => ({}))) as typeof payload
+    if (!response.ok || !payload.success) {
+      const validationErrors = payload.validation?.errors?.filter(Boolean) || []
+      const detail = validationErrors.length ? ` Missing: ${validationErrors.slice(0, 4).join("; ")}` : ""
+      throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
+    }
+    if (!payload.continuationRequired) break
+    if (!payload.continuationToken || round === MAX_GENERATION_CONTINUATIONS) throw new Error("Project generation exceeded its safe continuation limit.")
+    continuationToken = payload.continuationToken
   }
-  if (!response.ok || !payload.success || !payload.project) {
-    const validationErrors = payload.validation?.errors?.filter(Boolean) || []
-    const detail = validationErrors.length
-      ? ` Missing: ${validationErrors.slice(0, 4).join("; ")}`
-      : ""
-    throw new Error(`${errorMessage(payload, "Project generation failed.")}${detail}`)
-  }
+  if (!payload.project) throw new Error("Project generation ended before the complete project was validated.")
   return {
     generationId: payload.generationId,
     response: payload.response || `Created ${payload.project.title}`,
