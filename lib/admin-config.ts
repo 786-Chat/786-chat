@@ -1,6 +1,12 @@
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com")
-  .trim()
-  .toLowerCase()
+const DEFAULT_ADMIN_EMAIL = "mujeeb@job4u.com"
+
+// Keep one server-authoritative owner identity everywhere authentication is
+// checked. Removing accidental whitespace also prevents a malformed Vercel
+// ADMIN_EMAIL value (for example "mu jeeb@job4u.com") from making middleware
+// and route-level session verification disagree about the same signed user.
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL)
+  .replace(/\s+/g, "")
+  .toLowerCase() || DEFAULT_ADMIN_EMAIL
 
 export function isAdminUser(email: string | null | undefined): boolean {
   return Boolean(email && email.trim().toLowerCase() === ADMIN_EMAIL)

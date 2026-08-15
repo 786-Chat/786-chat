@@ -4,6 +4,7 @@ import { ensureAccountSecuritySchema } from "@/lib/account-security"
 import { createToken, setAuthCookie, verifyPassword } from "@/lib/auth"
 import { sql } from "@/lib/db"
 import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
+import { ADMIN_EMAIL } from "@/lib/admin-config"
 
 function isNeonQuotaError(message: string) {
   const lower = message.toLowerCase()
@@ -75,8 +76,7 @@ export async function POST(request: Request) {
       console.warn("[786.Chat] Subscription lookup failed during login")
     }
 
-    const ownerEmail = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com").trim().toLowerCase()
-    const role = user.email.toLowerCase().trim() === ownerEmail ? "admin" : user.role
+    const role = user.email.toLowerCase().trim() === ADMIN_EMAIL ? "admin" : user.role
     const token = await createToken({
       id: user.id,
       email: user.email,
