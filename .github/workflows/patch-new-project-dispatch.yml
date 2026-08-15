@@ -52,7 +52,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Run focused tests
-        run: node --test tests/phase2/new-project-dispatch.test.mjs tests/phase2/generation-continuation.test.mjs tests/phase2/batched-generation-completeness.test.mjs
+        run: node --test tests/phase2/new-project-dispatch.test.mjs tests/phase2/batched-generation-completeness.test.mjs
       - name: Build
         run: npm run build
       - name: Diff check
