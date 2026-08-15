@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { jwtVerify, type JWTPayload } from "jose"
-
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mujeeb@job4u.com").trim().toLowerCase()
+import { ADMIN_EMAIL } from "@/lib/admin-config"
 
 function getAuthToken(request: NextRequest) {
   return request.cookies.get("auth_token")?.value || request.cookies.get("auth-token")?.value || ""
