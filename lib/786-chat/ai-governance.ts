@@ -155,6 +155,38 @@ export async function reserveBuilderGeneration(input: {
   return { allowed: true, generationId, limit }
 }
 
+export async function verifyPendingBuilderGeneration(input: { generationId: string; ownerEmail: string; prompt: string }) {
+  const promptHash = createHash("sha256").update(input.prompt.trim()).digest("hex")
+  const rows = await sql`
+    SELECT id FROM builder_ai_generations
+    WHERE id = ${input.generationId}::uuid
+      AND owner_email = ${normalizedEmail(input.ownerEmail)}
+      AND prompt_hash = ${promptHash}
+      AND status = 'pending'
+    LIMIT 1
+  ` as unknown as Array<{ id: string }>
+  return Boolean(rows[0])
+}
+
+export async function recordBuilderGenerationProgress(input: {
+  generationId: string
+  ownerEmail: string
+  providerAttempts: unknown
+  usage: BuilderGenerationUsage
+}) {
+  await sql`
+    UPDATE builder_ai_generations
+    SET provider_attempts = ${JSON.stringify(input.providerAttempts || [])}::jsonb,
+        input_tokens = ${input.usage.inputTokens},
+        output_tokens = ${input.usage.outputTokens},
+        total_tokens = ${input.usage.totalTokens},
+        estimated_cost_usd = ${input.usage.estimatedCostUsd}
+    WHERE id = ${input.generationId}::uuid
+      AND owner_email = ${normalizedEmail(input.ownerEmail)}
+      AND status = 'pending'
+  `
+}
+
 export async function completeBuilderGeneration(input: {
   generationId: string
   ownerEmail: string
