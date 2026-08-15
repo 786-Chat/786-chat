@@ -1,0 +1,140 @@
+name: Apply multi-error build repair patch
+
+on:
+  push:
+    branches:
+      - fix/multi-error-build-repair
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/multi-error-build-repair
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply deterministic multi-error repair
+        shell: bash
+        run: |
+          cat > lib/786-chat/deterministic-build-repair.ts <<'EOF'
+          export type DeterministicGeneratedBuildRepair = {
+            files: Record<string, string>
+            removedPaths: string[]
+            model: string
+          }
+
+          function repairTailwindSemanticTheme(files: Record<string, string>, logs: string) {
+            if (!/class does not exist/i.test(logs) || !/app\/globals\.css/i.test(logs)) return null
+            const path = files["tailwind.config.ts"] ? "tailwind.config.ts" : files["tailwind.config.js"] ? "tailwind.config.js" : null
+            if (!path) return null
+            const source = files[path]
+            if (!/extend\s*:\s*\{\s*\}/.test(source)) return null
+            const extend = `extend: {\n      colors: {\n        border: 'var(--border)',\n        input: 'var(--input)',\n        ring: 'var(--ring)',\n        background: 'var(--background)',\n        foreground: 'var(--foreground)',\n        primary: { DEFAULT: 'var(--primary)', foreground: 'var(--primary-foreground)' },\n        secondary: { DEFAULT: 'var(--secondary)', foreground: 'var(--secondary-foreground)' },\n        destructive: { DEFAULT: 'var(--destructive)', foreground: 'var(--destructive-foreground)' },\n        muted: { DEFAULT: 'var(--muted)', foreground: 'var(--muted-foreground)' },\n        accent: { DEFAULT: 'var(--accent)', foreground: 'var(--accent-foreground)' },\n        card: { DEFAULT: 'var(--background)', foreground: 'var(--foreground)' },\n        popover: { DEFAULT: 'var(--background)', foreground: 'var(--foreground)' },\n      },\n    }`
+            const repaired = source.replace(/extend\s*:\s*\{\s*\}/, extend)
+            return repaired === source ? null : { [path]: repaired }
+          }
+
+          function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
+            if (!/Expected 0 arguments, but got 1/i.test(logs)) return null
+            const dbSource = files["lib/server/db.ts"] || ""
+            if (!/export\s+(?:async\s+)?function\s+getDb\s*\(\s*\)/.test(dbSource) && !/export\s+const\s+getDb\s*=\s*\(\s*\)/.test(dbSource)) return null
+            const repairedFiles: Record<string, string> = {}
+            for (const [path, source] of Object.entries(files)) {
+              if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\bgetDb\s*\(/.test(source)) continue
+              const repaired = source.replace(/\bgetDb\s*\(\s*[^()\n]+\s*\)/g, "getDb()")
+              if (repaired !== source) repairedFiles[path] = repaired
+            }
+            return Object.keys(repairedFiles).length ? repairedFiles : null
+          }
+
+          export function deterministicGeneratedBuildRepair(files: Record<string, string>, logs: string): DeterministicGeneratedBuildRepair | null {
+            const repairedFiles: Record<string, string> = {}
+            const models: string[] = []
+
+            const tailwind = repairTailwindSemanticTheme(files, logs)
+            if (tailwind) {
+              Object.assign(repairedFiles, tailwind)
+              models.push("tailwind-semantic-theme")
+            }
+
+            const dbFactory = repairZeroArgDbFactory({ ...files, ...repairedFiles }, logs)
+            if (dbFactory) {
+              Object.assign(repairedFiles, dbFactory)
+              models.push("zero-arg-db-factory")
+            }
+
+            if (!Object.keys(repairedFiles).length) return null
+            return {
+              files: repairedFiles,
+              removedPaths: [],
+              model: `deterministic-multi:${models.join("+")}`,
+            }
+          }
+          EOF
+
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('lib/786-chat/build-repair.ts')
+          text = path.read_text()
+          anchor = 'import { normalizeGeneratedMetadataBoundaries } from "@/lib/786-chat/validation"\n'
+          addition = anchor + 'import { deterministicGeneratedBuildRepair } from "@/lib/786-chat/deterministic-build-repair"\n'
+          if 'deterministicGeneratedBuildRepair' not in text:
+              text = text.replace(anchor, addition)
+          old = '''    const repair = deterministicCompatibilityRepair(context, input.logs)\n      ?? deterministicLucideImportRepair(context, input.logs)\n      ?? deterministicClientMetadataRepair(context, input.logs)\n      ?? deterministicClientBoundaryRepair(context, input.logs)\n      ?? deterministicNeonResultRepair(context, input.logs)\n      ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }'''
+          new = '''    const repair = deterministicGeneratedBuildRepair(context.files, input.logs)\n      ?? deterministicCompatibilityRepair(context, input.logs)\n      ?? deterministicLucideImportRepair(context, input.logs)\n      ?? deterministicClientMetadataRepair(context, input.logs)\n      ?? deterministicClientBoundaryRepair(context, input.logs)\n      ?? deterministicNeonResultRepair(context, input.logs)\n      ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }'''
+          if old not in text:
+              raise SystemExit('repair selection block not found')
+          text = text.replace(old, new)
+          path.write_text(text)
+          PY
+
+          cat > tests/phase2/deterministic-build-repair.test.mjs <<'EOF'
+          import assert from 'node:assert/strict'
+          import test from 'node:test'
+          import { readFile } from 'node:fs/promises'
+
+          const source = await readFile(new URL('../../lib/786-chat/deterministic-build-repair.ts', import.meta.url), 'utf8')
+          const pipeline = await readFile(new URL('../../lib/786-chat/build-repair.ts', import.meta.url), 'utf8')
+
+          test('repairs semantic Tailwind theme tokens reported by isolated builds', () => {
+            assert.match(source, /border: 'var\(--border\)'/)
+            assert.match(source, /input: 'var\(--input\)'/)
+            assert.match(source, /ring: 'var\(--ring\)'/)
+            assert.match(source, /background: 'var\(--background\)'/)
+            assert.match(source, /class does not exist/i)
+          })
+
+          test('repairs zero-argument getDb factory mismatches', () => {
+            assert.match(source, /Expected 0 arguments, but got 1/i)
+            assert.match(source, /getDb\\s\*\\\(/)
+            assert.match(source, /"getDb\(\)"/)
+          })
+
+          test('multi-error deterministic repair runs before single-category and AI repair', () => {
+            assert.match(pipeline, /deterministicGeneratedBuildRepair\(context\.files, input\.logs\)[\s\S]*deterministicCompatibilityRepair/)
+          })
+          EOF
+
+      - name: Install and verify
+        shell: bash
+        run: |
+          npm install --ignore-scripts
+          node --test tests/phase2/deterministic-build-repair.test.mjs
+          npm run build
+          git diff --check
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/apply-build-repair-fix.yml
+          git config user.name "786.Chat"
+          git config user.email "link24.7days@gmail.com"
+          git add lib/786-chat/build-repair.ts lib/786-chat/deterministic-build-repair.ts tests/phase2/deterministic-build-repair.test.mjs .github/workflows/apply-build-repair-fix.yml
+          git commit -m "fix: repair multiple generated build errors together"
+          git push origin HEAD:fix/multi-error-build-repair
