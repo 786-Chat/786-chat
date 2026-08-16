@@ -1,5 +1,5 @@
 import type { ProjectSpecification } from "./specification"
-import { backendCapabilities, requiredBackendFiles } from "./backend-capabilities"
+import { backendApiResources, backendCapabilities, requiredBackendFiles } from "./backend-capabilities"
 
 export type ProjectPlan = {
   files: Array<{ path: string; purpose: string }>
@@ -9,6 +9,18 @@ export type ProjectPlan = {
 
 function routeFile(route: string) {
   return route === "/" ? "app/page.tsx" : `app${route}/page.tsx`
+}
+
+function crudApplicationFiles(specification: ProjectSpecification) {
+  const routeSet = new Set(specification.routes)
+  return backendApiResources(specification).flatMap((resource) => {
+    const route = `/${resource}`
+    if (!routeSet.has(route)) return []
+    return [
+      { path: `app/${resource}/new/page.tsx`, purpose: `${route}/new create workflow route` },
+      { path: `app/${resource}/[id]/page.tsx`, purpose: `${route}/[id] detail and edit workflow route` },
+    ]
+  })
 }
 
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
@@ -44,6 +56,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       path,
       purpose: `Production ${capabilities.join("/")} backend implementation`,
     }))
+  const crudFiles = crudApplicationFiles(specification)
 
   // Backend files deliberately come before page files. Provider responses can be
   // truncated on large full-stack requests, so schema, manifest, server adapters
@@ -61,6 +74,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       path: routeFile(route),
       purpose: `${route} route`,
     })),
+    ...crudFiles,
     ...mobileFiles,
   ]
 
@@ -77,6 +91,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
         : []),
       "Create the application shell and design tokens",
       "Implement every requested route",
+      ...(crudFiles.length > 0 ? ["Implement create and detail/edit pages for CRUD application resources"] : []),
       "Add required controls and interactions",
       "Connect navigation only to existing routes",
       "Validate syntax, imports, requirements and project specificity",
@@ -97,6 +112,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     ],
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`),
+      ...crudFiles.map((file) => `Route file ${file.path} exists`),
       ...specification.requiredComponents.map((component) => `Component ${component} exists`),
       ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
       "Project content is specific to the request",
