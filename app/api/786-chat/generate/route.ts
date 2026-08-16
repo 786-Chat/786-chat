@@ -55,6 +55,18 @@ function uniquePaths(paths: string[]) {
   return Array.from(new Set(paths.filter(Boolean)))
 }
 
+function routeRepairFilesFromValidationErrors(errors: string[]) {
+  const files: string[] = []
+  for (const error of errors) {
+    const match = error.match(/(?:Internal navigation points to missing route|Missing requested route):\s*(\/[^;\s]*)/i)
+    if (!match) continue
+    const route = match[1].split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
+    if (!/^\/(?:[a-z0-9._~-]+\/?)*$/i.test(route)) continue
+    files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
+  }
+  return uniquePaths(files)
+}
+
 function isExplicitNewApplicationPrompt(prompt: string) {
   const message = prompt.toLowerCase()
   return /\bnew project\b|completely new|create (?:a |an )?new project|this is a new project|\b(?:create|build|develop)\s+(?:a|an)\s+(?:production-ready\s+)?[^\n]{0,140}\b(?:application|app|website|system)\s+called\b/.test(message)
@@ -323,6 +335,7 @@ export async function POST(request: Request) {
       /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence|CRUD/i.test(error)
     )
     const requiredRepairFiles = uniquePaths([
+      ...routeRepairFilesFromValidationErrors(validation.errors),
       ...specification.routes.map((route) =>
         route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
       ),
