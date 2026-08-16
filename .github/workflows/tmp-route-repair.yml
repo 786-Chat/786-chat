@@ -80,7 +80,8 @@ jobs:
 
           test("repair route extraction maps safe internal routes to Next.js page files", () => {
             assert.match(route, /route === "\/" \? "app\/page\.tsx" : `app\/\$\{route\.slice\(1\)\}\/page\.tsx`/)
-            assert.match(route, /\^\\\/(?:\(\?:\[a-z0-9\._~-\]\+\\\/?\)\*\$\/i\.test\(route\))/)
+            assert.match(route, /if \(!\/\^\\\//)
+            assert.match(route, /\.test\(route\)\) continue/)
           })
           EOF
       - name: Install dependencies
