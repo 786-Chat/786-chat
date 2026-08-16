@@ -120,17 +120,22 @@ jobs:
         shell: bash
         env:
           STATUS: ${{ steps.execute.outcome == 'success' && 'passed' || 'failed' }}
-          ERROR_MESSAGE: ${{ steps.execute.outcome == 'success' && '' || 'One or more isolated build commands failed.' }}
         run: |
           node <<'NODE' > "$RUNNER_TEMP/callback.json"
           const fs = require('fs')
           const logsPath = process.env.RUNNER_TEMP + '/build.log'
           const logs = fs.existsSync(logsPath) ? fs.readFileSync(logsPath, 'utf8').slice(-900000) : ''
+          const clean = logs.replace(/\u001b\[[0-9;]*m/g, '')
+          const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+          const actionable = lines.find((line) => /error TS\d+:|Type error:|Failed to compile\.|Module not found:|Cannot find module|SyntaxError:|ReferenceError:|Error: /i.test(line))
+          const errorMessage = process.env.STATUS === 'passed'
+            ? null
+            : (actionable || 'One or more isolated build commands failed.').slice(0, 2000)
           process.stdout.write(JSON.stringify({
             buildId: process.env.BUILD_ID,
             status: process.env.STATUS,
             logs,
-            errorMessage: process.env.ERROR_MESSAGE || null,
+            errorMessage,
           }))
           NODE
           curl --fail --silent --show-error \
