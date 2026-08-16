@@ -15,7 +15,7 @@ const ProjectSchema = z.object({ title: z.string().min(1), description: z.string
 type ProjectObject = z.infer<typeof ProjectSchema>
 
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator. Return a real runnable Next.js App Router project as JSON.
-Rules: Return FULL file content, never diffs or placeholders. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Preserve existing files for edits and emit only new or modified files. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. Return JSON only.`
+Rules: Return FULL file content, never diffs or placeholders. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Preserve existing files for edits and emit only new or modified files. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. In TypeScript, never call .length or [0] directly on an un-narrowed @neondatabase/serverless tagged-query union result; cast SELECT rows to an explicit array type or use a typed helper before indexing. Return JSON only.`
 const JSON_FORMAT_PROMPT = `\nReturn exactly one JSON object: {"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}. Begin with { and end with }. Escape JSON control characters. Keep metadata concise. Avoid duplicated code so the response fits the output budget.`
 const FILE_UNIT_JSON_FORMAT_PROMPT = `\nReturn ONLY this tiny JSON object with no markdown or prose: {"path":"exact requested path","content":"complete file content"}. Do not return title, description, reply, a files array, or any other key. Begin with { and end with }.`
 const TRUNCATION_MESSAGE = "DeepSeek JSON response was truncated before all project files were returned."
@@ -91,71 +91,61 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
       model: gatewayModel,
       system: SYSTEM_PROMPT,
       prompt,
-      temperature: 0.1,
-      maxOutputTokens: Math.min(requestedTokens, 24000),
-      maxRetries: 0,
+      maxOutputTokens: requestedTokens,
       abortSignal: input.abortSignal,
-      providerOptions: {
-        gateway: {
-          user: input.userId || "anonymous-builder",
-          tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])],
-          zeroDataRetention: true,
-        },
-        deepseek: { thinking: { type: "disabled" } },
-      },
     })
-    if (!result.text?.trim()) throw new Error("DeepSeek Gateway returned no output text.")
-    let object: ProjectObject
-    try { object = extractGeneratedObject(result.text, input) } catch (error) {
-      if (/JSON response could not be parsed|did not contain a JSON object/i.test(error instanceof Error ? error.message : String(error))) throw new Error(TRUNCATION_MESSAGE)
-      throw error
-    }
-    return { object, usage: result.usage }
+    const object = extractGeneratedObject(result.text, input)
+    return { object, usage: result.usage, finishReason: result.finishReason }
   }
 
-  const response = await fetch("https://api.deepseek.com/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], thinking: { type: "disabled" }, response_format: { type: "json_object" }, temperature: 0.1, max_tokens: Math.min(requestedTokens, 24000), stream: false }), signal: input.abortSignal })
-  const payload = await response.json().catch(() => ({})) as { error?: { message?: string }; choices?: Array<{ finish_reason?: string; message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
-  if (!response.ok) throw new Error(`DeepSeek API ${response.status}: ${payload.error?.message || "request failed"}`)
-  const choice = payload.choices?.[0]
-  const text = choice?.message?.content || ""
-  let object: ProjectObject
-  try { object = extractGeneratedObject(text, input) } catch (error) {
-    if (choice?.finish_reason === "length") throw new Error(TRUNCATION_MESSAGE)
-    throw error
-  }
-  if (choice?.finish_reason === "length" && (fileUnitTargetFromPrompt(input.prompt) || !input.existing)) throw new Error(TRUNCATION_MESSAGE)
-  return { object, usage: { inputTokens: payload.usage?.prompt_tokens || 0, outputTokens: payload.usage?.completion_tokens || 0, totalTokens: payload.usage?.total_tokens || 0 } }
+  const response = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }], response_format: { type: "json_object" }, temperature: 0.15, max_tokens: requestedTokens }),
+    signal: input.abortSignal,
+  })
+  if (!response.ok) throw new Error(`DeepSeek request failed with status ${response.status}.`)
+  const payload = await response.json() as { choices?: Array<{ finish_reason?: string; message?: { content?: string } }>; usage?: unknown }
+  const text = payload.choices?.[0]?.message?.content || ""
+  const finishReason = payload.choices?.[0]?.finish_reason || ""
+  if (/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt) && finishReason === "length") throw new Error("DeepSeek file-unit response was truncated.")
+  const object = extractGeneratedObject(text, input)
+  return { object, usage: payload.usage, finishReason }
 }
 
-async function runGemini(input: CodegenInput, prompt: string, modelName: string) {
-  const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
-  const directModel = modelName.replace(/^google\//, "")
-  const model = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel) : modelName
-  if (!googleApiKey && !gatewayConfigured()) throw new Error("Gemini is not configured.")
-  const requestedTokens = input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan)
-  const result = await generateText({ model, system: SYSTEM_PROMPT, ...(input.attachments?.length ? { messages: [{ role: "user" as const, content: attachmentContent(prompt, input.attachments) }] } : { prompt }), temperature: 0.1, maxOutputTokens: Math.min(requestedTokens, 24000), maxRetries: 0, abortSignal: input.abortSignal, ...(typeof model === "string" ? { providerOptions: { gateway: { user: input.userId || "anonymous-builder", tags: ["feature:builder-codegen", `plan:${String(input.userPlan || "starter").toLowerCase()}`, `env:${process.env.VERCEL_ENV || process.env.NODE_ENV || "development"}`, ...(input.generationId ? [`generation:${input.generationId}`] : [])], zeroDataRetention: true } } } : {}) })
-  if (!result.text?.trim()) throw new Error("Gemini returned no output text.")
-  return { object: extractGeneratedObject(result.text, input), usage: result.usage }
+async function runGemini(input: CodegenInput, prompt: string, model: string) {
+  const apiKey = (process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "").trim()
+  if (!apiKey && !gatewayConfigured()) throw new Error("Gemini API key and Vercel AI Gateway are not configured.")
+  const provider = apiKey ? createGoogleGenerativeAI({ apiKey }) : null
+  const result = await generateText({
+    model: provider ? provider(model) : model,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: attachmentContent(prompt, input.attachments || []) }],
+    maxOutputTokens: input.maxOutputTokens ?? maxOutputTokensForPlan(input.userPlan),
+    abortSignal: input.abortSignal,
+  })
+  const object = extractGeneratedObject(result.text, input)
+  return { object, usage: result.usage, finishReason: result.finishReason }
 }
 
 export async function generateProjectCode(input: CodegenInput): Promise<CodegenResult> {
   const attachments = input.attachments || []
-  const mode = selectedMode(input.mode ?? "auto", attachments.length > 0)
+  const mode = selectedMode(input.mode || "auto", attachments.length > 0)
   const picked = selectedModel(mode)
   const prompt = buildPrompt(input)
+  const fileLevelUnit = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)
   let result
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try { result = await runDeepSeek(input, prompt, mode) }
     catch (error) {
-      const fileLevelUnit = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)
-      const retryable = error instanceof Error && /JSON response (?:could not be parsed|was truncated)|did not contain a JSON object|File unit returned the wrong path/i.test(error.message)
+      const retryable = error instanceof Error && /JSON response (?:could not be parsed|was truncated)|did not contain a JSON object|file-unit response was truncated/i.test(error.message)
       if (!retryable || (input.existing && !fileLevelUnit)) throw error
-      result = await runDeepSeek({ ...input, maxOutputTokens: Math.min(input.maxOutputTokens ?? FILE_UNIT_RETRY_MAX_TOKENS, FILE_UNIT_RETRY_MAX_TOKENS) }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
+      result = await runDeepSeek({ ...input, maxOutputTokens: input.maxOutputTokens ?? 24_000 }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
     try { result = await runGemini(input, prompt, picked.model) }
     catch (error) {
-      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object|File unit returned the wrong path/i.test(error.message)
+      const retryable = error instanceof Error && /no output|JSON response could not be parsed|did not contain a JSON object/i.test(error.message)
       if (!retryable) throw error
       result = await runGemini(input, compactRetryPrompt(prompt, Boolean(input.existing)), picked.model)
     }
