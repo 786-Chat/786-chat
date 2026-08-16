@@ -1,0 +1,101 @@
+name: Temporary route repair patch
+on:
+  push:
+    branches:
+      - fix/validation-route-repair-targets
+permissions:
+  contents: write
+jobs:
+  patch-and-verify:
+    if: ${{ !contains(github.event.head_commit.message, '[route-repair-done]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/validation-route-repair-targets
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Patch validation-guided route repair
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/api/786-chat/generate/route.ts')
+          s = p.read_text()
+          needle = '''function uniquePaths(paths: string[]) {
+            return Array.from(new Set(paths.filter(Boolean)))
+          }
+          '''
+          insert = '''function uniquePaths(paths: string[]) {
+            return Array.from(new Set(paths.filter(Boolean)))
+          }
+
+          function routeRepairFilesFromValidationErrors(errors: string[]) {
+            const files: string[] = []
+            for (const error of errors) {
+              const match = error.match(/(?:Internal navigation points to missing route|Missing requested route):\\s*(\\/[^;\\s]*)/i)
+              if (!match) continue
+              const route = match[1].split(/[?#]/, 1)[0].replace(/\\/+$/, "") || "/"
+              if (!/^\\/(?:[a-z0-9._~-]+\\/?)*$/i.test(route)) continue
+              files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
+            }
+            return uniquePaths(files)
+          }
+          '''
+          if needle not in s:
+              raise SystemExit('uniquePaths anchor not found')
+          s = s.replace(needle, insert, 1)
+          needle2 = '''    const requiredRepairFiles = uniquePaths([
+                ...specification.routes.map((route) =>
+                  route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
+                ),
+          '''
+          repl2 = '''    const requiredRepairFiles = uniquePaths([
+                ...routeRepairFilesFromValidationErrors(validation.errors),
+                ...specification.routes.map((route) =>
+                  route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
+                ),
+          '''
+          if needle2 not in s:
+              raise SystemExit('requiredRepairFiles anchor not found')
+          s = s.replace(needle2, repl2, 1)
+          p.write_text(s)
+          PY
+      - name: Add regression test
+        run: |
+          cat > tests/phase2/validation-route-repair-targets.test.mjs <<'EOF'
+          import assert from "node:assert/strict"
+          import test from "node:test"
+          import { readFile } from "node:fs/promises"
+
+          const route = await readFile(new URL("../../app/api/786-chat/generate/route.ts", import.meta.url), "utf8")
+
+          test("validator-discovered missing routes are promoted into repair file targets", () => {
+            assert.match(route, /function routeRepairFilesFromValidationErrors/)
+            assert.match(route, /Internal navigation points to missing route/)
+            assert.match(route, /Missing requested route/)
+            assert.match(route, /\.\.\.routeRepairFilesFromValidationErrors\(validation\.errors\)/)
+          })
+
+          test("repair route extraction maps safe internal routes to Next.js page files", () => {
+            assert.match(route, /route === "\/" \? "app\/page\.tsx" : `app\/\$\{route\.slice\(1\)\}\/page\.tsx`/)
+            assert.match(route, /\^\\\/(?:\(\?:\[a-z0-9\._~-\]\+\\\/?\)\*\$\/i\.test\(route\))/)
+          })
+          EOF
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run focused regression tests
+        run: node --test tests/phase2/validation-route-repair-targets.test.mjs tests/phase2/continuation-repair-regression.test.mjs tests/phase2/route-integrity.test.mjs
+      - name: Build 786.Chat
+        run: npm run build
+      - name: Diff check
+        run: git diff --check
+      - name: Commit verified patch and remove temporary workflow
+        run: |
+          rm .github/workflows/tmp-route-repair.yml
+          git config user.name "786.Chat"
+          git config user.email "link24.7days@gmail.com"
+          git add app/api/786-chat/generate/route.ts tests/phase2/validation-route-repair-targets.test.mjs .github/workflows/tmp-route-repair.yml
+          git commit -m "fix: repair validator-discovered missing routes [route-repair-done]"
+          git push origin HEAD:fix/validation-route-repair-targets
