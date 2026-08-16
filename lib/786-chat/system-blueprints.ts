@@ -96,7 +96,7 @@ export const SYSTEM_BLUEPRINTS: readonly SystemBlueprint[] = [
   blueprint({
     id: "restaurant-pos",
     name: "Restaurant POS",
-    aliases: ["restaurant pos", "pos system", "point of sale", "restaurant management"],
+    aliases: ["restaurant pos", "pos system", "point of sale", "restaurant point of sale"],
     routes: ["/dashboard", "/pos", "/orders", "/menu", "/kitchen", "/inventory", "/staff", "/reports"],
     modules: ["point-of-sale", "orders", "menu", "kitchen-display", "inventory", "staff", "reporting"],
     entities: ["companies", "branches", "users", "menu_categories", "menu_items", "orders", "order_items", "payments", "stock_items", "shifts", "audit_logs"],
@@ -175,6 +175,7 @@ export function systemBlueprintBrief(value: SystemBlueprint): string[] {
     `Required modules: ${value.modules.join(", ")}`,
     `Required routes: ${value.routes.join(", ")}`,
     `Relational entities: ${value.entities.join(", ")}`,
+    `SQL schema rule: sql/schema.sql must CREATE TABLE for every relational entity listed above: ${value.entities.join(", ")}`,
     `Roles: ${value.roles.join(", ")}`,
     `End-to-end workflows: ${value.workflows.join(", ")}`,
     `API resources: ${value.apiResources.join(", ")}`,
@@ -182,6 +183,9 @@ export function systemBlueprintBrief(value: SystemBlueprint): string[] {
     value.tenantScoped
       ? "Tenant rule: every business record uses company_id and every server query enforces company ownership"
       : "Tenant rule: single-tenant",
+    ...(value.tenantScoped
+      ? ["Tenant SQL rule: sql/schema.sql must define companies, tenant-owned business tables must use company_id REFERENCES companies(id), and CREATE INDEX statements must include company_id."]
+      : []),
     "Every tenant-scoped collection and item API route must reference companyId and invoke requireTenant, requireCompany, tenantGuard or assertTenant before every read or mutation.",
     "Every POST, PATCH and DELETE route validates input and persists a tenant-scoped audit_logs event; comments and labels are not implementations.",
     "Every required operational page contains a real form, table or state-changing interactive control using onSubmit, onClick, useState or a data mutation action.",
