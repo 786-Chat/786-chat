@@ -28,6 +28,24 @@ function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
   return Object.keys(repairedFiles).length ? repairedFiles : null
 }
 
+function repairNeonTaggedQueryRows(files: Record<string, string>, logs: string) {
+  if (!/Property ['"](?:0|length)['"] does not exist on type|FullQueryResults|QueryResult.*not.*index/i.test(logs)) {
+    return null
+  }
+
+  const repairedFiles: Record<string, string> = {}
+  for (const [path, source] of Object.entries(files)) {
+    if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/await\s+sql`/.test(source)) continue
+    const repaired = source.replace(
+      /\b(const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*await\s+sql(`[^`]*`)\s*;/g,
+      (_statement, declaration: string, name: string, query: string) =>
+        `${declaration} ${name} = (await sql${query}) as unknown as Array<Record<string, any>>;`,
+    )
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
 export function deterministicGeneratedBuildRepair(files: Record<string, string>, logs: string): DeterministicGeneratedBuildRepair | null {
   const repairedFiles: Record<string, string> = {}
   const models: string[] = []
@@ -42,6 +60,12 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   if (dbFactory) {
     Object.assign(repairedFiles, dbFactory)
     models.push("zero-arg-db-factory")
+  }
+
+  const neonRows = repairNeonTaggedQueryRows({ ...files, ...repairedFiles }, logs)
+  if (neonRows) {
+    Object.assign(repairedFiles, neonRows)
+    models.push("neon-query-result-array")
   }
 
   if (!Object.keys(repairedFiles).length) return null
