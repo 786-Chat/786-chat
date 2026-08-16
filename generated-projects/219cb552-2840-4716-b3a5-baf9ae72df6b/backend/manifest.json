@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "Saffron Manager Test",
+  "description": "Restaurant CRM and reservation application with secure authentication and tenant isolation.",
+  "capabilities": [
+    "database",
+    "authentication",
+    "email",
+    "api"
+  ],
+  "providers": {
+    "database": {
+      "type": "neon",
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"],
+      "migration": "sql/migrations/001_initial.sql"
+    },
+    "authentication": {
+      "type": "custom",
+      "package": "bcryptjs",
+      "env": ["AUTH_SECRET"],
+      "session": "cookie"
+    },
+    "email": {
+      "type": "resend",
+      "package": "resend",
+      "env": ["RESEND_API_KEY", "EMAIL_FROM"]
+    }
+  },
+  "apiRoutes": [
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/session",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+    "/api/email",
+    "/api/customers",
+    "/api/customers/[id]",
+    "/api/reservations",
+    "/api/reservations/[id]"
+  ],
+  "databaseTables": [
+    "users",
+    "sessions",
+    "email_verification_tokens",
+    "password_reset_tokens",
+    "customers",
+    "reservations"
+  ]
+}
