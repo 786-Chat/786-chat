@@ -7,13 +7,48 @@ export type ProjectPlan = {
   acceptanceCriteria: string[]
 }
 
+const NON_CRUD_APPLICATION_ROUTES = new Set([
+  "about",
+  "blog",
+  "booking",
+  "checkout",
+  "contact",
+  "dashboard",
+  "faq",
+  "gallery",
+  "login",
+  "pricing",
+  "profile",
+  "register",
+  "reports",
+  "services",
+  "settings",
+])
+
 function routeFile(route: string) {
   return route === "/" ? "app/page.tsx" : `app${route}/page.tsx`
 }
 
 function crudApplicationFiles(specification: ProjectSpecification) {
   const routeSet = new Set(specification.routes)
-  return backendApiResources(specification).flatMap((resource) => {
+  const capabilities = backendCapabilities(specification)
+  const resources = new Set(backendApiResources(specification))
+
+  // Natural-language full-stack prompts can request business pages and a real
+  // backend without spelling every API path as `/api/resource`. When API/backend
+  // capability is active, treat simple collection-style application routes as
+  // CRUD resources too. This prevents generated navigation from linking to a
+  // detail/edit page that was never included in the file-level generation plan.
+  if (capabilities.includes("api")) {
+    for (const route of specification.routes) {
+      const match = route.match(/^\/([a-z0-9][a-z0-9_-]*)$/i)
+      const resource = match?.[1]?.toLowerCase()
+      if (!resource || NON_CRUD_APPLICATION_ROUTES.has(resource)) continue
+      resources.add(resource)
+    }
+  }
+
+  return Array.from(resources).flatMap((resource) => {
     const route = `/${resource}`
     if (!routeSet.has(route)) return []
     return [
