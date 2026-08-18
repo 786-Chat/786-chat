@@ -28,6 +28,25 @@ function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
   return Object.keys(repairedFiles).length ? repairedFiles : null
 }
 
+function repairNeonConnectUsage(files: Record<string, string>, logs: string) {
+  if (!/Property ['"]connect['"] does not exist on type ['"]?NeonQueryFunction/i.test(logs)) return null
+  const dbSource = files["lib/server/db.ts"] || ""
+  if (!/@neondatabase\/serverless/.test(dbSource) || !/\bget(?:Db|Sql)\b/.test(dbSource)) return null
+
+  const repairedFiles: Record<string, string> = {}
+  for (const [path, source] of Object.entries(files)) {
+    if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\.connect\s*\(\s*\)/.test(source)) continue
+    let repaired = source
+      .replace(/await\s+(get(?:Db|Sql)\s*\(\s*\))\.connect\s*\(\s*\)/g, "$1")
+      .replace(/await\s+([A-Za-z_$][\w$]*)\.connect\s*\(\s*\)/g, "$1")
+      .replace(/(get(?:Db|Sql)\s*\(\s*\))\.connect\s*\(\s*\)/g, "$1")
+      .replace(/([A-Za-z_$][\w$]*)\.connect\s*\(\s*\)/g, "$1")
+      .replace(/^\s*(?:await\s+)?[A-Za-z_$][\w$]*\.release\s*\(\s*\)\s*;?\s*$/gm, "")
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
 function repairNeonTaggedQueryRows(files: Record<string, string>, logs: string) {
   if (!/Property ['"](?:0|length)['"] does not exist on type|FullQueryResults|QueryResult.*not.*index/i.test(logs)) {
     return null
@@ -60,6 +79,12 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   if (dbFactory) {
     Object.assign(repairedFiles, dbFactory)
     models.push("zero-arg-db-factory")
+  }
+
+  const neonConnect = repairNeonConnectUsage({ ...files, ...repairedFiles }, logs)
+  if (neonConnect) {
+    Object.assign(repairedFiles, neonConnect)
+    models.push("neon-serverless-connect-compatibility")
   }
 
   const neonRows = repairNeonTaggedQueryRows({ ...files, ...repairedFiles }, logs)
