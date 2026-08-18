@@ -58,12 +58,13 @@ function uniquePaths(paths: string[]) {
 
 function routeRepairFilesFromValidationErrors(errors: string[]) {
   const files: string[] = []
+  const matcher = /(?:Internal navigation points to missing route|Missing requested route):\s*(\/[^;\s]*)/gi
   for (const error of errors) {
-    const match = error.match(/(?:Internal navigation points to missing route|Missing requested route):\s*(\/[^;\s]*)/i)
-    if (!match) continue
-    const route = match[1].split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
-    if (!/^\/(?:(?:[a-z0-9._~-]+|\[[a-z0-9_-]+\])\/?)*$/i.test(route)) continue
-    files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
+    for (const match of error.matchAll(matcher)) {
+      const route = match[1].split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
+      if (!/^\/(?:(?:[a-z0-9._~-]+|\[[a-z0-9_-]+\])\/?)*$/i.test(route)) continue
+      files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
+    }
   }
   return uniquePaths(files)
 }
