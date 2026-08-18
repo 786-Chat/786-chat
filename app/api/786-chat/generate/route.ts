@@ -46,6 +46,7 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 
 const MAX_CONTINUATION_PROVIDER_RETRIES = 2
+const MAX_VALIDATION_REPAIR_PASSES = 2
 
 function attemptsFrom(value: unknown) {
   return Array.isArray(value) ? value : []
@@ -61,7 +62,7 @@ function routeRepairFilesFromValidationErrors(errors: string[]) {
     const match = error.match(/(?:Internal navigation points to missing route|Missing requested route):\s*(\/[^;\s]*)/i)
     if (!match) continue
     const route = match[1].split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/"
-    if (!/^\/(?:[a-z0-9._~-]+\/?)*$/i.test(route)) continue
+    if (!/^\/(?:(?:[a-z0-9._~-]+|\[[a-z0-9_-]+\])\/?)*$/i.test(route)) continue
     files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
   }
   return uniquePaths(files)
@@ -210,7 +211,7 @@ export async function POST(request: Request) {
     "- app/page.tsx is mandatory for every Next.js project. A /login or other nested route never replaces the root entry file.",
     "- Files that export metadata or generateMetadata must remain Server Components. Move hooks, browser APIs and event handlers into a child component marked \"use client\".",
     "- When the user requests one nested page, app/page.tsx may render or redirect to that page, but it must still exist.",
-    "- Navigation links must point only to routes included above.",
+    "- Navigation links must point only to routes included above or planned authentication support routes.",
     "- Do not replace this request with a generic homepage.",
     "- Public auth bootstrap APIs register/login/forgot-password/reset-password/verify-email validate input securely but MUST NOT require an already-authenticated session.",
     "- If remember-me is required, render a real checkbox/control containing the words remember me in the login UI.",
@@ -328,7 +329,7 @@ export async function POST(request: Request) {
   validation.valid = validation.errors.length === 0
   let repairAttempted = repairPass > 0
 
-  if (!validation.valid && project && repairPass < 1) {
+  if (!validation.valid && project && repairPass < MAX_VALIDATION_REPAIR_PASSES) {
     repairAttempted = true
     const backendRepairFiles = requiredBackendFiles(specification)
     const focusedSystemRepair = validation.errors.every((error) =>
@@ -429,13 +430,13 @@ export async function POST(request: Request) {
 
     if (repairResponse.ok && repaired.success === true && repaired.continuationRequired === true && repaired.continuation && typeof repaired.continuation === "object") {
       await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repaired.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: 1 })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repaired.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
       return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((repaired.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: Object.keys(files).length + requiredRepairFiles.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairAttempted: true })
     }
 
     if (!repairResponse.ok || repaired.success !== true) {
       await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repairSeed, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: 1 })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repairSeed, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
       return NextResponse.json({
         success: true,
         continuationRequired: true,

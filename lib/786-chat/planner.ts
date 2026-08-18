@@ -48,6 +48,23 @@ function crudApplicationFiles(specification: ProjectSpecification) {
   })
 }
 
+function authSupportFiles(specification: ProjectSpecification) {
+  const capabilities = backendCapabilities(specification)
+  if (!capabilities.includes("authentication")) return []
+  const routeSet = new Set(specification.routes)
+  return [
+    !routeSet.has("/forgot-password")
+      ? { path: "app/forgot-password/page.tsx", purpose: "Forgot-password route with a real email form and submit handling" }
+      : null,
+    !routeSet.has("/reset-password")
+      ? { path: "app/reset-password/page.tsx", purpose: "Reset-password route with a real password form and submit handling" }
+      : null,
+    !routeSet.has("/verify-email")
+      ? { path: "app/verify-email/page.tsx", purpose: "Email-verification status route with a real verification action" }
+      : null,
+  ].filter((file): file is { path: string; purpose: string } => Boolean(file))
+}
+
 export function createProjectPlan(specification: ProjectSpecification): ProjectPlan {
   const capabilities = backendCapabilities(specification)
   const mobileFiles = specification.platforms.includes("mobile") ? [
@@ -67,6 +84,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
   const systemFilePaths = new Set(systemFiles.map((file) => file.path))
   const backendFiles = requiredBackendFiles(specification).filter((path) => !systemFilePaths.has(path)).map((path) => ({ path, purpose: `Production ${capabilities.join("/")} backend implementation` }))
   const crudFiles = crudApplicationFiles(specification)
+  const authFiles = authSupportFiles(specification)
   const files = [
     { path: "package.json", purpose: "Allowed dependencies and build scripts" },
     { path: "tsconfig.json", purpose: "TypeScript compiler configuration" },
@@ -75,7 +93,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     { path: "app/layout.tsx", purpose: "Application shell and metadata" },
     { path: "app/globals.css", purpose: "Project-specific design system and responsive styles" },
     ...specification.routes.map((route) => ({ path: routeFile(route), purpose: routePurpose(route, specification) })),
-    ...crudFiles, ...mobileFiles,
+    ...authFiles, ...crudFiles, ...mobileFiles,
   ]
   const requiresAuthentication = capabilities.includes("authentication")
   return {
@@ -83,6 +101,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     steps: [
       ...(capabilities.length > 0 ? ["Generate every mandatory backend file before any cosmetic or frontend rewrite", "Implement database schema, migrations, manifest, server adapters and requested API routes"] : []),
       "Create the application shell and design tokens", "Implement every requested route",
+      ...(authFiles.length > 0 ? ["Implement forgot-password, reset-password and verify-email support pages before linking to them from authentication UI"] : []),
       ...(specification.requiredComponents.includes("form") ? ["Implement required forms as real <form> elements with submit handling; styled divs or button groups do not satisfy form requirements"] : []),
       ...(crudFiles.length > 0 ? ["Implement create and detail/edit pages for CRUD application resources"] : []),
       "Add required controls and interactions", "Connect navigation only to existing routes", "Validate syntax, imports, requirements and project specificity", "Build the project in the isolated runner",
@@ -91,7 +110,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       ...(specification.platforms.includes("mobile") ? ["Generate the Expo mobile client against shared authenticated API contracts"] : []),
     ],
     acceptanceCriteria: [
-      ...specification.routes.map((route) => `Route ${route} exists`), ...crudFiles.map((file) => `Route file ${file.path} exists`),
+      ...specification.routes.map((route) => `Route ${route} exists`), ...authFiles.map((file) => `Route file ${file.path} exists`), ...crudFiles.map((file) => `Route file ${file.path} exists`),
       ...specification.requiredComponents.map((component) => `Component ${component} exists`), ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
       "Project content is specific to the request", "No generic fallback homepage is accepted as a verified build",
       ...(capabilities.length > 0 ? ["Backend manifest, migrations, server adapters and API routes pass production acceptance", requiresAuthentication ? "Authentication routes and protected data APIs are complete before frontend acceptance" : "Public data APIs remain functional without inventing authentication dependencies"] : []),
