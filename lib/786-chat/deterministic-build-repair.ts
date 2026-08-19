@@ -15,6 +15,19 @@ function repairTailwindSemanticTheme(files: Record<string, string>, logs: string
   return repaired === source ? null : { [path]: repaired }
 }
 
+function repairMissingDbHelperExport(files: Record<string, string>, logs: string) {
+  const match = logs.match(/Module ['"]@\/lib\/server\/db['"] declares ['"](get(?:Sql|Db))['"] locally, but it is not exported/i)
+  if (!match) return null
+  const helper = match[1]
+  const path = files["lib/server/db.ts"] ? "lib/server/db.ts" : files["src/lib/server/db.ts"] ? "src/lib/server/db.ts" : null
+  if (!path) return null
+  const source = files[path]
+  if (new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${helper}\\b`).test(source) || new RegExp(`\\bexport\\s*\\{[^}]*\\b${helper}\\b`).test(source)) return null
+  let repaired = source.replace(new RegExp(`\\b(async\\s+)?function\\s+${helper}\\b`), (_statement, asyncPrefix: string | undefined) => `export ${asyncPrefix || ""}function ${helper}`)
+  if (repaired === source) repaired = source.replace(new RegExp(`\\b(const|let)\\s+${helper}\\b`), (_statement, declaration: string) => `export ${declaration} ${helper}`)
+  return repaired === source ? null : { [path]: repaired }
+}
+
 function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
   if (!/Expected 0 arguments, but got 1/i.test(logs)) return null
   const dbSource = files["lib/server/db.ts"] || ""
@@ -55,9 +68,6 @@ function repairNeonQueryMethodUsage(files: Record<string, string>, logs: string)
   const repairedFiles: Record<string, string> = {}
   for (const [path, source] of Object.entries(files)) {
     if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\.query\s*\(/.test(source)) continue
-    // NeonQueryFunction is itself callable. Generated code can treat either a
-    // local variable or a direct getSql()/getDb() call like node-postgres.
-    // Preserve arguments exactly and remove only the incompatible `.query`.
     const repaired = source
       .replace(/\b(get(?:Db|Sql)\s*\(\s*\))\.query\s*\(/g, "$1(")
       .replace(/\b([A-Za-z_$][\w$]*)\.query\s*\(/g, "$1(")
@@ -88,7 +98,13 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   const repairedFiles: Record<string, string> = {}
   const models: string[] = []
 
-  const tailwind = repairTailwindSemanticTheme(files, logs)
+  const dbHelperExport = repairMissingDbHelperExport(files, logs)
+  if (dbHelperExport) {
+    Object.assign(repairedFiles, dbHelperExport)
+    models.push("db-helper-export-contract")
+  }
+
+  const tailwind = repairTailwindSemanticTheme({ ...files, ...repairedFiles }, logs)
   if (tailwind) {
     Object.assign(repairedFiles, tailwind)
     models.push("tailwind-semantic-theme")
