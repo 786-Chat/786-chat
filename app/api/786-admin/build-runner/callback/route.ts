@@ -6,7 +6,11 @@ import { repairFailedBuild } from "@/lib/786-chat/build-repair"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 export const runtime = "nodejs"
-export const maxDuration = 120
+// Publishing a verified build includes GitHub branch/PR creation, generated database
+// preparation, Vercel project/env setup and up to 75s waiting for the preview to be
+// READY. The old 120s budget could terminate this callback after publishing the PR
+// but before completeRunnerBuild(), leaving the workspace stuck on "Publishing preview".
+export const maxDuration = 300
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
