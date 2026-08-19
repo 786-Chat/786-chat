@@ -31,28 +31,28 @@ function routePurpose(route: string, specification: ProjectSpecification) {
 
 function backendFilePurpose(path: string, capabilities: string[]) {
   if (path === "lib/server/auth.ts" && capabilities.includes("authentication")) {
-    return "Production authentication backend using bcryptjs hash/compare for passwords, jose SignJWT/jwtVerify for signed sessions, AUTH_SECRET with no fallback, secure session helpers, and token hashing/revocation"
+    return "Production shared authentication module. It MUST export hashPassword(password), verifyPassword(password, hash), signSession(payload), verifySession(token), generateToken(), and hashToken(token). Use bcryptjs hash/compare for passwords; jose SignJWT/jwtVerify for signed sessions; crypto.randomBytes for one-time reset/verification tokens; crypto.createHash('sha256') for stored token hashes; require AUTH_SECRET with no hard-coded fallback. Every auth route must import only helpers that this module actually exports."
   }
   if (path === "app/api/auth/register/route.ts" && capabilities.includes("authentication")) {
-    return "Registration API that validates input, hashes passwords through lib/server/auth.ts, persists the user safely, and never stores plaintext passwords"
+    return "Registration API using exported hashPassword from lib/server/auth.ts; validate input, persist the user safely, and never store plaintext passwords"
   }
   if (path === "app/api/auth/login/route.ts" && capabilities.includes("authentication")) {
-    return "Login API that validates input, compares bcrypt password hashes, creates a signed jose-backed session, and sets a secure HttpOnly cookie"
+    return "Login API using exported verifyPassword and signSession from lib/server/auth.ts; validate input and set a secure HttpOnly session cookie"
   }
   if (path === "app/api/auth/session/route.ts" && capabilities.includes("authentication")) {
-    return "Session API that verifies the current jose-backed signed session through lib/server/auth.ts and returns only authenticated user-safe data"
+    return "Session API using exported verifySession from lib/server/auth.ts and returning only authenticated user-safe data"
   }
   if (path === "app/api/auth/logout/route.ts" && capabilities.includes("authentication")) {
-    return "Logout API that revokes/purges the persisted session and clears the secure cookie"
+    return "Logout API that revokes/purges the persisted session and clears the secure cookie; imports only helpers actually exported by lib/server/auth.ts"
   }
   if (path === "app/api/auth/forgot-password/route.ts" && capabilities.includes("authentication")) {
-    return "Forgot-password API that creates a hashed one-time reset token, sends a neutral response, and prevents account enumeration"
+    return "Forgot-password API using exported generateToken and hashToken from lib/server/auth.ts to create and store a hashed one-time reset token; send a neutral response and prevent account enumeration"
   }
   if (path === "app/api/auth/reset-password/route.ts" && capabilities.includes("authentication")) {
-    return "Reset-password API that validates the one-time token, hashes the new password with bcryptjs, revokes existing sessions, and invalidates the reset token"
+    return "Reset-password API using exported hashToken and hashPassword from lib/server/auth.ts; validate the one-time token, hash the new password, revoke existing sessions, and invalidate the reset token"
   }
   if (path === "app/api/auth/verify-email/route.ts" && capabilities.includes("authentication")) {
-    return "Email verification API that validates a hashed one-time verification token and marks the user verified without exposing token material"
+    return "Email verification API using exported hashToken from lib/server/auth.ts; validate a hashed one-time verification token and mark the user verified without exposing token material"
   }
   return `Production ${capabilities.join("/")} backend implementation`
 }
@@ -133,7 +133,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     files,
     steps: [
       ...(capabilities.length > 0 ? ["Generate every mandatory backend file before any cosmetic or frontend rewrite", "Implement database schema, migrations, manifest, server adapters and requested API routes"] : []),
-      ...(requiresAuthentication ? ["Implement lib/server/auth.ts first with bcryptjs hash/compare and jose SignJWT/jwtVerify using AUTH_SECRET, then make every auth route call those shared helpers instead of inventing incompatible local auth logic"] : []),
+      ...(requiresAuthentication ? ["Implement lib/server/auth.ts first with the exact shared exports hashPassword, verifyPassword, signSession, verifySession, generateToken, and hashToken. Then make every auth route import only those exported helpers. Use bcryptjs for passwords, jose with AUTH_SECRET for sessions, and crypto for one-time tokens."] : []),
       "Create the application shell and design tokens", "Implement every requested route",
       ...(authFiles.length > 0 ? ["Implement forgot-password, reset-password and verify-email support pages before linking to them from authentication UI"] : []),
       ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page must include a visible real link to /forgot-password with Forgot Password text; plain text or a non-link control does not satisfy this requirement"] : []),
@@ -147,7 +147,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`), ...authFiles.map((file) => `Route file ${file.path} exists`), ...crudFiles.map((file) => `Route file ${file.path} exists`),
       ...specification.requiredComponents.map((component) => `Component ${component} exists`), ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
-      ...(requiresAuthentication ? ["lib/server/auth.ts imports bcryptjs and jose, hashes/compares passwords, signs/verifies sessions, and requires AUTH_SECRET without a hard-coded fallback"] : []),
+      ...(requiresAuthentication ? ["lib/server/auth.ts imports bcryptjs and jose; exports hashPassword, verifyPassword, signSession, verifySession, generateToken and hashToken; hashes/compares passwords; signs/verifies sessions; requires AUTH_SECRET without a hard-coded fallback; and every app/api/auth route imports only helpers actually exported by lib/server/auth.ts"] : []),
       ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page contains a real /forgot-password link with visible Forgot Password text"] : []),
       "Project content is specific to the request", "No generic fallback homepage is accepted as a verified build",
       ...(capabilities.length > 0 ? ["Backend manifest, migrations, server adapters and API routes pass production acceptance", requiresAuthentication ? "Authentication routes and protected data APIs are complete before frontend acceptance" : "Public data APIs remain functional without inventing authentication dependencies"] : []),
