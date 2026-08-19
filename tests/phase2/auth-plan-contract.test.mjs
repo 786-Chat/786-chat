@@ -26,3 +26,10 @@ test("auth routes are planned against shared crypto helpers", () => {
   assert.match(planner, /Login API using exported verifyPassword and signSession/)
   assert.match(planner, /Session API using exported verifySession/)
 })
+
+test("signSession return type and cookie ownership are explicit", () => {
+  assert.match(planner, /signSession\(payload\).*Promise<string>/)
+  assert.match(planner, /signSession MUST return the signed JWT string/)
+  assert.match(planner, /Do NOT access session\.cookie or token\.cookie/)
+  assert.match(planner, /login sets that JWT directly as the secure HttpOnly cookie without accessing \.cookie/)
+})
