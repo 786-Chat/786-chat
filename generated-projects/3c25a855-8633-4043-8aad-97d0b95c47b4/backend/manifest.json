@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "resources": {
+    "database": {
+      "provider": "neon",
+      "env": "DATABASE_URL"
+    }
+  },
+  "migrations": "sql/migrations/001_initial.sql",
+  "api": {
+    "routes": [
+      "/api/customers",
+      "/api/customers/[id]",
+      "/api/reservations",
+      "/api/reservations/[id]",
+      "/api/orders",
+      "/api/orders/[id]"
+    ]
+  }
+}
