@@ -36,12 +36,29 @@ function repairNeonConnectUsage(files: Record<string, string>, logs: string) {
   const repairedFiles: Record<string, string> = {}
   for (const [path, source] of Object.entries(files)) {
     if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\.connect\s*\(\s*\)/.test(source)) continue
-    let repaired = source
+    const repaired = source
       .replace(/await\s+(get(?:Db|Sql)\s*\(\s*\))\.connect\s*\(\s*\)/g, "$1")
       .replace(/await\s+([A-Za-z_$][\w$]*)\.connect\s*\(\s*\)/g, "$1")
       .replace(/(get(?:Db|Sql)\s*\(\s*\))\.connect\s*\(\s*\)/g, "$1")
       .replace(/([A-Za-z_$][\w$]*)\.connect\s*\(\s*\)/g, "$1")
       .replace(/^\s*(?:await\s+)?[A-Za-z_$][\w$]*\.release\s*\(\s*\)\s*;?\s*$/gm, "")
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
+function repairNeonQueryMethodUsage(files: Record<string, string>, logs: string) {
+  if (!/Property ['"]query['"] does not exist on type ['"]?NeonQueryFunction/i.test(logs)) return null
+  const dbSource = files["lib/server/db.ts"] || ""
+  if (!/@neondatabase\/serverless/.test(dbSource)) return null
+
+  const repairedFiles: Record<string, string> = {}
+  for (const [path, source] of Object.entries(files)) {
+    if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\.query\s*\(/.test(source)) continue
+    // NeonQueryFunction is itself callable: sql(query, params). Generated code
+    // sometimes treats it like node-postgres and emits sql.query(query, params).
+    // Preserve the arguments exactly and remove only the incompatible `.query`.
+    const repaired = source.replace(/\b([A-Za-z_$][\w$]*)\.query\s*\(/g, "$1(")
     if (repaired !== source) repairedFiles[path] = repaired
   }
   return Object.keys(repairedFiles).length ? repairedFiles : null
@@ -85,6 +102,12 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   if (neonConnect) {
     Object.assign(repairedFiles, neonConnect)
     models.push("neon-serverless-connect-compatibility")
+  }
+
+  const neonQuery = repairNeonQueryMethodUsage({ ...files, ...repairedFiles }, logs)
+  if (neonQuery) {
+    Object.assign(repairedFiles, neonQuery)
+    models.push("neon-serverless-query-compatibility")
   }
 
   const neonRows = repairNeonTaggedQueryRows({ ...files, ...repairedFiles }, logs)
