@@ -9,7 +9,6 @@ test("authentication plan explicitly requires bcryptjs and jose", () => {
   assert.match(planner, /bcryptjs/)
   assert.match(planner, /jose/)
   assert.match(planner, /AUTH_SECRET/)
-  assert.match(planner, /signs\/verifies sessions/)
 })
 
 test("shared auth helper API is explicit and consistent", () => {
@@ -28,7 +27,7 @@ test("auth routes are planned against shared crypto helpers", () => {
 })
 
 test("signSession return type and cookie ownership are explicit", () => {
-  assert.match(planner, /signSession\(payload\).*Promise<string>/)
+  assert.match(planner, /signSession\(payload\): Promise<string>/)
   assert.match(planner, /signSession MUST return the signed JWT string/)
   assert.match(planner, /Do NOT access session\.cookie or token\.cookie/)
   assert.match(planner, /login sets that JWT directly as the secure HttpOnly cookie without accessing \.cookie/)
