@@ -9,6 +9,7 @@ import { getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
 import { findReadyGeneratedPreview } from "@/lib/786-admin/preview-reconciliation"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
+import { changedGeneratedFiles, normalizeGeneratedNeonServerlessUsage } from "@/lib/786-chat/neon-compatibility"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -56,31 +57,15 @@ async function repairMissingScaffold(
   return true
 }
 
-async function reconcileReadyPreview(build: Awaited<ReturnType<typeof getLatestBuildJob>>) {
-  if (
-    !build ||
-    build.status !== "running" ||
-    !build.github_commit_sha ||
-    build.deployment_url
-  ) {
-    return build
-  }
-
-  const ready = await findReadyGeneratedPreview({
-    projectId: build.project_id,
-    commitSha: build.github_commit_sha,
-  }).catch(() => null)
-  if (!ready) return build
-
-  const reconciled = await completeRunnerBuild({
-    buildId: build.id,
-    status: "passed",
-    logs: `\n[reconcile] Vercel preview ${ready.id} is READY.\n[vercel] Preview ${ready.url}.\n`,
-    deploymentUrl: ready.url,
-    errorMessage: null,
-  })
-  if (!reconciled) return build
-  return getLatestBuildJob(build.project_id, "")
+async function normalizeKnownGeneratedCompatibility(
+  projectId: string,
+  files: Record<string, string>,
+): Promise<boolean> {
+  const normalized = normalizeGeneratedNeonServerlessUsage(files)
+  const changed = changedGeneratedFiles(files, normalized)
+  if (!Object.keys(changed).length) return false
+  await upsertFiles(projectId, changed)
+  return true
 }
 
 export async function GET(_request: Request, { params }: Ctx) {
@@ -157,7 +142,16 @@ export async function POST(request: Request, { params }: Ctx) {
     }
   }
 
+  let compatibilityRepaired = false
   if (body.confirm === true) {
+    compatibilityRepaired = await normalizeKnownGeneratedCompatibility(id, project.files || {})
+    if (compatibilityRepaired) {
+      project = await getProjectWithData(id, email)
+      if (!project) {
+        return NextResponse.json({ success: false, error: "Project not found after compatibility repair" }, { status: 404 })
+      }
+    }
+
     const migrated = await migrateUnsupportedNextConfig({
       projectId: id,
       ownerEmail: email,
@@ -179,6 +173,7 @@ export async function POST(request: Request, { params }: Ctx) {
         error: "Project is not ready to build.",
         validation,
         scaffoldRepaired,
+        compatibilityRepaired,
       },
       { status: 422 },
     )
@@ -192,6 +187,7 @@ export async function POST(request: Request, { params }: Ctx) {
       project: { id: project.id, title: project.title },
       validation,
       scaffoldRepaired,
+      compatibilityRepaired,
       message: scaffoldRepaired
         ? "Missing Next.js scaffold files were repaired. Static validation passed. Send confirm=true to queue the build."
         : "Static validation passed. Send confirm=true to queue the build.",
@@ -215,6 +211,7 @@ export async function POST(request: Request, { params }: Ctx) {
       project: { id: project.id, title: project.title },
       validation,
       scaffoldRepaired,
+      compatibilityRepaired,
       build: buildForClient(latest),
       message: repairIsActive(latest)
         ? "Automatic build repair is already running for this project version."
@@ -238,7 +235,9 @@ export async function POST(request: Request, { params }: Ctx) {
     })
     await appendBuildLog({
       buildId: build.id,
-      line: `[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
+      line: compatibilityRepaired
+        ? `[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+        : `[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not dispatch isolated build"
@@ -268,6 +267,7 @@ export async function POST(request: Request, { params }: Ctx) {
         error: message,
         validation,
         scaffoldRepaired,
+        compatibilityRepaired,
         build: { ...build, status: "failed", error_message: message },
       },
       { status: 503 },
@@ -283,10 +283,13 @@ export async function POST(request: Request, { params }: Ctx) {
       project: { id: project.id, title: project.title },
       validation,
       scaffoldRepaired,
+      compatibilityRepaired,
       build,
-      message: scaffoldRepaired
-        ? "Missing Next.js scaffold files were repaired and the build was queued."
-        : "Build queued on the isolated GitHub Actions runner.",
+      message: compatibilityRepaired
+        ? "Known Neon serverless compatibility issues were normalized and the build was queued."
+        : scaffoldRepaired
+          ? "Missing Next.js scaffold files were repaired and the build was queued."
+          : "Build queued on the isolated GitHub Actions runner.",
     },
     { status: 202 },
   )
