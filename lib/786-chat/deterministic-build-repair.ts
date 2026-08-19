@@ -55,10 +55,12 @@ function repairNeonQueryMethodUsage(files: Record<string, string>, logs: string)
   const repairedFiles: Record<string, string> = {}
   for (const [path, source] of Object.entries(files)) {
     if (!logs.includes(path) || !/\.(?:ts|tsx)$/.test(path) || !/\.query\s*\(/.test(source)) continue
-    // NeonQueryFunction is itself callable: sql(query, params). Generated code
-    // sometimes treats it like node-postgres and emits sql.query(query, params).
-    // Preserve the arguments exactly and remove only the incompatible `.query`.
-    const repaired = source.replace(/\b([A-Za-z_$][\w$]*)\.query\s*\(/g, "$1(")
+    // NeonQueryFunction is itself callable. Generated code can treat either a
+    // local variable or a direct getSql()/getDb() call like node-postgres.
+    // Preserve arguments exactly and remove only the incompatible `.query`.
+    const repaired = source
+      .replace(/\b(get(?:Db|Sql)\s*\(\s*\))\.query\s*\(/g, "$1(")
+      .replace(/\b([A-Za-z_$][\w$]*)\.query\s*\(/g, "$1(")
     if (repaired !== source) repairedFiles[path] = repaired
   }
   return Object.keys(repairedFiles).length ? repairedFiles : null
