@@ -18,7 +18,10 @@ function routeFile(route: string) {
 
 function routePurpose(route: string, specification: ProjectSpecification) {
   if (route === "/login" && specification.requiredComponents.includes("form")) {
-    return "/login route with a real HTML form, email/password inputs, remember-me control and submit button"
+    const authRequired = backendCapabilities(specification).includes("authentication")
+    return authRequired
+      ? "/login route with a real HTML form, email/password inputs, remember-me control, submit button, and a visible real link to /forgot-password with Forgot Password text"
+      : "/login route with a real HTML form, email/password inputs, remember-me control and submit button"
   }
   if (route === "/register" && specification.requiredComponents.includes("form")) {
     return "/register route with a real HTML registration form and submit control"
@@ -102,6 +105,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
       ...(capabilities.length > 0 ? ["Generate every mandatory backend file before any cosmetic or frontend rewrite", "Implement database schema, migrations, manifest, server adapters and requested API routes"] : []),
       "Create the application shell and design tokens", "Implement every requested route",
       ...(authFiles.length > 0 ? ["Implement forgot-password, reset-password and verify-email support pages before linking to them from authentication UI"] : []),
+      ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page must include a visible real link to /forgot-password with Forgot Password text; plain text or a non-link control does not satisfy this requirement"] : []),
       ...(specification.requiredComponents.includes("form") ? ["Implement required forms as real <form> elements with submit handling; styled divs or button groups do not satisfy form requirements"] : []),
       ...(crudFiles.length > 0 ? ["Implement create and detail/edit pages for CRUD application resources"] : []),
       "Add required controls and interactions", "Connect navigation only to existing routes", "Validate syntax, imports, requirements and project specificity", "Build the project in the isolated runner",
@@ -112,6 +116,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`), ...authFiles.map((file) => `Route file ${file.path} exists`), ...crudFiles.map((file) => `Route file ${file.path} exists`),
       ...specification.requiredComponents.map((component) => `Component ${component} exists`), ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
+      ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page contains a real /forgot-password link with visible Forgot Password text"] : []),
       "Project content is specific to the request", "No generic fallback homepage is accepted as a verified build",
       ...(capabilities.length > 0 ? ["Backend manifest, migrations, server adapters and API routes pass production acceptance", requiresAuthentication ? "Authentication routes and protected data APIs are complete before frontend acceptance" : "Public data APIs remain functional without inventing authentication dependencies"] : []),
       ...(specification.systemBlueprint ? ["Tenant-owned records and APIs enforce company_id", "Operational modules are implemented as application pages, not marketing sections", "Database schema, shared contracts and core API resources exist"] : []),
