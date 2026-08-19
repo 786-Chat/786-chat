@@ -29,6 +29,34 @@ function routePurpose(route: string, specification: ProjectSpecification) {
   return `${route} route`
 }
 
+function backendFilePurpose(path: string, capabilities: string[]) {
+  if (path === "lib/server/auth.ts" && capabilities.includes("authentication")) {
+    return "Production authentication backend using bcryptjs hash/compare for passwords, jose SignJWT/jwtVerify for signed sessions, AUTH_SECRET with no fallback, secure session helpers, and token hashing/revocation"
+  }
+  if (path === "app/api/auth/register/route.ts" && capabilities.includes("authentication")) {
+    return "Registration API that validates input, hashes passwords through lib/server/auth.ts, persists the user safely, and never stores plaintext passwords"
+  }
+  if (path === "app/api/auth/login/route.ts" && capabilities.includes("authentication")) {
+    return "Login API that validates input, compares bcrypt password hashes, creates a signed jose-backed session, and sets a secure HttpOnly cookie"
+  }
+  if (path === "app/api/auth/session/route.ts" && capabilities.includes("authentication")) {
+    return "Session API that verifies the current jose-backed signed session through lib/server/auth.ts and returns only authenticated user-safe data"
+  }
+  if (path === "app/api/auth/logout/route.ts" && capabilities.includes("authentication")) {
+    return "Logout API that revokes/purges the persisted session and clears the secure cookie"
+  }
+  if (path === "app/api/auth/forgot-password/route.ts" && capabilities.includes("authentication")) {
+    return "Forgot-password API that creates a hashed one-time reset token, sends a neutral response, and prevents account enumeration"
+  }
+  if (path === "app/api/auth/reset-password/route.ts" && capabilities.includes("authentication")) {
+    return "Reset-password API that validates the one-time token, hashes the new password with bcryptjs, revokes existing sessions, and invalidates the reset token"
+  }
+  if (path === "app/api/auth/verify-email/route.ts" && capabilities.includes("authentication")) {
+    return "Email verification API that validates a hashed one-time verification token and marks the user verified without exposing token material"
+  }
+  return `Production ${capabilities.join("/")} backend implementation`
+}
+
 function crudApplicationFiles(specification: ProjectSpecification) {
   const routeSet = new Set(specification.routes)
   const capabilities = backendCapabilities(specification)
@@ -85,7 +113,9 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     ...specification.systemBlueprint.apiResources.map((resource) => ({ path: `app/api/${resource}/[id]/route.ts`, purpose: `Tenant-scoped ${resource} item API (GET, PATCH and DELETE)` })),
   ] : []
   const systemFilePaths = new Set(systemFiles.map((file) => file.path))
-  const backendFiles = requiredBackendFiles(specification).filter((path) => !systemFilePaths.has(path)).map((path) => ({ path, purpose: `Production ${capabilities.join("/")} backend implementation` }))
+  const backendFiles = requiredBackendFiles(specification)
+    .filter((path) => !systemFilePaths.has(path))
+    .map((path) => ({ path, purpose: backendFilePurpose(path, capabilities) }))
   const crudFiles = crudApplicationFiles(specification)
   const authFiles = authSupportFiles(specification)
   const files = [
@@ -103,6 +133,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     files,
     steps: [
       ...(capabilities.length > 0 ? ["Generate every mandatory backend file before any cosmetic or frontend rewrite", "Implement database schema, migrations, manifest, server adapters and requested API routes"] : []),
+      ...(requiresAuthentication ? ["Implement lib/server/auth.ts first with bcryptjs hash/compare and jose SignJWT/jwtVerify using AUTH_SECRET, then make every auth route call those shared helpers instead of inventing incompatible local auth logic"] : []),
       "Create the application shell and design tokens", "Implement every requested route",
       ...(authFiles.length > 0 ? ["Implement forgot-password, reset-password and verify-email support pages before linking to them from authentication UI"] : []),
       ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page must include a visible real link to /forgot-password with Forgot Password text; plain text or a non-link control does not satisfy this requirement"] : []),
@@ -116,6 +147,7 @@ export function createProjectPlan(specification: ProjectSpecification): ProjectP
     acceptanceCriteria: [
       ...specification.routes.map((route) => `Route ${route} exists`), ...authFiles.map((file) => `Route file ${file.path} exists`), ...crudFiles.map((file) => `Route file ${file.path} exists`),
       ...specification.requiredComponents.map((component) => `Component ${component} exists`), ...specification.requiredInteractions.map((interaction) => `Interaction ${interaction} is implemented`),
+      ...(requiresAuthentication ? ["lib/server/auth.ts imports bcryptjs and jose, hashes/compares passwords, signs/verifies sessions, and requires AUTH_SECRET without a hard-coded fallback"] : []),
       ...(requiresAuthentication && specification.routes.includes("/login") ? ["Login page contains a real /forgot-password link with visible Forgot Password text"] : []),
       "Project content is specific to the request", "No generic fallback homepage is accepted as a verified build",
       ...(capabilities.length > 0 ? ["Backend manifest, migrations, server adapters and API routes pass production acceptance", requiresAuthentication ? "Authentication routes and protected data APIs are complete before frontend acceptance" : "Public data APIs remain functional without inventing authentication dependencies"] : []),
