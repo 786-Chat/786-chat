@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { completeRunnerBuild, getRunnerBuildBundle } from "@/lib/786-admin/build-runner-store"
+import { completeRunnerBuild, getRunnerBuildBundle, recordRunnerPublishProgress } from "@/lib/786-admin/build-runner-store"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
 import { repairFailedBuild } from "@/lib/786-chat/build-repair"
@@ -8,8 +8,8 @@ import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 export const runtime = "nodejs"
 // Publishing a verified build includes GitHub branch/PR creation, generated database
 // preparation, Vercel project/env setup and up to 75s waiting for the preview to be
-// READY. The old 120s budget could terminate this callback after publishing the PR
-// but before completeRunnerBuild(), leaving the workspace stuck on "Publishing preview".
+// READY. The callback also checkpoints GitHub publish metadata before waiting on Vercel,
+// allowing normal status polling to reconcile a READY preview if this request is cut off.
 export const maxDuration = 300
 
 function isAuthorized(request: Request): boolean {
@@ -63,11 +63,14 @@ export async function POST(request: Request) {
       githubBranch = published.branch
       githubCommitSha = published.commitSha
       githubPrUrl = published.pullRequestUrl
-      lifecycleLogs.push(
-        `[publisher] Created branch ${published.branch}.`,
-        `[publisher] Commit ${published.commitSha}.`,
-        `[publisher] Draft PR ${published.pullRequestUrl}.`,
-      )
+
+      const checkpointed = await recordRunnerPublishProgress({
+        buildId: body.buildId,
+        githubBranch: published.branch,
+        githubCommitSha: published.commitSha,
+        githubPrUrl: published.pullRequestUrl,
+      })
+      if (!checkpointed) throw new Error("Build publish metadata could not be checkpointed")
 
       const deployment = await deployGeneratedProjectToVercel({
         projectId: bundle.projectId,
