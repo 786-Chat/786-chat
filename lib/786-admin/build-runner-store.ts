@@ -62,6 +62,27 @@ export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuild
   }
 }
 
+export async function recordRunnerPublishProgress(input: {
+  buildId: string
+  githubBranch: string
+  githubCommitSha: string
+  githubPrUrl: string
+}): Promise<boolean> {
+  const rows = (await sql`
+    UPDATE admin_project_builds
+    SET github_branch = ${input.githubBranch},
+        github_commit_sha = ${input.githubCommitSha},
+        github_pr_url = ${input.githubPrUrl},
+        logs = logs || ${`[publisher] Created branch ${input.githubBranch}.\n[publisher] Commit ${input.githubCommitSha}.\n[publisher] Draft PR ${input.githubPrUrl}.\n`},
+        updated_at = NOW()
+    WHERE id = ${input.buildId}
+      AND status IN ('queued','running')
+    RETURNING id
+  `) as unknown as Array<{ id: string }>
+
+  return Boolean(rows[0])
+}
+
 export async function completeRunnerBuild(input: {
   buildId: string
   status: Extract<AdminProjectBuildStatus, "passed" | "failed" | "cancelled">
