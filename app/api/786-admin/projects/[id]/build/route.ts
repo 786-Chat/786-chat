@@ -2,9 +2,11 @@ import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
+import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
+import { findReadyGeneratedPreview } from "@/lib/786-admin/preview-reconciliation"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
@@ -54,6 +56,33 @@ async function repairMissingScaffold(
   return true
 }
 
+async function reconcileReadyPreview(build: Awaited<ReturnType<typeof getLatestBuildJob>>) {
+  if (
+    !build ||
+    build.status !== "running" ||
+    !build.github_commit_sha ||
+    build.deployment_url
+  ) {
+    return build
+  }
+
+  const ready = await findReadyGeneratedPreview({
+    projectId: build.project_id,
+    commitSha: build.github_commit_sha,
+  }).catch(() => null)
+  if (!ready) return build
+
+  const reconciled = await completeRunnerBuild({
+    buildId: build.id,
+    status: "passed",
+    logs: `\n[reconcile] Vercel preview ${ready.id} is READY.\n[vercel] Preview ${ready.url}.\n`,
+    deploymentUrl: ready.url,
+    errorMessage: null,
+  })
+  if (!reconciled) return build
+  return getLatestBuildJob(build.project_id, "")
+}
+
 export async function GET(_request: Request, { params }: Ctx) {
   const email = await requireOwnerEmail()
   if (!email) {
@@ -75,7 +104,27 @@ export async function GET(_request: Request, { params }: Ctx) {
   }
 
   const validation = validateGeneratedProject(project.files || {})
-  const build = await getLatestBuildJob(id, email)
+  let build = await getLatestBuildJob(id, email)
+  if (
+    build?.status === "running" &&
+    build.github_commit_sha &&
+    !build.deployment_url
+  ) {
+    const ready = await findReadyGeneratedPreview({
+      projectId: build.project_id,
+      commitSha: build.github_commit_sha,
+    }).catch(() => null)
+    if (ready) {
+      const reconciled = await completeRunnerBuild({
+        buildId: build.id,
+        status: "passed",
+        logs: `\n[reconcile] Vercel preview ${ready.id} is READY.\n[vercel] Preview ${ready.url}.\n`,
+        deploymentUrl: ready.url,
+        errorMessage: null,
+      })
+      if (reconciled) build = await getLatestBuildJob(id, email)
+    }
+  }
 
   return NextResponse.json({
     success: true,
