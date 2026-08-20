@@ -26,7 +26,11 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --ignore-scripts
-      - name: Run regression suite
-        run: npm test
+      - name: Run Phase 1 regression suite
+        run: npm run test:phase1
+      - name: Run Phase 2 regression suite
+        if: always()
+        run: npm run test:phase2
       - name: Run TypeScript validation
+        if: always()
         run: npm run typecheck
