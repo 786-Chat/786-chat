@@ -1,5 +1,15 @@
 export type FileGenerationUnit = { name: string; files: readonly [string] }
 
+const SAME_PROVIDER_STRUCTURAL_RETRY_ERRORS = [
+  "AI project output was incomplete and did not contain every planned file.",
+  "AI generated an import for a local file that is not part of the project plan.",
+] as const
+
+function shouldRetrySameProvider(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "")
+  return SAME_PROVIDER_STRUCTURAL_RETRY_ERRORS.some((marker) => message.includes(marker))
+}
+
 export async function runFileGenerationUnits<Provider>(input: {
   units: readonly FileGenerationUnit[]
   providers: readonly Provider[]
@@ -15,16 +25,21 @@ export async function runFileGenerationUnits<Provider>(input: {
     let lastError: unknown
 
     for (const provider of input.providers) {
-      try {
-        const content = await input.generate(unit, provider, Object.freeze({ ...completedFiles }))
-        if (!content?.trim()) throw new Error(`Generation unit ${unit.name} returned an empty file.`)
-        completedFiles[target] = content
-        completed = true
-        break
-      } catch (error) {
-        lastError = error
-        input.onFailure?.(unit, provider, error)
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const content = await input.generate(unit, provider, Object.freeze({ ...completedFiles }))
+          if (!content?.trim()) throw new Error(`Generation unit ${unit.name} returned an empty file.`)
+          completedFiles[target] = content
+          completed = true
+          break
+        } catch (error) {
+          lastError = error
+          input.onFailure?.(unit, provider, error)
+          if (attempt === 0 && shouldRetrySameProvider(error)) continue
+          break
+        }
       }
+      if (completed) break
     }
 
     if (!completed) {
