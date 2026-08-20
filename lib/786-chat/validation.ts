@@ -136,9 +136,32 @@ function internalHrefRoutes(files: Record<string, string>) {
   return routes
 }
 
+function normalizeGeneratedMigrationRunner(specification: ProjectSpecification, files: Record<string, string>) {
+  if (!specification.platforms.includes("database")) return
+  const migration = files["sql/migrations/001_initial.sql"] || ""
+  if (!migration.trim()) return
+  const runner = files["scripts/migrate.mjs"] || ""
+  const validRunner = /@neondatabase\/serverless/.test(runner) && /DATABASE_URL/.test(runner) && /001_initial\.sql/.test(runner)
+  if (validRunner) return
+  files["scripts/migrate.mjs"] = `import { readFile } from "node:fs/promises"
+import { neon } from "@neondatabase/serverless"
+
+const databaseUrl = process.env.DATABASE_URL
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required to run migrations")
+}
+
+const migration = await readFile(new URL("../sql/migrations/001_initial.sql", import.meta.url), "utf8")
+const sql = neon(databaseUrl)
+await sql(migration, [])
+console.log("Applied sql/migrations/001_initial.sql")
+`
+}
+
 export function validateGeneratedProject(specification: ProjectSpecification, files: Record<string, string>): ProjectValidation {
   const errors: string[] = []
   const warnings: string[] = []
+  normalizeGeneratedMigrationRunner(specification, files)
   const combined = source(files)
 
   for (const [path, content] of Object.entries(files)) {
@@ -214,10 +237,15 @@ export function validateGeneratedProject(specification: ProjectSpecification, fi
     errors.push(...domainAcceptance.errors)
   }
 
-  if (specification.platforms.includes("mobile")) {
-    for (const path of ["mobile/package.json", "mobile/app.json", "mobile/app/index.tsx", "mobile/services/api.ts"]) {
+  const mobilePaths = ["mobile/package.json", "mobile/app.json", "mobile/app/index.tsx", "mobile/services/api.ts"]
+  const hasAnyMobileArtifact = mobilePaths.some((path) => typeof files[path] === "string" && Boolean(files[path].trim()))
+  const requiresStandaloneMobileArtifacts = specification.platforms.includes("mobile") && (specification.projectType === "mobile-application" || hasAnyMobileArtifact)
+  if (requiresStandaloneMobileArtifacts) {
+    for (const path of mobilePaths) {
       if (typeof files[path] !== "string" || !files[path].trim()) errors.push(`Missing required mobile file: ${path}`)
     }
+  } else if (specification.platforms.includes("mobile")) {
+    warnings.push("Mobile platform flag did not require Expo files because this generated output is a responsive web application with no standalone mobile artifact set.")
   }
 
   if (/AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Everything feels custom-built/i.test(combined)) errors.push("Generic fallback content was detected.")
