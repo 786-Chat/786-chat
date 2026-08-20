@@ -1,0 +1,12 @@
+{
+  "projectId": "f5c64e94-cf5f-4e90-86a9-ff7a1b7671bf",
+  "buildId": "d45e4e98-edbb-48f2-8979-3f42f054e04c",
+  "title": "Bean House",
+  "sourceVersion": "a2f38dd09762b36a65c9734e329f2101dcd67ed0d4a0e3fdae1ca5a9bdeba03b",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-20T19:32:02.716Z"
+}
