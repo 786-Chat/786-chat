@@ -24,8 +24,17 @@ test("gateway requests include attribution, tags, privacy and plan budgets", () 
   assert.match(codegen, /maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /deepseek\("deepseek-chat"\)/)
   assert.match(controller, /payload\._originalPrompt \|\| payload\.message/)
-  assert.match(controller, /maxOutputTokens: useCompactProfile \? 10_000 : undefined/)
-  assert.match(controller, /candidateModes: CodegenMode\[\] = \[primaryMode\]/)
+  assert.match(controller, /const maxOutputTokens = isFileUnit \? 8_000/)
+  assert.match(controller, /isComplex \? \["deepseek-flash","gemini-flash"\]/)
+})
+
+test("full-stack generation is split into bounded resumable requests before Vercel timeout", () => {
+  assert.match(controller, /FILE_LEVEL_GENERATION_DEADLINE_MS = 170_000/)
+  assert.match(controller, /MAX_FILE_UNITS_PER_REQUEST = 2/)
+  assert.match(controller, /continuationRequired: true/)
+  assert.match(route, /signGenerationContinuation/)
+  assert.match(route, /recordBuilderGenerationProgress/)
+  assert.match(route, /progress: \{ completedFiles:/)
 })
 
 test("builder code generation prefers connected direct provider keys before gateway", () => {

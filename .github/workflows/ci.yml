@@ -1,0 +1,60 @@
+name: 786.Chat CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+      - name: Phase 1 A
+        run: node --test tests/phase1/account-security.test.mjs tests/phase1/admin-preview-storage.test.mjs tests/phase1/build-repair-loop.test.mjs tests/phase1/business-software-generation.test.mjs tests/phase1/canonical-workspace-actions.test.mjs tests/phase1/compiled-preview-contract.test.mjs tests/phase1/deployment-domains.test.mjs tests/phase1/deployment-lifecycle.test.mjs tests/phase1/generation-pipeline.test.mjs
+      - name: Phase 1 B
+        if: always()
+        run: node --test tests/phase1/isolation-and-generation.test.mjs tests/phase1/legacy-runtime-retirement.test.mjs tests/phase1/multi-platform-generator.test.mjs tests/phase1/next-config-compatibility.test.mjs tests/phase1/premium-workspace-layout.test.mjs tests/phase1/preview-route-stability.test.mjs
+      - name: Phase 1 C providers
+        if: always()
+        run: node --test tests/phase1/provider-cleanup.test.mjs tests/phase1/provider-compact-generation.test.mjs tests/phase1/provider-diagnostics.test.mjs tests/phase1/provider-failover.test.mjs
+      - name: Phase 1 D
+        if: always()
+        run: node --test tests/phase1/routing-and-edit-preservation.test.mjs tests/phase1/single-builder-entrypoints.test.mjs tests/phase1/transactional-persistence.test.mjs tests/phase1/visual-editor.test.mjs
+      - name: Phase 2 A
+        if: always()
+        run: node --test tests/phase2/ai-*.test.mjs tests/phase2/application-*.test.mjs tests/phase2/auth-*.test.mjs tests/phase2/backend-*.test.mjs tests/phase2/batched-*.test.mjs tests/phase2/billing-*.test.mjs tests/phase2/canonical-*.test.mjs tests/phase2/contact-*.test.mjs tests/phase2/continuation-*.test.mjs tests/phase2/crm-*.test.mjs tests/phase2/crud-*.test.mjs tests/phase2/db-*.test.mjs
+      - name: Phase 2 B
+        if: always()
+        run: node --test tests/phase2/design-*.test.mjs tests/phase2/deterministic-*.test.mjs tests/phase2/direct-*.test.mjs tests/phase2/domain-*.test.mjs tests/phase2/file-*.test.mjs tests/phase2/focused-*.test.mjs tests/phase2/full-stack-*.test.mjs tests/phase2/fullstack-*.test.mjs
+      - name: Phase 2 C
+        if: always()
+        run: node --test tests/phase2/generated-*.test.mjs tests/phase2/generation-*.test.mjs tests/phase2/import-*.test.mjs tests/phase2/live-*.test.mjs tests/phase2/login-*.test.mjs tests/phase2/long-*.test.mjs tests/phase2/negative-*.test.mjs tests/phase2/neon-*.test.mjs tests/phase2/new-*.test.mjs
+      - name: Phase 2 D
+        if: always()
+        run: node --test tests/phase2/persistence-*.test.mjs tests/phase2/prebuild-*.test.mjs tests/phase2/preview-*.test.mjs tests/phase2/product-*.test.mjs tests/phase2/prompt-*.test.mjs tests/phase2/provider-*.test.mjs
+      - name: Phase 2 E
+        if: always()
+        run: node --test tests/phase2/real-*.test.mjs tests/phase2/required-*.test.mjs tests/phase2/restaurant-*.test.mjs tests/phase2/route-*.test.mjs tests/phase2/runtime-*.test.mjs tests/phase2/saffron-*.test.mjs tests/phase2/security-*.test.mjs
+      - name: Phase 2 F
+        if: always()
+        run: node --test tests/phase2/system-*.test.mjs tests/phase2/testing-*.test.mjs tests/phase2/unified-*.test.mjs tests/phase2/validation-*.test.mjs tests/phase2/vercel-*.test.mjs
+      - name: Run TypeScript validation
+        if: always()
+        run: npm run typecheck
