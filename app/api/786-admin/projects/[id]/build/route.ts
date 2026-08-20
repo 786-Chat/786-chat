@@ -6,13 +6,16 @@ import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
 import { getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
-import { findReadyGeneratedPreview } from "@/lib/786-admin/preview-reconciliation"
+import { findGeneratedPreviewState } from "@/lib/786-admin/preview-reconciliation"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
 import { changedGeneratedFiles, normalizeGeneratedNeonServerlessUsage } from "@/lib/786-chat/neon-compatibility"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
+
+const PREVIEW_PUBLISH_TIMEOUT_MS = 5 * 60 * 1000
+const TERMINAL_PREVIEW_FAILURE_STATES = new Set(["ERROR", "CANCELED", "CANCELLED"])
 
 async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
@@ -95,19 +98,41 @@ export async function GET(_request: Request, { params }: Ctx) {
     build.github_commit_sha &&
     !build.deployment_url
   ) {
-    const ready = await findReadyGeneratedPreview({
+    const preview = await findGeneratedPreviewState({
       projectId: build.project_id,
       commitSha: build.github_commit_sha,
     }).catch(() => null)
-    if (ready) {
+
+    if (preview?.state === "READY" && preview.url) {
       const reconciled = await completeRunnerBuild({
         buildId: build.id,
         status: "passed",
-        logs: `\n[reconcile] Vercel preview ${ready.id} is READY.\n[vercel] Preview ${ready.url}.\n`,
-        deploymentUrl: ready.url,
+        logs: `\n[reconcile] Vercel preview ${preview.id} is READY.\n[vercel] Preview ${preview.url}.\n`,
+        deploymentUrl: preview.url,
         errorMessage: null,
       })
       if (reconciled) build = await getLatestBuildJob(id, email)
+    } else if (preview && TERMINAL_PREVIEW_FAILURE_STATES.has(preview.state)) {
+      const message = `Vercel preview deployment finished with state ${preview.state}`
+      const reconciled = await completeRunnerBuild({
+        buildId: build.id,
+        status: "failed",
+        logs: `\n[reconcile] ${message}${preview.id ? ` (${preview.id})` : ""}.\n`,
+        errorMessage: message,
+      })
+      if (reconciled) build = await getLatestBuildJob(id, email)
+    } else {
+      const updatedAt = Date.parse(build.updated_at)
+      if (Number.isFinite(updatedAt) && Date.now() - updatedAt >= PREVIEW_PUBLISH_TIMEOUT_MS) {
+        const message = "Preview publishing timed out before Vercel reached a terminal state"
+        const reconciled = await completeRunnerBuild({
+          buildId: build.id,
+          status: "failed",
+          logs: `\n[reconcile] ${message}.\n`,
+          errorMessage: message,
+        })
+        if (reconciled) build = await getLatestBuildJob(id, email)
+      }
     }
   }
 

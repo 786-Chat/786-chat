@@ -17,19 +17,21 @@ test("failed isolated builds enter a bounded repair loop", async () => {
   assert.match(repair, /repair_status = 'exhausted'/)
 })
 
-test("builder keeps polling while an automatic replacement build is queued", async () => {
-  const [callback, runnerStore, contracts, workspace] = await Promise.all([
+test("builder keeps polling only while an automatic replacement build is genuinely active", async () => {
+  const [callback, runnerStore, buildJobs, contracts, workspace] = await Promise.all([
     read("app/api/786-admin/build-runner/callback/route.ts"),
     read("lib/786-admin/build-runner-store.ts"),
+    read("lib/786-admin/build-jobs.ts"),
     read("components/786-chat/contracts.ts"),
     read("components/786-chat/workspace.tsx"),
   ])
 
-  assert.match(callback, /repairStatus: runnerBuildFailed \? "pending" : null/)
+  assert.match(callback, /repairStatus: runnerBuildFailed \? "pending" : "not_needed"/)
   assert.match(runnerStore, /repair_status = COALESCE/)
+  assert.match(buildJobs, /normalizeTerminalPublishRepairState/)
+  assert.match(buildJobs, /build\.github_commit_sha/)
   assert.match(contracts, /repair_status:/)
   assert.match(workspace, /repairIsActive/)
-  assert.match(workspace, /"pending", "running", "repaired"/)
 })
 
 test("repair uses exact logs, snapshots a revision, validates, and rebuilds", async () => {
