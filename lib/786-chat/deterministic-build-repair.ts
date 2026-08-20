@@ -61,6 +61,118 @@ function repairMissingAuthTokenHelper(files: Record<string, string>, logs: strin
   return { [path]: `${source.trimEnd()}\n\n${implementation}\n` }
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function callShape(source: string, openParen: number) {
+  let quote: "'" | '"' | "`" | null = null
+  let escaped = false
+  let parenDepth = 1
+  let bracketDepth = 0
+  let braceDepth = 0
+  const commas: number[] = []
+
+  for (let index = openParen + 1; index < source.length; index += 1) {
+    const char = source[index]
+    if (quote) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (char === "\\") {
+        escaped = true
+        continue
+      }
+      if (char === quote) quote = null
+      continue
+    }
+
+    if (char === "'" || char === '"' || char === "`") {
+      quote = char
+      continue
+    }
+    if (char === "(") parenDepth += 1
+    else if (char === ")") {
+      parenDepth -= 1
+      if (parenDepth === 0) return { closeParen: index, commas }
+    } else if (char === "[") bracketDepth += 1
+    else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1)
+    else if (char === "{") braceDepth += 1
+    else if (char === "}") braceDepth = Math.max(0, braceDepth - 1)
+    else if (char === "," && parenDepth === 1 && bracketDepth === 0 && braceDepth === 0) commas.push(index)
+  }
+  return null
+}
+
+function truncateReportedThreeArgCall(source: string, lineNumber: number, columnNumber: number, callNames: string[]) {
+  const lines = source.split("\n")
+  if (lineNumber < 1 || lineNumber > lines.length) return source
+  const lineStart = lines.slice(0, lineNumber - 1).reduce((total, line) => total + line.length + 1, 0)
+  const lineEnd = lineStart + lines[lineNumber - 1].length
+  const errorOffset = Math.min(lineEnd, lineStart + Math.max(0, columnNumber - 1))
+  const candidates: Array<{ openParen: number; closeParen: number; secondComma: number; distance: number }> = []
+
+  for (const callName of callNames) {
+    const pattern = new RegExp(`\\b${escapeRegExp(callName)}\\s*\\(`, "g")
+    pattern.lastIndex = lineStart
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(source))) {
+      if (match.index > lineEnd) break
+      const openParen = source.indexOf("(", match.index + match[0].length - 1)
+      if (openParen < 0 || openParen > lineEnd) continue
+      const shape = callShape(source, openParen)
+      if (!shape || shape.commas.length !== 2) continue
+      const containsError = errorOffset >= match.index && errorOffset <= shape.closeParen
+      const distance = containsError ? 0 : Math.abs(errorOffset - match.index)
+      candidates.push({ openParen, closeParen: shape.closeParen, secondComma: shape.commas[1], distance })
+    }
+  }
+
+  if (!candidates.length) return source
+  candidates.sort((a, b) => a.distance - b.distance || a.openParen - b.openParen)
+  const target = candidates[0]
+  return `${source.slice(0, target.secondComma)}${source.slice(target.closeParen)}`
+}
+
+function repairTwoArgumentCallArity(files: Record<string, string>, logs: string) {
+  if (!/TS2554:\s*Expected 2 arguments, but got 3/i.test(logs)) return null
+  const dbSource = files["lib/server/db.ts"] || files["src/lib/server/db.ts"] || ""
+  const usesNeon = /@neondatabase\/serverless/.test(dbSource)
+  const repairedFiles: Record<string, string> = {}
+  const errorPattern = /(?:^|\n)([^\n()]+\.(?:ts|tsx))\((\d+),(\d+)\):\s*error\s+TS2554:\s*Expected 2 arguments, but got 3/gi
+
+  for (const match of logs.matchAll(errorPattern)) {
+    const reportedPath = match[1].trim().replace(/^\.\//, "")
+    const path = files[reportedPath] ? reportedPath : files[`src/${reportedPath}`] ? `src/${reportedPath}` : null
+    if (!path) continue
+    const lineNumber = Number(match[2])
+    const columnNumber = Number(match[3])
+    let source = repairedFiles[path] || files[path]
+    const callNames: string[] = []
+
+    if (/app\/api\/auth\/login\/route\.tsx?$/.test(path)) {
+      callNames.push("verifyPassword")
+      if (/from\s+["']bcryptjs["']|require\s*\(\s*["']bcryptjs["']\s*\)/.test(source)) {
+        callNames.push("compare", "bcrypt.compare")
+      }
+    }
+
+    if (usesNeon) {
+      callNames.push("sql")
+      for (const variableMatch of source.matchAll(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?get(?:Db|Sql)\s*\(\s*\)/g)) {
+        callNames.push(variableMatch[1])
+      }
+    }
+
+    if (!callNames.length) continue
+    const repaired = truncateReportedThreeArgCall(source, lineNumber, columnNumber, Array.from(new Set(callNames)))
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
 function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
   if (!/Expected 0 arguments, but got 1/i.test(logs)) return null
   const dbSource = files["lib/server/db.ts"] || ""
@@ -147,6 +259,12 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   if (authTokenHelper) {
     Object.assign(repairedFiles, authTokenHelper)
     models.push("auth-token-helper-contract")
+  }
+
+  const twoArgArity = repairTwoArgumentCallArity({ ...files, ...repairedFiles }, logs)
+  if (twoArgArity) {
+    Object.assign(repairedFiles, twoArgArity)
+    models.push("two-argument-call-arity")
   }
 
   const tailwind = repairTailwindSemanticTheme({ ...files, ...repairedFiles }, logs)
