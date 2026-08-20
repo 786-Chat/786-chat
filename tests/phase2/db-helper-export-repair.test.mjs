@@ -17,3 +17,10 @@ test('repairs TS2305 when getDb/getSql is missing but the sibling helper is expo
   assert.match(source, /export const \$\{missingHelper\} = \$\{existingHelper\}/)
   assert.match(source, /db-helper-alias-contract/)
 })
+
+test('repairs TS2305 when auth token helpers are missing', () => {
+  assert.match(source, /has no exported member \['"\]\(generateToken\|hashToken\)\['"\]/)
+  assert.match(source, /randomBytes\(32\)\.toString\("hex"\)/)
+  assert.match(source, /createHash\("sha256"\)\.update\(token\)\.digest\("hex"\)/)
+  assert.match(source, /auth-token-helper-contract/)
+})
