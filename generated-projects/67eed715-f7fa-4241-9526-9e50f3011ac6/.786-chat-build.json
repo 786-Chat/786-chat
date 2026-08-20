@@ -1,0 +1,12 @@
+{
+  "projectId": "67eed715-f7fa-4241-9526-9e50f3011ac6",
+  "buildId": "f21a0ea7-026b-487c-8ade-e1dbd262715c",
+  "title": "Saffron Manager Final Test",
+  "sourceVersion": "cf6488de1824d780d75c078e9475147f1912d951d0fb7fcfc73c38b0a3cb51cb",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-17T00:46:37.587Z"
+}
