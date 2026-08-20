@@ -1,3 +1,5 @@
+import { repairMissingGeneratedDbHelper } from "./db-helper-contract-repair"
+
 export type DeterministicGeneratedBuildRepair = {
   files: Record<string, string>
   removedPaths: string[]
@@ -249,7 +251,13 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   const repairedFiles: Record<string, string> = {}
   const models: string[] = []
 
-  const dbHelperExport = repairMissingDbHelperExport(files, logs)
+  const robustDbHelper = repairMissingGeneratedDbHelper(files, logs)
+  if (robustDbHelper) {
+    Object.assign(repairedFiles, robustDbHelper)
+    models.push("db-helper-nested-quote-contract")
+  }
+
+  const dbHelperExport = repairMissingDbHelperExport({ ...files, ...repairedFiles }, logs)
   if (dbHelperExport) {
     Object.assign(repairedFiles, dbHelperExport)
     models.push("db-helper-export-contract")
