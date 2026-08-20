@@ -24,3 +24,12 @@ test('repairs TS2305 when auth token helpers are missing', () => {
   assert.match(source, /createHash\("sha256"\)\.update\(token\)\.digest\("hex"\)/)
   assert.match(source, /auth-token-helper-contract/)
 })
+
+test('repairs TS2554 expected-two-got-three failures on the exact reported call', () => {
+  assert.match(source, /TS2554:\\s\*Expected 2 arguments, but got 3/)
+  assert.match(source, /truncateReportedThreeArgCall/)
+  assert.match(source, /verifyPassword/)
+  assert.match(source, /bcrypt\.compare/)
+  assert.match(source, /@neondatabase\\\/serverless/)
+  assert.match(source, /two-argument-call-arity/)
+})
