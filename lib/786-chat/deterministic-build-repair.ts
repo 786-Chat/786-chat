@@ -45,20 +45,26 @@ function repairMissingDbHelperAlias(files: Record<string, string>, logs: string)
 }
 
 function repairMissingAuthTokenHelper(files: Record<string, string>, logs: string) {
-  const match = logs.match(/Module ['"]@\/lib\/server\/auth['"] has no exported member ['"](generateToken|hashToken)['"]/i)
+  const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/auth[\"]?['"]+\s+has no exported member\s+['"](generateToken|hashToken)['"]/i)
   if (!match) return null
-  const helper = match[1]
   const path = files["lib/server/auth.ts"] ? "lib/server/auth.ts" : files["src/lib/server/auth.ts"] ? "src/lib/server/auth.ts" : null
   if (!path) return null
   let source = files[path]
-  const exported = new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${helper}\\b`).test(source) || new RegExp(`\\bexport\\s*\\{[^}]*\\b${helper}\\b`).test(source)
-  if (exported) return null
   const cryptoImport = `import * as __786NodeCrypto from "node:crypto"\n`
+  const implementations: string[] = []
+  const isExported = (helper: "generateToken" | "hashToken") =>
+    new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${helper}\\b`).test(source) ||
+    new RegExp(`\\bexport\\s*\\{[^}]*\\b${helper}\\b`).test(source)
+
+  if (!isExported("generateToken")) {
+    implementations.push(`export function generateToken(): string {\n  return __786NodeCrypto.randomBytes(32).toString("hex")\n}`)
+  }
+  if (!isExported("hashToken")) {
+    implementations.push(`export function hashToken(token: string): string {\n  return __786NodeCrypto.createHash("sha256").update(token).digest("hex")\n}`)
+  }
+  if (!implementations.length) return null
   if (!/\b__786NodeCrypto\b/.test(source)) source = `${cryptoImport}${source}`
-  const implementation = helper === "generateToken"
-    ? `export function generateToken(): string {\n  return __786NodeCrypto.randomBytes(32).toString("hex")\n}`
-    : `export function hashToken(token: string): string {\n  return __786NodeCrypto.createHash("sha256").update(token).digest("hex")\n}`
-  return { [path]: `${source.trimEnd()}\n\n${implementation}\n` }
+  return { [path]: `${source.trimEnd()}\n\n${implementations.join("\n\n")}\n` }
 }
 
 function escapeRegExp(value: string) {
