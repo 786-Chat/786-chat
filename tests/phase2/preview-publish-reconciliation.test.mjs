@@ -16,9 +16,24 @@ test("publisher checkpoints commit metadata before waiting for Vercel", () => {
 })
 
 test("build polling reconciles a READY Vercel preview", () => {
-  assert.match(buildRoute, /findReadyGeneratedPreview/)
+  assert.match(buildRoute, /findGeneratedPreviewState/)
+  assert.match(buildRoute, /preview\?\.state === "READY"/)
   assert.match(buildRoute, /status: "passed"/)
-  assert.match(buildRoute, /deploymentUrl: ready\.url/)
-  assert.match(reconciliation, /readyState \|\| candidate\.state/)
+  assert.match(buildRoute, /deploymentUrl: preview\.url/)
+  assert.match(reconciliation, /readyState \|\| item\.state/)
   assert.match(reconciliation, /\.vercel\.app/)
+})
+
+test("build polling converts terminal Vercel preview states into a failed build", () => {
+  assert.match(buildRoute, /TERMINAL_PREVIEW_FAILURE_STATES/)
+  assert.match(buildRoute, /"ERROR", "CANCELED", "CANCELLED"/)
+  assert.match(buildRoute, /status: "failed"/)
+  assert.match(buildRoute, /Vercel preview deployment finished with state/)
+  assert.match(reconciliation, /state: string/)
+})
+
+test("preview publishing cannot remain running forever", () => {
+  assert.match(buildRoute, /PREVIEW_PUBLISH_TIMEOUT_MS = 5 \* 60 \* 1000/)
+  assert.match(buildRoute, /Preview publishing timed out before Vercel reached a terminal state/)
+  assert.match(buildRoute, /Date\.parse\(build\.updated_at\)/)
 })
