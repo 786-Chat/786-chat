@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     githubCommitSha,
     githubPrUrl,
     deploymentUrl,
-    repairStatus: runnerBuildFailed ? "pending" : null,
+    repairStatus: runnerBuildFailed ? "pending" : "not_needed",
   })
 
   if (!updated) {
