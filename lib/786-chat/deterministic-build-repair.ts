@@ -28,6 +28,22 @@ function repairMissingDbHelperExport(files: Record<string, string>, logs: string
   return repaired === source ? null : { [path]: repaired }
 }
 
+function repairMissingDbHelperAlias(files: Record<string, string>, logs: string) {
+  const match = logs.match(/Module ['"]@\/lib\/server\/db['"] has no exported member ['"](get(?:Sql|Db))['"]/i)
+  if (!match) return null
+  const missingHelper = match[1]
+  const existingHelper = missingHelper === "getDb" ? "getSql" : "getDb"
+  const path = files["lib/server/db.ts"] ? "lib/server/db.ts" : files["src/lib/server/db.ts"] ? "src/lib/server/db.ts" : null
+  if (!path) return null
+  const source = files[path]
+  const missingExported = new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${missingHelper}\\b`).test(source) || new RegExp(`\\bexport\\s*\\{[^}]*\\b${missingHelper}\\b`).test(source)
+  if (missingExported) return null
+  const existingExported = new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${existingHelper}\\b`).test(source) || new RegExp(`\\bexport\\s*\\{[^}]*\\b${existingHelper}\\b`).test(source)
+  if (!existingExported) return null
+  const repaired = `${source.trimEnd()}\n\nexport const ${missingHelper} = ${existingHelper}\n`
+  return { [path]: repaired }
+}
+
 function repairZeroArgDbFactory(files: Record<string, string>, logs: string) {
   if (!/Expected 0 arguments, but got 1/i.test(logs)) return null
   const dbSource = files["lib/server/db.ts"] || ""
@@ -102,6 +118,12 @@ export function deterministicGeneratedBuildRepair(files: Record<string, string>,
   if (dbHelperExport) {
     Object.assign(repairedFiles, dbHelperExport)
     models.push("db-helper-export-contract")
+  }
+
+  const dbHelperAlias = repairMissingDbHelperAlias({ ...files, ...repairedFiles }, logs)
+  if (dbHelperAlias) {
+    Object.assign(repairedFiles, dbHelperAlias)
+    models.push("db-helper-alias-contract")
   }
 
   const tailwind = repairTailwindSemanticTheme({ ...files, ...repairedFiles }, logs)
