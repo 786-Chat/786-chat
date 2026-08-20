@@ -214,10 +214,15 @@ export function validateGeneratedProject(specification: ProjectSpecification, fi
     errors.push(...domainAcceptance.errors)
   }
 
-  if (specification.platforms.includes("mobile")) {
-    for (const path of ["mobile/package.json", "mobile/app.json", "mobile/app/index.tsx", "mobile/services/api.ts"]) {
+  const mobilePaths = ["mobile/package.json", "mobile/app.json", "mobile/app/index.tsx", "mobile/services/api.ts"]
+  const hasAnyMobileArtifact = mobilePaths.some((path) => typeof files[path] === "string" && Boolean(files[path].trim()))
+  const requiresStandaloneMobileArtifacts = specification.platforms.includes("mobile") && (specification.projectType === "mobile-application" || hasAnyMobileArtifact)
+  if (requiresStandaloneMobileArtifacts) {
+    for (const path of mobilePaths) {
       if (typeof files[path] !== "string" || !files[path].trim()) errors.push(`Missing required mobile file: ${path}`)
     }
+  } else if (specification.platforms.includes("mobile")) {
+    warnings.push("Mobile platform flag did not require Expo files because this generated output is a responsive web application with no standalone mobile artifact set.")
   }
 
   if (/AI Generated Project|Top-tier digital craftsmanship|Enter the experience|Everything feels custom-built/i.test(combined)) errors.push("Generic fallback content was detected.")
