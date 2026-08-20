@@ -65,6 +65,11 @@
   background: var(--agent-bg);
 }
 
+/* The Auto / Plan / Build / Refactor row was decorative only, not a real control. */
+.agentPanel > div:last-child > :global(.grid-cols-4):last-child {
+  display: none;
+}
+
 .previewPanel {
   background: var(--preview-bg) !important;
   border-color: var(--preview-border) !important;
@@ -103,4 +108,3 @@
     grid-template-columns: minmax(104px, 32%) minmax(0, 1fr) !important;
   }
 }
-
