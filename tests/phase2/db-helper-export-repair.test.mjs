@@ -10,3 +10,17 @@ test('repairs TS2459 when getSql/getDb is declared locally but not exported', ()
   assert.match(source, /export \$\{asyncPrefix \|\| ""\}function/)
   assert.match(source, /export \$\{declaration\} \$\{helper\}/)
 })
+
+test('repairs TS2305 when getDb/getSql is missing but the sibling helper is exported', () => {
+  assert.match(source, /has no exported member \['"\]\(get\(\?:Sql\|Db\)\)\['"\]/)
+  assert.match(source, /missingHelper === "getDb" \? "getSql" : "getDb"/)
+  assert.match(source, /export const \$\{missingHelper\} = \$\{existingHelper\}/)
+  assert.match(source, /db-helper-alias-contract/)
+})
+
+test('repairs TS2305 when auth token helpers are missing', () => {
+  assert.match(source, /has no exported member \['"\]\(generateToken\|hashToken\)\['"\]/)
+  assert.match(source, /randomBytes\(32\)\.toString\("hex"\)/)
+  assert.match(source, /createHash\("sha256"\)\.update\(token\)\.digest\("hex"\)/)
+  assert.match(source, /auth-token-helper-contract/)
+})
