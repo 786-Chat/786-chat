@@ -3,6 +3,8 @@ import type { ProjectSpecification } from "./specification"
 export type BackendCapability = "database" | "authentication" | "storage" | "email" | "api"
 export type BackendAcceptance = { valid: boolean; errors: string[]; warnings: string[] }
 const CAPABILITY_ORDER: BackendCapability[] = ["database", "authentication", "storage", "email", "api"]
+const AUTH_TABLE_NAMES = ["users", "sessions", "email_verification_tokens", "password_reset_tokens"] as const
+const AUTH_SUPPORT_TABLE_NAMES = ["sessions", "email_verification_tokens", "password_reset_tokens"] as const
 function unique<T>(values: T[]) { return Array.from(new Set(values)) }
 function normalizedResource(value: string) { return value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") }
 
@@ -48,7 +50,7 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
     "backend/manifest.json must declare version 1 and may declare capabilities either as top-level provider objects or in a capabilities array. It must include every resource provider, required environment variable name, migration path and API route without containing secret values.",
     "lib/server/env.ts must be server-only, validate required environment variables with Zod and fail closed. Never use NEXT_PUBLIC_ for database, authentication, Blob or email secrets.",
     ...(capabilities.includes("database") ? ["Use @neondatabase/serverless through a lazy getDb/getSql function in lib/server/db.ts; do not instantiate the connection at module load and do not use a Proxy. A function declaration or const arrow function is valid. DATABASE_URL may be loaded through lib/server/env.ts, but the Neon client itself must still be created lazily inside getDb/getSql.", "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, indexes and non-destructive IF NOT EXISTS statements.", "scripts/migrate.mjs must read the checked-in migration and apply it only through DATABASE_URL. It must not run shell commands or silently ignore migration errors."] : []),
-    ...(requiresAuthentication ? ["Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.", "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.", "Use jose with an AUTH_SECRET that has no hard-coded fallback. Rotate/revoke sessions on password reset and never reveal whether a forgot-password email exists."] : []),
+    ...(requiresAuthentication ? ["AUTHENTICATION SQL CONTRACT: BOTH sql/schema.sql and sql/migrations/001_initial.sql must create tables with these exact names: users, sessions, email_verification_tokens, password_reset_tokens. Do not rename, alias or substitute any of these tables.", "Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.", "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.", "Use jose with an AUTH_SECRET that has no hard-coded fallback. Rotate/revoke sessions on password reset and never reveal whether a forgot-password email exists."] : []),
     ...(capabilities.includes("storage") ? ["Use @vercel/blob private storage. Upload routes must authenticate first, enforce file size and MIME allowlists, prefix Blob paths with the authenticated owner/tenant, and persist upload metadata in Neon.", "Download/delete routes must re-check database ownership before issuing a private download URL or deleting a Blob."] : []),
     ...(capabilities.includes("email") ? ["Use Resend only in lib/server/email.ts with RESEND_API_KEY and EMAIL_FROM. Validate recipients, use an idempotency key, return a typed result and never expose provider errors or credentials to the browser.", "app/api/email/route.ts must validate the request with Zod and authenticate the user with requireUser/requireAuth/getSession/getCurrentUser, or enforce a persistent rate limit for an explicitly public contact form, before it sends email.", "For an authenticated business application, prefer authentication on app/api/email/route.ts. Do not treat a UI-only check, hidden field, or client-side token as authentication."] : []),
     ...(capabilities.includes("api") ? [`API resources: ${resources.join(", ") || "authentication routes only"}`, ...(requiresAuthentication ? ["Every data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses."] : ["The request does not require authentication. Do not invent an auth dependency. Public data routes must still validate path/body/query input with Zod, use parameterized Neon queries, avoid exposing secrets and return explicit 400/404/409/429/500 responses."]), "For every API resource, create both the collection route and [id] item route. The collection route must export GET and POST; the item route must export GET, PATCH and DELETE. Both `export async function METHOD` and `export const METHOD = async` are valid."] : []),
@@ -70,9 +72,31 @@ function manifestDeclaresCapability(manifest: Record<string, unknown>, capabilit
 function hasRouteMethod(content: string, method: "GET" | "POST" | "PATCH" | "DELETE") { return new RegExp(`export\\s+async\\s+function\\s+${method}\\b`).test(content) || new RegExp(`export\\s+const\\s+${method}\\s*=`).test(content) }
 function hasZodValidation(content: string) { const directSchema = /\bz\.(?:object|string|coerce|array|union|enum|number|boolean|date)\b/.test(content); const importsZod = /from\s+["']zod["']/.test(content); const parsesInput = /\.(?:safeParse|parse|parseAsync)\s*\(/.test(content); return directSchema || (importsZod && parsesInput) || parsesInput }
 function hasLazyNeonGetter(db: string, env: string) { const combined = `${db}\n${env}`; const hasNeon = /@neondatabase\/serverless/.test(db); const hasDatabaseUrl = /\bDATABASE_URL\b/.test(combined); const functionGetter = /\bfunction\s+get(?:Db|Sql)\b/.test(db); const constGetter = /\bconst\s+get(?:Db|Sql)\s*=\s*(?:async\s*)?\(/.test(db) || /\bconst\s+get(?:Db|Sql)\s*=\s*(?:async\s*)?[^=\n]+=>/.test(db); const noProxy = !/\bnew\s+Proxy\b/.test(db); return hasNeon && hasDatabaseUrl && (functionGetter || constGetter) && noProxy }
+function hasSqlTable(sql: string, table: string) { return new RegExp(`CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+["']?${table}\\b`, "i").test(sql) }
+function inferUsersIdSqlType(sql: string) {
+  const users = sql.match(/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+["']?users["']?\s*\(([\s\S]*?)\)\s*;/i)?.[1] || ""
+  const candidate = users.match(/(?:^|[,\n])\s*["']?id["']?\s+([a-z][a-z0-9_]*(?:\s*\([^)]*\))?)/i)?.[1]?.trim() || "TEXT"
+  return /^(?:uuid|text|varchar(?:\s*\(\s*\d+\s*\))?|character\s+varying(?:\s*\(\s*\d+\s*\))?)$/i.test(candidate) ? candidate : "TEXT"
+}
+function authSupportTableSql(table: typeof AUTH_SUPPORT_TABLE_NAMES[number], userIdType: string) {
+  return `CREATE TABLE IF NOT EXISTS ${table} (\n  id TEXT PRIMARY KEY,\n  user_id ${userIdType} NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  token_hash TEXT NOT NULL UNIQUE,\n  expires_at TIMESTAMPTZ NOT NULL,\n  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\nCREATE INDEX IF NOT EXISTS ${table}_user_id_idx ON ${table}(user_id);\nCREATE INDEX IF NOT EXISTS ${table}_expires_at_idx ON ${table}(expires_at);`
+}
+export function normalizeGeneratedAuthenticationSchema(specification: ProjectSpecification, files: Record<string, string>) {
+  if (!backendCapabilities(specification).includes("authentication")) return files
+  for (const path of ["sql/schema.sql", "sql/migrations/001_initial.sql"]) {
+    const source = files[path] || ""
+    if (!source.trim() || !hasSqlTable(source, "users")) continue
+    const userIdType = inferUsersIdSqlType(source)
+    const missing = AUTH_SUPPORT_TABLE_NAMES.filter((table) => !hasSqlTable(source, table))
+    if (!missing.length) continue
+    files[path] = `${source.trimEnd()}\n\n-- 786.Chat auth compatibility: exact required auth table names\n${missing.map((table) => authSupportTableSql(table, userIdType)).join("\n\n")}\n`
+  }
+  return files
+}
 function backendRepairError(message: string) { return `Backend CRUD repair: ${message}` }
 
 export function assessGeneratedBackend(specification: ProjectSpecification, files: Record<string, string>): BackendAcceptance {
+  normalizeGeneratedAuthenticationSchema(specification, files)
   const capabilities = backendCapabilities(specification)
   const errors: string[] = []
   const warnings: string[] = []
@@ -99,8 +123,11 @@ export function assessGeneratedBackend(specification: ProjectSpecification, file
     if (!/@neondatabase\/serverless/.test(runner) || !/DATABASE_URL/.test(runner) || !/001_initial\.sql/.test(runner)) errors.push(backendRepairError("Migration runner must apply 001_initial.sql through DATABASE_URL."))
   }
   if (capabilities.includes("authentication")) {
-    const auth = files["lib/server/auth.ts"] || ""; const schema = files["sql/schema.sql"] || ""
-    for (const table of ["users", "sessions", "email_verification_tokens", "password_reset_tokens"]) if (!new RegExp(`CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+["']?${table}\\b`, "i").test(schema)) errors.push(backendRepairError(`Authentication schema is missing ${table}.`))
+    const auth = files["lib/server/auth.ts"] || ""; const schema = files["sql/schema.sql"] || ""; const migration = files["sql/migrations/001_initial.sql"] || ""
+    for (const table of AUTH_TABLE_NAMES) {
+      if (!hasSqlTable(schema, table)) errors.push(backendRepairError(`Authentication schema is missing ${table}.`))
+      if (!hasSqlTable(migration, table)) errors.push(backendRepairError(`Authentication migration is missing ${table}.`))
+    }
     if (!/bcryptjs/.test(auth) || !/\b(?:hash|compare)\s*\(/.test(auth) || !/\bjose\b/.test(auth)) errors.push(backendRepairError("Authentication must hash passwords and sign/verify sessions with bcryptjs and jose."))
     if (!/\bAUTH_SECRET\b/.test(auth) || /AUTH_SECRET[^\n]*(?:\|\||\?\?)\s*["']/.test(auth)) errors.push(backendRepairError("Authentication must require AUTH_SECRET without a hard-coded fallback."))
     const cookieSource = [files["app/api/auth/login/route.ts"], files["app/api/auth/logout/route.ts"], auth].join("\n")
