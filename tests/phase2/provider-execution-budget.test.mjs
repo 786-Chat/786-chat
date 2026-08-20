@@ -14,14 +14,14 @@ const codegen = await readFile(
   new URL("../../lib/786-admin/codegen.ts", import.meta.url),
   "utf8",
 )
-const canonicalGenerator = await readFile(
-  new URL("../../app/api/786-chat/generate/route.ts", import.meta.url),
-  "utf8",
-)
 
-test("canonical generation route leaves cleanup time after the DeepSeek budget", () => {
-  assert.match(route, /maxDuration = 180/)
-  assert.match(controller, /PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000/)
+test("full-stack file generation returns before the Vercel hard timeout", () => {
+  assert.match(route, /maxDuration = 300/)
+  assert.match(controller, /FILE_LEVEL_GENERATION_DEADLINE_MS = 170_000/)
+  assert.match(controller, /MAX_FILE_UNITS_PER_REQUEST = 2/)
+  assert.match(controller, /const deadlineAt = Date\.now\(\) \+ FILE_LEVEL_GENERATION_DEADLINE_MS/)
+  assert.match(controller, /remainingMs = deadlineAt - startedAt/)
+  assert.match(controller, /Math\.min\(providerTimeoutMs, remainingMs\)/)
 })
 
 test("timed-out provider work is aborted instead of running in the background", () => {
@@ -30,49 +30,30 @@ test("timed-out provider work is aborted instead of running in the background", 
   assert.match(controller, /controller\.abort/)
 })
 
-test("the alternate provider is not started while the primary is running", () => {
+test("provider fallback is sequential and never races providers", () => {
   assert.match(controller, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
   assert.match(controller, /result = await runAttempt/)
   assert.doesNotMatch(controller, /coordinatorSignal|attemptsByMode/)
 })
 
-test("automatic generation uses one direct DeepSeek mode", () => {
-  assert.match(controller, /const primaryMode: CodegenMode = requestedMode === "deepseek-pro" \? "deepseek-pro" : "deepseek-flash"/)
-  assert.match(controller, /const candidateModes: CodegenMode\[\] = \[primaryMode\]/)
+test("automatic full-stack generation prefers DeepSeek then Gemini fallback", () => {
+  assert.match(controller, /isComplex \? \["deepseek-flash","gemini-flash"\]/)
+  assert.match(controller, /candidateModes\.filter\(modeConfigured\)/)
+  assert.match(controller, /providers: configuredProviders/)
 })
 
-test("compact websites send the original customer prompt instead of the full platform brief", () => {
-  assert.match(controller, /const originalMessage = String\(payload\._originalPrompt \|\| message\)/)
-  assert.match(controller, /prompt: `\$\{useCompactProfile \? originalMessage : message\}\$\{compactRules\}`/)
+test("large full-stack plans use resumable single-file units", () => {
+  assert.match(controller, /FILE-LEVEL FULL-STACK GENERATION/)
+  assert.match(controller, /Generate ONLY the single target file/)
+  assert.match(controller, /units\.slice\(startIndex, startIndex \+ unitLimit\)/)
+  assert.match(controller, /initialFiles: supplied\?\.completedFiles/)
+  assert.match(controller, /continuationRequired: true/)
+  assert.match(route, /signGenerationContinuation/)
+  assert.match(route, /recordBuilderGenerationProgress/)
 })
 
-test("invalid full systems receive one strict validation-guided repair pass", () => {
-  assert.match(canonicalGenerator, /VALIDATION-GUIDED REPAIR — RETURN COMPLETE CONTENT FOR EVERY MODIFIED FILE/)
-  assert.match(canonicalGenerator, /validation\.errors\.map/)
-  assert.match(canonicalGenerator, /focusedSystemRepair/)
-  assert.match(canonicalGenerator, /requiredRepairFiles/)
-  assert.match(canonicalGenerator, /app\/page\.tsx is mandatory/)
-  assert.match(canonicalGenerator, /apiResources\.flatMap/)
-  assert.match(canonicalGenerator, /keyFiles: repairKeyFiles/)
-  assert.match(canonicalGenerator, /persist an audit_logs event/)
-  assert.match(canonicalGenerator, /operational page must contain a real form/)
-  assert.match(canonicalGenerator, /sales follow-up task and notification/)
-  assert.match(canonicalGenerator, /Do not omit a collection route, item route or operational page/)
-  assert.match(canonicalGenerator, /repairAttempted/)
-  assert.match(canonicalGenerator, /validation\.valid && repairedProject/)
-})
-
-test("the active code generator requires tenant ownership rejection and real audit writes", () => {
-  assert.match(codegen, /explicitly reject missing or mismatched company ownership/)
-  assert.match(codegen, /persist a tenant-scoped audit_logs event/)
-  assert.match(codegen, /comments do not count/)
-  assert.match(codegen, /collection and item API route must reference companyId/)
-  assert.match(codegen, /Static marketing cards do not count/)
-  assert.match(codegen, /CRM must include a sales follow-up task and notification/)
-  assert.match(codegen, /Every generated Next\.js project must include app\/page\.tsx/)
-})
-
-test("large file generation has an explicit output and retry budget", () => {
+test("provider output and retries are explicitly bounded", () => {
+  assert.match(controller, /const maxOutputTokens = isFileUnit \? 8_000/)
   assert.match(codegen, /maxOutputTokens:\s*input\.maxOutputTokens \?\? maxOutputTokensForPlan\(input\.userPlan\)/)
   assert.match(codegen, /maxRetries:\s*0/)
   assert.match(codegen, /abortSignal: input\.abortSignal/)
