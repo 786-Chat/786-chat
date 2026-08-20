@@ -18,10 +18,12 @@ test('repairs TS2305 when getDb/getSql is missing but the sibling helper is expo
   assert.match(source, /db-helper-alias-contract/)
 })
 
-test('repairs TS2305 when auth token helpers are missing', () => {
-  assert.match(source, /has no exported member \['"\]\(generateToken\|hashToken\)\['"\]/)
+test('repairs TS2305 auth helper errors with TypeScript nested module quotes', () => {
+  assert.match(source, /Module\\s\+\['"\]\+\[\\"\]\?@\\\/lib\\\/server\\\/auth/)
+  assert.match(source, /generateToken\|hashToken/)
   assert.match(source, /randomBytes\(32\)\.toString\("hex"\)/)
   assert.match(source, /createHash\("sha256"\)\.update\(token\)\.digest\("hex"\)/)
+  assert.match(source, /implementations\.push/)
   assert.match(source, /auth-token-helper-contract/)
 })
 
