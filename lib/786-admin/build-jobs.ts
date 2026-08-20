@@ -33,6 +33,18 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim()
 }
 
+function normalizeTerminalPublishRepairState(build: AdminProjectBuild | null): AdminProjectBuild | null {
+  if (
+    build?.status === "failed" &&
+    build.github_commit_sha &&
+    !build.deployment_url &&
+    ["pending", "running", "repaired"].includes(build.repair_status)
+  ) {
+    return { ...build, repair_status: "not_needed" }
+  }
+  return build
+}
+
 export async function ensureBuildJobsSchema(): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS admin_project_builds (
@@ -140,7 +152,7 @@ export async function getLatestBuildJob(
     LIMIT 1
   `) as unknown as AdminProjectBuild[]
 
-  return rows[0] ?? null
+  return normalizeTerminalPublishRepairState(rows[0] ?? null)
 }
 
 export async function appendBuildLog(input: {
