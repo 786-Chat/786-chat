@@ -1,0 +1,12 @@
+{
+  "projectId": "219cb552-2840-4716-b3a5-baf9ae72df6b",
+  "buildId": "59027c91-b536-4d09-b4b6-b42b0343abeb",
+  "title": "Generated application",
+  "sourceVersion": "6ccda53450c7279f0a89175e4ee0be2780a66dcbc5cb4eacc1e5a276e09a50fe",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-16T01:53:23.124Z"
+}
