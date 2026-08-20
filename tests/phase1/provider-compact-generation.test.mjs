@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
 
-const resilient = await readFile(
+const controller = await readFile(
   new URL("../../lib/786-chat/provider-controller.ts", import.meta.url),
   "utf8",
 )
@@ -11,40 +11,40 @@ const codegen = await readFile(
   "utf8",
 )
 
-test("simple text-only websites use the compact generation profile", () => {
-  assert.match(resilient, /isSimpleWebsiteRequest/)
-  assert.match(resilient, /compactEligible && providerForMode\(mode\) === "deepseek"/)
-  assert.match(resilient, /COMPACT WEBSITE PROFILE/)
+test("simple websites and complex applications use separate generation profiles", () => {
+  assert.match(controller, /type GenerationProfile = "website" \| "full-stack"/)
+  assert.match(controller, /const profile: GenerationProfile = isComplex \? "full-stack" : "website"/)
+  assert.match(controller, /Generate a compact complete runnable Next\.js App Router website/)
+  assert.match(controller, /ULTRA-COMPACT FULL-STACK OUTPUT/)
 })
 
-test("complex application terms keep the full platform generator", () => {
-  for (const term of ["database", "erp", "iot", "mqtt", "mobile app", "admin dashboard"]) {
-    assert.ok(resilient.includes(`"${term}"`), `missing complex-term guard for ${term}`)
+test("complex application terms keep the full-stack generator", () => {
+  for (const term of ["database", "erp", "crm", "inventory", "admin dashboard", "authentication"]) {
+    assert.ok(controller.includes(`"${term}"`), `missing complex-term guard for ${term}`)
   }
 })
 
 test("provider diagnostics classify quota and timeout failures", () => {
-  assert.match(resilient, /quota_exhausted/)
-  assert.match(resilient, /timed_out/)
-  assert.match(resilient, /providerStatus/)
+  assert.match(controller, /quota_exhausted/)
+  assert.match(controller, /timed_out/)
+  assert.match(controller, /providerStatus/)
 })
 
-test("compact generation requires real routes and rejects generic design", () => {
-  assert.match(resilient, /real page file for every requested route/i)
-  assert.match(resilient, /Do not use generic 786 artwork, placeholder copy, or a repeated template/)
-  assert.match(resilient, /"compact-website"/)
+test("full-stack generation is file-level, contract-aware and resumable", () => {
+  assert.match(controller, /FILE-LEVEL FULL-STACK GENERATION/)
+  assert.match(controller, /Generate ONLY the single target file/)
+  assert.match(controller, /Use supplied dependency files as authoritative contracts/)
+  assert.match(controller, /initialFiles: supplied\?\.completedFiles/)
+  assert.match(controller, /continuationRequired: true/)
 })
 
-test("truncated existing-project edits get one compact DeepSeek retry", () => {
+test("existing edits can retry truncated provider output without replacing the entire project", () => {
   assert.match(codegen, /const TRUNCATION_MESSAGE/)
-  assert.match(codegen, /function compactRetryPrompt/)
-  assert.match(codegen, /RETRY AFTER OUTPUT LIMIT/)
-  assert.match(codegen, /if \(!truncated \|\| !input\.existing\) throw error/)
-  assert.match(codegen, /runDeepSeek\(input, compactRetryPrompt\(prompt\), mode\)/)
-  assert.match(codegen, /Return ONLY the smallest set of files directly changed by the current user request/)
+  assert.match(codegen, /compactRetryPrompt/)
+  assert.match(codegen, /maxRetries:\s*0/)
 })
 
-test("existing edits do not require unchanged root page output", () => {
-  assert.match(codegen, /app\/page\.tsx is mandatory for new projects; for existing-project edits/)
-  assert.match(codegen, /return it only when the requested change actually modifies it/)
+test("provider calls always receive abort signals and explicit token limits", () => {
+  assert.match(controller, /abortSignal: controller\.signal/)
+  assert.match(controller, /const maxOutputTokens = isFileUnit \? 8_000/)
 })
