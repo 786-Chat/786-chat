@@ -85,11 +85,14 @@ function validatePlannedLocalImports(prompt: string, files: Record<string, strin
 
 export function assertGeneratedProjectCompleteness(prompt: string, files: Record<string, string>, existing: boolean) {
   const planned = extractRequiredFiles(prompt)
-  // Ordinary existing-project edits intentionally return only changed files.
-  // Validation-guided repairs are different: they contain an explicit required
-  // file list and must not silently return only part of that list. File-level
-  // generations validate only the current unit's explicit target file.
-  if (existing && !planned.length) return
+  const isValidationRepair = /\bVALIDATION-GUIDED REPAIR\b/i.test(prompt)
+  const isFileLevelGeneration = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)
+  // Ordinary existing-project edits intentionally return only new/changed files.
+  // The planner may still include the complete project's Planned files list in
+  // the provider prompt, so that list must not turn a targeted edit into a full
+  // regeneration requirement. Validation-guided repairs and explicit file-level
+  // generation units remain strict because they name the files that must return.
+  if (existing && !isValidationRepair && !isFileLevelGeneration) return
   if (!planned.length) return
   const missing = planned.filter((file) => !files[file] || !files[file].trim())
   if (missing.length) throw new Error(`${INCOMPLETE_PROJECT_OUTPUT} Missing: ${missing.join(", ")}`)
