@@ -12,9 +12,9 @@ test("the workspace uses one canonical provider entry point", () => {
   assert.doesNotMatch(workspaceApi, /chat-resilient|chat-compact|\/api\/786-admin\/chat/)
 })
 
-test("provider controller keeps text generation on direct DeepSeek", () => {
-  assert.match(providerController, /candidateModes: CodegenMode\[\] = \[primaryMode\]/)
-  assert.doesNotMatch(providerController, /alternateMode/)
+test("provider controller prefers DeepSeek and retains Gemini fallback", () => {
+  assert.match(providerController, /isComplex \? \["deepseek-flash","gemini-flash"\]/)
+  assert.match(providerController, /largeFrontendEdit \? \["gemini-flash","deepseek-flash"\]/)
   assert.match(providerController, /providerFailoverUsed/)
 })
 
@@ -29,17 +29,18 @@ test("canonical generation rejects local fallback output", () => {
   assert.match(canonicalRoute, /status:\s*503/)
 })
 
-test("direct provider attempt is bounded inside the Vercel window", () => {
-  assert.match(providerController, /PRIMARY_ATTEMPT_TIMEOUT_MS = 170_000/)
-  assert.match(providerController, /maxDuration = 180/)
-  assert.match(providerController, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
+test("full-stack provider work is bounded below the route execution window", () => {
+  assert.match(providerController, /maxDuration = 300/)
+  assert.match(providerController, /FILE_LEVEL_GENERATION_DEADLINE_MS = 170_000/)
+  assert.match(providerController, /MAX_FILE_UNITS_PER_REQUEST = 2/)
+  assert.match(providerController, /Math\.min\(providerTimeoutMs, remainingMs\)/)
   assert.match(providerController, /controller\.abort/)
 })
 
-test("the provider request records the single direct attempt", () => {
+test("provider attempts are sequential rather than raced", () => {
+  assert.match(providerController, /for \(const \[position, mode\] of configuredModes\.entries\(\)\)/)
   assert.match(providerController, /fallback: position > 0/)
-  assert.match(providerController, /continue/)
-  assert.doesNotMatch(providerController, /rescueModes|abortFromCoordinator|coordinatorSignal/)
+  assert.doesNotMatch(providerController, /rescueModes|abortFromCoordinator|coordinatorSignal|Promise\.any/)
 })
 
 test("code generation uses gateway attribution and plan-specific budgets", () => {
@@ -50,7 +51,9 @@ test("code generation uses gateway attribution and plan-specific budgets", () =>
   assert.match(codegen, /maxRetries:\s*0/)
 })
 
-test("compact and complex requests both stay on DeepSeek", () => {
-  assert.match(providerController, /requestedMode === "deepseek-pro" \? "deepseek-pro" : "deepseek-flash"/)
-  assert.match(providerController, /const compact = compactEligible && providerForMode\(mode\) === "deepseek"/)
+test("large full-stack generation can resume without starting over", () => {
+  assert.match(providerController, /initialFiles: supplied\?\.completedFiles/)
+  assert.match(providerController, /continuationRequired: true/)
+  assert.match(canonicalRoute, /signGenerationContinuation/)
+  assert.match(canonicalRoute, /recordBuilderGenerationProgress/)
 })
