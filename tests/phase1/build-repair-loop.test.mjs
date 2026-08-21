@@ -88,6 +88,29 @@ test("deterministic repair restores the generated signSession auth contract", as
   assert.match(repaired["lib/server/auth.ts"], /\.sign\(secret\)/)
 })
 
+test("deterministic repair aliases legacy getSessionUser to canonical getCurrentUser", async () => {
+  const { repairMissingGeneratedDbHelper } = await loadStandaloneTsModule("lib/786-chat/db-helper-contract-repair.ts")
+  const files = {
+    "lib/server/auth.ts": [
+      "export async function getSessionUser() {",
+      "  return { id: 'u1', email: 'user@example.com' };",
+      "}",
+      "export async function requireUser() {",
+      "  const user = await getSessionUser();",
+      "  if (!user) throw new Error('Unauthorized');",
+      "  return user;",
+      "}",
+    ].join("\n"),
+    "app/admin/[id]/page.tsx": "import { getCurrentUser } from '@/lib/server/auth';",
+  }
+  const logs = `app/admin/[id]/page.tsx(2,10): error TS2305: Module '"@/lib/server/auth"' has no exported member 'getCurrentUser'.`
+
+  const repaired = repairMissingGeneratedDbHelper(files, logs)
+  assert.ok(repaired)
+  assert.match(repaired["lib/server/auth.ts"], /export async function getCurrentUser\(\)/)
+  assert.match(repaired["lib/server/auth.ts"], /return getSessionUser\(\)/)
+})
+
 test("migration records parent builds and safe repair state", async () => {
   const migration = await read("lib/786-admin/migrations/004-build-repair-loop.sql")
 
