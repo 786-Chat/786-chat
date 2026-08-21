@@ -1,8 +1,20 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import test from "node:test"
+import ts from "typescript"
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8")
+
+async function loadStandaloneTsModule(path) {
+  const source = await read(path)
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`)
+}
 
 test("failed isolated builds enter a bounded repair loop", async () => {
   const [callback, repair] = await Promise.all([
@@ -53,6 +65,27 @@ test("repair deterministically migrates unsupported TypeScript Next config", asy
   assert.match(repair, /DELETE FROM admin_project_files/)
   assert.match(repair, /context\.buildId\}::text/)
   assert.match(repair, /model\}::text/)
+})
+
+test("deterministic repair restores the generated signSession auth contract", async () => {
+  const { repairMissingGeneratedDbHelper } = await loadStandaloneTsModule("lib/786-chat/db-helper-contract-repair.ts")
+  const files = {
+    "lib/server/auth.ts": [
+      "import { SignJWT } from 'jose';",
+      "const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'test-secret');",
+      "export async function createSession(userId: string, companyId: string): Promise<string> {",
+      "  return new SignJWT({ userId, companyId }).setProtectedHeader({ alg: 'HS256' }).sign(secret);",
+      "}",
+    ].join("\n"),
+    "app/api/auth/login/route.ts": "import { signSession } from '@/lib/server/auth';",
+  }
+  const logs = `app/api/auth/login/route.ts(4,26): error TS2305: Module '"@/lib/server/auth"' has no exported member 'signSession'.`
+
+  const repaired = repairMissingGeneratedDbHelper(files, logs)
+  assert.ok(repaired)
+  assert.match(repaired["lib/server/auth.ts"], /export async function signSession\(payload:/)
+  assert.match(repaired["lib/server/auth.ts"], /new SignJWT\(\{ userId: payload\.userId/)
+  assert.match(repaired["lib/server/auth.ts"], /\.sign\(secret\)/)
 })
 
 test("migration records parent builds and safe repair state", async () => {
