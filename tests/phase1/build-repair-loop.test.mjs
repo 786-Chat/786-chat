@@ -88,6 +88,31 @@ test("deterministic repair restores the generated signSession auth contract", as
   assert.match(repaired["lib/server/auth.ts"], /\.sign\(secret\)/)
 })
 
+test("deterministic repair narrows generated current-user rows for typed admin props", async () => {
+  const { repairMissingGeneratedDbHelper } = await loadStandaloneTsModule("lib/786-chat/db-helper-contract-repair.ts")
+  const files = {
+    "lib/server/auth.ts": [
+      "export async function getCurrentUser() {",
+      "  const sql = getSql();",
+      "  const rows = (await sql`SELECT id, email, name, role, company_id FROM users`) as unknown as Array<Record<string, any>>;",
+      "  if (rows.length === 0) return null;",
+      "  return rows[0];",
+      "}",
+      "export async function requireUser() { return getCurrentUser(); }",
+    ].join("\n"),
+    "app/admin/page.tsx": "return <AdminClient user={user} customers={customers} orders={orders} />;",
+  }
+  const logs = "app/admin/page.tsx(19,23): error TS2739: Type 'Record<string, any>' is missing the following properties from type '{ id: string; name: string; email: string; role: string; }': id, name, email, role"
+
+  const repaired = repairMissingGeneratedDbHelper(files, logs)
+  assert.ok(repaired)
+  assert.match(
+    repaired["lib/server/auth.ts"],
+    /Array<\{ id: string; email: string; name: string; role: string; company_id\?: string \| null \}>/,
+  )
+  assert.doesNotMatch(repaired["lib/server/auth.ts"], /getCurrentUser\(\)[\s\S]*Array<Record<string,\s*any>>/)
+})
+
 test("migration records parent builds and safe repair state", async () => {
   const migration = await read("lib/786-admin/migrations/004-build-repair-loop.sql")
 
