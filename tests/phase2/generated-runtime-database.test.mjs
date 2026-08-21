@@ -26,6 +26,15 @@ test("generated deployments provision an isolated database before Vercel publish
   assert.match(callback, /Generated database namespace prepared/)
 })
 
+test("generated auth deployments provision a stable encrypted AUTH_SECRET", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+  assert.match(deployer, /createHash\("sha256"\)/)
+  assert.match(deployer, /generatedAuthSecret/)
+  assert.match(deployer, /key:\s*"AUTH_SECRET"/)
+  assert.match(deployer, /786\.chat-auth-v1:/)
+  assert.match(deployer, /target:\s*\["preview",\s*"production"\]/)
+})
+
 test("first failed generated deployment may reset only its exact isolated database", async () => {
   const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
   assert.match(deployer, /isExactGeneratedDatabase/)
