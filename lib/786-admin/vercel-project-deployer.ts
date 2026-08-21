@@ -1,3 +1,4 @@
+import { createHash } from "crypto"
 import { neon } from "@neondatabase/serverless"
 import { sql } from "./db"
 
@@ -58,6 +59,12 @@ function safeDatabaseName(projectId: string): string {
 
 function isExactGeneratedDatabase(database: string, projectId: string): boolean {
   return /^generated_[a-z0-9]{1,12}$/.test(database) && database === safeDatabaseName(projectId)
+}
+
+function generatedAuthSecret(projectId: string, databaseUrl: string): string {
+  return createHash("sha256")
+    .update(`786.chat-auth-v1:${projectId}:${databaseUrl}`)
+    .digest("hex")
 }
 
 async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
@@ -202,38 +209,47 @@ async function ensureVercelProject(input: {
 }
 
 async function upsertRuntimeEnvironment(input: {
+  projectId: string
   projectName: string
   databaseUrl: string | null
   token: string
   teamId?: string
 }): Promise<void> {
   if (!input.databaseUrl) return
-  const endpoint = new URL(
-    `https://api.vercel.com/v10/projects/${encodeURIComponent(input.projectName)}/env`,
-  )
-  endpoint.searchParams.set("upsert", "true")
-  if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      key: "DATABASE_URL",
-      value: input.databaseUrl,
-      type: "encrypted",
-      target: ["preview", "production"],
-      comment: "Managed by 786.Chat generated runtime",
-    }),
-    cache: "no-store",
-  })
-  if (response.ok) return
-  const payload = (await response.json().catch(() => null)) as null | { error?: { message?: unknown } }
-  const detail = typeof payload?.error?.message === "string"
-    ? payload.error.message
-    : `Vercel runtime environment update failed with ${response.status}`
-  throw new Error(detail.slice(0, 500))
+
+  const values = [
+    { key: "DATABASE_URL", value: input.databaseUrl },
+    { key: "AUTH_SECRET", value: generatedAuthSecret(input.projectId, input.databaseUrl) },
+  ]
+
+  for (const entry of values) {
+    const endpoint = new URL(
+      `https://api.vercel.com/v10/projects/${encodeURIComponent(input.projectName)}/env`,
+    )
+    endpoint.searchParams.set("upsert", "true")
+    if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        key: entry.key,
+        value: entry.value,
+        type: "encrypted",
+        target: ["preview", "production"],
+        comment: "Managed by 786.Chat generated runtime",
+      }),
+      cache: "no-store",
+    })
+    if (response.ok) continue
+    const payload = (await response.json().catch(() => null)) as null | { error?: { message?: unknown } }
+    const detail = typeof payload?.error?.message === "string"
+      ? payload.error.message
+      : `Vercel runtime environment update failed with ${response.status}`
+    throw new Error(detail.slice(0, 500))
+  }
 }
 
 async function deploymentState(
@@ -374,7 +390,13 @@ export async function deployGeneratedProjectToVercel(input: {
   })
 
   await ensureVercelProject({ projectName, rootDirectory, token, teamId })
-  await upsertRuntimeEnvironment({ projectName, databaseUrl, token, teamId })
+  await upsertRuntimeEnvironment({
+    projectId: input.projectId,
+    projectName,
+    databaseUrl,
+    token,
+    teamId,
+  })
 
   const endpoint = new URL("https://api.vercel.com/v13/deployments")
   if (teamId) endpoint.searchParams.set("teamId", teamId)
