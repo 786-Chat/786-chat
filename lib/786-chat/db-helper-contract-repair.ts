@@ -43,9 +43,43 @@ function repairMissingGeneratedAuthSignSession(files: Record<string, string>, lo
   return null
 }
 
+function repairGeneratedCurrentUserRowContract(files: Record<string, string>, logs: string) {
+  const mismatch = logs.match(
+    /TS2739:[^\n]*Type ['"]Record<string,\s*any>['"] is missing the following properties from type ['"]\{([^'"]+)\}['"]/i,
+  )
+  if (!mismatch) return null
+
+  const expected = mismatch[1]
+  if (!["id", "name", "email", "role"].every((field) => new RegExp(`\\b${field}\\s*:`).test(expected))) {
+    return null
+  }
+
+  const path = files["lib/server/auth.ts"] ? "lib/server/auth.ts" : files["src/lib/server/auth.ts"] ? "src/lib/server/auth.ts" : null
+  if (!path) return null
+
+  const source = files[path]
+  const marker = "export async function getCurrentUser"
+  const start = source.indexOf(marker)
+  if (start < 0) return null
+  const nextExport = source.indexOf("\nexport ", start + marker.length)
+  const end = nextExport >= 0 ? nextExport : source.length
+  const block = source.slice(start, end)
+
+  if (!/SELECT[^`]*\bid\b[^`]*\bemail\b[^`]*\bname\b[^`]*\brole\b/i.test(block)) return null
+
+  const rowType = "Array<{ id: string; email: string; name: string; role: string; company_id?: string | null }>"
+  const repairedBlock = block.replace(/Array<Record<string,\s*any>>/, rowType)
+  if (repairedBlock === block) return null
+
+  return { [path]: `${source.slice(0, start)}${repairedBlock}${source.slice(end)}` }
+}
+
 export function repairMissingGeneratedDbHelper(files: Record<string, string>, logs: string) {
   const authSignSessionRepair = repairMissingGeneratedAuthSignSession(files, logs)
   if (authSignSessionRepair) return authSignSessionRepair
+
+  const currentUserContractRepair = repairGeneratedCurrentUserRowContract(files, logs)
+  if (currentUserContractRepair) return currentUserContractRepair
 
   const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/db[\"]?['"]+\s+has no exported member\s+['"](get(?:Sql|Db))['"]/i)
     || logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/db[\"]?['"]+\s+declares\s+['"](get(?:Sql|Db))['"]\s+locally, but it is not exported/i)
