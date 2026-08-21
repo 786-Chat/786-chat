@@ -52,12 +52,12 @@ function safeProjectName(projectId: string): string {
   return `786-generated-${projectSuffix(projectId)}`
 }
 
-function safeSchemaName(projectId: string): string {
+function safeDatabaseName(projectId: string): string {
   return `generated_${projectSuffix(projectId)}`
 }
 
-function isExactGeneratedSchema(schema: string, projectId: string): boolean {
-  return /^generated_[a-z0-9]{1,12}$/.test(schema) && schema === safeSchemaName(projectId)
+function isExactGeneratedDatabase(database: string, projectId: string): boolean {
+  return /^generated_[a-z0-9]{1,12}$/.test(database) && database === safeDatabaseName(projectId)
 }
 
 async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
@@ -74,14 +74,18 @@ async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
   return rows[0]?.deployed === true
 }
 
-function isRecoverablePartialSchemaError(error: unknown): boolean {
+function isRecoverablePartialDatabaseError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || "")
   return /(?:column|relation|constraint|index).*(?:does not exist|already exists)|duplicate (?:column|table|object)|undefined (?:column|table)/i.test(message)
 }
 
-function scopedDatabaseUrl(baseUrl: string, schema: string): string {
+function scopedDatabaseUrl(baseUrl: string, database: string): string {
   const url = new URL(baseUrl)
-  url.searchParams.set("options", `-csearch_path=${schema}`)
+  url.pathname = `/${database}`
+  // Legacy generated runtimes used a connection-string search_path option. Neon HTTP
+  // queries do not preserve session settings reliably, so use a real per-project
+  // database instead and remove the old option completely.
+  url.searchParams.delete("options")
   return url.toString()
 }
 
@@ -104,12 +108,18 @@ async function prepareGeneratedRuntimeDatabase(input: {
   if (!hasDatabaseRuntime) return null
 
   const baseUrl = generatedDatabaseBaseUrl()
-  const schema = safeSchemaName(input.projectId)
+  const database = safeDatabaseName(input.projectId)
   const adminSql = neon(baseUrl)
-  await adminSql.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`, [])
+  const existing = (await adminSql.query(
+    "SELECT 1 FROM pg_database WHERE datname = $1 LIMIT 1",
+    [database],
+  )) as unknown as Array<Record<string, unknown>>
+  if (!existing.length) {
+    await adminSql.query(`CREATE DATABASE "${database}"`, [])
+  }
 
-  const runtimeUrl = scopedDatabaseUrl(baseUrl, schema)
-  const runtimeSql = neon(runtimeUrl)
+  const runtimeUrl = scopedDatabaseUrl(baseUrl, database)
+  let runtimeSql = neon(runtimeUrl)
 
   const applyMigrations = async () => {
     const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""
@@ -133,17 +143,17 @@ async function prepareGeneratedRuntimeDatabase(input: {
     const deployed = await hasSuccessfulDeployment(input.projectId)
     const mayRecover =
       !deployed &&
-      isExactGeneratedSchema(schema, input.projectId) &&
-      isRecoverablePartialSchemaError(error)
+      isExactGeneratedDatabase(database, input.projectId) &&
+      isRecoverablePartialDatabaseError(error)
 
     if (!mayRecover) throw error
 
-    // This project has never had a successful deployment. A failed earlier publish may
-    // have left a partial generated-only schema behind. Reset only this exact isolated
-    // namespace, once, then rerun the repeatable migrations. Existing deployed apps are
-    // never reset by this path.
-    await adminSql.query(`DROP SCHEMA "${schema}" CASCADE`, [])
-    await adminSql.query(`CREATE SCHEMA "${schema}"`, [])
+    // A failed first publish can leave a partial generated-only database. Reset only
+    // this exact project database once, then rerun the idempotent migrations. Existing
+    // deployed apps are never reset by this path.
+    await adminSql.query(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`, [])
+    await adminSql.query(`CREATE DATABASE "${database}"`, [])
+    runtimeSql = neon(runtimeUrl)
     await applyMigrations()
   }
 
