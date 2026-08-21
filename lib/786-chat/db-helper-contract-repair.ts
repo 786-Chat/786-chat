@@ -1,28 +1,42 @@
+function authModulePath(files: Record<string, string>) {
+  return files["lib/server/auth.ts"]
+    ? "lib/server/auth.ts"
+    : files["src/lib/server/auth.ts"]
+      ? "src/lib/server/auth.ts"
+      : null
+}
+
+function isExported(source: string, name: string) {
+  return new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${name}\\b`).test(source) ||
+    new RegExp(`\\bexport\\s*\\{[^}]*\\b${name}\\b`).test(source)
+}
+
+function exportExistingDeclaration(source: string, name: string) {
+  let repaired = source.replace(
+    new RegExp(`\\b(async\\s+)?function\\s+${name}\\b`),
+    (_statement, asyncPrefix: string | undefined) => `export ${asyncPrefix || ""}function ${name}`,
+  )
+  if (repaired === source) {
+    repaired = source.replace(
+      new RegExp(`\\b(const|let)\\s+${name}\\b`),
+      (_statement, declaration: string) => `export ${declaration} ${name}`,
+    )
+  }
+  return repaired
+}
+
 function repairMissingGeneratedAuthSignSession(files: Record<string, string>, logs: string) {
   const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/auth[\"]?['"]+\s+has no exported member\s+['"]signSession['"]/i)
   if (!match) return null
 
-  const path = files["lib/server/auth.ts"] ? "lib/server/auth.ts" : files["src/lib/server/auth.ts"] ? "src/lib/server/auth.ts" : null
+  const path = authModulePath(files)
   if (!path) return null
 
   const source = files[path]
-  const isExported = (name: string) =>
-    new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${name}\\b`).test(source) ||
-    new RegExp(`\\bexport\\s*\\{[^}]*\\b${name}\\b`).test(source)
+  if (isExported(source, "signSession")) return null
 
-  if (isExported("signSession")) return null
-
-  let repaired = source.replace(
-    /\b(async\s+)?function\s+signSession\b/,
-    (_statement, asyncPrefix: string | undefined) => `export ${asyncPrefix || ""}function signSession`,
-  )
-  if (repaired === source) {
-    repaired = source.replace(
-      /\b(const|let)\s+signSession\b/,
-      (_statement, declaration: string) => `export ${declaration} signSession`,
-    )
-  }
-  if (repaired !== source) return { [path]: repaired }
+  const exported = exportExistingDeclaration(source, "signSession")
+  if (exported !== source) return { [path]: exported }
 
   // Most generated auth modules already import jose SignJWT and define the signing
   // secret for createSession. Reuse those exact primitives to restore the stable
@@ -43,9 +57,48 @@ function repairMissingGeneratedAuthSignSession(files: Record<string, string>, lo
   return null
 }
 
+function repairMissingGeneratedAuthCurrentUser(files: Record<string, string>, logs: string) {
+  const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/auth[\"]?['"]+\s+has no exported member\s+['"]getCurrentUser['"]/i)
+  if (!match) return null
+
+  const path = authModulePath(files)
+  if (!path) return null
+
+  const source = files[path]
+  if (isExported(source, "getCurrentUser")) return null
+
+  const exported = exportExistingDeclaration(source, "getCurrentUser")
+  if (exported !== source) return { [path]: exported }
+
+  // Generated projects from older contracts frequently called this helper
+  // getSessionUser(). Keep the existing implementation and expose the canonical
+  // getCurrentUser() name expected by the planner and generated routes.
+  if (/\b(?:export\s+)?async\s+function\s+getSessionUser\b/.test(source) || /\b(?:export\s+)?(?:const|let)\s+getSessionUser\b/.test(source)) {
+    return {
+      [path]: `${source.trimEnd()}\n\nexport async function getCurrentUser() {\n  return getSessionUser()\n}\n`,
+    }
+  }
+
+  return null
+}
+
 export function repairMissingGeneratedDbHelper(files: Record<string, string>, logs: string) {
-  const authSignSessionRepair = repairMissingGeneratedAuthSignSession(files, logs)
-  if (authSignSessionRepair) return authSignSessionRepair
+  let workingFiles = files
+  const authRepairs: Record<string, string> = {}
+
+  const authSignSessionRepair = repairMissingGeneratedAuthSignSession(workingFiles, logs)
+  if (authSignSessionRepair) {
+    Object.assign(authRepairs, authSignSessionRepair)
+    workingFiles = { ...workingFiles, ...authSignSessionRepair }
+  }
+
+  const authCurrentUserRepair = repairMissingGeneratedAuthCurrentUser(workingFiles, logs)
+  if (authCurrentUserRepair) {
+    Object.assign(authRepairs, authCurrentUserRepair)
+    workingFiles = { ...workingFiles, ...authCurrentUserRepair }
+  }
+
+  if (Object.keys(authRepairs).length) return authRepairs
 
   const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/db[\"]?['"]+\s+has no exported member\s+['"](get(?:Sql|Db))['"]/i)
     || logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/db[\"]?['"]+\s+declares\s+['"](get(?:Sql|Db))['"]\s+locally, but it is not exported/i)
@@ -53,29 +106,16 @@ export function repairMissingGeneratedDbHelper(files: Record<string, string>, lo
 
   const helper = match[1] as "getDb" | "getSql"
   const sibling = helper === "getDb" ? "getSql" : "getDb"
-  const path = files["lib/server/db.ts"] ? "lib/server/db.ts" : files["src/lib/server/db.ts"] ? "src/lib/server/db.ts" : null
+  const path = workingFiles["lib/server/db.ts"] ? "lib/server/db.ts" : workingFiles["src/lib/server/db.ts"] ? "src/lib/server/db.ts" : null
   if (!path) return null
 
-  const source = files[path]
-  const isExported = (name: string) =>
-    new RegExp(`\\bexport\\s+(?:(?:async)\\s+)?(?:function|const|let)\\s+${name}\\b`).test(source) ||
-    new RegExp(`\\bexport\\s*\\{[^}]*\\b${name}\\b`).test(source)
+  const source = workingFiles[path]
+  if (isExported(source, helper)) return null
 
-  if (isExported(helper)) return null
-
-  let repaired = source.replace(
-    new RegExp(`\\b(async\\s+)?function\\s+${helper}\\b`),
-    (_statement, asyncPrefix: string | undefined) => `export ${asyncPrefix || ""}function ${helper}`,
-  )
-  if (repaired === source) {
-    repaired = source.replace(
-      new RegExp(`\\b(const|let)\\s+${helper}\\b`),
-      (_statement, declaration: string) => `export ${declaration} ${helper}`,
-    )
-  }
+  const repaired = exportExistingDeclaration(source, helper)
   if (repaired !== source) return { [path]: repaired }
 
-  if (isExported(sibling)) {
+  if (isExported(source, sibling)) {
     return { [path]: `${source.trimEnd()}\n\nexport const ${helper} = ${sibling}\n` }
   }
 
