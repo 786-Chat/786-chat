@@ -35,6 +35,16 @@ test("generated auth deployments provision a stable encrypted AUTH_SECRET", asyn
   assert.match(deployer, /target:\s*\["preview",\s*"production"\]/)
 })
 
+test("generated email deployments inherit encrypted Resend runtime configuration", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+  assert.match(deployer, /generatedUsesEmail/)
+  assert.match(deployer, /process\.env\.RESEND_API_KEY/)
+  assert.match(deployer, /key:\s*"RESEND_API_KEY"/)
+  assert.match(deployer, /key:\s*"EMAIL_FROM"/)
+  assert.match(deployer, /AUTH_EMAIL_FROM/)
+  assert.match(deployer, /Generated email runtime requires RESEND_API_KEY/)
+})
+
 test("first failed generated deployment may reset only its exact isolated database", async () => {
   const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
   assert.match(deployer, /isExactGeneratedDatabase/)

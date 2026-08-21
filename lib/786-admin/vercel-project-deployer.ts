@@ -67,6 +67,22 @@ function generatedAuthSecret(projectId: string, databaseUrl: string): string {
     .digest("hex")
 }
 
+function generatedUsesEmail(files: Record<string, string>): boolean {
+  const manifest = files["backend/manifest.json"] || ""
+  const email = files["lib/server/email.ts"] || ""
+  return /RESEND_API_KEY|["']email["']\s*:/i.test(manifest) || /\bResend\b|RESEND_API_KEY/.test(email)
+}
+
+function generatedEmailFrom(): string {
+  const configured =
+    process.env.GENERATED_EMAIL_FROM?.trim() ||
+    process.env.EMAIL_FROM?.trim() ||
+    process.env.AUTH_EMAIL_FROM?.trim() ||
+    "onboarding@resend.dev"
+  const bracketed = configured.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/)
+  return (bracketed?.[1] || configured).trim()
+}
+
 async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
   const rows = (await sql`
     SELECT EXISTS (
@@ -212,15 +228,31 @@ async function upsertRuntimeEnvironment(input: {
   projectId: string
   projectName: string
   databaseUrl: string | null
+  files: Record<string, string>
   token: string
   teamId?: string
 }): Promise<void> {
-  if (!input.databaseUrl) return
+  const values: Array<{ key: string; value: string }> = []
 
-  const values = [
-    { key: "DATABASE_URL", value: input.databaseUrl },
-    { key: "AUTH_SECRET", value: generatedAuthSecret(input.projectId, input.databaseUrl) },
-  ]
+  if (input.databaseUrl) {
+    values.push(
+      { key: "DATABASE_URL", value: input.databaseUrl },
+      { key: "AUTH_SECRET", value: generatedAuthSecret(input.projectId, input.databaseUrl) },
+    )
+  }
+
+  if (generatedUsesEmail(input.files)) {
+    const resendApiKey = process.env.RESEND_API_KEY?.trim()
+    if (!resendApiKey) {
+      throw new Error("Generated email runtime requires RESEND_API_KEY on 786.Chat")
+    }
+    values.push(
+      { key: "RESEND_API_KEY", value: resendApiKey },
+      { key: "EMAIL_FROM", value: generatedEmailFrom() },
+    )
+  }
+
+  if (!values.length) return
 
   for (const entry of values) {
     const endpoint = new URL(
@@ -394,6 +426,7 @@ export async function deployGeneratedProjectToVercel(input: {
     projectId: input.projectId,
     projectName,
     databaseUrl,
+    files: input.files,
     token,
     teamId,
   })
