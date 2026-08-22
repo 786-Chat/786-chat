@@ -131,7 +131,7 @@ export function assessGeneratedBackend(specification: ProjectSpecification, file
     if (!/bcryptjs/.test(auth) || !/\b(?:hash|compare)\s*\(/.test(auth) || !/\bjose\b/.test(auth)) errors.push(backendRepairError("Authentication must hash passwords and sign/verify sessions with bcryptjs and jose."))
     if (!/\bAUTH_SECRET\b/.test(auth) || /AUTH_SECRET[^\n]*(?:\|\||\?\?)\s*["']/.test(auth)) errors.push(backendRepairError("Authentication must require AUTH_SECRET without a hard-coded fallback."))
     const cookieSource = [files["app/api/auth/login/route.ts"], files["app/api/auth/logout/route.ts"], auth].join("\n")
-    if (!/httpOnly\s*:\s*true/.test(cookieSource) || !/sameSite\s*:\s*["'](?:lax|strict)["']/.test(cookieSource) || !/secure\s*:/.test(cookieSource)) errors.push(backendRepairError("Authentication session cookie must be HttpOnly, SameSite and Secure in production."))
+    if (!/httpOnly\s*:\s*true/.test(cookieSource) || !/sameSite\s*:[^,\n}]*(?:["'](?:lax|strict)["'])/.test(cookieSource) || !/secure\s*:/.test(cookieSource)) errors.push(backendRepairError("Authentication session cookie must be HttpOnly, SameSite and Secure in production."))
     const forgot = files["app/api/auth/forgot-password/route.ts"] || ""
     if (!/send|email/i.test(forgot) || /user not found|email does not exist/i.test(forgot)) errors.push(backendRepairError("Forgot-password must send a neutral email response without account enumeration."))
   }
