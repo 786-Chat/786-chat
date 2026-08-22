@@ -10,11 +10,14 @@ test("786.Chat dashboard does not mount the Pages manager", async () => {
   assert.doesNotMatch(source, /BuilderPageManagerOverlay/)
 })
 
-test("generated apps use arrows only for navigation overflow", async () => {
+test("generated apps add previous and next arrows when more than one customer page exists", async () => {
   const source = await readFile(optionalRulesPath, "utf8")
-  assert.match(source, /1 to 5 visible top-level pages/)
-  assert.match(source, /more than 5 visible top-level pages/)
-  assert.match(source, /< and > arrow controls/)
-  assert.match(source, /Previous pages and Next pages/)
+  assert.match(source, /only one visible top-level customer page/)
+  assert.match(source, /two or more visible top-level customer pages/)
+  assert.match(source, /< and > controls inside each generated page header/)
+  assert.match(source, /previous visible top-level customer page/)
+  assert.match(source, /next visible top-level customer page/)
+  assert.match(source, /Previous page and Next page/)
+  assert.match(source, /must not paginate, hide, replace, delete, rename, or recreate/)
   assert.match(source, /Never add a Pages button, Pages manager/)
 })
