@@ -46,10 +46,34 @@ export async function getCurrentUser() {
   if (!token) return null;
   const session = await verifySession(token);
   if (!session) return null;
+
   const sql = getSql();
-  const rows = (await sql`SELECT id, email, name, role FROM users WHERE id = ${session.userId}`) as unknown as Array<Record<string, any>>;
+  const rows = (await sql`
+    SELECT id, email, name, role
+    FROM users
+    WHERE id = ${session.userId}
+    LIMIT 1
+  `) as unknown as Array<Record<string, any>>;
+
   if (rows.length === 0) return null;
-  return rows[0];
+  const user = rows[0];
+
+  // Secure one-time bootstrap: if this installation does not have an admin yet,
+  // promote the first already-authenticated user. Once an admin exists, this
+  // branch can never promote ordinary users automatically.
+  if (user.role !== 'admin') {
+    const promoted = (await sql`
+      UPDATE users
+      SET role = 'admin', updated_at = now()
+      WHERE id = ${session.userId}
+        AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')
+      RETURNING id, email, name, role
+    `) as unknown as Array<Record<string, any>>;
+
+    if (promoted.length > 0) return promoted[0];
+  }
+
+  return user;
 }
 
 export async function requireUser() {
