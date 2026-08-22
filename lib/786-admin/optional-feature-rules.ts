@@ -12,13 +12,17 @@ USER-REQUEST-ONLY PROJECT SCOPE — MANDATORY:
 - If the user asks for one page, do not expand it into a multi-page site unless they explicitly request multiple pages.
 - If a requested detail is not specified, choose a reasonable implementation detail without adding unrelated business features or pages.
 
-GENERATED APP PAGE NAVIGATION — MANDATORY:
-- This applies inside the customer's generated application only. Never add a Pages button, Pages manager, page-management overlay, or page-management icon to the 786.Chat builder dashboard.
-- When the generated application has 1 to 5 visible top-level pages, show those page links normally in the application's primary navigation and do not add page-navigation arrows.
-- When the generated application has more than 5 visible top-level pages, show no more than 5 top-level page links at one time and add compact visible < and > arrow controls inside the generated application's primary navigation so the user can move through the remaining page links.
-- The < and > controls must change which navigation page links are visible; they must not delete, hide, rename, or recreate routes.
-- Give the arrow controls accessible labels such as Previous pages and Next pages, keep them keyboard accessible, and preserve the application's existing visual style.
-- On mobile, keep the navigation touch-friendly and responsive. A normal mobile menu may contain all page links, while desktop/tablet navigation should use the < and > overflow controls when more than 5 top-level links would otherwise overflow.
+GENERATED APP PREVIOUS/NEXT PAGE CONTROLS — USER REQUEST ONLY:
+- This applies inside the customer's generated application only. Never add a Pages button, Pages manager, page-management overlay, page list, or page-management sidebar to the 786.Chat builder dashboard.
+- Do NOT automatically add < and > page controls just because a project has multiple pages. Add them only when the customer explicitly asks for previous/next page arrows, page-to-page arrows, or equivalent sequential page navigation.
+- If the customer requests these controls and the generated application has only one visible top-level customer page, do not add them because there is no previous or next page.
+- If the customer requests these controls and the generated application has two or more visible top-level customer pages, add compact visible < and > controls inside each generated page header or equivalent top page action area.
+- The < control navigates to the previous visible top-level customer page in the application's page/navigation order. The > control navigates to the next visible top-level customer page.
+- On the first page, disable the < control. On the last page, disable the > control. Do not wrap around unless the customer explicitly asks for circular navigation.
+- These controls navigate between real pages; they must not paginate, hide, replace, delete, rename, or recreate the application's existing navigation links.
+- Keep the application's normal header/navigation exactly as designed. The arrows are an optional additional convenience only when requested, not a replacement navigation system.
+- Exclude utility authentication routes such as login, register, forgot-password, reset-password, verification and API routes from this previous/next page sequence unless the customer explicitly asks to include them.
+- Give the controls accessible labels such as Previous page and Next page, keep them keyboard and touch accessible, and preserve the generated application's visual style on desktop, tablet and mobile.
 
 PROJECT TYPE DECISION — MANDATORY:
 - Decide whether the request is for a marketing website, an operational business application, an IoT/device platform, or a mixed public website plus authenticated application.
