@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation"
 
-import { BuilderPageManagerOverlay } from "@/components/786-chat/page-manager-overlay"
 import { SevenEightSixWorkspace } from "@/components/786-chat/workspace"
 import { getSession } from "@/lib/auth"
 
@@ -11,10 +10,5 @@ export default async function SevenEightSixBuilderPage() {
     redirect("/login?next=%2F786.chat&error=session-expired")
   }
 
-  return (
-    <>
-      <SevenEightSixWorkspace />
-      <BuilderPageManagerOverlay />
-    </>
-  )
+  return <SevenEightSixWorkspace />
 }
