@@ -147,9 +147,8 @@ export async function generateProjectCode(input: CodegenInput): Promise<CodegenR
   if (mode === "deepseek-flash" || mode === "deepseek-pro") {
     try { result = await runDeepSeek(input, prompt, mode) }
     catch (error) {
-      const fileLevelUnit = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(input.prompt)
       const retryable = error instanceof Error && /JSON response (?:could not be parsed|was truncated)|did not contain a JSON object|File unit returned the wrong path/i.test(error.message)
-      if (!retryable || (input.existing && !fileLevelUnit)) throw error
+      if (!retryable) throw error
       result = await runDeepSeek({ ...input, maxOutputTokens: Math.min(input.maxOutputTokens ?? FILE_UNIT_RETRY_MAX_TOKENS, FILE_UNIT_RETRY_MAX_TOKENS) }, compactRetryPrompt(prompt, Boolean(input.existing)), mode)
     }
   } else {
