@@ -10,6 +10,14 @@ function shouldRetrySameProvider(error: unknown) {
   return SAME_PROVIDER_STRUCTURAL_RETRY_ERRORS.some((marker) => message.includes(marker))
 }
 
+function canRetainExistingValidationRepair(
+  unit: FileGenerationUnit,
+  target: string,
+  completedFiles: Readonly<Record<string, string>>,
+) {
+  return unit.name.startsWith("validation-repair-") && Boolean(completedFiles[target]?.trim())
+}
+
 export async function runFileGenerationUnits<Provider>(input: {
   units: readonly FileGenerationUnit[]
   providers: readonly Provider[]
@@ -35,6 +43,18 @@ export async function runFileGenerationUnits<Provider>(input: {
         } catch (error) {
           lastError = error
           input.onFailure?.(unit, provider, error)
+
+          // Validation repair plans can intentionally include broad safety files that
+          // already exist in the saved project even when the current edit did not
+          // invalidate them. If a provider cannot regenerate one of those existing
+          // files, keep the verified saved copy and let the final project validator
+          // decide whether that copy is still valid. This prevents unrelated auth or
+          // infrastructure files from turning a focused edit into a long repair loop.
+          if (canRetainExistingValidationRepair(unit, target, completedFiles)) {
+            completed = true
+            break
+          }
+
           if (attempt === 0 && shouldRetrySameProvider(error)) continue
           break
         }
