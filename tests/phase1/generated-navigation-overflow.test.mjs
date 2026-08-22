@@ -10,9 +10,10 @@ test("786.Chat dashboard does not mount the Pages manager", async () => {
   assert.doesNotMatch(source, /BuilderPageManagerOverlay/)
 })
 
-test("generated apps add previous and next arrows when more than one customer page exists", async () => {
+test("generated apps add previous and next arrows only when customer requests them", async () => {
   const source = await readFile(optionalRulesPath, "utf8")
-  assert.match(source, /only one visible top-level customer page/)
+  assert.match(source, /Do NOT automatically add < and > page controls/)
+  assert.match(source, /only when the customer explicitly asks/)
   assert.match(source, /two or more visible top-level customer pages/)
   assert.match(source, /< and > controls inside each generated page header/)
   assert.match(source, /previous visible top-level customer page/)
