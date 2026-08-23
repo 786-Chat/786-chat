@@ -304,7 +304,7 @@ export default function Home() {
         </article>
         <article className="landing-card contact-card" id="contact">
           <span className="section-label">Contact</span><h2>Bring your next product to life.</h2><p>Start in the builder, describe what you need and move from your first idea to a working application in one focused workspace.</p>
-          <div className="contact-actions" id="signin"><a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a><a className="secondary-cta support-call" href="tel:+447427070000">Call support <span>+44 7427 070000</span></a></div>
+          <div className="contact-actions" id="signin"><a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a><a className="secondary-cta support-call" href="/support">Support</a></div>
         </article>
       </section>
     </main>
