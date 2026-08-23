@@ -87,8 +87,9 @@
   display: none !important;
 }
 
-/* New projects are created from the dedicated New project/Projects flow, not from Settings. */
-.workspace section[aria-labelledby="utility-panel-title"] > div:nth-child(2) > div > button:nth-of-type(3) {
+/* New projects are created only from New project / Projects. Remove the Settings shortcut. */
+.workspace section[aria-labelledby="utility-panel-title"] [class~="space-y-3"] > button:nth-child(3),
+.workspace section[aria-labelledby="utility-panel-title"] [class~="space-y-3"] > button:has(svg[class*="lucide-sparkles"]) {
   display: none !important;
 }
 
