@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { DeveloperContact } from "@/components/786-chat/developer-contact"
+import { MobileWorkspaceMenu } from "@/components/786-chat/mobile-workspace-menu"
 import { WorkspaceWithProjectsRoute } from "@/components/786-chat/workspace-with-projects-route"
 import { getSession } from "@/lib/auth"
 
@@ -14,6 +15,7 @@ export default async function SevenEightSixBuilderPage() {
   return (
     <>
       <WorkspaceWithProjectsRoute />
+      <MobileWorkspaceMenu />
       <DeveloperContact />
     </>
   )
