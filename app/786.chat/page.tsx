@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { DeveloperContact } from "@/components/786-chat/developer-contact"
-import { SevenEightSixWorkspace } from "@/components/786-chat/workspace"
+import { WorkspaceWithProjectsRoute } from "@/components/786-chat/workspace-with-projects-route"
 import { getSession } from "@/lib/auth"
 
 export default async function SevenEightSixBuilderPage() {
@@ -13,7 +13,7 @@ export default async function SevenEightSixBuilderPage() {
 
   return (
     <>
-      <SevenEightSixWorkspace />
+      <WorkspaceWithProjectsRoute />
       <DeveloperContact />
     </>
   )
