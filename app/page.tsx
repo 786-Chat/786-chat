@@ -153,7 +153,7 @@ export default function Home() {
         <div className="founder-card">
           <div className="founder-photo-wrap">
             <div className="founder-photo-ring" aria-hidden="true" />
-            <Image src="/images/founder.png" alt="Mujeeb Sardar, CEO of 786.Chat" width={360} height={360} className="founder-photo" />
+            <Image src="/images/founder.png" alt="Mujeeb Sardar, CEO of 786.Chat" width={360} height={360} className="founder-photo" unoptimized priority />
           </div>
           <div className="founder-copy">
             <span className="one-kicker">Leadership</span>
