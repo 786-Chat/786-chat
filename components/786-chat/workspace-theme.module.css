@@ -70,6 +70,11 @@
   display: none;
 }
 
+/* Design is an AI-generation capability, not a separate manual workspace panel. */
+.workspace button:has(svg[class*="lucide-palette"]) {
+  display: none !important;
+}
+
 .previewPanel {
   background: var(--preview-bg) !important;
   border-color: var(--preview-border) !important;

@@ -264,6 +264,14 @@ export function analyseProjectPrompt(
     [/(?:\bdata\s+table\b|\badmin\s+table\b|\bresponsive\s+table\b|\border\s+table\b|\bcustomer\s+table\b|\btable\s+(?:view|component|grid)\b)/i, "data-table"],
     [/\bchart|analytics\b/i, "chart"],
     [/\bfooter\b/i, "footer"],
+    [/\bfont|typography|heading|subheading|body text|text style|brand font/i, "rich-typography"],
+    [/\bframe|photo frame|image frame\b/i, "frame"],
+    [/\bshape|line|arrow|badge|sticker\b/i, "shape-element"],
+    [/\bgraphic|icon|illustration\b/i, "graphic-element"],
+    [/\bphoto|image library|gallery\b/i, "photo-element"],
+    [/\bvideo|motion media\b/i, "video-element"],
+    [/\bmockup\b/i, "mockup"],
+    [/\b3d element|3d object|three-dimensional element\b/i, "3d-element"],
   ])
   if (loginRequested) {
     requiredComponents.push("email-input", "password-input", "remember-me", "forgot-password-link", "submit-button")
@@ -277,6 +285,11 @@ export function analyseProjectPrompt(
     [/\banimat/i, "motion"],
     [/\bdark\b/i, "dark"],
     [/\blight\b/i, "light"],
+    [/\bcustom size|resize|dimensions?|\bpx\b|\binches?\b|\bcm\b/i, "custom-sizing"],
+    [/\bfont|typography|text style|font combination|brand font/i, "rich-typography"],
+    [/\bframe|shape|graphic|icon|illustration|mockup|3d element|3d object/i, "visual-elements"],
+    [/\bphoto|video|media library|background texture/i, "rich-media"],
+    [/\bprint|a4|poster|flyer|banner|canvas size/i, "print-and-canvas-layout"],
   ]))
 
   const industry = matches(prompt, [
@@ -323,6 +336,10 @@ export function analyseProjectPrompt(
       [/\bmodal|dialog\b/i, "modal"],
       [/\bdropdown\b/i, "dropdown"],
       [/\bupload|attachment\b/i, "file-upload"],
+      [/\bdrag|drag-and-drop|drag and drop\b/i, "drag-and-drop"],
+      [/\bresize|resizable|custom size\b/i, "resize-elements"],
+      [/\brotate|rotation\b/i, "rotate-elements"],
+      [/\blayer|bring forward|send backward|z-index\b/i, "layer-order"],
     ])),
     designDirection,
     colours: unique(Array.from(prompt.matchAll(/\b(?:red|orange|yellow|green|emerald|blue|cyan|purple|violet|pink|black|white|gold|silver|navy|teal)\b/gi), (match) => match[0].toLowerCase())),
@@ -331,6 +348,9 @@ export function analyseProjectPrompt(
       [/\btestimonial\b/i, "testimonials"],
       [/\bfaq\b/i, "faq"],
       [/\bpricing\b/i, "pricing-content"],
+      [/\bbackground texture|texture|pattern\b/i, "background-textures"],
+      [/\bvideo|motion media\b/i, "project-specific-video"],
+      [/\bfont combination|text preset|text effect|outline text|shadow text|glow text|neon text|curved text\b/i, "advanced-text-styles"],
     ])),
     backendRequirements: unique(matches(positivePrompt, [
       [/\bdatabase|postgres|neon\b/i, "database"],
