@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { HomeInlineSupport } from "@/components/home-inline-support";
 import "./marketing-home.css";
 import "./marketing-home-cleanup.css";
 
@@ -260,7 +261,7 @@ export default function Home() {
 
       <nav className="site-nav" aria-label="Primary navigation">
         <a className="site-brand" href="#home" aria-label="786.Chat home"><BrandMark /><span>786.Chat</span></a>
-        <div className="nav-links"><a href="#home">Home</a><a href="/support">Support</a></div>
+        <div className="nav-links"><a href="#home">Home</a><a href="#support">Support</a></div>
         <div className="nav-actions"><a className="sign-in-link" href="/login">Sign in</a><a className="nav-cta" href="/786.chat">Open builder <ArrowIcon /></a></div>
       </nav>
 
@@ -304,9 +305,11 @@ export default function Home() {
         </article>
         <article className="landing-card contact-card" id="contact">
           <span className="section-label">Contact</span><h2>Bring your next product to life.</h2><p>Start in the builder, describe what you need and move from your first idea to a working application in one focused workspace.</p>
-          <div className="contact-actions" id="signin"><a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a><a className="secondary-cta support-call" href="/support">Support</a></div>
+          <div className="contact-actions" id="signin"><a className="primary-cta" href="/786.chat">Open builder <ArrowIcon /></a><a className="secondary-cta support-call" href="#support">Support</a></div>
         </article>
       </section>
+
+      <HomeInlineSupport />
     </main>
   );
 }
