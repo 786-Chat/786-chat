@@ -87,6 +87,11 @@
   display: none !important;
 }
 
+/* New projects are created from the dedicated New project/Projects flow, not from Settings. */
+.workspace section[aria-labelledby="utility-panel-title"] > div:nth-child(2) > div > button:nth-of-type(3) {
+  display: none !important;
+}
+
 .previewPanel {
   min-width: 0;
   background: var(--preview-bg) !important;
