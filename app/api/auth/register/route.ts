@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           name, email, password, plan, role, email_verified, session_version, account_status
         )
         VALUES (
-          ${name}, ${email}, ${passwordHash}, 'starter', 'user', FALSE, 0, 'active'
+          ${name}, ${email}, ${passwordHash}, 'starter', 'user', FALSE, 0, 'pending'
         )
         RETURNING id, name, email_verified
       `) as unknown as Array<{ id: string; name: string; email_verified: boolean }>
@@ -66,6 +66,12 @@ export async function POST(request: Request) {
         INSERT INTO subscriptions (user_id, plan, tokens_used, tokens_limit)
         SELECT ${user.id}, 'starter', 0, 10000
         WHERE NOT EXISTS (SELECT 1 FROM subscriptions WHERE user_id = ${user.id})
+      `
+    } else {
+      await sql`
+        UPDATE users
+        SET account_status = 'pending', updated_at = NOW()
+        WHERE id = ${user.id}
       `
     }
 
@@ -78,8 +84,9 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
-      message: "Account created. Verify your email to continue.",
+      message: "Account created. Verify your email, then wait for admin approval before using 786.Chat.",
       verificationRequired: true,
+      approvalRequired: true,
       email,
       emailDelivery: delivery.sent ? "sent" : "pending",
     }, { status: resumed ? 202 : 201 })
