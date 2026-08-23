@@ -12,6 +12,22 @@ PROJECT STRUCTURE:
 - For relational storage, include a Neon/PostgreSQL-compatible schema or migrations and typed data contracts.
 - For device systems, include an integration service boundary under backend/devices/**, lib/devices/** or services/devices/**.
 
+RESPONSIVE WEB APPLICATION OUTPUT — MANDATORY FOR EVERY GENERATED WEB PROJECT:
+- Every generated website, dashboard, admin panel and web application must work at 320px through large desktop widths without page-level horizontal clipping.
+- Build mobile-first layouts. Main page content must start at the top, stay centred within a responsive max-width container where appropriate, and use responsive side padding rather than fixed desktop offsets.
+- Do not use fixed min-width values on page shells, headers, navigation, cards, forms or dashboards that force content wider than the viewport.
+- Responsive grids must collapse cleanly from desktop columns to tablet and then one-column mobile layouts when space requires it.
+- Headers and action bars must wrap or collapse on small screens. Important buttons, status indicators and back actions must never be pushed outside the viewport.
+- Wide data tables must be placed inside a dedicated horizontal overflow container, or use a mobile card/list presentation. The overall page itself must remain viewport-width and vertically scrollable.
+- Forms, inputs, selects, buttons, cards, dialogs and menus must use max-width: 100% semantics so they cannot overflow their parent on narrow devices.
+- Images, video, SVG, canvas and embedded media must be responsive with max-width: 100% and appropriate object-fit behaviour.
+- Modals and popovers must fit inside the viewport with safe margins and internal scrolling when their content is taller than the screen.
+- Avoid fixed viewport heights that trap or cut off application content. Pages must naturally scroll vertically, including on touch devices.
+- Use touch-safe controls and spacing. Primary interactive targets should be about 44px high/wide where practical.
+- Preserve readable typography and spacing at small widths; do not solve overflow by shrinking the whole application to unreadable scale.
+- Treat 375px, 393px, 412px, 768px and 1366px widths as required responsive checkpoints when choosing layout CSS.
+- Operational/admin tables, dashboards and order/customer/product screens require the same mobile responsiveness as marketing pages.
+
 EXPO MOBILE APPLICATIONS:
 - When Android, iPhone, iOS, tablet or Expo is requested, generate one shared React Native codebase.
 - Include requested screens such as mobile/app/index.tsx, login.tsx, dashboard.tsx, devices.tsx, alerts.tsx and settings.tsx.
