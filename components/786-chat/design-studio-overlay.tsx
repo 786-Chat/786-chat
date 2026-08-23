@@ -155,6 +155,7 @@ export function DesignStudioOverlay() {
   const [uploading, setUploading] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
+  const savePending = useRef(0)
   const lastProjectId = useRef("")
 
   const targetSection = selectedSection || sections[0]?.id || ""
@@ -381,6 +382,7 @@ export function DesignStudioOverlay() {
     setVisualState(next)
     postState(next)
     setDirty(true)
+    savePending.current += 1
     setSaving(true)
     const projectId = project.id
     const operation = saveQueue.current.then(async () => {
@@ -389,7 +391,8 @@ export function DesignStudioOverlay() {
     }).catch((failure) => {
       setError(failure instanceof Error ? failure.message : "Design Studio change could not be saved.")
     }).finally(() => {
-      setSaving(false)
+      savePending.current -= 1
+      if (savePending.current === 0) setSaving(false)
     })
     saveQueue.current = operation
     return operation
@@ -587,13 +590,16 @@ export function DesignStudioOverlay() {
     setSelectedStudioId("")
   }
 
-  async function uploadImage(file: File) {
-    if (!file.type.startsWith("image/")) {
-      setError("Choose an image file.")
+  async function uploadMedia(file: File) {
+    const isVideo = file.type.startsWith("video/")
+    const isImage = file.type.startsWith("image/")
+    if (!isImage && !isVideo) {
+      setError("Choose an image or video file.")
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Image must be 10MB or smaller.")
+    const maxSize = (isVideo ? 25 : 10) * 1024 * 1024
+    if (file.size > maxSize) {
+      setError(`${isVideo ? "Video" : "Image"} must be ${isVideo ? 25 : 10}MB or smaller.`)
       return
     }
     setUploading(true)
@@ -608,11 +614,16 @@ export function DesignStudioOverlay() {
         error?: string
       }
       if (!response.ok || !payload.url) {
-        throw new Error(payload.message || payload.error || "Image storage is not configured.")
+        throw new Error(payload.message || payload.error || "Media storage is not configured.")
       }
-      addMedia("image", payload.url)
+      if (isImage && selectedElement?.kind === "frame") {
+        updateElement(selectedElement.id, { source: payload.url })
+        setNotice("Image added to the selected frame.")
+      } else {
+        addMedia(isVideo ? "video" : "image", payload.url)
+      }
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Image could not be uploaded.")
+      setError(failure instanceof Error ? failure.message : "Media could not be uploaded.")
     } finally {
       setUploading(false)
     }
@@ -1064,14 +1075,14 @@ export function DesignStudioOverlay() {
                       <ImageIcon className="h-4 w-4 text-cyan-300" />
                       <b className="text-[12px]">Photos & videos</b>
                     </div>
-                    <input ref={uploadInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden" onChange={(event) => {
+                    <input ref={uploadInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,video/mp4,video/webm,video/quicktime" className="hidden" onChange={(event) => {
                       const file = event.target.files?.[0]
-                      if (file) void uploadImage(file)
+                      if (file) void uploadMedia(file)
                       event.target.value = ""
                     }} />
                     <button type="button" onClick={() => uploadInputRef.current?.click()} disabled={uploading} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-400/10 text-[11px] font-bold text-cyan-100 disabled:opacity-50">
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      Upload photo
+                      Upload photo or video
                     </button>
                     <div className="mt-2 flex gap-2">
                       <input value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} placeholder="https:// image or video URL" className="h-9 min-w-0 flex-1 rounded border border-[#32435f] bg-[#070c18] px-2 text-[11px]" />
