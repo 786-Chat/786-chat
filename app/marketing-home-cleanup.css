@@ -1,0 +1,65 @@
+/* User-facing 786.Chat homepage workspace demo and mobile navigation fixes. */
+.workspace-shell.workspace-clean { overflow: hidden; }
+.workspace-clean .workspace-grid { grid-template-columns: 24% 32% 44%; }
+.workspace-clean .workspace-sidebar-demo { display:flex; flex-direction:column; padding:12px 10px; border-right:1px solid var(--hairline); background:radial-gradient(circle at 12% 10%,rgba(99,102,241,.24),transparent 42%),linear-gradient(160deg,rgba(11,8,44,.98),rgba(5,14,35,.96)); }
+.workspace-clean .sidebar-demo-brand { display:flex; align-items:center; gap:8px; padding:4px 5px 13px; color:#f5f7ff; font-size:11px; font-weight:800; }
+.workspace-clean .sidebar-demo-brand .brand-mark { width:25px; height:25px; }
+.workspace-clean .sidebar-demo-link { display:flex; min-height:34px; align-items:center; gap:8px; margin:2px 0; padding:0 9px; border-radius:8px; color:rgba(231,236,255,.72); font-size:10px; font-weight:700; text-decoration:none; }
+.workspace-clean .sidebar-demo-link.active { background:rgba(128,92,255,.18); color:#fff; box-shadow:inset 2px 0 #a78bfa; }
+.workspace-clean .sidebar-demo-icon { display:grid; width:18px; height:18px; place-items:center; color:#79d8ff; font-size:10px; }
+.workspace-clean .sidebar-demo-new { display:flex; align-items:center; gap:8px; margin-top:auto; padding:9px; border:1px solid rgba(104,124,226,.28); border-radius:11px; background:rgba(11,20,45,.8); text-decoration:none; }
+.workspace-clean .sidebar-demo-new strong,.workspace-clean .sidebar-demo-new small { display:block; }
+.workspace-clean .sidebar-demo-new strong { font-size:10px; }
+.workspace-clean .sidebar-demo-new small { margin-top:2px; color:rgba(231,236,255,.42); font-size:8px; }
+.workspace-clean .sidebar-demo-avatar { display:grid; width:29px; height:29px; flex:0 0 auto; place-items:center; border-radius:50%; background:rgba(129,92,246,.3); color:#ded6ff; font-size:9px; font-weight:800; }
+.workspace-clean .agent-demo-panel { display:flex; min-width:0; flex-direction:column; }
+.workspace-clean .agent-demo-body { min-height:0; flex:1; padding:12px; overflow:hidden; }
+.workspace-clean .agent-demo-card { padding:13px; border:1px solid rgba(94,120,230,.22); border-radius:10px; background:rgba(255,255,255,.025); }
+.workspace-clean .agent-demo-card strong { display:block; margin-bottom:6px; color:#f7f8ff; font-size:10px; }
+.workspace-clean .agent-demo-card p { margin:0; color:rgba(231,236,255,.62); font-size:9px; line-height:1.55; }
+.workspace-clean .build-steps { padding:14px 2px 8px; }
+.workspace-clean .build-step { font-size:9px; }
+.workspace-clean .pages-inventory { margin-top:12px; padding-top:10px; border-top:1px solid rgba(94,120,230,.18); }
+.workspace-clean .pages-inventory>strong { display:block; margin-bottom:7px; color:#f4f6ff; font-size:9px; }
+.workspace-clean .page-chip-list { display:flex; flex-wrap:wrap; gap:6px; }
+.workspace-clean .page-chip-list span { padding:5px 7px; border:1px solid rgba(104,124,226,.2); border-radius:999px; background:rgba(14,27,60,.72); color:rgba(231,236,255,.7); font-size:8px; }
+.workspace-clean .agent-demo-composer { display:flex; min-height:42px; align-items:center; justify-content:space-between; margin:auto 10px 10px; padding:0 8px 0 11px; border:1px solid rgba(94,120,230,.22); border-radius:9px; color:rgba(231,236,255,.35); font-size:8px; text-decoration:none; }
+.workspace-clean .agent-demo-composer b { display:grid; width:29px; height:29px; place-items:center; border-radius:7px; background:linear-gradient(145deg,#24b8ff,#7964ff); color:#fff; font-size:12px; }
+.workspace-clean .deploy-button { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+.workspace-clean a { pointer-events:auto; position:relative; z-index:4; }
+
+@media (max-width:900px){
+  .marketing-home .site-nav{height:auto;min-height:78px;grid-template-columns:1fr auto;grid-template-areas:"brand builder" "links links";gap:8px 12px;padding:12px 18px 10px;}
+  .marketing-home .site-brand{grid-area:brand;}
+  .marketing-home .nav-actions{grid-area:builder;}
+  .marketing-home .nav-links{grid-area:links;display:flex!important;width:100%;justify-content:flex-start;gap:18px;}
+  .marketing-home .nav-links a{display:inline-flex!important;padding:5px 0 8px;font-size:12px;pointer-events:auto;}
+  .marketing-home .nav-links a::after{bottom:2px;}
+  .marketing-home .sign-in-link{display:inline-flex!important;pointer-events:auto;}
+  .marketing-home .nav-cta,.marketing-home .site-brand{pointer-events:auto;}
+}
+
+@media (max-width:640px){
+  .marketing-home .site-nav{position:relative;z-index:30;min-height:104px;grid-template-columns:1fr auto;grid-template-areas:"brand builder" "links links";padding:12px 16px 10px;}
+  .marketing-home .site-brand{font-size:17px;}
+  .marketing-home .site-brand .brand-mark{width:31px;height:31px;}
+  .marketing-home .nav-actions{gap:8px;}
+  .marketing-home .sign-in-link{font-size:11px;}
+  .marketing-home .nav-cta{min-height:36px;padding:8px 10px;font-size:11px;white-space:nowrap;}
+  .marketing-home .nav-links{justify-content:space-between;gap:12px;}
+  .marketing-home .nav-links a{flex:1 1 0;text-align:center;justify-content:center;}
+  .workspace-shell.workspace-clean{width:100%;max-width:100%;transform:none!important;overflow:visible;}
+  .workspace-clean .workspace-toolbar{min-height:54px;padding:0 10px;}
+  .workspace-clean .environment{display:none;}
+  .workspace-clean .toolbar-actions{gap:6px;}
+  .workspace-clean .deploy-button{min-height:31px;padding:0 9px;}
+  .workspace-clean .workspace-grid{display:grid;grid-template-columns:1fr;height:auto;}
+  .workspace-clean .workspace-sidebar-demo,.workspace-clean .agent-demo-panel,.workspace-clean .preview-panel{min-height:auto;border-right:0;border-bottom:1px solid var(--hairline);}
+  .workspace-clean .workspace-sidebar-demo{padding:10px;}
+  .workspace-clean .sidebar-demo-link{min-height:38px;font-size:12px;}
+  .workspace-clean .sidebar-demo-new{margin-top:10px;}
+  .workspace-clean .agent-demo-body{overflow:visible;}
+  .workspace-clean .preview-panel{min-height:430px;}
+  .workspace-clean .app-preview{min-height:360px;}
+  .workspace-clean .pages-inventory{margin-bottom:8px;}
+}
