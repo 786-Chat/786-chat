@@ -6,11 +6,26 @@ export type BuilderDevice =
   | "laptop"
   | "tablet"
   | "ipadPro"
+  | "ipadAir"
+  | "ipadMini"
   | "mobile"
+  | "iphone16ProMax"
+  | "iphone16Pro"
+  | "iphone16"
+  | "iphone15ProMax"
   | "iphone15"
+  | "iphone14"
+  | "iphone13"
   | "iphoneSE"
+  | "android"
+  | "pixel9Pro"
+  | "pixel9"
   | "pixel8"
+  | "galaxyS25Ultra"
+  | "galaxyS25"
   | "galaxyS24"
+  | "galaxyA55"
+  | "onePlus12"
   | "custom"
 
 export type BuilderMessage = {
@@ -158,10 +173,25 @@ export const BUILDER_DEVICES: Record<
   laptop: { label: "Laptop · 1366 × 768", width: 1366, height: 768 },
   tablet: { label: "Tablet · 768 × 1024", width: 768, height: 1024 },
   ipadPro: { label: "iPad Pro 11 · 834 × 1194", width: 834, height: 1194 },
+  ipadAir: { label: "iPad Air · 820 × 1180", width: 820, height: 1180 },
+  ipadMini: { label: "iPad mini · 744 × 1133", width: 744, height: 1133 },
   mobile: { label: "Mobile · 393 × 852", width: 393, height: 852 },
+  iphone16ProMax: { label: "iPhone 16 Pro Max · 440 × 956", width: 440, height: 956 },
+  iphone16Pro: { label: "iPhone 16 Pro · 402 × 874", width: 402, height: 874 },
+  iphone16: { label: "iPhone 16 · 393 × 852", width: 393, height: 852 },
+  iphone15ProMax: { label: "iPhone 15 Pro Max · 430 × 932", width: 430, height: 932 },
   iphone15: { label: "iPhone 15 Pro · 393 × 852", width: 393, height: 852 },
+  iphone14: { label: "iPhone 14 · 390 × 844", width: 390, height: 844 },
+  iphone13: { label: "iPhone 13 · 390 × 844", width: 390, height: 844 },
   iphoneSE: { label: "iPhone SE · 375 × 667", width: 375, height: 667 },
+  android: { label: "Android · 360 × 800", width: 360, height: 800 },
+  pixel9Pro: { label: "Google Pixel 9 Pro · 412 × 915", width: 412, height: 915 },
+  pixel9: { label: "Google Pixel 9 · 412 × 915", width: 412, height: 915 },
   pixel8: { label: "Google Pixel 8 · 412 × 915", width: 412, height: 915 },
+  galaxyS25Ultra: { label: "Galaxy S25 Ultra · 412 × 915", width: 412, height: 915 },
+  galaxyS25: { label: "Galaxy S25 · 360 × 780", width: 360, height: 780 },
   galaxyS24: { label: "Galaxy S24 · 360 × 780", width: 360, height: 780 },
+  galaxyA55: { label: "Galaxy A55 · 412 × 915", width: 412, height: 915 },
+  onePlus12: { label: "OnePlus 12 · 412 × 915", width: 412, height: 915 },
   custom: { label: "Custom size", width: 960, height: 720 },
 }
