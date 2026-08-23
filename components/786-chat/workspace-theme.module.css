@@ -88,9 +88,21 @@
 }
 
 .previewPanel {
+  min-width: 0;
   background: var(--preview-bg) !important;
   border-color: var(--preview-border) !important;
   box-shadow: 0 20px 65px rgba(2, 6, 23, 0.38), inset 0 1px rgba(255, 255, 255, 0.035);
+  overscroll-behavior: contain;
+}
+
+/* Device previews stay top-aligned, centred, touch-scrollable and clipped to the selected viewport. */
+.previewPanel :global(iframe[title$="compiled preview"]) {
+  display: block;
+  max-width: 100%;
+  background: #fff;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .codePanel {
