@@ -83,7 +83,6 @@ export default function Home() {
           <a href="#home">Home</a>
           <a href="#features">Features</a>
           <a href="#about">About</a>
-          <Link href="/support">Support</Link>
         </div>
 
         <div className="one-nav-actions">
@@ -181,7 +180,6 @@ export default function Home() {
         <div className="one-footer-actions">
           <Link className="one-button primary" href="/786.chat">Open builder <ArrowIcon /></Link>
           <Link className="one-button" href="/login">Sign in</Link>
-          <Link className="one-button" href="/support">Support</Link>
         </div>
         <small>786.Chat · AI application builder</small>
       </footer>
