@@ -27,6 +27,7 @@
 .workspace-clean .agent-demo-composer b { display:grid; width:29px; height:29px; place-items:center; border-radius:7px; background:linear-gradient(145deg,#24b8ff,#7964ff); color:#fff; font-size:12px; }
 .workspace-clean .deploy-button { display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
 .workspace-clean a { pointer-events:auto; position:relative; z-index:4; }
+.marketing-home .site-nav a { touch-action:manipulation; -webkit-tap-highlight-color:rgba(75,174,255,.22); }
 
 @media (max-width:900px){
   .marketing-home .site-nav{height:auto;min-height:78px;grid-template-columns:1fr auto;grid-template-areas:"brand builder" "links links";gap:8px 12px;padding:12px 18px 10px;}
@@ -40,26 +41,139 @@
 }
 
 @media (max-width:640px){
-  .marketing-home .site-nav{position:relative;z-index:30;min-height:104px;grid-template-columns:1fr auto;grid-template-areas:"brand builder" "links links";padding:12px 16px 10px;}
-  .marketing-home .site-brand{font-size:17px;}
+  .marketing-home .site-nav{
+    position:relative;
+    z-index:40;
+    min-height:0;
+    grid-template-columns:1fr;
+    grid-template-areas:"brand" "actions" "links";
+    gap:9px;
+    padding:12px 16px 12px;
+  }
+  .marketing-home .site-nav::after{right:16px;left:16px;}
+  .marketing-home .site-brand{
+    grid-area:brand;
+    min-height:42px;
+    justify-self:start;
+    font-size:17px;
+    pointer-events:auto;
+  }
   .marketing-home .site-brand .brand-mark{width:31px;height:31px;}
-  .marketing-home .nav-actions{gap:8px;}
-  .marketing-home .sign-in-link{font-size:11px;}
-  .marketing-home .nav-cta{min-height:36px;padding:8px 10px;font-size:11px;white-space:nowrap;}
-  .marketing-home .nav-links{justify-content:space-between;gap:12px;}
-  .marketing-home .nav-links a{flex:1 1 0;text-align:center;justify-content:center;}
-  .workspace-shell.workspace-clean{width:100%;max-width:100%;transform:none!important;overflow:visible;}
+  .marketing-home .nav-actions{
+    grid-area:actions;
+    position:relative;
+    z-index:42;
+    display:grid!important;
+    width:100%;
+    grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
+    gap:9px;
+    justify-self:stretch;
+  }
+  .marketing-home .sign-in-link,
+  .marketing-home .nav-cta{
+    display:inline-flex!important;
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    align-items:center;
+    justify-content:center;
+    border:1px solid rgba(91,127,255,.32);
+    border-radius:9px;
+    background:rgba(5,12,37,.58);
+    font-size:12px;
+    font-weight:650;
+    pointer-events:auto!important;
+    touch-action:manipulation;
+  }
+  .marketing-home .nav-cta{padding:8px 10px;white-space:nowrap;}
+  .marketing-home .nav-links{
+    grid-area:links;
+    position:relative;
+    z-index:42;
+    display:grid!important;
+    width:100%;
+    grid-template-columns:1fr 1fr;
+    gap:9px;
+  }
+  .marketing-home .nav-links a{
+    display:flex!important;
+    min-height:44px;
+    align-items:center;
+    justify-content:center;
+    padding:0 10px;
+    border:1px solid rgba(91,127,255,.2);
+    border-radius:9px;
+    background:rgba(7,14,42,.4);
+    text-align:center;
+    pointer-events:auto!important;
+    touch-action:manipulation;
+  }
+  .marketing-home .nav-links a::after{right:24%;bottom:6px;left:24%;}
+
+  .workspace-shell.workspace-clean{
+    width:100%;
+    max-width:100%;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    transform:none!important;
+    overflow:visible!important;
+    overscroll-behavior:auto;
+    touch-action:pan-y;
+  }
   .workspace-clean .workspace-toolbar{min-height:54px;padding:0 10px;}
   .workspace-clean .environment{display:none;}
   .workspace-clean .toolbar-actions{gap:6px;}
-  .workspace-clean .deploy-button{min-height:31px;padding:0 9px;}
-  .workspace-clean .workspace-grid{display:grid;grid-template-columns:1fr;height:auto;}
-  .workspace-clean .workspace-sidebar-demo,.workspace-clean .agent-demo-panel,.workspace-clean .preview-panel{min-height:auto;border-right:0;border-bottom:1px solid var(--hairline);}
-  .workspace-clean .workspace-sidebar-demo{padding:10px;}
-  .workspace-clean .sidebar-demo-link{min-height:38px;font-size:12px;}
-  .workspace-clean .sidebar-demo-new{margin-top:10px;}
-  .workspace-clean .agent-demo-body{overflow:visible;}
-  .workspace-clean .preview-panel{min-height:430px;}
-  .workspace-clean .app-preview{min-height:360px;}
+  .workspace-clean .deploy-button{min-height:34px;padding:0 10px;touch-action:manipulation;}
+  .workspace-clean .workspace-grid{
+    display:flex!important;
+    width:100%;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    flex-direction:column;
+    align-items:stretch;
+    overflow:visible!important;
+    overscroll-behavior:auto;
+  }
+  .workspace-clean .workspace-sidebar-demo,
+  .workspace-clean .agent-demo-panel,
+  .workspace-clean .preview-panel{
+    position:relative;
+    flex:0 0 auto!important;
+    align-self:stretch;
+    width:100%;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    overflow:visible!important;
+    border-right:0;
+    border-bottom:1px solid var(--hairline);
+    touch-action:pan-y;
+  }
+  .workspace-clean .workspace-sidebar-demo{
+    display:flex!important;
+    height:max-content!important;
+    padding:10px;
+  }
+  .workspace-clean .sidebar-demo-link{min-height:42px;font-size:12px;touch-action:manipulation;}
+  .workspace-clean .sidebar-demo-new{margin-top:10px;min-height:52px;touch-action:manipulation;}
+  .workspace-clean .agent-demo-body{flex:0 0 auto!important;overflow:visible!important;}
+  .workspace-clean .agent-demo-composer{margin:0 10px 10px;touch-action:manipulation;}
+  .workspace-clean .preview-panel{min-height:0!important;}
+  .workspace-clean .app-preview{
+    height:auto!important;
+    min-height:360px;
+    max-height:none!important;
+    overflow:hidden;
+    overscroll-behavior:auto;
+  }
   .workspace-clean .pages-inventory{margin-bottom:8px;}
+}
+
+@media (max-width:390px){
+  .marketing-home .site-nav{padding-right:12px;padding-left:12px;}
+  .marketing-home .nav-actions{grid-template-columns:1fr;}
+  .marketing-home .sign-in-link,.marketing-home .nav-cta{min-height:42px;}
+  .marketing-home .nav-links a{min-height:42px;}
 }
