@@ -35,7 +35,18 @@ export async function PATCH(request: Request, { params }: Context) {
   if (!project) return NextResponse.json({ error: "Project not found." }, { status: 404 })
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const state = normalizeVisualEditorState(body.state)
+  const incomingState = body.state && typeof body.state === "object"
+    ? body.state as Record<string, unknown>
+    : {}
+  const existingState = normalizeVisualEditorState(project.metadata?.visual_editor)
+
+  // Older builder sessions may save only the original section/style fields. Merge
+  // with the persisted state first so Studio text blocks/elements are never lost
+  // when a native visual edit is made from a stale browser tab.
+  const state = normalizeVisualEditorState({
+    ...existingState,
+    ...incomingState,
+  })
   const files = injectVisualEditorFiles(project.files, state)
   const metadata = { ...(project.metadata || {}), visual_editor: state }
   const validation = validatePersistedGeneration(metadata, files)
