@@ -36,6 +36,7 @@ export type BuilderProjectSummary = {
   id: string
   title: string
   description: string
+  created_at: string
   updated_at: string
   file_count: number
   message_count: number
