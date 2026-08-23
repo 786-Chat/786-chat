@@ -50,9 +50,15 @@
   box-shadow: 16px 0 55px rgba(2, 6, 23, 0.24), inset -1px 0 rgba(255, 255, 255, 0.025);
 }
 
-/* Keep advanced integrations and help docs out of the customer-facing sidebar. */
+/* Customer navigation: Overview, Projects, Agent Flow, Settings, Help & Docs only. */
+.sidebar nav > div:nth-child(4),
+.sidebar nav > div:nth-child(5),
+.sidebar nav > div:nth-child(6),
 .sidebar nav > div:nth-child(7),
-.sidebar nav > button:last-of-type {
+.sidebar nav > div:nth-child(8),
+.sidebar nav > button:first-of-type,
+.sidebar nav > p,
+.sidebar nav > div:nth-child(3) > p {
   display: none !important;
 }
 
@@ -109,8 +115,13 @@
   box-shadow: 24px 0 80px rgba(0, 0, 0, 0.68);
 }
 
+.mobileDrawer nav > button:nth-of-type(4),
+.mobileDrawer nav > button:nth-of-type(5),
+.mobileDrawer nav > button:nth-of-type(6),
 .mobileDrawer nav > button:nth-of-type(7),
-.mobileDrawer nav > button:last-of-type {
+.mobileDrawer nav > button:nth-of-type(8),
+.mobileDrawer nav > button:nth-of-type(10),
+.mobileDrawer nav > p {
   display: none !important;
 }
 
