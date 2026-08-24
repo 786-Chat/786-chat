@@ -47,6 +47,14 @@ test("deploy UI exposes path, subdomain and customer-domain choices", async () =
   assert.match(source, /SSL\/HTTPS is free/)
 })
 
+test("adding another production address reuses the current release instead of redeploying", async () => {
+  const source = await read("app/api/786-chat/projects/[id]/deploy/route.ts")
+  assert.match(source, /const currentDeployment =\s*\n\s*action === "deploy" \? await getProjectDeployment/)
+  assert.match(source, /action === "deploy" && !currentDeployment/)
+  assert.match(source, /const deployment =\s*\n\s*currentDeployment \|\|/)
+  assert.match(source, /action: "redeploy"/)
+})
+
 test("custom host requests stay on the customer hostname and proxy the generated runtime", async () => {
   const middleware = await read("middleware.ts")
   const route = await read("app/customer-hosts/[hostname]/[[...path]]/route.ts")
