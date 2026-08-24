@@ -54,5 +54,8 @@ test("custom host requests use a routable App Router hostname resolver", async (
   assert.match(middleware, /customer-hosts/)
   assert.doesNotMatch(middleware, /_sites/)
   assert.match(route, /getLiveDeploymentByHostname/)
+  assert.match(route, /deployment\.runtime_url/)
+  assert.match(route, /NextResponse\.redirect\(runtime, 307\)/)
+  assert.match(route, /path\.join\("\/"\)/)
   assert.match(publishing, /ssl_status = 'active'/)
 })
