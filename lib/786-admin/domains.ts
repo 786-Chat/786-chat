@@ -80,6 +80,30 @@ function stateColumns(state: VercelDomainState) {
   } as const
 }
 
+function canBePrimary(domain: AdminProjectDomain) {
+  if (domain.address_type === "path") return domain.status === "active"
+  return domain.status === "active" && domain.dns_status === "verified" && domain.ssl_status === "active"
+}
+
+async function ownedProjectDomain(input: {
+  domainId: string
+  projectId: string
+  ownerEmail: string
+}) {
+  const rows = (await sql`
+    SELECT d.*
+    FROM admin_project_domains d
+    INNER JOIN admin_projects p ON p.id = d.project_id
+    WHERE d.id = ${input.domainId}
+      AND d.project_id = ${input.projectId}
+      AND p.owner_email = ${input.ownerEmail.toLowerCase().trim()}
+      AND d.status != 'removed'
+    LIMIT 1
+  `) as unknown as AdminProjectDomain[]
+  if (!rows[0]) throw new Error("Domain not found.")
+  return rows[0]
+}
+
 async function assertHostnameAvailable(hostname: string, projectId: string) {
   const rows = (await sql`
     SELECT project_id
@@ -214,18 +238,7 @@ export async function refreshProjectDomain(input: {
   projectId: string
   ownerEmail: string
 }) {
-  const current = (await sql`
-    SELECT d.*
-    FROM admin_project_domains d
-    INNER JOIN admin_projects p ON p.id = d.project_id
-    WHERE d.id = ${input.domainId}
-      AND d.project_id = ${input.projectId}
-      AND p.owner_email = ${input.ownerEmail.toLowerCase().trim()}
-      AND d.status != 'removed'
-    LIMIT 1
-  `) as unknown as AdminProjectDomain[]
-  const domain = current[0]
-  if (!domain) throw new Error("Domain not found.")
+  const domain = await ownedProjectDomain(input)
   if (domain.address_type === "path") return domain
 
   const providerState = await getVercelDomainState(domain.hostname!)
@@ -246,29 +259,83 @@ export async function refreshProjectDomain(input: {
   return rows[0]
 }
 
+export async function setPrimaryProjectDomain(input: {
+  domainId: string
+  projectId: string
+  ownerEmail: string
+}) {
+  const domain = await ownedProjectDomain(input)
+  if (!canBePrimary(domain)) {
+    throw new Error("This domain must be active before it can be primary.")
+  }
+
+  const ownerEmail = input.ownerEmail.toLowerCase().trim()
+  const results = await transaction<AdminProjectDomain>([
+    sql`
+      UPDATE admin_project_domains
+      SET is_primary = FALSE, updated_at = NOW()
+      WHERE project_id = ${input.projectId}
+        AND owner_email = ${ownerEmail}
+        AND status != 'removed'
+    `,
+    sql`
+      UPDATE admin_project_domains
+      SET is_primary = TRUE, updated_at = NOW()
+      WHERE id = ${domain.id}
+        AND project_id = ${input.projectId}
+        AND owner_email = ${ownerEmail}
+        AND status != 'removed'
+      RETURNING *
+    `,
+  ])
+  const rows = results[1] as unknown as AdminProjectDomain[]
+  if (!rows[0]) throw new Error("Domain not found.")
+  return rows[0]
+}
+
 export async function removeProjectDomain(input: {
   domainId: string
   projectId: string
   ownerEmail: string
 }) {
-  const current = (await sql`
-    SELECT d.*
-    FROM admin_project_domains d
-    INNER JOIN admin_projects p ON p.id = d.project_id
-    WHERE d.id = ${input.domainId}
-      AND d.project_id = ${input.projectId}
-      AND p.owner_email = ${input.ownerEmail.toLowerCase().trim()}
-      AND d.status != 'removed'
-    LIMIT 1
-  `) as unknown as AdminProjectDomain[]
-  const domain = current[0]
-  if (!domain) throw new Error("Domain not found.")
+  const domain = await ownedProjectDomain(input)
+  const domains = await listProjectDomains(input.projectId, input.ownerEmail)
+  const remaining = domains.filter((item) => item.id !== domain.id)
+  if (!remaining.length) {
+    throw new Error("Keep at least one deployment address connected to this project.")
+  }
+
+  const replacement = domain.is_primary
+    ? remaining.find((item) => canBePrimary(item))
+    : undefined
+  if (domain.is_primary && !replacement) {
+    throw new Error("Choose another active domain as primary before removing this address.")
+  }
+
   if (domain.hostname && domain.provider === "vercel") {
     await removeDomainFromVercel(domain.hostname)
   }
-  await sql`
-    UPDATE admin_project_domains
-    SET status = 'removed', is_primary = FALSE, updated_at = NOW()
-    WHERE id = ${domain.id}
-  `
+
+  const ownerEmail = input.ownerEmail.toLowerCase().trim()
+  const queries = [
+    sql`
+      UPDATE admin_project_domains
+      SET status = 'removed', is_primary = FALSE, updated_at = NOW()
+      WHERE id = ${domain.id}
+        AND project_id = ${input.projectId}
+        AND owner_email = ${ownerEmail}
+    `,
+  ]
+  if (replacement) {
+    queries.push(sql`
+      UPDATE admin_project_domains
+      SET is_primary = TRUE, updated_at = NOW()
+      WHERE id = ${replacement.id}
+        AND project_id = ${input.projectId}
+        AND owner_email = ${ownerEmail}
+        AND status != 'removed'
+    `)
+  }
+  await transaction<AdminProjectDomain>(queries)
+  return replacement || null
 }

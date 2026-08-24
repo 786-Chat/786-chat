@@ -9,6 +9,8 @@ import {
   normalizeHostname,
   normalizeSubdomain,
   refreshProjectDomain,
+  removeProjectDomain,
+  setPrimaryProjectDomain,
   type AdminDomainAddressType,
   type AdminProjectDomain,
 } from "@/lib/786-admin/domains";
@@ -196,6 +198,46 @@ export async function POST(request: Request, { params }: Context) {
       });
     }
 
+    if (action === "set-primary-domain") {
+      const domainId = String(body.domainId || "").trim();
+      if (!domainId) {
+        return NextResponse.json(
+          { error: "Choose a domain to make primary." },
+          { status: 400 },
+        );
+      }
+      const domain = await setPrimaryProjectDomain({
+        domainId,
+        projectId: id,
+        ownerEmail,
+      });
+      return NextResponse.json({
+        success: true,
+        ...(await lifecycle(id, ownerEmail)),
+        domain: publicDomain(domain),
+      });
+    }
+
+    if (action === "remove-domain") {
+      const domainId = String(body.domainId || "").trim();
+      if (!domainId) {
+        return NextResponse.json(
+          { error: "Choose a domain to remove." },
+          { status: 400 },
+        );
+      }
+      const promoted = await removeProjectDomain({
+        domainId,
+        projectId: id,
+        ownerEmail,
+      });
+      return NextResponse.json({
+        success: true,
+        ...(await lifecycle(id, ownerEmail)),
+        domain: promoted ? publicDomain(promoted) : null,
+      });
+    }
+
     if (action === "rollback") {
       const version = Number(body.version);
       if (!Number.isInteger(version) || version < 1) {
@@ -334,7 +376,10 @@ export async function POST(request: Request, { params }: Context) {
     return NextResponse.json(
       { error: message },
       {
-        status: message.includes("passed build")
+        status: message.includes("passed build") ||
+          message.includes("must be active") ||
+          message.includes("Keep at least one") ||
+          message.includes("Choose another active")
           ? 409
           : message.includes("not found")
             ? 404
