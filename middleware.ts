@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
   const isInternalAsset =
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/_sites/") ||
+    pathname.startsWith("/customer-hosts/") ||
     pathname === "/favicon.ico" ||
     /\.[a-z0-9]{2,8}$/i.test(pathname)
   const isPlatformHost =
@@ -57,7 +57,7 @@ export async function middleware(request: NextRequest) {
 
   if (!isInternalAsset && !isPlatformHost) {
     const target = request.nextUrl.clone()
-    target.pathname = `/_sites/${encodeURIComponent(hostname)}${pathname === "/" ? "" : pathname}`
+    target.pathname = `/customer-hosts/${encodeURIComponent(hostname)}${pathname === "/" ? "" : pathname}`
     return NextResponse.rewrite(target)
   }
 
