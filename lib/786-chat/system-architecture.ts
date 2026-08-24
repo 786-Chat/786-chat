@@ -66,6 +66,12 @@ export function systemArchitectureBrief(
     plan.tenantIsolation
       ? "Tenant isolation: mandatory company ownership checks in every server query and mutation"
       : "Tenant isolation: not requested",
+    ...(plan.tenantIsolation
+      ? [
+          "Pre-auth setup/status routes must resolve tenant scope from trusted server-side application context before any database query; never accept tenantId/companyId/ownerId from the browser as authority.",
+          "First-admin setup must atomically check and create inside that same tenant, return only minimal setup status before authentication, and permanently close first-admin creation once a manager exists.",
+        ]
+      : []),
     plan.migrationsRequired
       ? "Database migration: emit Neon/PostgreSQL SQL with keys, foreign keys, tenant indexes, timestamps and audit storage"
       : "Database migration: not requested",
