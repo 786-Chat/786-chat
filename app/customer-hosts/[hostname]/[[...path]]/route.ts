@@ -4,6 +4,19 @@ type Ctx = { params: Promise<{ hostname: string; path?: string[] }> }
 
 type StreamingRequestInit = RequestInit & { duplex?: "half" }
 
+const NON_INDEXABLE_SEGMENTS = new Set([
+  "api",
+  "admin",
+  "dashboard",
+  "login",
+  "register",
+  "verify-email",
+  "forgot-password",
+  "reset-password",
+  "account",
+  "settings",
+])
+
 function notFound() {
   return new Response(
     "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Domain unavailable</title></head><body style=\"margin:0;display:grid;min-height:100vh;place-items:center;background:#070b12;color:#e2e8f0;font-family:system-ui\"><main style=\"text-align:center\"><h1>Domain unavailable</h1><p>DNS, SSL or the production deployment is not active yet.</p></main></body></html>",
@@ -16,6 +29,93 @@ function notFound() {
       },
     },
   )
+}
+
+function canonicalUrl(customerHostname: string, path: string[]) {
+  const pathname = path.length
+    ? `/${path.map((segment) => encodeURIComponent(segment)).join("/")}`
+    : "/"
+  return `https://${customerHostname}${pathname}`
+}
+
+function publicStaticRoutes(files: Record<string, string>) {
+  const routes = new Set<string>(["/"])
+
+  for (const filePath of Object.keys(files)) {
+    const normalized = filePath.replace(/^src\//, "")
+    const match = normalized.match(/^app\/(.*\/)?page\.(?:tsx?|jsx?)$/)
+    if (!match) continue
+
+    const raw = (match[1] ?? "").replace(/\/$/, "")
+    if (!raw) continue
+
+    const segments = raw.split("/").filter(Boolean)
+    if (
+      segments.some(
+        (segment) =>
+          segment.startsWith("[") ||
+          segment.startsWith("@") ||
+          segment.startsWith("_") ||
+          NON_INDEXABLE_SEGMENTS.has(segment.toLowerCase()),
+      )
+    ) {
+      continue
+    }
+
+    const visibleSegments = segments.filter(
+      (segment) => !(segment.startsWith("(") && segment.endsWith(")")),
+    )
+    const route = visibleSegments.length ? `/${visibleSegments.join("/")}` : "/"
+    routes.add(route)
+  }
+
+  return [...routes].sort((a, b) => {
+    if (a === "/") return -1
+    if (b === "/") return 1
+    return a.localeCompare(b)
+  })
+}
+
+function robotsResponse(request: Request, customerHostname: string) {
+  const body = `User-agent: *\nAllow: /\nSitemap: https://${customerHostname}/sitemap.xml\n`
+  return new Response(request.method === "HEAD" ? null : body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "public, max-age=0, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+    },
+  })
+}
+
+function escapeXml(value: string) {
+  return value.replace(/[<>&'\"]/g, (char) => {
+    if (char === "<") return "&lt;"
+    if (char === ">") return "&gt;"
+    if (char === "&") return "&amp;"
+    if (char === "'") return "&apos;"
+    return "&quot;"
+  })
+}
+
+function sitemapResponse(
+  request: Request,
+  customerHostname: string,
+  files: Record<string, string>,
+) {
+  const urls = publicStaticRoutes(files)
+    .map((route) => `  <url><loc>${escapeXml(`https://${customerHostname}${route}`)}</loc></url>`)
+    .join("\n")
+  const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
+
+  return new Response(request.method === "HEAD" ? null : body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Cache-Control": "public, max-age=0, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+    },
+  })
 }
 
 function runtimeTarget(runtimeUrl: string, path: string[], requestUrl: string) {
@@ -42,7 +142,13 @@ function upstreamHeaders(request: Request, customerHostname: string) {
   return headers
 }
 
-function downstreamHeaders(upstream: Response, runtime: URL, request: Request) {
+function downstreamHeaders(
+  upstream: Response,
+  runtime: URL,
+  request: Request,
+  customerHostname: string,
+  path: string[],
+) {
   const headers = new Headers(upstream.headers)
   headers.delete("content-length")
   headers.delete("content-encoding")
@@ -55,6 +161,11 @@ function downstreamHeaders(upstream: Response, runtime: URL, request: Request) {
   // being indexed. The unavailable-domain response above intentionally keeps its
   // own noindex header.
   headers.delete("x-robots-tag")
+
+  const contentType = headers.get("content-type")?.toLowerCase() ?? ""
+  if (upstream.ok && contentType.includes("text/html")) {
+    headers.append("Link", `<${canonicalUrl(customerHostname, path)}>; rel="canonical"`)
+  }
 
   const location = upstream.headers.get("location")
   if (location) {
@@ -92,7 +203,7 @@ async function proxyRuntime(
   }
 
   const upstream = await fetch(runtime, init)
-  const headers = downstreamHeaders(upstream, runtime, request)
+  const headers = downstreamHeaders(upstream, runtime, request, customerHostname, path)
 
   return new Response(request.method === "HEAD" ? null : upstream.body, {
     status: upstream.status,
@@ -106,6 +217,14 @@ async function handle(request: Request, { params }: Ctx) {
   const normalized = decodeURIComponent(hostname).toLowerCase().trim()
   const deployment = await getLiveDeploymentByHostname(normalized)
   if (!deployment) return notFound()
+
+  if (request.method === "GET" || request.method === "HEAD") {
+    const seoPath = path.join("/").toLowerCase()
+    if (seoPath === "robots.txt") return robotsResponse(request, normalized)
+    if (seoPath === "sitemap.xml") {
+      return sitemapResponse(request, normalized, deployment.files)
+    }
+  }
 
   if (deployment.runtime_url) {
     return proxyRuntime(request, deployment.runtime_url, normalized, path)
@@ -122,6 +241,7 @@ async function handle(request: Request, { params }: Ctx) {
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-786-Project-Version": String(deployment.version),
       "X-786-Project-Name": deployment.title,
+      Link: `<${canonicalUrl(normalized, path)}>; rel="canonical"`,
     },
   })
 }
