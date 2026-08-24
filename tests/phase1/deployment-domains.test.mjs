@@ -67,6 +67,16 @@ test("adding another production address reuses the current release instead of re
   assert.match(source, /action: "redeploy"/)
 })
 
+test("live customer hosts can be indexed while unavailable domains remain noindex", async () => {
+  const route = await read("app/customer-hosts/[hostname]/[[...path]]/route.ts")
+  assert.match(route, /headers\.delete\("x-robots-tag"\)/)
+  assert.match(route, /"X-Robots-Tag": "noindex"/)
+  assert.ok(
+    route.indexOf('headers.delete("x-robots-tag")') > route.indexOf("function downstreamHeaders"),
+    "upstream noindex must be stripped only from live proxied customer responses",
+  )
+})
+
 test("custom host requests stay on the customer hostname and proxy the generated runtime", async () => {
   const middleware = await read("middleware.ts")
   const route = await read("app/customer-hosts/[hostname]/[[...path]]/route.ts")
