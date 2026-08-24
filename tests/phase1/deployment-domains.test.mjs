@@ -29,6 +29,16 @@ test("SSL becomes active only after DNS, ownership and HTTPS checks", async () =
   assert.match(domains, /state\.configured && state\.verified && state\.sslReady/)
 })
 
+test("786.Chat-owned subdomains use wildcard HTTPS instead of per-subdomain DNS provisioning", async () => {
+  const provider = await read("lib/786-admin/vercel-domains.ts")
+  assert.match(provider, /PLATFORM_DOMAIN = "786\.chat"/)
+  assert.match(provider, /isPlatformSubdomain/)
+  assert.match(provider, /platformSubdomainState/)
+  assert.match(provider, /providerDomainId: `\*\.\$\{PLATFORM_DOMAIN\}`/)
+  assert.match(provider, /if \(isPlatformSubdomain\(hostname\)\) return platformSubdomainState\(hostname\)/)
+  assert.match(provider, /if \(isPlatformSubdomain\(hostname\)\) return\n\n  const \{ project \} = configuration\(\)/)
+})
+
 test("deploy UI exposes path, subdomain and customer-domain choices", async () => {
   const source = await read("components/786-admin/admin-chat-publish-controller.tsx")
   assert.match(source, /786\.Chat project link/)
