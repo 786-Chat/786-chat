@@ -99,6 +99,7 @@ jobs:
           EMAIL_FROM: build@example.com
           APP_URL: https://example.com
           NEXT_PUBLIC_APP_URL: https://example.com
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_786_chat_isolated_build_placeholder
         run: |
           set -o pipefail
           LOG_FILE="$RUNNER_TEMP/build.log"
@@ -127,10 +128,13 @@ jobs:
           const logs = fs.existsSync(logsPath) ? fs.readFileSync(logsPath, 'utf8').slice(-900000) : ''
           const clean = logs.replace(/\u001b\[[0-9;]*m/g, '')
           const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-          const actionable = lines.find((line) => /error TS\d+:|Type error:|Failed to compile\.|Module not found:|Cannot find module|SyntaxError:|ReferenceError:|Error: /i.test(line))
+          const isActionable = (line) => /error TS\d+:|Type error:|Failed to compile\.|Module not found:|Cannot find module|SyntaxError:|ReferenceError:|Invalid environment variables|invalid route|Route .* has an invalid|Argument of type|Build error|Error occurred prerendering|Error: /i.test(line)
+          const actionable = lines.find(isActionable)
+          const lastActionable = [...lines].reverse().find(isActionable)
+          const tail = lines.slice(-12).join(' | ')
           const errorMessage = process.env.STATUS === 'passed'
             ? null
-            : (actionable || 'One or more isolated build commands failed.').slice(0, 2000)
+            : (lastActionable || actionable || tail || 'One or more isolated build commands failed.').slice(0, 2000)
           process.stdout.write(JSON.stringify({
             buildId: process.env.BUILD_ID,
             status: process.env.STATUS,
