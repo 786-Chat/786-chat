@@ -1,555 +1,260 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import { 
-  Users, 
-  Search, 
-  MoreVertical,
-  Mail,
+import { useEffect, useMemo, useState } from "react"
+import {
   Ban,
-  Trash2,
-  Crown,
+  CheckCircle2,
+  Clock3,
   Loader2,
-  CheckCircle,
-  Plus,
   RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
   UserCheck,
-  Shield
+  Users,
+  XCircle,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
 
-interface User {
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+
+type Customer = {
   id: string
   name: string
   email: string
   role: string | null
   plan: string | null
   email_verified: boolean
+  account_status: string
   created_at: string
   updated_at: string
-  subscription_status: string | null
-  messages_used: number | null
-  messages_limit: number | null
-  extra_credits: number | null
-  daily_messages_used: number | null
-  stripe_customer_id: string | null
-  current_period_end: string | null
-  free_messages_used: number | null
-  free_messages_limit: number | null
-  chat_count: number
-  message_count: number
+  chat_count: number | string
 }
 
-interface Stats {
-  total_users: number
-  paid_users: number
-  new_users_30d: number
-  new_users_7d: number
+type Stats = {
+  total_users: number | string
+  pending_users: number | string
+  active_users: number | string
+  verified_users: number | string
+  new_users_7d: number | string
 }
 
 const OWNER_EMAIL = "mujeeb@job4u.com"
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [planFilter, setPlanFilter] = useState<string>("all")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
-  
-  // Dialog states
-  const [addCreditsDialog, setAddCreditsDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
-  const [changePlanDialog, setChangePlanDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
-  const [creditsToAdd, setCreditsToAdd] = useState("100")
-  const [newPlan, setNewPlan] = useState("starter")
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState("")
+  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState("all")
+  const [error, setError] = useState("")
 
-  const fetchUsers = async () => {
-    setIsLoading(true)
+  async function loadCustomers() {
+    setLoading(true)
+    setError("")
     try {
-      const res = await fetch("/api/admin/users", { credentials: "include" })
-      if (res.ok) {
-        const data = await res.json()
-        setUsers(data.users || [])
-        setStats(data.stats || null)
-      }
-    } catch (error) {
-      console.error("Failed to fetch users:", error)
+      const response = await fetch("/api/admin/users", { credentials: "include", cache: "no-store" })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Could not load customers")
+      setCustomers(data.users || [])
+      setStats(data.stats || null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load customers")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchUsers()
+    loadCustomers()
   }, [])
 
-  const handleAction = async (userId: string, action: string, data?: Record<string, unknown>) => {
-    setActionLoading(userId + action)
+  async function updateCustomer(customer: Customer, action: "approve" | "reject" | "suspend") {
+    setActionLoading(`${customer.id}:${action}`)
+    setError("")
     try {
-      const res = await fetch("/api/admin/users", {
+      const response = await fetch("/api/admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ userId, action, data })
+        body: JSON.stringify({ userId: customer.id, action }),
       })
-      if (res.ok) {
-        fetchUsers()
-      }
-    } catch (error) {
-      console.error("Action failed:", error)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Could not update customer")
+      await loadCustomers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update customer")
     } finally {
-      setActionLoading(null)
+      setActionLoading("")
     }
   }
 
-  const handleDelete = async (userId: string) => {
-    setActionLoading(userId + "delete")
+  async function deleteCustomer(customer: Customer) {
+    if (!window.confirm(`Delete ${customer.name || customer.email}? This cannot be undone.`)) return
+    setActionLoading(`${customer.id}:delete`)
+    setError("")
     try {
-      const res = await fetch(`/api/admin/users?userId=${userId}`, {
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(customer.id)}`, {
         method: "DELETE",
-        credentials: "include"
+        credentials: "include",
       })
-      if (res.ok) {
-        setDeleteDialog({ open: false, user: null })
-        fetchUsers()
-      }
-    } catch (error) {
-      console.error("Delete failed:", error)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Could not delete customer")
+      await loadCustomers()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete customer")
     } finally {
-      setActionLoading(null)
+      setActionLoading("")
     }
   }
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = (user.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-                         (user.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-    const matchesPlan = planFilter === "all" || user.plan === planFilter
-    const matchesStatus = statusFilter === "all" || user.subscription_status === statusFilter
-    return matchesSearch && matchesPlan && matchesStatus
-  })
-
-  const getStatusColor = (status: string | null) => {
-    switch (status) {
-      case "active": return "bg-green-500/10 text-green-500"
-      case "suspended": return "bg-red-500/10 text-red-500"
-      case "canceled": return "bg-yellow-500/10 text-yellow-500"
-      case "trialing": return "bg-blue-500/10 text-blue-500"
-      default: return "bg-muted text-muted-foreground"
-    }
-  }
-
-  const getPlanColor = (plan: string | null) => {
-    switch (plan) {
-      case "pro": return "bg-primary/10 text-primary"
-      case "business": return "bg-purple-500/10 text-purple-500"
-      case "enterprise": return "bg-orange-500/10 text-orange-500"
-      case "basic": return "bg-cyan-500/10 text-cyan-500"
-      default: return "bg-muted text-muted-foreground"
-    }
-  }
-
-  const formatDate = (date: string | null) => {
-    if (!date) return "N/A"
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return customers.filter((customer) => {
+      const matchesSearch = !query || customer.name?.toLowerCase().includes(query) || customer.email.toLowerCase().includes(query)
+      const matchesFilter = filter === "all" || customer.account_status === filter
+      return matchesSearch && matchesFilter
     })
-  }
+  }, [customers, filter, search])
 
-  // Format the Messages column display
-  const formatMessages = (user: User) => {
-    // Owner gets "Unlimited"
-    if (user.email === OWNER_EMAIL) {
-      return <span className="font-medium text-primary">Unlimited</span>
-    }
-
-    // Normal customers: always show /10 as the limit
-    // free_messages_used from user_balances, default to 0 if null
-    const used = user.free_messages_used ?? 0
-
-    return (
-      <>
-        <span className="font-medium">{used}</span>
-        <span className="text-muted-foreground">/10</span>
-      </>
-    )
-  }
+  const pending = useMemo(() => customers.filter((customer) => customer.account_status === "pending"), [customers])
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">Manage registered users from database</p>
-        </div>
-        <Button onClick={fetchUsers} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </motion.div>
-
-      {/* Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 sm:grid-cols-4 gap-4"
-      >
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <p className="text-2xl font-bold">{stats?.total_users || 0}</p>
-            <p className="text-sm text-muted-foreground">Total Users</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <p className="text-2xl font-bold">{stats?.paid_users || 0}</p>
-            <p className="text-sm text-muted-foreground">Paid Users</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <p className="text-2xl font-bold">{stats?.new_users_7d || 0}</p>
-            <p className="text-sm text-muted-foreground">New (7 days)</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
-            <p className="text-2xl font-bold">{stats?.new_users_30d || 0}</p>
-            <p className="text-sm text-muted-foreground">New (30 days)</p>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="flex flex-col sm:flex-row gap-4"
-      >
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={planFilter} onValueChange={setPlanFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Plan" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Plans</SelectItem>
-            <SelectItem value="starter">Starter</SelectItem>
-            <SelectItem value="basic">Basic</SelectItem>
-            <SelectItem value="pro">Pro</SelectItem>
-            <SelectItem value="business">Business</SelectItem>
-            <SelectItem value="enterprise">Enterprise</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
-            <SelectItem value="canceled">Canceled</SelectItem>
-            <SelectItem value="trialing">Trialing</SelectItem>
-          </SelectContent>
-        </Select>
-      </motion.div>
-
-      {/* Users Table */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <Card className="bg-card border-border">
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Users className="w-12 h-12 mb-4 opacity-50" />
-                <p>No users found</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left p-4 font-medium text-muted-foreground">User</th>
-                      <th className="text-left p-4 font-medium text-muted-foreground">Plan</th>
-                      <th className="text-left p-4 font-medium text-muted-foreground">Status</th>
-                      <th className="text-left p-4 font-medium text-muted-foreground">Messages</th>
-                      <th className="text-left p-4 font-medium text-muted-foreground">Credits</th>
-                      <th className="text-left p-4 font-medium text-muted-foreground">Created</th>
-                      <th className="text-right p-4 font-medium text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-sm font-bold text-white">
-                              {user.name?.charAt(0) || "?"}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium">{user.name || "No name"}</p>
-                                {user.role === "admin" && (
-                                  <Shield className="w-4 h-4 text-red-500" />
-                                )}
-                                {user.email_verified && (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                )}
-                              </div>
-                              <p className="text-sm text-muted-foreground">{user.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-xs px-2 py-1 rounded-full capitalize ${getPlanColor(user.plan)}`}>
-                            {user.plan || "starter"}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`text-xs px-2 py-1 rounded-full capitalize ${getStatusColor(user.subscription_status)}`}>
-                            {user.subscription_status || "none"}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          {formatMessages(user)}
-                        </td>
-                        <td className="p-4">
-                          <span className="font-medium">{user.extra_credits || 0}</span>
-                        </td>
-                        <td className="p-4 text-sm text-muted-foreground">
-                          {formatDate(user.created_at)}
-                        </td>
-                        <td className="p-4 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => {
-                                setNewPlan(user.plan || "starter")
-                                setChangePlanDialog({ open: true, user })
-                              }}>
-                                <Crown className="w-4 h-4 mr-2" />
-                                Change Plan
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setAddCreditsDialog({ open: true, user })}>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Add Credits
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleAction(user.id, "reset_usage")}>
-                                <RefreshCw className="w-4 h-4 mr-2" />
-                                Reset Usage
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {user.subscription_status === "suspended" ? (
-                                <DropdownMenuItem onClick={() => handleAction(user.id, "activate")}>
-                                  <UserCheck className="w-4 h-4 mr-2" />
-                                  Activate User
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem 
-                                  className="text-orange-500"
-                                  onClick={() => handleAction(user.id, "suspend")}
-                                >
-                                  <Ban className="w-4 h-4 mr-2" />
-                                  Suspend User
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => setDeleteDialog({ open: true, user })}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete User
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Add Credits Dialog */}
-      <Dialog open={addCreditsDialog.open} onOpenChange={(open) => setAddCreditsDialog({ open, user: open ? addCreditsDialog.user : null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Credits</DialogTitle>
-            <DialogDescription>
-              Add extra message credits to {addCreditsDialog.user?.name || "user"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="credits">Credits to add</Label>
-              <Input
-                id="credits"
-                type="number"
-                value={creditsToAdd}
-                onChange={(e) => setCreditsToAdd(e.target.value)}
-                placeholder="100"
-              />
+    <div className="mx-auto max-w-[1500px] space-y-7">
+      <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-cyan-500/10 via-blue-500/[.05] to-violet-600/10 p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/5 px-3 py-1.5 text-xs font-bold uppercase tracking-[.14em] text-cyan-200">
+              <ShieldCheck className="h-4 w-4" /> Customer access control
             </div>
+            <h1 className="text-3xl font-black tracking-[-.04em] sm:text-4xl">Customer approvals</h1>
+            <p className="mt-3 leading-7 text-slate-400">A new customer can register and verify their email, but they cannot open the 786.Chat builder until you press <strong className="text-white">Approve</strong>.</p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddCreditsDialog({ open: false, user: null })}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => {
-                if (addCreditsDialog.user) {
-                  handleAction(addCreditsDialog.user.id, "add_credits", { credits: parseInt(creditsToAdd) })
-                  setAddCreditsDialog({ open: false, user: null })
-                }
-              }}
-              disabled={actionLoading === addCreditsDialog.user?.id + "add_credits"}
-            >
-              {actionLoading === addCreditsDialog.user?.id + "add_credits" ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Add Credits
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Button variant="outline" onClick={loadCustomers} disabled={loading} className="border-white/15 bg-white/[.03]">
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
+      </section>
 
-      {/* Change Plan Dialog */}
-      <Dialog open={changePlanDialog.open} onOpenChange={(open) => setChangePlanDialog({ open, user: open ? changePlanDialog.user : null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change Plan</DialogTitle>
-            <DialogDescription>
-              Change subscription plan for {changePlanDialog.user?.name || "user"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="plan">Select Plan</Label>
-              <Select value={newPlan} onValueChange={setNewPlan}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="starter">Starter (Free)</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="business">Business</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
-                </SelectContent>
-              </Select>
+      {error && <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">{error}</div>}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat icon={Clock3} label="Waiting approval" value={Number(stats?.pending_users || 0)} tone="text-amber-300" />
+        <Stat icon={UserCheck} label="Active customers" value={Number(stats?.active_users || 0)} tone="text-emerald-300" />
+        <Stat icon={Users} label="Total accounts" value={Number(stats?.total_users || 0)} tone="text-cyan-300" />
+        <Stat icon={CheckCircle2} label="Verified emails" value={Number(stats?.verified_users || 0)} tone="text-violet-300" />
+      </section>
+
+      {pending.length > 0 && (
+        <Card className="border-amber-300/20 bg-amber-300/[.035] text-white">
+          <CardContent className="p-5 sm:p-6">
+            <div className="mb-4 flex items-center gap-2 text-amber-200"><Clock3 className="h-5 w-5" /><h2 className="text-lg font-bold">Needs your approval ({pending.length})</h2></div>
+            <div className="grid gap-3 xl:grid-cols-2">
+              {pending.map((customer) => <CustomerCard key={customer.id} customer={customer} actionLoading={actionLoading} updateCustomer={updateCustomer} deleteCustomer={deleteCustomer} />)}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setChangePlanDialog({ open: false, user: null })}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => {
-                if (changePlanDialog.user) {
-                  handleAction(changePlanDialog.user.id, "change_plan", { newPlan })
-                  setChangePlanDialog({ open: false, user: null })
-                }
-              }}
-              disabled={actionLoading === changePlanDialog.user?.id + "change_plan"}
-            >
-              {actionLoading === changePlanDialog.user?.id + "change_plan" ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Update Plan
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, user: open ? deleteDialog.user : null })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete {deleteDialog.user?.name || "this user"}? This action cannot be undone.
-              All user data including chats, messages, and subscriptions will be permanently deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, user: null })}>
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive"
-              onClick={() => {
-                if (deleteDialog.user) {
-                  handleDelete(deleteDialog.user.id)
-                }
-              }}
-              disabled={actionLoading === deleteDialog.user?.id + "delete"}
-            >
-              {actionLoading === deleteDialog.user?.id + "delete" ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Delete User
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <section className="rounded-[24px] border border-white/10 bg-white/[.02] p-4 sm:p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email…" className="h-11 border-white/10 bg-black/20 pl-9" />
+          </div>
+          <select value={filter} onChange={(event) => setFilter(event.target.value)} className="h-11 rounded-xl border border-white/10 bg-[#060a16] px-4 text-sm text-slate-300 outline-none">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </section>
+
+      {loading ? (
+        <div className="grid min-h-[260px] place-items-center"><Loader2 className="h-8 w-8 animate-spin text-cyan-300" /></div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-[24px] border border-dashed border-white/10 p-12 text-center text-slate-500">No matching customers.</div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {visible.map((customer) => <CustomerCard key={customer.id} customer={customer} actionLoading={actionLoading} updateCustomer={updateCustomer} deleteCustomer={deleteCustomer} />)}
+        </div>
+      )}
     </div>
   )
+}
+
+function CustomerCard({
+  customer,
+  actionLoading,
+  updateCustomer,
+  deleteCustomer,
+}: {
+  customer: Customer
+  actionLoading: string
+  updateCustomer: (customer: Customer, action: "approve" | "reject" | "suspend") => Promise<void>
+  deleteCustomer: (customer: Customer) => Promise<void>
+}) {
+  const owner = customer.email.toLowerCase() === OWNER_EMAIL
+  const busy = actionLoading.startsWith(`${customer.id}:`)
+  return (
+    <article className="rounded-[22px] border border-white/10 bg-[#070b18]/80 p-5 shadow-xl shadow-black/10">
+      <div className="flex items-start gap-4">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400/20 to-violet-500/20 text-lg font-black text-cyan-100">{customer.name?.charAt(0)?.toUpperCase() || "?"}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate font-bold">{customer.name || "Unnamed customer"}</h3>
+            {owner && <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-200">Owner</span>}
+            <StatusBadge status={customer.account_status} />
+          </div>
+          <p className="mt-1 truncate text-sm text-slate-500">{customer.email}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+        <Info label="Email" value={customer.email_verified ? "Verified" : "Not verified"} />
+        <Info label="Chats" value={String(Number(customer.chat_count || 0))} />
+        <Info label="Created" value={new Date(customer.created_at).toLocaleDateString("en-GB")} />
+      </div>
+
+      {!owner && (
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+          {customer.account_status !== "active" && (
+            <Button size="sm" disabled={busy} onClick={() => updateCustomer(customer, "approve")} className="bg-emerald-500 text-white hover:bg-emerald-400">
+              {actionLoading === `${customer.id}:approve` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />} Approve
+            </Button>
+          )}
+          {customer.account_status === "active" && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => updateCustomer(customer, "suspend")} className="border-amber-300/20 text-amber-200 hover:bg-amber-300/10">
+              <Ban className="mr-2 h-4 w-4" /> Suspend
+            </Button>
+          )}
+          {customer.account_status !== "rejected" && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => updateCustomer(customer, "reject")} className="border-rose-300/20 text-rose-200 hover:bg-rose-300/10">
+              <XCircle className="mr-2 h-4 w-4" /> Reject
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => deleteCustomer(customer)} className="ml-auto text-slate-500 hover:bg-rose-500/10 hover:text-rose-200">
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          </Button>
+        </div>
+      )}
+    </article>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles = status === "active" ? "bg-emerald-400/10 text-emerald-300" : status === "pending" ? "bg-amber-300/10 text-amber-200" : status === "suspended" ? "bg-orange-400/10 text-orange-300" : status === "rejected" ? "bg-rose-400/10 text-rose-300" : "bg-slate-400/10 text-slate-300"
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${styles}`}>{status || "unknown"}</span>
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-white/[.03] p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-600">{label}</p><p className="mt-1 truncate font-medium text-slate-300">{value}</p></div>
+}
+
+function Stat({ icon: Icon, label, value, tone }: { icon: typeof Users; label: string; value: number; tone: string }) {
+  return <Card className="border-white/10 bg-white/[.025] text-white"><CardContent className="p-5"><Icon className={`h-5 w-5 ${tone}`} /><p className="mt-5 text-3xl font-black">{value.toLocaleString()}</p><p className="mt-1 text-sm text-slate-500">{label}</p></CardContent></Card>
 }

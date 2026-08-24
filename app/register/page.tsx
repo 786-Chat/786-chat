@@ -14,15 +14,13 @@ import { Label } from "@/components/ui/label"
 const benefits = [
   { icon: WandSparkles, title: "Build with AI", text: "Generate complete, editable projects from a simple description." },
   { icon: Rocket, title: "Publish faster", text: "Move from idea to preview, GitHub and deployment in one workspace." },
-  { icon: ShieldCheck, title: "Your work stays yours", text: "Projects, revisions and collaboration access remain protected." },
+  { icon: ShieldCheck, title: "Approved access", text: "New accounts are verified and approved before builder access is enabled." },
 ]
 
 function BrandIdentity({ compact = false }: { compact?: boolean }) {
   return (
     <div className="inline-flex items-center gap-3" aria-label="786.Chat">
-      <span className={`grid place-items-center rounded-full border border-violet-400/60 bg-violet-500/10 font-black text-violet-200 shadow-[0_0_24px_rgba(124,58,237,.35)] ${compact ? "h-9 w-9 text-[11px]" : "h-11 w-11 text-[12px]"}`}>
-        786
-      </span>
+      <span className={`grid place-items-center rounded-full border border-violet-400/60 bg-violet-500/10 font-black text-violet-200 shadow-[0_0_24px_rgba(124,58,237,.35)] ${compact ? "h-9 w-9 text-[11px]" : "h-11 w-11 text-[12px]"}`}>786</span>
       <span className={`${compact ? "text-lg" : "text-[22px]"} font-black tracking-[-.04em]`}>786.Chat</span>
     </div>
   )
@@ -54,7 +52,6 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError("")
-
     if (!firstName.trim() || !lastName.trim()) return setError("Please enter your first and last name.")
     if (!passwordChecks.every((check) => check.passed)) return setError("Please create a stronger password using the requirements below.")
     if (!agreedToTerms) return setError("Please agree to the Terms of Service and Privacy Policy.")
@@ -71,7 +68,7 @@ export default function RegisterPage() {
         router.replace(`/verify-email?email=${encodeURIComponent(result.email || normalizedEmail)}`)
         return
       }
-      router.replace("/dashboard")
+      router.replace("/login")
     } catch {
       setError("We could not create your account. Please try again.")
     } finally {
@@ -80,11 +77,7 @@ export default function RegisterPage() {
   }
 
   if (authLoading) {
-    return (
-      <main className="grid min-h-screen place-items-center bg-[#050814] text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
-      </main>
-    )
+    return <main className="grid min-h-screen place-items-center bg-[#050814] text-white"><Loader2 className="h-8 w-8 animate-spin text-cyan-300" /></main>
   }
 
   const existingAccount = error === "This email already has a 786.Chat account."
@@ -100,14 +93,10 @@ export default function RegisterPage() {
       <div className="relative mx-auto grid min-h-screen max-w-7xl lg:grid-cols-[1.05fr_.95fr]">
         <section className="hidden border-r border-white/10 px-12 py-10 lg:flex lg:flex-col lg:justify-between xl:px-20">
           <Link href="/" className="inline-flex w-fit items-center" aria-label="786 Chat AI home"><BrandIdentity /></Link>
-
           <div className="max-w-xl py-12">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/5 px-4 py-2 text-sm text-cyan-100">
-              <Sparkles className="h-4 w-4" /> Your AI product workspace
-            </div>
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/5 px-4 py-2 text-sm text-cyan-100"><Sparkles className="h-4 w-4" /> Your AI product workspace</div>
             <h1 className="text-5xl font-black leading-[1.05] tracking-[-.04em] xl:text-6xl">Turn your idea into a real product.</h1>
-            <p className="mt-6 max-w-lg text-lg leading-8 text-slate-300">Create your 786.chat account to generate, edit, review and deploy complete projects from one secure workspace.</p>
-
+            <p className="mt-6 max-w-lg text-lg leading-8 text-slate-300">Create your 786.Chat account, verify your email and wait for owner approval. Once approved, the builder opens normally.</p>
             <div className="mt-10 space-y-5">
               {benefits.map(({ icon: Icon, title, text }) => (
                 <div key={title} className="flex gap-4 rounded-2xl border border-white/10 bg-white/[.035] p-5 backdrop-blur-xl">
@@ -117,48 +106,34 @@ export default function RegisterPage() {
               ))}
             </div>
           </div>
-          <p className="text-sm text-slate-500">© {new Date().getFullYear()} 786.chat. Build with confidence.</p>
+          <p className="text-sm text-slate-500">© {new Date().getFullYear()} 786.Chat.</p>
         </section>
 
         <section className="flex items-center justify-center px-4 py-8 sm:px-8 lg:px-12">
           <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="w-full max-w-xl">
-            <div className="mb-5 flex items-center lg:hidden">
-              <Link href="/" aria-label="786 Chat AI home"><BrandIdentity compact /></Link>
-            </div>
-
+            <div className="mb-5 flex items-center lg:hidden"><Link href="/" aria-label="786 Chat AI home"><BrandIdentity compact /></Link></div>
             <Link href="/" className="mb-6 inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to home</Link>
 
             <div className="rounded-[28px] border border-white/10 bg-white/[.055] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl sm:p-9">
               <div className="mb-8">
                 <div className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-200"><LockKeyhole className="h-4 w-4" /> Secure registration</div>
-                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Create your 786.chat account</h1>
-                <p className="mt-3 text-slate-400">Start building free. No payment details required.</p>
+                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">Create your 786.Chat account</h1>
+                <p className="mt-3 text-slate-400">Email verification and admin approval are required before builder access.</p>
               </div>
 
               {error && (
                 <div role="alert" className="mb-6 flex items-start gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-100">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div>
-                    <p>{error}</p>
-                    {existingAccount && (
-                      <p className="mt-2 text-red-50">
-                        <Link href={`/login?next=${encodeURIComponent("/786.chat")}`} className="font-bold underline underline-offset-4">Sign in</Link>
-                        <span className="px-2 text-red-200/70">or</span>
-                        <Link href="/forgot-password" className="font-bold underline underline-offset-4">reset your password</Link>.
-                      </p>
-                    )}
-                  </div>
+                  <div><p>{error}</p>{existingAccount && <p className="mt-2 text-red-50"><Link href={`/login?next=${encodeURIComponent("/786.chat")}`} className="font-bold underline underline-offset-4">Sign in</Link><span className="px-2 text-red-200/70">or</span><Link href="/forgot-password" className="font-bold underline underline-offset-4">reset your password</Link>.</p>}</div>
                 </div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2"><Label htmlFor="firstName">First name</Label><Input id="firstName" autoComplete="given-name" placeholder="Mujeeb" value={firstName} onChange={(event) => setFirstName(event.target.value)} required className="h-12 border-white/15 bg-black/20" /></div>
-                  <div className="space-y-2"><Label htmlFor="lastName">Last name</Label><Input id="lastName" autoComplete="family-name" placeholder="Sardar" value={lastName} onChange={(event) => setLastName(event.target.value)} required className="h-12 border-white/15 bg-black/20" /></div>
+                  <div className="space-y-2"><Label htmlFor="firstName">First name</Label><Input id="firstName" autoComplete="given-name" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required className="h-12 border-white/15 bg-black/20" /></div>
+                  <div className="space-y-2"><Label htmlFor="lastName">Last name</Label><Input id="lastName" autoComplete="family-name" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} required className="h-12 border-white/15 bg-black/20" /></div>
                 </div>
-
                 <div className="space-y-2"><Label htmlFor="email">Email address</Label><Input id="email" type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-12 border-white/15 bg-black/20" /></div>
-
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
                   <div className="relative">
@@ -167,21 +142,14 @@ export default function RegisterPage() {
                   </div>
                   <div className="grid gap-2 pt-1 sm:grid-cols-3">{passwordChecks.map((check) => <div key={check.label} className={`flex items-center gap-1.5 text-xs ${check.passed ? "text-emerald-300" : "text-slate-500"}`}><Check className="h-3.5 w-3.5" /> {check.label}</div>)}</div>
                 </div>
-
                 <label htmlFor="terms" className={`group flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${agreedToTerms ? "border-cyan-300/55 bg-cyan-300/10" : "border-white/25 bg-black/20 hover:border-cyan-300/40"}`}>
-                  <span className="relative mt-0.5 grid h-6 w-6 shrink-0 place-items-center">
-                    <input id="terms" type="checkbox" checked={agreedToTerms} onChange={(event) => setAgreedToTerms(event.target.checked)} className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-slate-300/80 bg-[#060914] shadow-inner outline-none transition checked:border-cyan-300 checked:bg-cyan-400 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090c18]" />
-                    <Check className="pointer-events-none absolute h-4 w-4 scale-75 text-[#031019] opacity-0 transition peer-checked:scale-100 peer-checked:opacity-100" strokeWidth={3.5} />
-                  </span>
-                  <span className="text-sm leading-6 text-slate-300">I agree to the <Link href="/terms" onClick={(event) => event.stopPropagation()} className="font-semibold text-cyan-200 underline decoration-cyan-300/30 underline-offset-4 hover:text-white">Terms of Service</Link> and <Link href="/privacy" onClick={(event) => event.stopPropagation()} className="font-semibold text-cyan-200 underline decoration-cyan-300/30 underline-offset-4 hover:text-white">Privacy Policy</Link>.</span>
+                  <span className="relative mt-0.5 grid h-6 w-6 shrink-0 place-items-center"><input id="terms" type="checkbox" checked={agreedToTerms} onChange={(event) => setAgreedToTerms(event.target.checked)} className="peer h-6 w-6 cursor-pointer appearance-none rounded-md border-2 border-slate-300/80 bg-[#060914] outline-none transition checked:border-cyan-300 checked:bg-cyan-400" /><Check className="pointer-events-none absolute h-4 w-4 scale-75 text-[#031019] opacity-0 transition peer-checked:scale-100 peer-checked:opacity-100" strokeWidth={3.5} /></span>
+                  <span className="text-sm leading-6 text-slate-300">I agree to the <Link href="/terms" onClick={(event) => event.stopPropagation()} className="font-semibold text-cyan-200 underline underline-offset-4">Terms of Service</Link> and <Link href="/privacy" onClick={(event) => event.stopPropagation()} className="font-semibold text-cyan-200 underline underline-offset-4">Privacy Policy</Link>.</span>
                 </label>
-
-                <Button type="submit" disabled={isSubmitting} className="h-12 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-600 text-base font-bold text-white shadow-lg shadow-blue-500/20 hover:opacity-95">{isSubmitting ? "Creating your account…" : "Create account"}</Button>
+                <Button type="submit" disabled={isSubmitting} className="h-12 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-600 text-base font-bold text-white">{isSubmitting ? "Creating your account…" : "Create account"}</Button>
               </form>
-
-              <div className="mt-7 border-t border-white/10 pt-6 text-center text-sm text-slate-400">Already have an account? <Link href="/login" className="font-bold text-cyan-200 hover:text-cyan-100">Sign in to 786.chat</Link></div>
+              <div className="mt-7 border-t border-white/10 pt-6 text-center text-sm text-slate-400">Already have an account? <Link href="/login" className="font-bold text-cyan-200 hover:text-cyan-100">Sign in to 786.Chat</Link></div>
             </div>
-            <p className="mt-5 text-center text-xs leading-5 text-slate-600 lg:hidden">© {new Date().getFullYear()} 786.chat</p>
           </motion.div>
         </section>
       </div>

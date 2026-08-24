@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
+
     const limits = await Promise.all([
       consumeSecurityRateLimit({ namespace: "auth-login-ip", identifier: requestIdentifier(request), limit: 30, windowSeconds: 15 * 60 }),
       consumeSecurityRateLimit({ namespace: "auth-login-account", identifier: email, limit: 10, windowSeconds: 15 * 60 }),
@@ -52,15 +53,29 @@ export async function POST(request: Request) {
     if (!user || !(await verifyPassword(password, user.password))) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
-    if (user.account_status !== "active") {
-      return NextResponse.json({ error: "This account is not active. Contact support." }, { status: 403 })
-    }
+
     if (!user.email_verified) {
       return NextResponse.json({
         error: "Please verify your email before signing in.",
         code: "EMAIL_NOT_VERIFIED",
         email: user.email,
       }, { status: 403 })
+    }
+
+    if (user.account_status === "pending") {
+      return NextResponse.json({
+        error: "Your account is waiting for 786.Chat admin approval. You will be able to sign in after approval.",
+        code: "ACCOUNT_PENDING_APPROVAL",
+      }, { status: 403 })
+    }
+    if (user.account_status === "rejected") {
+      return NextResponse.json({ error: "This account request was not approved.", code: "ACCOUNT_REJECTED" }, { status: 403 })
+    }
+    if (user.account_status === "suspended") {
+      return NextResponse.json({ error: "This account is suspended. Contact the 786.Chat administrator.", code: "ACCOUNT_SUSPENDED" }, { status: 403 })
+    }
+    if (user.account_status !== "active") {
+      return NextResponse.json({ error: "This account is not active.", code: "ACCOUNT_INACTIVE" }, { status: 403 })
     }
 
     let subscription = { plan: user.plan || "starter", tokens_used: 0, tokens_limit: 10000 }
@@ -102,10 +117,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown login error"
     console.error("[786.Chat] Login failed", error)
     if (isNeonQuotaError(message)) {
-      return NextResponse.json(
-        { error: "Database capacity is temporarily unavailable. Please try again shortly." },
-        { status: 503 },
-      )
+      return NextResponse.json({ error: "Database capacity is temporarily unavailable. Please try again shortly." }, { status: 503 })
     }
     return NextResponse.json({ error: "Sign-in is temporarily unavailable." }, { status: 500 })
   }
