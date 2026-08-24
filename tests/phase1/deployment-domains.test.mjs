@@ -39,6 +39,18 @@ test("786.Chat-owned subdomains use wildcard HTTPS instead of per-subdomain DNS 
   assert.match(provider, /if \(isPlatformSubdomain\(hostname\)\) return\n\n  const \{ project \} = configuration\(\)/)
 })
 
+test("www.786.chat permanently redirects to the canonical apex before other routing", async () => {
+  const middleware = await read("middleware.ts")
+  assert.match(middleware, /if \(hostname === "www\.786\.chat"\)/)
+  assert.match(middleware, /canonical\.protocol = "https:"/)
+  assert.match(middleware, /canonical\.hostname = "786\.chat"/)
+  assert.match(middleware, /NextResponse\.redirect\(canonical, 308\)/)
+  assert.ok(
+    middleware.indexOf('if (hostname === "www.786.chat")') < middleware.indexOf("const isPlatformHost"),
+    "canonical www redirect must run before platform/customer host routing",
+  )
+})
+
 test("deploy UI exposes path, subdomain and customer-domain choices", async () => {
   const source = await read("components/786-admin/admin-chat-publish-controller.tsx")
   assert.match(source, /786\.Chat project link/)

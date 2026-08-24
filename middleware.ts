@@ -41,10 +41,18 @@ function rewriteCustomerWorkspace(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
+
+  if (hostname === "www.786.chat") {
+    const canonical = new URL(request.url)
+    canonical.protocol = "https:"
+    canonical.hostname = "786.chat"
+    canonical.port = ""
+    return NextResponse.redirect(canonical, 308)
+  }
+
   const isPlatformHost =
     !hostname ||
     hostname === "786.chat" ||
-    hostname === "www.786.chat" ||
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||
     hostname.endsWith(".vercel.app")
