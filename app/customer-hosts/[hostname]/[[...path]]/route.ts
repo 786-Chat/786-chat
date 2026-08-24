@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server"
 import { getLiveDeploymentByHostname } from "@/lib/786-admin/publishing"
 
 type Ctx = { params: Promise<{ hostname: string; path?: string[] }> }
+
+type StreamingRequestInit = RequestInit & { duplex?: "half" }
 
 function notFound() {
   return new Response(
@@ -17,17 +18,90 @@ function notFound() {
   )
 }
 
-export async function GET(request: Request, { params }: Ctx) {
+function runtimeTarget(runtimeUrl: string, path: string[], requestUrl: string) {
+  const runtime = new URL(runtimeUrl)
+  const incoming = new URL(requestUrl)
+  const basePath = runtime.pathname === "/" ? "" : runtime.pathname.replace(/\/+$/, "")
+  runtime.pathname = `${basePath}/${path.join("/")}` || "/"
+
+  for (const [key, value] of incoming.searchParams) {
+    runtime.searchParams.append(key, value)
+  }
+
+  return runtime
+}
+
+function upstreamHeaders(request: Request, customerHostname: string) {
+  const headers = new Headers(request.headers)
+  headers.delete("host")
+  headers.delete("content-length")
+  headers.delete("connection")
+  headers.set("accept-encoding", "identity")
+  headers.set("x-forwarded-host", customerHostname)
+  headers.set("x-forwarded-proto", "https")
+  return headers
+}
+
+function downstreamHeaders(upstream: Response, runtime: URL, request: Request) {
+  const headers = new Headers(upstream.headers)
+  headers.delete("content-length")
+  headers.delete("content-encoding")
+  headers.delete("transfer-encoding")
+  headers.delete("connection")
+
+  const location = upstream.headers.get("location")
+  if (location) {
+    const resolved = new URL(location, runtime)
+    if (resolved.origin === runtime.origin) {
+      const customer = new URL(request.url)
+      customer.pathname = resolved.pathname
+      customer.search = resolved.search
+      customer.hash = resolved.hash
+      headers.set("location", customer.toString())
+    }
+  }
+
+  headers.set("X-786-Runtime-Proxy", "active")
+  return headers
+}
+
+async function proxyRuntime(
+  request: Request,
+  runtimeUrl: string,
+  customerHostname: string,
+  path: string[],
+) {
+  const runtime = runtimeTarget(runtimeUrl, path, request.url)
+  const init: StreamingRequestInit = {
+    method: request.method,
+    headers: upstreamHeaders(request, customerHostname),
+    redirect: "manual",
+    cache: "no-store",
+  }
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body
+    init.duplex = "half"
+  }
+
+  const upstream = await fetch(runtime, init)
+  const headers = downstreamHeaders(upstream, runtime, request)
+
+  return new Response(request.method === "HEAD" ? null : upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers,
+  })
+}
+
+async function handle(request: Request, { params }: Ctx) {
   const { hostname, path = [] } = await params
   const normalized = decodeURIComponent(hostname).toLowerCase().trim()
   const deployment = await getLiveDeploymentByHostname(normalized)
   if (!deployment) return notFound()
 
   if (deployment.runtime_url) {
-    const runtime = new URL(deployment.runtime_url)
-    runtime.pathname = `/${path.join("/")}`
-    runtime.search = new URL(request.url).search
-    return NextResponse.redirect(runtime, 307)
+    return proxyRuntime(request, deployment.runtime_url, normalized, path)
   }
 
   const scopedBase = `/p/${deployment.slug}`
@@ -44,3 +118,11 @@ export async function GET(request: Request, { params }: Ctx) {
     },
   })
 }
+
+export const GET = handle
+export const HEAD = handle
+export const POST = handle
+export const PUT = handle
+export const PATCH = handle
+export const DELETE = handle
+export const OPTIONS = handle
