@@ -45,8 +45,13 @@ export async function PATCH(request: Request, { params }: Context) {
     return NextResponse.json({ error: "A complete generated file set is required." }, { status: 400 })
   }
 
-  const metadata = body.metadata && typeof body.metadata === "object"
+  const incomingMetadata = body.metadata && typeof body.metadata === "object"
     ? body.metadata as Record<string, unknown>
+    : null
+  // Existing-project edits may only send generation metadata. Preserve saved
+  // visual-editor and other project metadata unless the edit explicitly replaces it.
+  const metadata = incomingMetadata
+    ? { ...(current?.metadata || {}), ...incomingMetadata }
     : current?.metadata || {}
   const validation = validatePersistedGeneration(metadata, files)
   if (validation && !validation.valid) {
