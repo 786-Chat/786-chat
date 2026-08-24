@@ -264,10 +264,12 @@ export async function POST(request: Request, { params }: Context) {
       });
     }
 
+    const currentDeployment =
+      action === "deploy" ? await getProjectDeployment(id, ownerEmail) : null;
     const allowance = await builderPlanUsage({ userId: session.id, ownerEmail });
     if (
-      (action === "deploy" || action === "redeploy") &&
-      allowance.usage.deploymentsThisMonth >= allowance.subscription.planConfig.deploymentsPerMonth
+      (((action === "deploy" && !currentDeployment) || action === "redeploy") &&
+        allowance.usage.deploymentsThisMonth >= allowance.subscription.planConfig.deploymentsPerMonth)
     ) {
       return NextResponse.json({
         error: allowance.subscription.plan === "free"
@@ -330,11 +332,13 @@ export async function POST(request: Request, { params }: Context) {
       }
     }
 
-    const deployment = await publishCompiledProject({
-      projectId: id,
-      ownerEmail,
-      action: "deploy",
-    });
+    const deployment =
+      currentDeployment ||
+      (await publishCompiledProject({
+        projectId: id,
+        ownerEmail,
+        action: "deploy",
+      }));
     const domains = await listProjectDomains(id, ownerEmail);
     const existing = matchingDomain(domains, addressType, addressValue);
     const address = existing
