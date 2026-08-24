@@ -20,6 +20,21 @@ test("spoken application edits receive explicit targeted generation contracts", 
   assert.match(route, /UNDO_REQUIRES_REVISION_ENDPOINT/)
 })
 
+test("quoted one-match text edits cannot regenerate the whole existing design", async () => {
+  const [api, surgical, projectRoute] = await Promise.all([
+    read("components/786-chat/api.ts"),
+    read("components/786-chat/surgical-edit.ts"),
+    read("app/api/786-chat/projects/[id]/route.ts"),
+  ])
+  assert.match(api, /trySurgicalTextEdit\(request\)/)
+  assert.match(api, /input\.generated\.model !== "surgical-edit"/)
+  assert.match(surgical, /totalMatches !== 1/)
+  assert.match(surgical, /files\[matchedPath\] = files\[matchedPath\]\.replace/)
+  assert.match(surgical, /preserved every other project file/)
+  assert.match(projectRoute, /incomingMetadata/)
+  assert.match(projectRoute, /\.\.\.\(current\?\.metadata \|\| \{\}\)/)
+})
+
 test("booking and database requests become verifiable project requirements", async () => {
   const [specification, architecture, validation] = await Promise.all([
     read("lib/786-chat/specification.ts"),

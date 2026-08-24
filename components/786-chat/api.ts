@@ -9,6 +9,7 @@ import type {
   GenerationRequest,
   GenerationResult,
 } from "./contracts"
+import { trySurgicalTextEdit } from "./surgical-edit"
 import {
   normalizeVisualEditorState,
   type VisualEditorState,
@@ -105,6 +106,9 @@ export async function loadBuilderProject(projectId: string) {
 }
 
 export async function generateBuilderProject(request: GenerationRequest) {
+  const surgicalEdit = trySurgicalTextEdit(request)
+  if (surgicalEdit) return surgicalEdit
+
   const MAX_GENERATION_CONTINUATIONS = 60
   const MAX_RETRIES_PER_CONTINUATION = 2
   let continuationToken: string | undefined
@@ -210,7 +214,7 @@ export async function saveBuilderProject(input: {
         ],
         revision_label: `Before AI edit: ${input.userPrompt.slice(0, 100)}`,
         revision_source: "ai-edit",
-        record_generation_job: true,
+        record_generation_job: input.generated.model !== "surgical-edit",
       }),
     },
   )
