@@ -47,11 +47,12 @@ test("deploy UI exposes path, subdomain and customer-domain choices", async () =
   assert.match(source, /SSL\/HTTPS is free/)
 })
 
-test("custom host requests use the canonical hostname deployment resolver", async () => {
+test("custom host requests use a routable App Router hostname resolver", async () => {
   const middleware = await read("middleware.ts")
-  const route = await read("app/_sites/[hostname]/[[...path]]/route.ts")
+  const route = await read("app/customer-hosts/[hostname]/[[...path]]/route.ts")
   const publishing = await read("lib/786-admin/publishing.ts")
-  assert.match(middleware, /_sites/)
+  assert.match(middleware, /customer-hosts/)
+  assert.doesNotMatch(middleware, /_sites/)
   assert.match(route, /getLiveDeploymentByHostname/)
   assert.match(publishing, /ssl_status = 'active'/)
 })
