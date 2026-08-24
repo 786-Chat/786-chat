@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import type { MouseEvent as ReactMouseEvent } from "react"
 
+import { ProjectDomainManager } from "./project-domain-manager"
 import { SevenEightSixWorkspace } from "./workspace"
 
 export function WorkspaceWithProjectsRoute() {
@@ -22,6 +23,7 @@ export function WorkspaceWithProjectsRoute() {
   return (
     <div className="h-screen" onClickCapture={handleClickCapture}>
       <SevenEightSixWorkspace />
+      <ProjectDomainManager />
     </div>
   )
 }
