@@ -12,6 +12,14 @@ test("generated builds normalize TypeScript target and iteration support", async
   assert.match(compatibility, /typescript-es2017-iteration/)
 })
 
+test("repaired builds finish with a terminal repaired or exhausted state", async () => {
+  const runnerStore = await read("lib/786-admin/build-runner-store.ts")
+  assert.match(runnerStore, /repair_attempt > 0 AND repair_status = 'pending'/)
+  assert.match(runnerStore, /THEN 'running'/)
+  assert.match(runnerStore, /repair_attempt > 0 THEN 'repaired'/)
+  assert.match(runnerStore, /THEN 'exhausted'/)
+})
+
 test("synthetic customer journey uses public production and exercises owner approval", async () => {
   const journey = await read("app/api/cron/customer-journey/route.ts")
   assert.match(journey, /SYNTHETIC_MONITOR_ORIGIN/)
