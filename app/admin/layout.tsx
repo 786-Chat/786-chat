@@ -8,6 +8,7 @@ import {
   BellRing,
   Bot,
   ChevronLeft,
+  FolderKanban,
   Globe,
   Headphones,
   LayoutDashboard,
@@ -33,6 +34,7 @@ const navGroups = [
     items: [
       { href: "/admin", label: "Overview", icon: LayoutDashboard },
       { href: "/admin/users", label: "Customer Approvals", icon: Users },
+      { href: "/admin/projects", label: "Projects", icon: FolderKanban },
       { href: "/admin/activity", label: "Activity", icon: Activity },
       { href: "/admin/monitoring", label: "Monitoring", icon: BellRing },
     ],
@@ -169,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <ShieldCheck className="h-5 w-5 shrink-0 text-cyan-300" />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold">786.Chat Admin</p>
-              <p className="hidden truncate text-xs text-slate-500 sm:block">Customers, AI, deployments and platform health</p>
+              <p className="hidden truncate text-xs text-slate-500 sm:block">Customers, projects, AI, deployments and platform health</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
