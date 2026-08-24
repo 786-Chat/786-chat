@@ -41,12 +41,6 @@ function rewriteCustomerWorkspace(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
-  const isInternalAsset =
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/customer-hosts/") ||
-    pathname === "/favicon.ico" ||
-    /\.[a-z0-9]{2,8}$/i.test(pathname)
   const isPlatformHost =
     !hostname ||
     hostname === "786.chat" ||
@@ -55,7 +49,10 @@ export async function middleware(request: NextRequest) {
     hostname.endsWith(".localhost") ||
     hostname.endsWith(".vercel.app")
 
-  if (!isInternalAsset && !isPlatformHost) {
+  // Customer domains and 786.Chat subdomains must proxy every path — including
+  // /_next assets, API routes, images and nested application pages — so the
+  // browser can keep the customer hostname while the generated runtime is served.
+  if (!isPlatformHost && !pathname.startsWith("/customer-hosts/")) {
     const target = request.nextUrl.clone()
     target.pathname = `/customer-hosts/${encodeURIComponent(hostname)}${pathname === "/" ? "" : pathname}`
     return NextResponse.rewrite(target)

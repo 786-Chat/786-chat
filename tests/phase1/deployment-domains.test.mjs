@@ -47,15 +47,27 @@ test("deploy UI exposes path, subdomain and customer-domain choices", async () =
   assert.match(source, /SSL\/HTTPS is free/)
 })
 
-test("custom host requests use a routable App Router hostname resolver", async () => {
+test("custom host requests stay on the customer hostname and proxy the generated runtime", async () => {
   const middleware = await read("middleware.ts")
   const route = await read("app/customer-hosts/[hostname]/[[...path]]/route.ts")
   const publishing = await read("lib/786-admin/publishing.ts")
+
   assert.match(middleware, /customer-hosts/)
   assert.doesNotMatch(middleware, /_sites/)
+  assert.match(middleware, /if \(!isPlatformHost && !pathname\.startsWith\("\/customer-hosts\/"\)\)/)
+  assert.ok(
+    middleware.indexOf("if (!isPlatformHost") < middleware.indexOf("const isAdminApi"),
+    "customer host rewrite must run before platform API/auth routing",
+  )
+
   assert.match(route, /getLiveDeploymentByHostname/)
   assert.match(route, /deployment\.runtime_url/)
-  assert.match(route, /NextResponse\.redirect\(runtime, 307\)/)
+  assert.match(route, /fetch\(runtime, init\)/)
+  assert.match(route, /redirect: "manual"/)
+  assert.doesNotMatch(route, /NextResponse\.redirect/)
+  assert.match(route, /headers\.set\("location", customer\.toString\(\)\)/)
+  assert.match(route, /export const POST = handle/)
+  assert.match(route, /export const OPTIONS = handle/)
   assert.match(route, /path\.join\("\/"\)/)
   assert.match(publishing, /ssl_status = 'active'/)
 })
