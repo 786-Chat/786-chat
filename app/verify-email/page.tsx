@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { FormEvent, useEffect, useState } from "react"
-import { CheckCircle2, Loader2, Mail, RefreshCw, XCircle } from "lucide-react"
+import { CheckCircle2, Clock3, Loader2, Mail, RefreshCw, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -31,7 +31,7 @@ export default function VerifyEmailPage() {
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || "This verification link is invalid or expired.")
         setStatus("verified")
-        setMessage("Your email is verified. You can now sign in securely.")
+        setMessage("Your email is verified. Your 786.Chat account is now waiting for admin approval.")
       })
       .catch((error: Error) => {
         setStatus("error")
@@ -70,9 +70,14 @@ export default function VerifyEmailPage() {
         <p className="mt-3 text-center leading-7 text-slate-400">{message}</p>
 
         {status === "verified" ? (
-          <Button asChild className="mt-7 h-12 w-full bg-gradient-to-r from-cyan-400 to-violet-500 font-bold">
-            <Link href="/login">Sign in to 786.Chat</Link>
-          </Button>
+          <div className="mt-7 rounded-2xl border border-amber-300/20 bg-amber-300/[.06] p-5 text-center">
+            <Clock3 className="mx-auto h-6 w-6 text-amber-200" />
+            <p className="mt-3 font-bold text-amber-100">Waiting for admin approval</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">You cannot use the 786.Chat builder yet. After the administrator approves your account, you can return to the sign-in page and log in normally.</p>
+            <Button asChild variant="outline" className="mt-5 h-11 w-full border-white/15 bg-white/[.03]">
+              <Link href="/login">Go to sign in</Link>
+            </Button>
+          </div>
         ) : (
           <form onSubmit={resend} className="mt-7 space-y-3">
             <Input type="email" autoComplete="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-12 border-white/15 bg-black/20" />
@@ -82,7 +87,7 @@ export default function VerifyEmailPage() {
             </Button>
           </form>
         )}
-        <p className="mt-6 text-center text-sm text-slate-500"><Link href="/login" className="font-bold text-cyan-200">Back to sign in</Link></p>
+        <p className="mt-6 text-center text-sm text-slate-500"><Link href="/" className="font-bold text-cyan-200">Back to 786.Chat home</Link></p>
       </section>
     </main>
   )
