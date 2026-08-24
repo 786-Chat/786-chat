@@ -37,13 +37,15 @@ function syntheticEmail(runId: string) {
   return `${match[1]}+786journey-${runId.slice(0, 12)}@${match[2]}`
 }
 
-function applicationOrigin(request: Request) {
-  const configured = process.env.APP_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim()
-  const origin = configured || new URL(request.url).origin
-  if (!/^https:\/\/(?:786\.chat|[a-z0-9-]+\.vercel\.app)$/i.test(origin.replace(/\/$/, ""))) {
-    throw new JourneyError("configuration", "Synthetic journey origin is not trusted.")
+function applicationOrigin() {
+  // Always exercise the public production hostname. APP_URL/NEXT_PUBLIC_APP_URL can
+  // point at an authenticated Vercel deployment and previously made registration
+  // return the platform's 401 page instead of reaching the 786.Chat API.
+  const configured = process.env.SYNTHETIC_MONITOR_ORIGIN?.trim().replace(/\/$/, "") || "https://786.chat"
+  if (!/^https:\/\/(?:www\.)?786\.chat$/i.test(configured)) {
+    throw new JourneyError("configuration", "SYNTHETIC_MONITOR_ORIGIN must be https://786.chat or https://www.786.chat.")
   }
-  return origin.replace(/\/$/, "")
+  return configured
 }
 
 async function jsonRequest(input: {
@@ -168,7 +170,7 @@ export async function GET(request: Request) {
   await recordOperationalEvent({ category: "journey", eventName: "customer_journey_started", status: "started", runId })
 
   try {
-    const origin = applicationOrigin(request)
+    const origin = applicationOrigin()
     const password = process.env.SYNTHETIC_MONITOR_PASSWORD?.trim() || ""
     if (password.length < 16 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
       throw new JourneyError("configuration", "SYNTHETIC_MONITOR_PASSWORD must contain at least 16 characters, a letter and a number.")
@@ -183,16 +185,42 @@ export async function GET(request: Request) {
         body: { name: "786 Journey Monitor", email, password },
       })
       if (payload.verificationRequired !== true) throw new Error("Registration did not require verification.")
-      const users = (await sql`SELECT id FROM users WHERE email = ${email} LIMIT 1`) as unknown as Array<{ id: string }>
+      if (payload.approvalRequired !== true) throw new Error("Registration did not require owner approval.")
+      const users = (await sql`
+        SELECT id, account_status FROM users WHERE email = ${email} LIMIT 1
+      `) as unknown as Array<{ id: string; account_status: string }>
       if (!users[0]) throw new Error("Registered account was not persisted.")
+      if (users[0].account_status !== "pending") throw new Error("New account did not start in pending approval state.")
       userId = users[0].id
     })
 
     await stage(stages, "verify-email", async () => {
       const token = await issueAuthToken(userId!, "email_verification", 10)
       await jsonRequest({ origin, path: "/api/auth/verify-email", method: "POST", body: { token } })
-      await sql`UPDATE users SET plan = 'business' WHERE id = ${userId!}::uuid AND email = ${email}`
-      await sql`UPDATE subscriptions SET plan = 'business', tokens_limit = GREATEST(tokens_limit, 1000000) WHERE user_id = ${userId!}::uuid`
+      const rows = (await sql`
+        SELECT email_verified, account_status FROM users WHERE id = ${userId!}::uuid LIMIT 1
+      `) as unknown as Array<{ email_verified: boolean; account_status: string }>
+      if (!rows[0]?.email_verified) throw new Error("Email verification was not persisted.")
+      if (rows[0].account_status !== "pending") throw new Error("Verification bypassed the approval gate.")
+    })
+
+    await stage(stages, "admin-approval", async () => {
+      // This account is synthetic and the journey itself is owner-authorized. Approve it
+      // directly in the database to exercise the same account_status gate as Admin > Users.
+      await sql`
+        UPDATE users
+        SET plan = 'business', account_status = 'active', session_version = session_version + 1, updated_at = NOW()
+        WHERE id = ${userId!}::uuid AND email = ${email}
+      `
+      await sql`
+        UPDATE subscriptions
+        SET plan = 'business', tokens_limit = GREATEST(tokens_limit, 1000000), updated_at = NOW()
+        WHERE user_id = ${userId!}::uuid
+      `
+      const rows = (await sql`
+        SELECT account_status FROM users WHERE id = ${userId!}::uuid LIMIT 1
+      `) as unknown as Array<{ account_status: string }>
+      if (rows[0]?.account_status !== "active") throw new Error("Synthetic approval was not persisted.")
     })
 
     const cookie = await stage(stages, "login", async () => {
