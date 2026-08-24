@@ -49,6 +49,13 @@ function downstreamHeaders(upstream: Response, runtime: URL, request: Request) {
   headers.delete("transfer-encoding")
   headers.delete("connection")
 
+  // Generated runtimes can be protected preview deployments and may send
+  // X-Robots-Tag: noindex. Once a deployment is live behind a verified customer
+  // hostname, that upstream protection header must not block the public site from
+  // being indexed. The unavailable-domain response above intentionally keeps its
+  // own noindex header.
+  headers.delete("x-robots-tag")
+
   const location = upstream.headers.get("location")
   if (location) {
     const resolved = new URL(location, runtime)
