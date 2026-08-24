@@ -1,33 +1,31 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { getSystemSpendingReport, getSpendingByPlan, getTodaySpend, getMonthSpend } from "@/lib/ai-spending"
 import { unblockUser, blockUser, suspendUser, addExtraCredits } from "@/lib/ai-protection"
 import { AI_LIMITS } from "@/lib/ai-limits"
 
+async function requireAdminSession() {
+  const session = await getSession()
+  if (!session) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
+
+  const user = await sql`SELECT role FROM users WHERE id = ${session.id}`
+  if (user[0]?.role !== "admin") {
+    return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
+  }
+
+  return { session }
+}
 
 // GET - Get admin usage dashboard data
 export async function GET(request: Request) {
   try {
-    const session = await getSession()
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const user = await sql`
-      SELECT role FROM users WHERE id = ${session.id}
-    `
-
-    if (user[0]?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const auth = await requireAdminSession()
+    if ("response" in auth) return auth.response
 
     const { searchParams } = new URL(request.url)
     const view = searchParams.get("view")
 
-    // Main dashboard view
     if (!view || view === "dashboard") {
       const [spendingReport, spendingByPlan, todaySpend, monthSpend] = await Promise.all([
         getSystemSpendingReport(),
@@ -36,9 +34,8 @@ export async function GET(request: Request) {
         getMonthSpend(),
       ])
 
-      // Get subscription stats
       const subscriptionStats = await sql`
-        SELECT 
+        SELECT
           plan,
           status,
           COUNT(*) as count,
@@ -49,9 +46,8 @@ export async function GET(request: Request) {
         ORDER BY plan, status
       `
 
-      // Get revenue estimate (monthly)
       const revenueStats = await sql`
-        SELECT 
+        SELECT
           plan,
           COUNT(*) as subscriber_count,
           CASE plan
@@ -66,29 +62,24 @@ export async function GET(request: Request) {
         GROUP BY plan
       `
 
-      // Get failed requests in last 24h
+      // The production usage_logs table intentionally stores compact counters only.
+      // Older code queried a non-existent metadata column and made Admin > AI Usage fail.
       const failedRequests = await sql`
-        SELECT 
-          COALESCE(metadata->>'errorCode', 'unknown') as error_code,
-          COUNT(*) as count
+        SELECT 'ai_error'::text as error_code, COUNT(*) as count
         FROM usage_logs
         WHERE action = 'ai_error'
-        AND created_at > NOW() - INTERVAL '24 hours'
-        GROUP BY metadata->>'errorCode'
-        ORDER BY count DESC
-        LIMIT 20
+          AND created_at > NOW() - INTERVAL '24 hours'
+        HAVING COUNT(*) > 0
       `
 
-      // Get active users (last 24h)
       const activeUsers = await sql`
         SELECT COUNT(DISTINCT user_id) as count
         FROM usage_logs
         WHERE created_at > NOW() - INTERVAL '24 hours'
       `
 
-      // Get blocked users
       const blockedUsers = await sql`
-        SELECT 
+        SELECT
           r.user_id,
           u.email,
           u.name,
@@ -102,10 +93,9 @@ export async function GET(request: Request) {
         LIMIT 50
       `
 
-      // Calculate total monthly revenue
       const totalRevenue = revenueStats.reduce(
         (sum, row) => sum + Number(row.monthly_revenue_gbp || 0),
-        0
+        0,
       )
 
       return NextResponse.json({
@@ -137,10 +127,9 @@ export async function GET(request: Request) {
       })
     }
 
-    // Top users view
     if (view === "topUsers") {
       const topUsers = await sql`
-        SELECT 
+        SELECT
           u.id, u.email, u.name,
           s.plan, s.messages_used, s.messages_limit, s.extra_credits,
           COALESCE(SUM(ul.estimated_cost_gbp), 0) as total_cost_gbp,
@@ -155,7 +144,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ topUsers })
     }
 
-    // Blocked users view
     if (view === "blocked") {
       const blocked = await sql`
         SELECT rl.*, u.email, u.name
@@ -167,29 +155,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ blocked })
     }
 
-    // Specific user view
     const userId = searchParams.get("userId")
     if (userId) {
       const userInfo = await sql`
         SELECT id, email, name, role, created_at
         FROM users WHERE id = ${userId}::uuid
       `
-      
+
       const subscription = await sql`
         SELECT * FROM subscriptions WHERE user_id = ${userId}::uuid
       `
-      
+
       const rateLimits = await sql`
         SELECT * FROM rate_limits WHERE user_id = ${userId}::uuid
       `
-      
+
       const recentUsage = await sql`
-        SELECT * FROM usage_logs 
+        SELECT * FROM usage_logs
         WHERE user_id = ${userId}::uuid
         ORDER BY created_at DESC
         LIMIT 50
       `
-      
+
       return NextResponse.json({
         user: userInfo[0],
         subscription: subscription[0],
@@ -208,46 +195,40 @@ export async function GET(request: Request) {
 // POST - Admin actions
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
-
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const user = await sql`
-      SELECT role FROM users WHERE id = ${session.id}
-    `
-
-    if (user[0]?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const auth = await requireAdminSession()
+    if ("response" in auth) return auth.response
+    const { session } = auth
 
     const body = await request.json()
     const { action, userId, reason, credits, durationMinutes } = body
 
-    // Log all admin actions
-    const logAdminAction = async (actionType: string, details: object) => {
+    // Keep the audit event compatible with the compact production usage_logs schema.
+    const logAdminAction = async (actionType: string) => {
       await sql`
-        INSERT INTO usage_logs (user_id, action, metadata)
-        VALUES (${session.id}, ${`admin_${actionType}`}, ${JSON.stringify({ targetUserId: userId, ...details })})
+        INSERT INTO usage_logs (
+          user_id, action, tokens_used, cost, input_tokens, output_tokens,
+          image_count, pdf_pages, estimated_cost_usd, estimated_cost_gbp
+        )
+        VALUES (
+          ${session.id}, ${`admin_${actionType}`}, 0, 0, 0, 0, 0, 0, 0, 0
+        )
       `
     }
 
     switch (action) {
       case "unblock":
         await unblockUser(userId)
-        await logAdminAction("unblock", { reason })
+        await logAdminAction("unblock")
         return NextResponse.json({ success: true, message: "User unblocked" })
 
       case "block":
         await blockUser(userId, reason || "Blocked by admin", durationMinutes || 60)
-        await logAdminAction("block", { reason, durationMinutes })
+        await logAdminAction("block")
         return NextResponse.json({ success: true, message: "User blocked" })
 
       case "suspend":
         await suspendUser(userId, reason || "Suspended by admin")
-        await logAdminAction("suspend", { reason })
+        await logAdminAction("suspend")
         return NextResponse.json({ success: true, message: "User suspended" })
 
       case "add_credits":
@@ -255,16 +236,16 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "Invalid credit amount (1-10000)" }, { status: 400 })
         }
         await addExtraCredits(userId, credits)
-        await logAdminAction("add_credits", { credits })
+        await logAdminAction("add_credits")
         return NextResponse.json({ success: true, message: `Added ${credits} credits` })
 
       case "reset_usage":
         await sql`
           UPDATE subscriptions
-          SET messages_used = 0, daily_messages_used = 0, updated_at = NOW()
+          SET messages_used = 0, daily_messages_used = 0, tokens_used = 0, updated_at = NOW()
           WHERE user_id = ${userId}::uuid
         `
-        await logAdminAction("reset_usage", {})
+        await logAdminAction("reset_usage")
         return NextResponse.json({ success: true, message: "Usage reset" })
 
       case "reset_spam":
@@ -273,10 +254,10 @@ export async function POST(request: Request) {
           SET spam_score = 0
           WHERE user_id = ${userId}::uuid AND action = 'chat'
         `
-        await logAdminAction("reset_spam", {})
+        await logAdminAction("reset_spam")
         return NextResponse.json({ success: true, message: "Spam score reset" })
 
-      case "set_plan":
+      case "set_plan": {
         const { plan, messagesLimit } = body
         if (!["starter", "basic", "pro", "business", "enterprise"].includes(plan)) {
           return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
@@ -286,8 +267,9 @@ export async function POST(request: Request) {
           SET plan = ${plan}, messages_limit = ${messagesLimit || null}, updated_at = NOW()
           WHERE user_id = ${userId}::uuid
         `
-        await logAdminAction("set_plan", { plan, messagesLimit })
+        await logAdminAction("set_plan")
         return NextResponse.json({ success: true, message: `Plan set to ${plan}` })
+      }
 
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 })

@@ -9,6 +9,10 @@ type PackageManifest = Record<string, unknown> & {
   devDependencies?: Record<string, string>
 }
 
+type TypeScriptConfig = Record<string, unknown> & {
+  compilerOptions?: Record<string, unknown>
+}
+
 function parsePackageManifest(source: string | undefined): PackageManifest | null {
   if (!source) return null
   try {
@@ -26,27 +30,66 @@ function dependencyMajor(version: string | undefined): number | null {
   return match ? Number(match[0]) : null
 }
 
+export function normalizePortableTypeScriptConfig(files: Record<string, string>) {
+  const source = files["tsconfig.json"]
+  if (!source) return { ...files }
+
+  const normalized = { ...files }
+  try {
+    const parsed = JSON.parse(source) as TypeScriptConfig
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return normalized
+    const compilerOptions =
+      parsed.compilerOptions && typeof parsed.compilerOptions === "object" && !Array.isArray(parsed.compilerOptions)
+        ? { ...parsed.compilerOptions }
+        : {}
+
+    compilerOptions.target = "ES2017"
+    compilerOptions.downlevelIteration = true
+    parsed.compilerOptions = compilerOptions
+    normalized["tsconfig.json"] = `${JSON.stringify(parsed, null, 2)}\n`
+    return normalized
+  } catch {
+    // Some imported/generated tsconfig files contain comments. Keep those files intact
+    // and make the two compatibility edits textually instead of rejecting them.
+    let next = source
+    if (/"target"\s*:\s*"[^"]+"/i.test(next)) {
+      next = next.replace(/"target"\s*:\s*"[^"]+"/i, '"target": "ES2017"')
+    } else {
+      next = next.replace(/"compilerOptions"\s*:\s*\{/i, (match) => `${match}\n    "target": "ES2017",`)
+    }
+
+    if (/"downlevelIteration"\s*:/i.test(next)) {
+      next = next.replace(/"downlevelIteration"\s*:\s*(?:true|false)/i, '"downlevelIteration": true')
+    } else {
+      next = next.replace(/"compilerOptions"\s*:\s*\{/i, (match) => `${match}\n    "downlevelIteration": true,`)
+    }
+
+    normalized["tsconfig.json"] = next
+    return normalized
+  }
+}
+
 export function normalizePortablePostCss(files: Record<string, string>) {
-  const manifest = parsePackageManifest(files["package.json"])
-  if (!manifest) return { ...files }
+  const normalized = normalizePortableTypeScriptConfig(files)
+  const manifest = parsePackageManifest(normalized["package.json"])
+  if (!manifest) return normalized
 
   const dependencies = { ...(manifest.dependencies || {}) }
   const devDependencies = { ...(manifest.devDependencies || {}) }
   const tailwindVersion = dependencies.tailwindcss || devDependencies.tailwindcss
   const tailwindMajor = dependencyMajor(tailwindVersion)
-  if (!tailwindMajor) return { ...files }
+  if (!tailwindMajor) return normalized
 
-  const normalized = { ...files }
   const hasPostCssConfig = Boolean(
-    files["postcss.config.js"] ||
-    files["postcss.config.cjs"] ||
-    files["postcss.config.mjs"],
+    normalized["postcss.config.js"] ||
+    normalized["postcss.config.cjs"] ||
+    normalized["postcss.config.mjs"],
   )
   const hasTailwindConfig = Boolean(
-    files["tailwind.config.js"] ||
-    files["tailwind.config.cjs"] ||
-    files["tailwind.config.mjs"] ||
-    files["tailwind.config.ts"],
+    normalized["tailwind.config.js"] ||
+    normalized["tailwind.config.cjs"] ||
+    normalized["tailwind.config.mjs"] ||
+    normalized["tailwind.config.ts"],
   )
   let packageChanged = false
   const ensureDevDependency = (name: string, version: string) => {
@@ -126,6 +169,10 @@ export async function migrateUnsupportedNextConfig(input: {
 }): Promise<boolean> {
   const normalized = normalizePortablePostCss(input.files)
   const migrations: string[] = []
+
+  if (normalized["tsconfig.json"] && normalized["tsconfig.json"] !== input.files["tsconfig.json"]) {
+    migrations.push("typescript-es2017-iteration")
+  }
 
   const source = normalized["next.config.ts"]
   if (source && !normalized["next.config.mjs"] && !normalized["next.config.js"]) {

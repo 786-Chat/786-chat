@@ -45,6 +45,10 @@ export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuild
     UPDATE admin_project_builds
     SET status = 'running',
         started_at = COALESCE(started_at, NOW()),
+        repair_status = CASE
+          WHEN repair_attempt > 0 AND repair_status = 'pending' THEN 'running'
+          ELSE repair_status
+        END,
         logs = logs || ${"[runner] Source bundle downloaded.\n"},
         updated_at = NOW()
     WHERE id = ${build.id}
@@ -103,7 +107,14 @@ export async function completeRunnerBuild(input: {
         github_commit_sha = COALESCE(${input.githubCommitSha ?? null}, github_commit_sha),
         github_pr_url = COALESCE(${input.githubPrUrl ?? null}, github_pr_url),
         deployment_url = COALESCE(${input.deploymentUrl ?? null}, deployment_url),
-        repair_status = COALESCE(${input.repairStatus ?? null}, repair_status),
+        repair_status = COALESCE(
+          ${input.repairStatus ?? null},
+          CASE
+            WHEN ${input.status} = 'passed' AND repair_attempt > 0 THEN 'repaired'
+            WHEN ${input.status} IN ('failed','cancelled') AND repair_attempt > 0 AND repair_status = 'running' THEN 'exhausted'
+            ELSE repair_status
+          END
+        ),
         completed_at = NOW(),
         updated_at = NOW()
     WHERE id = ${input.buildId}
