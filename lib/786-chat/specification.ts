@@ -274,7 +274,9 @@ export function analyseProjectPrompt(
     [/\b3d element|3d object|three-dimensional element\b/i, "3d-element"],
   ])
   if (loginRequested) {
-    requiredComponents.push("email-input", "password-input", "remember-me", "forgot-password-link", "submit-button")
+    requiredComponents.push("email-input", "password-input", "submit-button")
+    if (/\bremember[ -]?me\b/i.test(positivePrompt)) requiredComponents.push("remember-me")
+    if (/\bforgot(?:ten)?[ -]?(?:your[ -]?)?password\b|\bpassword[ -]?reset\b/i.test(positivePrompt)) requiredComponents.push("forgot-password-link")
   }
 
   const designDirection = unique(matches(prompt, [
