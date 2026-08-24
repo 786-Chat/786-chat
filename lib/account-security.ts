@@ -41,7 +41,7 @@ export function ensureAccountSecuritySchema() {
 
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status TEXT`
       await sql`UPDATE users SET account_status = 'active' WHERE account_status IS NULL`
-      await sql`ALTER TABLE users ALTER COLUMN account_status SET DEFAULT 'active'`
+      await sql`ALTER TABLE users ALTER COLUMN account_status SET DEFAULT 'pending'`
       await sql`ALTER TABLE users ALTER COLUMN account_status SET NOT NULL`
 
       await sql`
@@ -83,11 +83,7 @@ export async function getAccountSessionState(userId: string): Promise<AccountSes
   return rows[0] || null
 }
 
-export async function issueAuthToken(
-  userId: string,
-  tokenType: AuthTokenType,
-  ttlMinutes: number,
-) {
+export async function issueAuthToken(userId: string, tokenType: AuthTokenType, ttlMinutes: number) {
   await ensureAccountSecuritySchema()
   const token = randomBytes(32).toString("base64url")
   const hash = tokenHash(token)
@@ -101,12 +97,7 @@ export async function issueAuthToken(
   `
   await sql`
     INSERT INTO auth_tokens (user_id, token_type, token_hash, expires_at)
-    VALUES (
-      ${userId},
-      ${tokenType},
-      ${hash},
-      NOW() + (${ttlMinutes} * INTERVAL '1 minute')
-    )
+    VALUES (${userId}, ${tokenType}, ${hash}, NOW() + (${ttlMinutes} * INTERVAL '1 minute'))
   `
   await sql`DELETE FROM auth_tokens WHERE expires_at < NOW() - INTERVAL '7 days'`
   return token
