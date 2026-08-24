@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 
 import type {
   BuilderDeploymentDomain,
@@ -51,6 +52,7 @@ function typeLabel(domain: BuilderDeploymentDomain) {
 
 export function ProjectDomainManager() {
   const [open, setOpen] = useState(false)
+  const [settingsHost, setSettingsHost] = useState<HTMLElement | null>(null)
   const [projectId, setProjectId] = useState("")
   const [lifecycle, setLifecycle] = useState<BuilderDeploymentLifecycle>({
     deployment: null,
@@ -70,6 +72,24 @@ export function ProjectDomainManager() {
     syncProject()
     const interval = window.setInterval(syncProject, 1000)
     return () => window.clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    function syncSettingsHost() {
+      const title = document.getElementById("utility-panel-title")
+      if (title?.textContent?.trim() !== "Settings") {
+        setSettingsHost(null)
+        return
+      }
+      const header = title.closest("header")
+      const body = header?.nextElementSibling
+      setSettingsHost(body instanceof HTMLElement ? body : null)
+    }
+
+    syncSettingsHost()
+    const observer = new MutationObserver(syncSettingsHost)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
   }, [])
 
   const load = useCallback(async (activeProjectId = projectId) => {
@@ -148,20 +168,33 @@ export function ProjectDomainManager() {
     [lifecycle.domains],
   )
 
-  return (
-    <>
+  const settingsEntry = settingsHost ? createPortal(
+    <div className="mt-3">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-[80] inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-[#08111f]/95 px-4 py-2.5 text-[14px] font-black text-cyan-100 shadow-[0_16px_45px_rgba(0,0,0,.45)] backdrop-blur-xl hover:border-cyan-300/45"
+        className="flex w-full items-center rounded-xl border border-[#263550] bg-[#10182b] p-4 text-left text-[14px] font-bold transition hover:border-cyan-300/30 hover:bg-[#121d33]"
       >
-        <Globe2 className="h-4 w-4" /> Domains
+        <Globe2 className="mr-3 h-4 w-4 shrink-0 text-cyan-300" />
+        <span className="min-w-0 flex-1">
+          <span className="block">Domains</span>
+          <span className="mt-1 block text-[12px] font-normal text-slate-500">
+            Manage 786.Chat subdomains, custom domains, DNS, SSL and the primary address.
+          </span>
+        </span>
         {lifecycle.domains.length > 0 && (
-          <span className="rounded-full bg-cyan-300/15 px-2 py-0.5 text-[12px] text-cyan-200">
+          <span className="ml-3 rounded-full bg-cyan-300/15 px-2 py-0.5 text-[12px] text-cyan-200">
             {lifecycle.domains.length}
           </span>
         )}
       </button>
+    </div>,
+    settingsHost,
+  ) : null
+
+  return (
+    <>
+      {settingsEntry}
 
       {open && (
         <div className="fixed inset-0 z-[120] flex justify-end bg-black/45 backdrop-blur-[2px]" onMouseDown={(event) => {
