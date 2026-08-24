@@ -25,6 +25,62 @@ function exportExistingDeclaration(source: string, name: string) {
   return repaired
 }
 
+function generatedPathFromTypeScriptLog(files: Record<string, string>, logs: string) {
+  for (const match of logs.matchAll(/(?:^|\n)([^\n()]+\.(?:ts|tsx))\((\d+),(\d+)\):\s*error\s+TS\d+:/gi)) {
+    const reported = match[1].trim().replace(/^\.\//, "")
+    if (files[reported]) return reported
+    if (files[`src/${reported}`]) return `src/${reported}`
+  }
+  return null
+}
+
+function repairGeneratedBlobPutBody(files: Record<string, string>, logs: string) {
+  if (!/Uint8Array(?:<[^>]+>)?[\s\S]{0,180}PutBody/i.test(logs)) return null
+  const reportedPath = generatedPathFromTypeScriptLog(files, logs)
+  const candidatePaths = reportedPath
+    ? [reportedPath]
+    : Object.keys(files).filter((path) => /^(?:src\/)?app\/api\/uploads(?:\/\[id\])?\/route\.ts$/.test(path))
+  const repairedFiles: Record<string, string> = {}
+
+  for (const path of candidatePaths) {
+    const source = files[path]
+    if (!source || !/@vercel\/blob|\bput\s*\(/.test(source)) continue
+    const repaired = source
+      .replace(/new\s+Uint8Array\s*\(\s*await\s+([^\n;]+?\.arrayBuffer\s*\(\s*\))\s*\)/g, "await $1")
+      .replace(/Uint8Array\.from\s*\(\s*await\s+([^\n;]+?\.arrayBuffer\s*\(\s*\))\s*\)/g, "await $1")
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
+function repairGeneratedDynamicRouteParams(files: Record<string, string>, logs: string) {
+  if (!/(?:Route .* has an invalid|params[\s\S]{0,160}Promise|Promise[\s\S]{0,160}params|invalid.*route handler)/i.test(logs)) return null
+  const reportedPath = generatedPathFromTypeScriptLog(files, logs)
+  const candidatePaths = reportedPath
+    ? [reportedPath]
+    : Object.keys(files).filter((path) => /^(?:src\/)?app\/api\/.+\/\[[^/]+\]\/route\.ts$/.test(path))
+  const repairedFiles: Record<string, string> = {}
+
+  for (const path of candidatePaths) {
+    let source = files[path]
+    if (!source || !/\/\[[^/]+\]\/route\.ts$/.test(path) || !/\bparams\b/.test(source)) continue
+    const original = source
+    source = source.replace(
+      /params\s*:\s*\{\s*([^{}]+?)\s*\}/g,
+      (_statement, members: string) => `params: Promise<{ ${members.trim()} }>`
+    )
+    source = source.replace(
+      /\b(const|let)\s+\{([^}]+)\}\s*=\s*params\b/g,
+      (_statement, declaration: string, members: string) => `${declaration} {${members}} = await params`
+    )
+    source = source.replace(/\bparams\.([A-Za-z_$][\w$]*)/g, "(await params).$1")
+    if (source !== original) repairedFiles[path] = source
+  }
+
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
 function repairMissingGeneratedAuthSignSession(files: Record<string, string>, logs: string) {
   const match = logs.match(/Module\s+['"]+[\"]?@\/lib\/server\/auth[\"]?['"]+\s+has no exported member\s+['"]signSession['"]/i)
   if (!match) return null
@@ -84,6 +140,22 @@ function repairMissingGeneratedAuthCurrentUser(files: Record<string, string>, lo
 
 export function repairMissingGeneratedDbHelper(files: Record<string, string>, logs: string) {
   let workingFiles = files
+  const compatibilityRepairs: Record<string, string> = {}
+
+  const blobPutBodyRepair = repairGeneratedBlobPutBody(workingFiles, logs)
+  if (blobPutBodyRepair) {
+    Object.assign(compatibilityRepairs, blobPutBodyRepair)
+    workingFiles = { ...workingFiles, ...blobPutBodyRepair }
+  }
+
+  const dynamicRouteParamsRepair = repairGeneratedDynamicRouteParams(workingFiles, logs)
+  if (dynamicRouteParamsRepair) {
+    Object.assign(compatibilityRepairs, dynamicRouteParamsRepair)
+    workingFiles = { ...workingFiles, ...dynamicRouteParamsRepair }
+  }
+
+  if (Object.keys(compatibilityRepairs).length) return compatibilityRepairs
+
   const authRepairs: Record<string, string> = {}
 
   const authSignSessionRepair = repairMissingGeneratedAuthSignSession(workingFiles, logs)
