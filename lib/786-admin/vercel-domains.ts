@@ -16,6 +16,13 @@ export type VercelDomainState = {
   error: string | null
 }
 
+const PLATFORM_DOMAIN = "786.chat"
+
+function isPlatformSubdomain(hostname: string) {
+  const normalized = hostname.toLowerCase().trim().replace(/\.$/, "")
+  return normalized.endsWith(`.${PLATFORM_DOMAIN}`) && normalized !== `www.${PLATFORM_DOMAIN}`
+}
+
 function configuration() {
   const token = (process.env.VERCEL_ACCESS_TOKEN || process.env.VERCEL_TOKEN || "").trim()
   const project = (process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT_NAME || "").trim()
@@ -69,6 +76,18 @@ async function httpsIsReady(hostname: string) {
   }
 }
 
+async function platformSubdomainState(hostname: string): Promise<VercelDomainState> {
+  const ready = await httpsIsReady(hostname)
+  return {
+    configured: ready,
+    verified: ready,
+    sslReady: ready,
+    records: [],
+    providerDomainId: `*.${PLATFORM_DOMAIN}`,
+    error: null,
+  }
+}
+
 function recordFromUnknown(value: unknown): VercelDnsRecord | null {
   if (!value || typeof value !== "object") return null
   const raw = value as Record<string, unknown>
@@ -110,6 +129,8 @@ async function configurationRecords(hostname: string): Promise<VercelDnsRecord[]
 }
 
 export async function addDomainToVercel(hostname: string): Promise<VercelDomainState> {
+  if (isPlatformSubdomain(hostname)) return platformSubdomainState(hostname)
+
   const { project } = configuration()
   const body = await vercelRequest(
     `/v10/projects/${encodeURIComponent(project)}/domains`,
@@ -132,6 +153,8 @@ export async function addDomainToVercel(hostname: string): Promise<VercelDomainS
 }
 
 export async function getVercelDomainState(hostname: string): Promise<VercelDomainState> {
+  if (isPlatformSubdomain(hostname)) return platformSubdomainState(hostname)
+
   const { project } = configuration()
   const body = await vercelRequest(
     `/v9/projects/${encodeURIComponent(project)}/domains/${encodeURIComponent(hostname)}`,
@@ -154,6 +177,8 @@ export async function getVercelDomainState(hostname: string): Promise<VercelDoma
 }
 
 export async function removeDomainFromVercel(hostname: string): Promise<void> {
+  if (isPlatformSubdomain(hostname)) return
+
   const { project } = configuration()
   await vercelRequest(
     `/v9/projects/${encodeURIComponent(project)}/domains/${encodeURIComponent(hostname)}`,
