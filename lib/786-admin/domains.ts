@@ -80,6 +80,20 @@ function stateColumns(state: VercelDomainState) {
   } as const
 }
 
+async function assertHostnameAvailable(hostname: string, projectId: string) {
+  const rows = (await sql`
+    SELECT project_id
+    FROM admin_project_domains
+    WHERE LOWER(hostname) = ${hostname.toLowerCase().trim()}
+      AND status != 'removed'
+      AND project_id != ${projectId}
+    LIMIT 1
+  `) as unknown as Array<{ project_id: string }>
+  if (rows[0]) {
+    throw new Error("This domain is already connected to another project.")
+  }
+}
+
 export async function listProjectDomains(projectId: string, ownerEmail: string) {
   return (await sql`
     SELECT d.*
@@ -147,6 +161,8 @@ export async function createHostedDomain(input: {
     const validationError = validateHostname(hostname)
     if (validationError) throw new Error(validationError)
   }
+
+  await assertHostnameAvailable(hostname, input.deployment.project_id)
 
   let providerState: VercelDomainState
   try {
