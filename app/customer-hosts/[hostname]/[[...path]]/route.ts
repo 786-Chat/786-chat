@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server"
 import { getLiveDeploymentByHostname } from "@/lib/786-admin/publishing"
 
 type Ctx = { params: Promise<{ hostname: string; path?: string[] }> }
@@ -16,11 +17,18 @@ function notFound() {
   )
 }
 
-export async function GET(_request: Request, { params }: Ctx) {
-  const { hostname } = await params
+export async function GET(request: Request, { params }: Ctx) {
+  const { hostname, path = [] } = await params
   const normalized = decodeURIComponent(hostname).toLowerCase().trim()
   const deployment = await getLiveDeploymentByHostname(normalized)
   if (!deployment) return notFound()
+
+  if (deployment.runtime_url) {
+    const runtime = new URL(deployment.runtime_url)
+    runtime.pathname = `/${path.join("/")}`
+    runtime.search = new URL(request.url).search
+    return NextResponse.redirect(runtime, 307)
+  }
 
   const scopedBase = `/p/${deployment.slug}`
   const html = deployment.published_html.replaceAll(scopedBase, "")
