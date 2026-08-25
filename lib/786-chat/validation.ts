@@ -109,6 +109,7 @@ function source(files: Record<string, string>) {
 }
 
 function regexEscape(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") }
+function sqlIdentifier(value: string) { return value.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") }
 
 function normalizeDynamicRoute(route: string) {
   return route.replace(/\$\{[^}]+\}/g, "[id]")
@@ -207,8 +208,10 @@ export function validateGeneratedProject(specification: ProjectSpecification, fi
     if (!schema.trim()) errors.push("Missing required database schema: sql/schema.sql")
     else if (!/CREATE\s+TABLE/i.test(schema)) errors.push("PostgreSQL schema does not create a database table.")
     for (const table of specification.databaseTables || []) {
-      const tablePattern = new RegExp(`CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+["']?${regexEscape(table)}["']?\\b`, "i")
-      if (!tablePattern.test(schema)) errors.push(`Missing requested database table: ${table}`)
+      const normalizedTable = sqlIdentifier(table)
+      if (!normalizedTable) continue
+      const tablePattern = new RegExp(`CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+["']?${regexEscape(normalizedTable)}["']?\\b`, "i")
+      if (!tablePattern.test(schema)) errors.push(`Missing requested database table: ${normalizedTable}`)
     }
   }
 
