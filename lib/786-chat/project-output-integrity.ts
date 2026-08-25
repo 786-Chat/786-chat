@@ -67,8 +67,18 @@ function candidates(base: string) {
   ]
 }
 
-function validatePlannedLocalImports(prompt: string, files: Record<string, string>) {
+function validatePlannedLocalImports(prompt: string, files: Record<string, string>, existing: boolean) {
   if (!/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)) return
+
+  // During a validation-guided repair of an existing project, the current file unit
+  // only contains the replacement file plus a narrow dependency context. A valid
+  // import may point to a file that already exists in the saved project but is not
+  // present in this unit's planned allowlist. Rejecting it here creates false
+  // provider failures and unnecessary fallback/timeouts. The merged-project
+  // validator and isolated build remain authoritative and will still catch a truly
+  // missing local module after the repaired file is merged with the saved project.
+  if (existing && /\bVALIDATION-GUIDED REPAIR\b/i.test(prompt)) return
+
   const planned = extractPlannedAllowlist(prompt)
   if (!planned.size) return
 
@@ -96,5 +106,5 @@ export function assertGeneratedProjectCompleteness(prompt: string, files: Record
   if (!planned.length) return
   const missing = planned.filter((file) => !files[file] || !files[file].trim())
   if (missing.length) throw new Error(`${INCOMPLETE_PROJECT_OUTPUT} Missing: ${missing.join(", ")}`)
-  validatePlannedLocalImports(prompt, files)
+  validatePlannedLocalImports(prompt, files, existing)
 }
