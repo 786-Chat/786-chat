@@ -8,7 +8,7 @@ import { normalizeGenerationUsage } from "@/lib/786-chat/ai-provider-config"
 export const runtime = "nodejs"
 export const maxDuration = 90
 
-const VISION_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"] as const
+const VISION_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash"] as const
 
 type VisionAttachment = {
   name?: string
