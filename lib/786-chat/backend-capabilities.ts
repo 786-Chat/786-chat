@@ -5,6 +5,15 @@ export type BackendAcceptance = { valid: boolean; errors: string[]; warnings: st
 const CAPABILITY_ORDER: BackendCapability[] = ["database", "authentication", "storage", "email", "api"]
 const AUTH_TABLE_NAMES = ["users", "sessions", "email_verification_tokens", "password_reset_tokens"] as const
 const AUTH_SUPPORT_TABLE_NAMES = ["sessions", "email_verification_tokens", "password_reset_tokens"] as const
+const BACKEND_DEPENDENCY_VERSIONS: Record<string, string> = {
+  "server-only": "^0.0.1",
+  zod: "^3.24.1",
+  "@neondatabase/serverless": "^1.1.0",
+  bcryptjs: "^3.0.3",
+  jose: "^6.2.3",
+  "@vercel/blob": "^2.4.0",
+  resend: "^6.0.1",
+}
 function unique<T>(values: T[]) { return Array.from(new Set(values)) }
 function normalizedResource(value: string) { return value.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") }
 
@@ -38,6 +47,42 @@ export function requiredBackendFiles(specification: ProjectSpecification) {
   return unique(files)
 }
 
+function requiredBackendDependencies(capabilities: BackendCapability[]) {
+  return unique([
+    "server-only",
+    "zod",
+    ...(capabilities.includes("database") ? ["@neondatabase/serverless"] : []),
+    ...(capabilities.includes("authentication") ? ["bcryptjs", "jose"] : []),
+    ...(capabilities.includes("storage") ? ["@vercel/blob"] : []),
+    ...(capabilities.includes("email") ? ["resend"] : []),
+  ])
+}
+
+export function normalizeGeneratedBackendDependencies(specification: ProjectSpecification, files: Record<string, string>) {
+  const capabilities = backendCapabilities(specification)
+  if (!capabilities.length || !files["package.json"]) return files
+  try {
+    const packageJson = JSON.parse(files["package.json"]) as Record<string, unknown>
+    const dependencies = packageJson.dependencies && typeof packageJson.dependencies === "object" && !Array.isArray(packageJson.dependencies)
+      ? packageJson.dependencies as Record<string, string>
+      : {}
+    let changed = false
+    for (const dependency of requiredBackendDependencies(capabilities)) {
+      if (!dependencies[dependency]) {
+        dependencies[dependency] = BACKEND_DEPENDENCY_VERSIONS[dependency]
+        changed = true
+      }
+    }
+    if (changed || packageJson.dependencies !== dependencies) {
+      packageJson.dependencies = dependencies
+      files["package.json"] = `${JSON.stringify(packageJson, null, 2)}\n`
+    }
+  } catch {
+    // Invalid package.json remains a validation error for the repair engine.
+  }
+  return files
+}
+
 export function backendCapabilityBrief(specification: ProjectSpecification): string[] {
   const capabilities = backendCapabilities(specification)
   if (capabilities.length === 0) return []
@@ -49,11 +94,11 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
     "When extending an existing project, mandatory backend files take priority over cosmetic rewrites. Return every missing backend file and only the frontend files that must change. Never omit schema, migration, manifest or API files to save output tokens.",
     "backend/manifest.json must declare version 1 and may declare capabilities either as top-level provider objects or in a capabilities array. It must include every resource provider, required environment variable name, migration path and API route without containing secret values.",
     "lib/server/env.ts must be server-only, validate required environment variables with Zod and fail closed. Never use NEXT_PUBLIC_ for database, authentication, Blob or email secrets.",
-    ...(capabilities.includes("database") ? ["Use @neondatabase/serverless through a lazy getDb/getSql function in lib/server/db.ts; do not instantiate the connection at module load and do not use a Proxy. A function declaration or const arrow function is valid. DATABASE_URL may be loaded through lib/server/env.ts, but the Neon client itself must still be created lazily inside getDb/getSql.", "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, indexes and non-destructive IF NOT EXISTS statements.", "scripts/migrate.mjs must read the checked-in migration and apply it only through DATABASE_URL. It must not run shell commands or silently ignore migration errors."] : []),
+    ...(capabilities.includes("database") ? ["Use @neondatabase/serverless through a lazy getDb/getSql function in lib/server/db.ts; do not instantiate the connection at module load and do not use a Proxy. A function declaration or const arrow function is valid. DATABASE_URL may be loaded through lib/server/env.ts, but the Neon client itself must still be created lazily inside getDb/getSql.", "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, indexes and non-destructive IF NOT EXISTS statements.", "SQL table identifiers must use letters, numbers and underscores. Keep route slugs separate from table names: for example API resource production-records maps to SQL table production_records.", "scripts/migrate.mjs must read the checked-in migration and apply it only through DATABASE_URL. It must not run shell commands or silently ignore migration errors."] : []),
     ...(requiresAuthentication ? ["AUTHENTICATION SQL CONTRACT: BOTH sql/schema.sql and sql/migrations/001_initial.sql must create tables with these exact names: users, sessions, email_verification_tokens, password_reset_tokens. Do not rename, alias or substitute any of these tables.", "Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.", "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.", "Use jose with an AUTH_SECRET that has no hard-coded fallback. Rotate/revoke sessions on password reset and never reveal whether a forgot-password email exists."] : []),
     ...(capabilities.includes("storage") ? ["Use @vercel/blob private storage. Upload routes must authenticate first, enforce file size and MIME allowlists, prefix Blob paths with the authenticated owner/tenant, and persist upload metadata in Neon.", "Download/delete routes must re-check database ownership before issuing a private download URL or deleting a Blob."] : []),
     ...(capabilities.includes("email") ? ["Use Resend only in lib/server/email.ts with RESEND_API_KEY and EMAIL_FROM. Validate recipients, use an idempotency key, return a typed result and never expose provider errors or credentials to the browser.", "app/api/email/route.ts must validate the request with Zod and authenticate the user with requireUser/requireAuth/getSession/getCurrentUser, or enforce a persistent rate limit for an explicitly public contact form, before it sends email.", "For an authenticated business application, prefer authentication on app/api/email/route.ts. Do not treat a UI-only check, hidden field, or client-side token as authentication."] : []),
-    ...(capabilities.includes("api") ? [`API resources: ${resources.join(", ") || "authentication routes only"}`, ...(requiresAuthentication ? ["Every data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses."] : ["The request does not require authentication. Do not invent an auth dependency. Public data routes must still validate path/body/query input with Zod, use parameterized Neon queries, avoid exposing secrets and return explicit 400/404/409/429/500 responses."]), "For every API resource, create both the collection route and [id] item route. The collection route must export GET and POST; the item route must export GET, PATCH and DELETE. Both `export async function METHOD` and `export const METHOD = async` are valid."] : []),
+    ...(capabilities.includes("api") ? [`API resources: ${resources.join(", ") || "authentication routes only"}`, ...(requiresAuthentication ? ["Every protected data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses. An explicitly public scan/label route may be GET-only and token-scoped, must expose only safe fields, and must never create, update or delete data."] : ["The request does not require authentication. Do not invent an auth dependency. Public data routes must still validate path/body/query input with Zod, use parameterized Neon queries, avoid exposing secrets and return explicit 400/404/409/429/500 responses."]), "For every CRUD API resource, create both the collection route and [id] item route. The collection route must export GET and POST; the item route must export GET, PATCH and DELETE. Explicit public read-only scan routes are not CRUD resources and must remain GET-only. Both `export async function METHOD` and `export const METHOD = async` are valid."] : []),
     "package.json must contain explicit non-latest semver ranges for every imported server package, including server-only, zod and each selected provider SDK.",
     "docs/backend-setup.md must list setup and migration commands plus environment variable names only; never generate an .env file or credential value.",
   ]
@@ -96,8 +141,9 @@ export function normalizeGeneratedAuthenticationSchema(specification: ProjectSpe
 function backendRepairError(message: string) { return `Backend CRUD repair: ${message}` }
 
 export function assessGeneratedBackend(specification: ProjectSpecification, files: Record<string, string>): BackendAcceptance {
-  normalizeGeneratedAuthenticationSchema(specification, files)
   const capabilities = backendCapabilities(specification)
+  normalizeGeneratedAuthenticationSchema(specification, files)
+  normalizeGeneratedBackendDependencies(specification, files)
   const errors: string[] = []
   const warnings: string[] = []
   if (capabilities.length === 0) return { valid: true, errors, warnings }
@@ -113,7 +159,7 @@ export function assessGeneratedBackend(specification: ProjectSpecification, file
   const combinedServer = Object.entries(files).filter(([path]) => /^(?:lib\/server|app\/api)\//.test(path)).map(([, content]) => content).join("\n")
   if (/\bNEXT_PUBLIC_(?:DATABASE|NEON|AUTH|BLOB|RESEND|EMAIL)/.test(combinedServer)) errors.push(backendRepairError("Backend credentials cannot use NEXT_PUBLIC_ environment variables."))
   const dependencies = parsePackage(files["package.json"])
-  const requiredDependencies = unique(["server-only", "zod", ...(capabilities.includes("database") ? ["@neondatabase/serverless"] : []), ...(capabilities.includes("authentication") ? ["bcryptjs", "jose"] : []), ...(capabilities.includes("storage") ? ["@vercel/blob"] : []), ...(capabilities.includes("email") ? ["resend"] : [])])
+  const requiredDependencies = requiredBackendDependencies(capabilities)
   for (const dependency of requiredDependencies) if (!dependencies[dependency]) errors.push(backendRepairError(`Missing backend dependency: ${dependency}`))
   if (capabilities.includes("database")) {
     const db = files["lib/server/db.ts"] || ""; const schema = files["sql/schema.sql"] || ""; const migration = files["sql/migrations/001_initial.sql"] || ""; const runner = files["scripts/migrate.mjs"] || ""
