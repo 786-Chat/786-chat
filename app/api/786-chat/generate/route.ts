@@ -45,8 +45,8 @@ import { screenBuilderPrompt } from "@/lib/786-chat/security"
 export const runtime = "nodejs"
 export const maxDuration = 300
 
-const MAX_CONTINUATION_PROVIDER_RETRIES = 2
-const MAX_VALIDATION_REPAIR_PASSES = 2
+const MAX_CONTINUATION_PROVIDER_RETRIES = 3
+const MAX_VALIDATION_REPAIR_PASSES = 5
 
 function attemptsFrom(value: unknown) {
   return Array.isArray(value) ? value : []
@@ -65,6 +65,15 @@ function routeRepairFilesFromValidationErrors(errors: string[]) {
       if (!/^\/(?:(?:[a-z0-9._~-]+|\[[a-z0-9_-]+\])\/?)*$/i.test(route)) continue
       files.push(route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`)
     }
+  }
+  return uniquePaths(files)
+}
+
+function validationRepairFilesFromErrors(errors: string[]) {
+  const files: string[] = []
+  const pathPattern = /((?:src\/)?(?:app|lib|shared|sql|scripts|backend|docs)\/[A-Za-z0-9_./\[\]-]+\.(?:tsx?|jsx?|mjs|sql|json|md))/g
+  for (const error of errors) {
+    for (const match of error.matchAll(pathPattern)) files.push(match[1].replace(/^src\//, "src/"))
   }
   return uniquePaths(files)
 }
@@ -333,11 +342,12 @@ export async function POST(request: Request) {
   if (!validation.valid && project && repairPass < MAX_VALIDATION_REPAIR_PASSES) {
     repairAttempted = true
     const backendRepairFiles = requiredBackendFiles(specification)
-    const focusedSystemRepair = validation.errors.every((error) =>
-      /tenant guard|tenant ownership|API mutations|operational pages|workflow evidence|CRUD/i.test(error)
+    const focusedSystemRepair = validation.errors.some((error) =>
+      /backend|database|authentication|AUTH_SECRET|tenant|ownership|security|dependency|schema|migration|Zod|Neon|API|CRUD|public scan|public database/i.test(error)
     )
     const requiredRepairFiles = uniquePaths([
       ...routeRepairFilesFromValidationErrors(validation.errors),
+      ...validationRepairFilesFromErrors(validation.errors),
       ...specification.routes.map((route) =>
         route === "/" ? "app/page.tsx" : `app/${route.slice(1)}/page.tsx`
       ),
@@ -359,18 +369,22 @@ export async function POST(request: Request) {
       ? Object.fromEntries(Object.entries(files).filter(([path]) =>
           path === "lib/server/tenant.ts" ||
           path === "lib/server/validation.ts" ||
+          path === "lib/server/auth.ts" ||
           path === "shared/contracts.ts" ||
           path === "sql/schema.sql" ||
+          path === "sql/migrations/001_initial.sql" ||
+          path === "package.json" ||
           /^app\/api\/.+\/route\.ts$/.test(path) ||
           backendRepairFiles.includes(path) ||
+          requiredRepairFiles.includes(path) ||
           /^app\/(?!api\/).+\/page\.tsx$/.test(path)
         ))
       : files
     const repairBrief = [
       prompt,
       "",
-      "VALIDATION-GUIDED REPAIR — FILE-BY-FILE AND RESUMABLE:",
-      "The previous generated project was rejected. Correct every error below without removing working features.",
+      `VALIDATION-GUIDED AUTO REPAIR PASS ${repairPass + 1} OF ${MAX_VALIDATION_REPAIR_PASSES}:`,
+      "The previous generated project was rejected. Correct every error below automatically without asking the user to send a repair prompt and without removing working features.",
       ...validation.errors.map((error) => `- ${error}`),
       "",
       `Exact required routes: ${specification.routes.join(", ")}`,
@@ -378,17 +392,21 @@ export async function POST(request: Request) {
       `Required system files (create any that are absent and replace every rejected one): ${requiredRepairFiles.join(", ")}`,
       ...backendCapabilityBrief(specification).map((line) => `- ${line}`),
       "Public auth bootstrap APIs register/login/forgot-password/reset-password/verify-email must validate inputs securely but do not require a pre-existing authenticated session.",
+      "Use the existing project authentication implementation when one already exists; never create a competing second auth system just to satisfy validation.",
+      "If authentication is required, lib/server/auth.ts must actually use bcryptjs for password hashing and jose for signed/verified sessions, and AUTH_SECRET must be required with no hard-coded fallback.",
       "If remember-me is required, the login UI must include a real checkbox/control containing the words remember me.",
       "backend/manifest.json must declare every requested capability including api when API routes are required.",
       "If email is required, package.json must include resend and lib/server/email.ts must import server-only, use Resend with RESEND_API_KEY and EMAIL_FROM, and provide an idempotency key.",
       "app/page.tsx is mandatory. If it is missing, create it and wire it to the requested application or requested nested route.",
-      "For tenant security, lib/server/tenant.ts must explicitly reject a missing or mismatched companyId with a forbidden/unauthorized error.",
-      "Every collection and item API route must reference companyId and call requireTenant, requireCompany, tenantGuard or assertTenant before reading or mutating data.",
-      "For every mutating POST, PATCH and DELETE handler, validate input and persist an audit_logs event in the same tenant scope.",
-      "Both collection and item API files must import or call the audit implementation; a comment or label is not enough.",
+      "For tenant security, protected CRUD routes must authenticate and scope every query to the authenticated owner/company/tenant before reading or mutating data.",
+      "An explicitly public scan or label endpoint is a special read-only route: it may omit login only when it exports GET only, uses a non-editable public/scan token or public record identifier, returns only safe display fields, and contains no POST, PUT, PATCH or DELETE.",
+      "Do not require a public read-only scan endpoint to call the protected CRUD API. It must query only the minimum safe fields needed for scanning.",
+      "SQL table names and API route slugs are different identifiers. PostgreSQL table identifiers use underscores. For example route production-records must use table production_records, never a hyphenated SQL table name.",
+      "For every mutating protected POST, PATCH and DELETE handler in tenant-scoped systems, validate input and persist an audit_logs event in the same tenant scope.",
+      "Both protected collection and item API files must import or call the required audit implementation when the system blueprint requires auditing; a comment or label is not enough.",
       "Every required operational page must contain a real form, table or interactive control with onSubmit, onClick, useState or a data mutation action. Static marketing cards do not count.",
       "Implement every missing workflow evidence term in functional page, API or schema code. For CRM this includes an explicit sales follow-up task and notification.",
-      "Return every missing or rejected file from the required system file list. Do not omit a collection route, item route or operational page to save output tokens.",
+      "Return every missing or rejected file from the required system file list. Do not omit a collection route, item route, dependency, schema, migration, auth helper or operational page to save output tokens.",
       "Generate the repair one file at a time. Return complete replacement content, never a patch.",
       "Do not return commentary, a partial patch, a landing page, mock-only controls or local fallback content.",
     ].join("\n")
@@ -491,7 +509,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: false,
       generationId,
-      error: "Generated project failed requirement validation and was not accepted.",
+      error: "Generated project failed requirement validation and was not accepted after automatic repair attempts.",
       specification,
       plan,
       validation,
@@ -499,6 +517,7 @@ export async function POST(request: Request) {
       providerStatus: result.providerStatus,
       fellBackToLocal: result.fellBackToLocal,
       repairAttempted,
+      repairPassesAttempted: Math.min(MAX_VALIDATION_REPAIR_PASSES, repairPass + 1),
     }, { status: 422 })
   }
 
