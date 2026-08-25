@@ -34,6 +34,15 @@ type StoredProject = {
   messages?: StoredMessage[]
 }
 
+type VisionResult = {
+  success?: boolean
+  response?: string
+  model?: string
+  reason?: string
+  usage?: GenerationResult["usage"]
+  error?: string
+}
+
 function errorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
     const value = (payload as { error?: unknown }).error
@@ -62,6 +71,35 @@ function toProject(project: StoredProject): BuilderProject {
     previewState: project.preview_state || {},
     metadata: project.metadata || {},
     visualEditor: normalizeVisualEditorState(project.metadata?.visual_editor),
+  }
+}
+
+function isReadOnlyImageRequest(message: string) {
+  const text = message.trim().toLowerCase()
+  const asksToInspect = /\b(read|describe|explain|analyse|analyze|summari[sz]e|identify|tell me|what(?:'s| is)|show me)\b/.test(text) &&
+    /\b(image|picture|photo|screenshot|screen shot|attachment|attached)\b/.test(text)
+  const asksToEdit = /\b(add|remove|delete|change|edit|fix|replace|move|copy|create|build|make|update|redesign|implement|apply|match|use this|like this)\b/.test(text)
+  return asksToInspect && !asksToEdit
+}
+
+export async function analyzeBuilderAttachments(request: GenerationRequest) {
+  const response = await fetch("/api/786-chat/vision", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: request.message,
+      attachments: request.attachments,
+    }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as VisionResult
+  if (!response.ok || !payload.success || !payload.response) {
+    throw new Error(payload.error || "Gemini could not read the attached image.")
+  }
+  return {
+    response: payload.response,
+    model: payload.model || "gemini-vision",
+    reason: payload.reason || "Gemini vision analysis completed.",
+    usage: payload.usage,
   }
 }
 
@@ -106,7 +144,44 @@ export async function loadBuilderProject(projectId: string) {
 }
 
 export async function generateBuilderProject(request: GenerationRequest) {
-  const surgicalEdit = trySurgicalTextEdit(request)
+  let effectiveRequest = request
+
+  if (request.attachments.length) {
+    const vision = await analyzeBuilderAttachments(request)
+
+    if (isReadOnlyImageRequest(request.message)) {
+      if (!request.existing) {
+        throw new Error("Open or create a project first, then ask 786.Chat to read the attached image.")
+      }
+      return {
+        response: vision.response,
+        model: "gemini-vision",
+        reason: `${vision.reason} Project files were kept unchanged.`,
+        usage: vision.usage,
+        project: {
+          title: request.existing.title,
+          description: request.existing.description,
+          files: { ...request.existing.keyFiles },
+        },
+      } satisfies GenerationResult
+    }
+
+    effectiveRequest = {
+      ...request,
+      attachments: [],
+      message: [
+        request.message,
+        "",
+        "IMAGE REFERENCE ANALYSIS — GEMINI VISION ONLY:",
+        vision.response,
+        "",
+        "CODING INSTRUCTION:",
+        "Use the image analysis above only as visual/reference context. DeepSeek must perform all project code generation, editing and repair. Do not claim the coding model can directly see the attachment.",
+      ].join("\n"),
+    }
+  }
+
+  const surgicalEdit = trySurgicalTextEdit(effectiveRequest)
   if (surgicalEdit) return surgicalEdit
 
   const MAX_GENERATION_CONTINUATIONS = 60
@@ -128,7 +203,7 @@ export async function generateBuilderProject(request: GenerationRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(continuationToken
         ? { continuationToken, continuationRetryCount }
-        : { ...request, mode: "auto" }),
+        : { ...effectiveRequest, mode: "auto" }),
     })
     payload = (await response.json().catch(() => ({}))) as typeof payload
     if (!response.ok || !payload.success) {
@@ -214,7 +289,7 @@ export async function saveBuilderProject(input: {
         ],
         revision_label: `Before AI edit: ${input.userPrompt.slice(0, 100)}`,
         revision_source: "ai-edit",
-        record_generation_job: input.generated.model !== "surgical-edit",
+        record_generation_job: !["surgical-edit", "gemini-vision"].includes(String(input.generated.model || "")),
       }),
     },
   )
