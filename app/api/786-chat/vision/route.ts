@@ -3,10 +3,12 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateText, type FilePart, type ImagePart, type TextPart } from "ai"
 
 import { getSession } from "@/lib/auth"
-import { BUILDER_MODELS, normalizeGenerationUsage } from "@/lib/786-chat/ai-provider-config"
+import { normalizeGenerationUsage } from "@/lib/786-chat/ai-provider-config"
 
 export const runtime = "nodejs"
 export const maxDuration = 90
+
+const VISION_MODELS = ["gemini-2.5-flash", "gemini-3.5-flash"] as const
 
 type VisionAttachment = {
   name?: string
@@ -63,6 +65,10 @@ function safeError(error: unknown) {
     .slice(0, 500)
 }
 
+function isQuotaError(reason: string) {
+  return /quota|resource exhausted|rate.?limit|429|exceeded your current quota/i.test(reason)
+}
+
 export async function POST(request: Request) {
   const session = await getSession()
   if (!session?.email) {
@@ -92,56 +98,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: "Gemini image analysis is not configured." }, { status: 503 })
   }
 
-  const modelName = BUILDER_MODELS["gemini-flash"]
-  const directModel = modelName.replace(/^google\//, "")
-  const model = googleApiKey
-    ? createGoogleGenerativeAI({ apiKey: googleApiKey })(directModel)
-    : modelName
+  const directGoogle = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey }) : null
+  const failures: Array<{ model: string; reason: string; quota: boolean }> = []
 
-  try {
-    const result = await generateText({
-      model,
-      system: "You are 786.Chat's vision reader. Your only job is to inspect attached images/files and return concise factual visual context for the user or for a separate coding agent. Never generate code and never modify project files.",
-      messages: [{
-        role: "user",
-        content: attachmentContent(prompt, attachments),
-      }],
-      temperature: 0.1,
-      maxOutputTokens: 1800,
-      maxRetries: 0,
-      ...(typeof model === "string"
-        ? {
-            providerOptions: {
-              gateway: {
-                user: session.id || session.email,
-                tags: ["feature:builder-vision", `plan:${String(session.plan || "starter").toLowerCase()}`],
-                zeroDataRetention: true,
+  for (const modelId of VISION_MODELS) {
+    const modelName = `google/${modelId}`
+    const model = directGoogle ? directGoogle(modelId) : modelName
+
+    try {
+      const result = await generateText({
+        model,
+        system: "You are 786.Chat's vision reader. Your only job is to inspect attached images/files and return concise factual visual context for the user or for a separate coding agent. Never generate code and never modify project files.",
+        messages: [{
+          role: "user",
+          content: attachmentContent(prompt, attachments),
+        }],
+        temperature: 0.1,
+        maxOutputTokens: 1800,
+        maxRetries: 0,
+        ...(typeof model === "string"
+          ? {
+              providerOptions: {
+                gateway: {
+                  user: session.id || session.email,
+                  tags: ["feature:builder-vision", `plan:${String(session.plan || "starter").toLowerCase()}`],
+                  zeroDataRetention: true,
+                },
               },
-            },
-          }
-        : {}),
-    })
+            }
+          : {}),
+      })
 
-    const response = result.text?.trim()
-    if (!response) throw new Error("Gemini returned no image analysis text.")
+      const response = result.text?.trim()
+      if (!response) throw new Error("Gemini returned no image analysis text.")
 
-    return NextResponse.json({
-      success: true,
-      response,
-      model: modelName,
-      reason: "Gemini vision analysis completed. No project files were generated or changed.",
-      usage: normalizeGenerationUsage(result.usage, modelName),
-    })
-  } catch (error) {
-    const reason = safeError(error)
-    const quota = /quota|resource exhausted|rate.?limit|429|exceeded your current quota/i.test(reason)
-    return NextResponse.json({
-      success: false,
-      error: quota
-        ? "Gemini image-reading quota is exhausted. Your project was kept unchanged."
-        : `Gemini could not read the attachment. ${reason}`,
-      warning: quota ? "GEMINI_VISION_QUOTA_EXHAUSTED" : "GEMINI_VISION_FAILED",
-      projectPreserved: true,
-    }, { status: 503 })
+      return NextResponse.json({
+        success: true,
+        response,
+        model: modelName,
+        reason: `Gemini vision analysis completed with ${modelId}. No project files were generated or changed.`,
+        usage: normalizeGenerationUsage(result.usage, modelName),
+        visionFallbackUsed: modelId !== VISION_MODELS[0],
+      })
+    } catch (error) {
+      const reason = safeError(error)
+      failures.push({ model: modelId, reason, quota: isQuotaError(reason) })
+      console.warn(`[786.Chat vision] ${modelId} failed: ${reason}`)
+    }
   }
+
+  const quotaOnly = failures.length > 0 && failures.every((failure) => failure.quota)
+  const lastReason = failures.at(-1)?.reason || "Gemini vision failed."
+
+  return NextResponse.json({
+    success: false,
+    error: quotaOnly
+      ? "Gemini image-reading quota is exhausted on the available vision models. Your project was kept unchanged."
+      : `Gemini could not read the attachment. ${lastReason}`,
+    warning: quotaOnly ? "GEMINI_VISION_QUOTA_EXHAUSTED" : "GEMINI_VISION_FAILED",
+    projectPreserved: true,
+    visionAttempts: failures.map(({ model, quota }) => ({ model, status: quota ? "quota_exhausted" : "failed" })),
+  }, { status: 503 })
 }
