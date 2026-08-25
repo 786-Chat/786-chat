@@ -6,10 +6,19 @@ const integrity = await readFile(new URL("../../lib/786-chat/project-output-inte
 const controller = await readFile(new URL("../../lib/786-chat/provider-controller.ts", import.meta.url), "utf8")
 const codegen = await readFile(new URL("../../lib/786-admin/codegen.ts", import.meta.url), "utf8")
 
-test("file-level generation completeness is scoped to the current unit", () => {
-  assert.match(integrity, /FILE-LEVEL/)
-  assert.match(integrity, /return every file in this \(\?:batch\|unit\)/)
-  assert.match(integrity, /isBatchedGeneration/)
+test("file-level generation completeness is scoped to the explicit target file", () => {
+  assert.match(integrity, /FILE-LEVEL FULL-STACK GENERATION/)
+  assert.match(integrity, /Target file:/)
+  assert.match(integrity, /if \(targets\.size\) return \[\.\.\.targets\]/)
+  assert.match(integrity, /Backward-compatible fallback/)
+})
+
+test("a broader required-system-files list cannot override an explicit file-level target", () => {
+  const fileLevelBlock = integrity.match(/if \(isFileLevelGeneration\) \{([\s\S]*?)\n  \}\n  return \[\.\.\.extractPathList/)?.[1] || ""
+  assert.match(fileLevelBlock, /Target file:/)
+  assert.match(fileLevelBlock, /if \(targets\.size\) return \[\.\.\.targets\]/)
+  assert.match(fileLevelBlock, /Required system files/)
+  assert.ok(fileLevelBlock.indexOf("if (targets.size)") < fileLevelBlock.indexOf("Required system files"))
 })
 
 test("long full-stack generation retains completed files and never truncates the file plan", () => {
@@ -17,7 +26,7 @@ test("long full-stack generation retains completed files and never truncates the
   assert.match(controller, /runFileGenerationUnits\(/)
   assert.match(controller, /dependencyContext\(completedFiles as Record<string, string>, unit\.files\[0\]\)/)
   assert.doesNotMatch(controller, /MAX_GENERATION_BATCHES|MAX_FILES_PER_BATCH|batches\.slice/)
-  assert.match(controller, /\["deepseek-flash","gemini-flash"\]/)
+  assert.match(controller, /\["deepseek-flash"\]/)
 })
 
 test("a truncated individual file is compacted and retried without accepting partial JSON", () => {
