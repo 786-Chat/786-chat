@@ -18,11 +18,13 @@ test("read-only image questions return Gemini vision without changing project fi
   assert.match(apiSource, /files:\s*\{ \.\.\.request\.existing\.keyFiles \}/)
 })
 
-test("vision endpoint is analysis-only and tries a lower-quota fallback model", () => {
+test("vision endpoint stays read-only and falls back from direct Gemini to AI Gateway", () => {
   assert.match(visionRoute, /Your only job is to inspect attached images\/files/)
   assert.match(visionRoute, /Never generate code and never modify project files/)
   assert.match(visionRoute, /VISION_MODELS = \["gemini-2\.5-flash", "gemini-3\.5-flash"\]/)
-  assert.match(visionRoute, /for \(const modelId of VISION_MODELS\)/)
-  assert.match(visionRoute, /visionFallbackUsed/)
+  assert.match(visionRoute, /transport: "direct"/)
+  assert.match(visionRoute, /transport: "gateway"/)
+  assert.match(visionRoute, /Vercel AI Gateway/)
+  assert.match(visionRoute, /visionTransport/)
   assert.match(visionRoute, /visionAttempts/)
 })

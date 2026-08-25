@@ -16,6 +16,11 @@ type VisionAttachment = {
   url: string
 }
 
+type VisionAttempt = {
+  modelId: (typeof VISION_MODELS)[number]
+  transport: "direct" | "gateway"
+}
+
 function gatewayConfigured() {
   return Boolean(
     process.env.AI_GATEWAY_API_KEY?.trim() ||
@@ -94,16 +99,28 @@ export async function POST(request: Request) {
   }
 
   const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim()
-  if (!googleApiKey && !gatewayConfigured()) {
+  const useGateway = gatewayConfigured()
+  if (!googleApiKey && !useGateway) {
     return NextResponse.json({ success: false, error: "Gemini image analysis is not configured." }, { status: 503 })
   }
 
   const directGoogle = googleApiKey ? createGoogleGenerativeAI({ apiKey: googleApiKey }) : null
-  const failures: Array<{ model: string; reason: string; quota: boolean }> = []
+  const attempts: VisionAttempt[] = []
 
-  for (const modelId of VISION_MODELS) {
-    const modelName = `google/${modelId}`
-    const model = directGoogle ? directGoogle(modelId) : modelName
+  if (directGoogle) {
+    for (const modelId of VISION_MODELS) attempts.push({ modelId, transport: "direct" })
+  }
+  if (useGateway) {
+    for (const modelId of VISION_MODELS) attempts.push({ modelId, transport: "gateway" })
+  }
+
+  const failures: Array<{ model: string; transport: VisionAttempt["transport"]; reason: string; quota: boolean }> = []
+
+  for (const attempt of attempts) {
+    const modelName = `google/${attempt.modelId}`
+    const model = attempt.transport === "direct"
+      ? directGoogle!(attempt.modelId)
+      : modelName
 
     try {
       const result = await generateText({
@@ -116,7 +133,7 @@ export async function POST(request: Request) {
         temperature: 0.1,
         maxOutputTokens: 1800,
         maxRetries: 0,
-        ...(typeof model === "string"
+        ...(attempt.transport === "gateway"
           ? {
               providerOptions: {
                 gateway: {
@@ -136,14 +153,15 @@ export async function POST(request: Request) {
         success: true,
         response,
         model: modelName,
-        reason: `Gemini vision analysis completed with ${modelId}. No project files were generated or changed.`,
+        reason: `Gemini vision analysis completed with ${attempt.modelId} via ${attempt.transport === "gateway" ? "Vercel AI Gateway" : "direct Google API"}. No project files were generated or changed.`,
         usage: normalizeGenerationUsage(result.usage, modelName),
-        visionFallbackUsed: modelId !== VISION_MODELS[0],
+        visionFallbackUsed: attempts.indexOf(attempt) > 0,
+        visionTransport: attempt.transport,
       })
     } catch (error) {
       const reason = safeError(error)
-      failures.push({ model: modelId, reason, quota: isQuotaError(reason) })
-      console.warn(`[786.Chat vision] ${modelId} failed: ${reason}`)
+      failures.push({ model: attempt.modelId, transport: attempt.transport, reason, quota: isQuotaError(reason) })
+      console.warn(`[786.Chat vision] ${attempt.transport}:${attempt.modelId} failed: ${reason}`)
     }
   }
 
@@ -153,10 +171,14 @@ export async function POST(request: Request) {
   return NextResponse.json({
     success: false,
     error: quotaOnly
-      ? "Gemini image-reading quota is exhausted on the available vision models. Your project was kept unchanged."
+      ? "Gemini image-reading quota is exhausted on both the direct Google connection and the available AI Gateway fallbacks. Your project was kept unchanged."
       : `Gemini could not read the attachment. ${lastReason}`,
     warning: quotaOnly ? "GEMINI_VISION_QUOTA_EXHAUSTED" : "GEMINI_VISION_FAILED",
     projectPreserved: true,
-    visionAttempts: failures.map(({ model, quota }) => ({ model, status: quota ? "quota_exhausted" : "failed" })),
+    visionAttempts: failures.map(({ model, transport, quota }) => ({
+      model,
+      transport,
+      status: quota ? "quota_exhausted" : "failed",
+    })),
   }, { status: 503 })
 }
