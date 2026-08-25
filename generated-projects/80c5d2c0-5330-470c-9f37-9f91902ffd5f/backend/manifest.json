@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "providers": {
+    "neon": {
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    }
+  },
+  "migrations": ["sql/migrations/001_initial.sql", "sql/migrations/002_ingredient_usage.sql"],
+  "api": ["/api/production-records", "/api/production-records/[id]", "/api/products", "/api/products/[id]", "/api/ingredients", "/api/ingredients/[id]", "/api/freezer-equipment", "/api/freezer-equipment/[id]", "/api/freezer-options"]
+}
