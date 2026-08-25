@@ -18,8 +18,11 @@ test("read-only image questions return Gemini vision without changing project fi
   assert.match(apiSource, /files:\s*\{ \.\.\.request\.existing\.keyFiles \}/)
 })
 
-test("vision endpoint is analysis-only and never project codegen", () => {
+test("vision endpoint is analysis-only and tries a lower-quota fallback model", () => {
   assert.match(visionRoute, /Your only job is to inspect attached images\/files/)
   assert.match(visionRoute, /Never generate code and never modify project files/)
-  assert.match(visionRoute, /BUILDER_MODELS\["gemini-flash"\]/)
+  assert.match(visionRoute, /VISION_MODELS = \["gemini-2\.5-flash", "gemini-3\.5-flash"\]/)
+  assert.match(visionRoute, /for \(const modelId of VISION_MODELS\)/)
+  assert.match(visionRoute, /visionFallbackUsed/)
+  assert.match(visionRoute, /visionAttempts/)
 })
