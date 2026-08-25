@@ -210,6 +210,33 @@ function withoutNegativeRequirements(prompt: string) {
   return kept.join("\n")
 }
 
+function withoutDisplayCopy(prompt: string) {
+  const lines = prompt.split(/\r?\n/)
+  const kept: string[] = []
+  let skipNextDisplayLine = false
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    const displayInstruction = line.match(/^(?:[-*•]\s*)?(?:show|display)(?:\s+this)?\s+(?:message|text|label)\s*:\s*(.*)$/i)
+    if (displayInstruction) {
+      const colonIndex = rawLine.indexOf(":")
+      kept.push(colonIndex >= 0 ? rawLine.slice(0, colonIndex + 1) : rawLine)
+      skipNextDisplayLine = !displayInstruction[1].trim()
+      continue
+    }
+
+    if (skipNextDisplayLine && line) {
+      kept.push("")
+      skipNextDisplayLine = false
+      continue
+    }
+
+    kept.push(rawLine)
+  }
+
+  return kept.join("\n")
+}
+
 function isTargetedExistingEdit(prompt: string) {
   return /\b(?:update|change|fix|adjust|align|redesign|edit|remove|keep|make|add)\b[\s\S]{0,180}\b(?:existing|current)\b|\b(?:existing|current)\b[\s\S]{0,180}\b(?:project|application|app|page|screen|feature|layout|design|button|form|table|card|product|stock|reservation|customer)\b/i
     .test(prompt)
@@ -221,6 +248,7 @@ export function analyseProjectPrompt(
   familyHistory: readonly string[] = [],
 ): ProjectSpecification {
   const positivePrompt = withoutNegativeRequirements(prompt)
+  const capabilityPrompt = withoutNegativeRequirements(withoutDisplayCopy(prompt))
   const targetedExistingEdit = isTargetedExistingEdit(positivePrompt)
   const systemBlueprint = targetedExistingEdit ? null : selectSystemBlueprint(positivePrompt)
   const editIntent = classifyApplicationEdit(positivePrompt)
@@ -231,12 +259,12 @@ export function analyseProjectPrompt(
   const loginRequested = explicitPages
     ? explicitPages.routes.includes("/login")
     : !targetedExistingEdit && /\blog[ -]?in|sign[ -]?in\b/i.test(positivePrompt)
-  const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(positivePrompt)
+  const functionalAuthRequested = /\bauth(?:entication|orization)?\b|\b(?:working|functional|secure|real|database[- ]backed)\s+(?:log[ -]?in|sign[ -]?in|register|sign[ -]?up)\b|\buser accounts?\b|\baccount system\b|\bsessions?\b/i.test(capabilityPrompt)
   const requestedRoutes = explicitRoutes(positivePrompt)
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
-  const requestedApiResources = explicitApiResources(positivePrompt)
-  const explicitTables = explicitDatabaseTables(positivePrompt)
-  const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(positivePrompt)
+  const requestedApiResources = explicitApiResources(capabilityPrompt)
+  const explicitTables = explicitDatabaseTables(capabilityPrompt)
+  const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(capabilityPrompt)
   const routes = unique([
     "/",
     ...(explicitPages?.routes || pageMatches.map(([, , route]) => route)),
@@ -310,11 +338,11 @@ export function analyseProjectPrompt(
     `${prompt} ${industry || ""}`,
     familyHistory,
   )
-  const deliveryEmailRequested = /\b(?:send|deliver|transactional|notification|contact)\s+emails?\b|\bemail service\b|\bresend\b/i.test(positivePrompt)
+  const deliveryEmailRequested = /\b(?:send|deliver|transactional|notification|contact)\s+emails?\b|\bemail service\b|\bresend\b/i.test(capabilityPrompt)
   const platforms = unique([
     "web",
     ...(/\bmobile app|android|iphone|ipad|ios|expo|react native\b/i.test(positivePrompt) ? ["mobile"] : []),
-    ...(/\bapi|backend|server|saas|crm|erp|upload|attachment\b/i.test(positivePrompt) || deliveryEmailRequested || functionalAuthRequested || systemBlueprint ? ["backend"] : []),
+    ...(/\bapi|backend|server|saas|crm|erp|upload|attachment\b/i.test(capabilityPrompt) || deliveryEmailRequested || functionalAuthRequested || systemBlueprint ? ["backend"] : []),
     ...(databaseRequested || functionalAuthRequested || systemBlueprint ? ["database"] : []),
     ...(/\biot|sensor|device|telemetry|mqtt|bluetooth|firmware\b/i.test(positivePrompt) ? ["iot"] : []),
   ]) as ProjectPlatform[]
@@ -354,7 +382,7 @@ export function analyseProjectPrompt(
       [/\bvideo|motion media\b/i, "project-specific-video"],
       [/\bfont combination|text preset|text effect|outline text|shadow text|glow text|neon text|curved text\b/i, "advanced-text-styles"],
     ])),
-    backendRequirements: unique(matches(positivePrompt, [
+    backendRequirements: unique(matches(capabilityPrompt, [
       [/\bdatabase|postgres|neon\b/i, "database"],
       [functionalAuthRequested ? /[\s\S]/ : /(?!)/, "authentication"],
       [/\bapi\b/i, "api"],
