@@ -10,6 +10,11 @@ test("file-unit prompt extracts the exact requested path", () => {
   assert.equal(fileUnitTargetFromPrompt("ordinary project"), null)
 })
 
+test("explicit Target file wins over a broader repair file list", () => {
+  const repairPrompt = `FILE-LEVEL FULL-STACK GENERATION 5/9: validation-repair-5\nTarget file: lib/server/db.ts\nRequired system files (return every file in this unit): backend/manifest.json, lib/server/env.ts, sql/schema.sql`
+  assert.equal(fileUnitTargetFromPrompt(repairPrompt), "lib/server/db.ts")
+})
+
 test("tiny path/content JSON is accepted without a project envelope", () => {
   assert.deepEqual(parseFileUnitOutput(JSON.stringify({ path: target, content: "export function GET() {}" }), target), {
     path: target,
