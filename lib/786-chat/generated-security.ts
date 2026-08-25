@@ -16,8 +16,12 @@ const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
 const DOCUMENTATION_PATH = /(?:^|\/)(?:docs\/.*\.md|README(?:\.md)?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
 const PUBLIC_AUTH_BOOTSTRAP_ROUTE = /^(?:src\/)?app\/api\/auth\/(?:register|login|logout|forgot-password|reset-password|verify-email)\/route\.(?:[cm]?[jt]s)$/i
+const PUBLIC_READ_ONLY_ROUTE = /^(?:src\/)?app\/api\/public\/.+\/route\.(?:[cm]?[jt]s)$/i
 const CLIENT_FILE = /^(?:src\/)?app\/.+\.(?:[cm]?[jt]sx?)$/i
 const ACCESS_GUARD = /\b(?:requireTenant|requireCompany|assertTenant|requireUser|requireAuth|requireSession|getSession|getCurrentUser|getAuthenticatedUser|getUser|auth|session)\s*\(/i
+const EXPORTED_GET = /export\s+(?:async\s+function\s+GET\b|const\s+GET\s*=)/
+const EXPORTED_MUTATION = /export\s+(?:async\s+function\s+(?:POST|PUT|PATCH|DELETE)\b|const\s+(?:POST|PUT|PATCH|DELETE)\s*=)/
+const PUBLIC_LOOKUP_TOKEN = /\b(?:public|scan|batch|record)[_-]?(?:id|token|code)\b/i
 const DANGEROUS_CODE: Array<[string, RegExp, string]> = [
   ["DANGEROUS_PROCESS_EXECUTION", /(?:from\s+["']node:child_process["']|require\s*\(\s*["'](?:node:)?child_process["']\s*\)|\b(?:execSync|spawnSync|execFileSync|Bun\.spawn|Deno\.Command)\s*\()/, "Generated projects cannot execute operating-system commands."],
   ["DYNAMIC_CODE_EXECUTION", /\b(?:eval|Function)\s*\(|\bnew\s+Function\s*\(|from\s+["']node:vm["']/, "Generated projects cannot evaluate dynamic server code."],
@@ -63,6 +67,11 @@ function isPlaceholderEnvFile(path: string, content: string) {
   })
 }
 
+function isSafePublicReadOnlyDatabaseRoute(path: string, content: string) {
+  if (!PUBLIC_READ_ONLY_ROUTE.test(path)) return false
+  return EXPORTED_GET.test(content) && !EXPORTED_MUTATION.test(content) && PUBLIC_LOOKUP_TOKEN.test(content)
+}
+
 export function validateGeneratedSecurity(files: Record<string, string>): GeneratedSecurityResult {
   const errors: GeneratedSecurityIssue[] = []
   const warnings: GeneratedSecurityIssue[] = []
@@ -105,8 +114,10 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
       !PUBLIC_AUTH_BOOTSTRAP_ROUTE.test(normalizedPath) &&
       /\b(?:DATABASE_URL|neon\s*\(|sql`)/.test(content)
     ) {
-      if (!ACCESS_GUARD.test(content)) {
-        errors.push({ code: "DATABASE_ROUTE_WITHOUT_ACCESS_GUARD", path, message: "Database API routes must authenticate the user or enforce tenant ownership before querying data." })
+      if (PUBLIC_READ_ONLY_ROUTE.test(normalizedPath) && EXPORTED_MUTATION.test(content)) {
+        errors.push({ code: "PUBLIC_DATABASE_MUTATION", path, message: "Public database routes must be read-only. Move create/update/delete operations behind authenticated APIs." })
+      } else if (!ACCESS_GUARD.test(content) && !isSafePublicReadOnlyDatabaseRoute(normalizedPath, content)) {
+        errors.push({ code: "DATABASE_ROUTE_WITHOUT_ACCESS_GUARD", path, message: "Database API routes must authenticate the user or enforce tenant ownership before querying data. Explicit public scan routes may be GET-only and token-scoped." })
       }
     }
   }
