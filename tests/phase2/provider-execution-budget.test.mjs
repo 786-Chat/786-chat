@@ -36,8 +36,10 @@ test("provider fallback is sequential and never races providers", () => {
   assert.doesNotMatch(controller, /coordinatorSignal|attemptsByMode/)
 })
 
-test("automatic full-stack generation prefers DeepSeek then Gemini fallback", () => {
-  assert.match(controller, /isComplex \? \["deepseek-flash","gemini-flash"\]/)
+test("text and code use DeepSeek while image attachments use Gemini", () => {
+  assert.match(controller, /if \(hasAttachments\) candidateModes = \["gemini-flash"\]/)
+  assert.match(controller, /else candidateModes = \[requestedMode === "deepseek-pro" \? "deepseek-pro" : "deepseek-flash"\]/)
+  assert.doesNotMatch(controller, /isComplex \? \["deepseek-flash","gemini-flash"\]/)
   assert.match(controller, /candidateModes\.filter\(modeConfigured\)/)
   assert.match(controller, /providers: configuredProviders/)
 })
