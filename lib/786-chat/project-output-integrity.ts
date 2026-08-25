@@ -22,12 +22,21 @@ function extractPathList(prompt: string, label: RegExp) {
 function extractRequiredFiles(prompt: string) {
   const isFileLevelGeneration = /\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)
   if (isFileLevelGeneration) {
-    const paths = extractPathList(prompt, /Required system files \(return every file in this unit\):\s*([^\n]+)/gi)
+    // File-level generation is intentionally one target file at a time. The base
+    // validation-repair prompt can still contain a broader "Required system files"
+    // list for the whole repair. Requiring that entire list from a single-file unit
+    // causes false incompleteness failures (for example, asking a page repair unit
+    // to also return lib/server/env.ts). The explicit Target file is authoritative.
+    const targets = new Set<string>()
     for (const match of prompt.matchAll(/Target file:\s*([^\n]+)/gi)) {
       const file = cleanPath(match[1])
-      if (file) paths.add(file)
+      if (file) targets.add(file)
     }
-    return [...paths]
+    if (targets.size) return [...targets]
+
+    // Backward-compatible fallback for any older file-level prompt that does not
+    // include an explicit Target file.
+    return [...extractPathList(prompt, /Required system files \(return every file in this unit\):\s*([^\n]+)/gi)]
   }
   return [...extractPathList(prompt, /(?:Planned files|Required system files[^:]*):\s*([^\n]+)/gi)]
 }
