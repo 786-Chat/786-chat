@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "capabilities": ["database", "authentication", "storage", "email", "api"],
+  "providers": {
+    "neon": {
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    },
+    "authentication": {
+      "env": ["AUTH_SECRET"]
+    },
+    "blob": {
+      "package": "@vercel/blob",
+      "env": ["BLOB_READ_WRITE_TOKEN"],
+      "access": "private"
+    },
+    "email": {
+      "package": "resend",
+      "env": ["RESEND_API_KEY", "EMAIL_FROM"]
+    }
+  },
+  "migrations": [
+    "sql/migrations/001_initial.sql"
+  ],
+  "api": [
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/session",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+    "/api/uploads",
+    "/api/uploads/[id]",
+    "/api/email"
+  ]
+}
