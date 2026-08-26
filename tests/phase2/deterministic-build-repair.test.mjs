@@ -20,11 +20,18 @@ test('repairs zero-argument getDb factory mismatches', () => {
   assert.match(source, /"getDb\(\)"/)
 })
 
-test('repairs TypeScript suggested property-name mismatches before AI repair', () => {
-  assert.match(helperSource, /repairSuggestedTypeScriptProperty/)
-  assert.match(helperSource, /Did you mean/)
-  assert.match(helperSource, /missingPattern/)
+test('repairs every TypeScript suggested property mismatch on its reported source line', () => {
+  assert.match(helperSource, /reportedPropertyErrors/)
+  assert.match(helperSource, /TS\(2339\|2551\)/)
+  assert.match(helperSource, /replacePropertyOnLine/)
   assert.match(helperSource, /suggestedPropertyRepair/)
+})
+
+test('preserves database values when PATCH SQL references properties absent from its validated payload', () => {
+  assert.match(helperSource, /repairMissingSqlPatchProperties/)
+  assert.match(helperSource, /sqlAssignment/)
+  assert.match(helperSource, /Removing only that SET/)
+  assert.match(helperSource, /missingSqlPropertyRepair/)
 })
 
 test('multi-error deterministic repair runs before single-category and AI repair', () => {
