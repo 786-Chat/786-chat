@@ -1,5 +1,40 @@
 import { normalizeGeneratedResendUsage } from "./resend-compatibility"
 
+function normalizeDatabaseApiRouteRuntime(files: Record<string, string>) {
+  return Object.fromEntries(Object.entries(files).map(([path, content]) => {
+    if (!/^(?:src\/)?app\/api\/.+\/route\.(?:ts|tsx|js|jsx)$/.test(path)) {
+      return [path, content]
+    }
+
+    const usesGeneratedDb =
+      (/@\/lib\/server\/db/.test(content) && /\bget(?:Db|Sql)\b/.test(content)) ||
+      /\bget(?:Db|Sql)\s*\(\s*\)/.test(content) ||
+      (/@neondatabase\/serverless/.test(content) && /\bneon\s*\(/.test(content))
+
+    if (!usesGeneratedDb) return [path, content]
+
+    // Database-backed route handlers must never be evaluated during `next build`.
+    // The isolated runner intentionally uses build-only placeholder credentials, so
+    // allowing Next.js to prerender a GET route would attempt a real Neon request and
+    // fail even though the route is valid at runtime. Keep these handlers on-demand.
+    if (/\bexport\s+const\s+dynamic\s*=\s*["']force-dynamic["']/.test(content)) {
+      return [path, content]
+    }
+
+    if (/\bexport\s+const\s+dynamic\s*=/.test(content)) {
+      return [
+        path,
+        content.replace(
+          /\bexport\s+const\s+dynamic\s*=\s*["'][^"']+["']\s*;?/,
+          'export const dynamic = "force-dynamic"',
+        ),
+      ]
+    }
+
+    return [path, `export const dynamic = "force-dynamic"\n\n${content}`]
+  }))
+}
+
 export function normalizeGeneratedNeonServerlessUsage(files: Record<string, string>) {
   const dbPath = files["lib/server/db.ts"]
     ? "lib/server/db.ts"
@@ -64,6 +99,8 @@ export function normalizeGeneratedNeonServerlessUsage(files: Record<string, stri
       }))
     }
   }
+
+  normalizedFiles = normalizeDatabaseApiRouteRuntime(normalizedFiles)
 
   // Keep provider compatibility repairs in the same pre-build normalization pass.
   // This makes both old and newly generated projects safe to build before optional
