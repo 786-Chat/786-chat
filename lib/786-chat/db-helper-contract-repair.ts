@@ -34,6 +34,39 @@ function generatedPathFromTypeScriptLog(files: Record<string, string>, logs: str
   return null
 }
 
+function regexEscape(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function repairSuggestedTypeScriptProperty(files: Record<string, string>, logs: string) {
+  const suggestions = Array.from(
+    logs.matchAll(/Property\s+['"]([A-Za-z_$][\w$]*)['"]\s+does not exist on type[\s\S]{0,1400}?Did you mean\s+['"]([A-Za-z_$][\w$]*)['"]\?/gi),
+    (match) => [match[1], match[2]] as const,
+  ).filter(([missing, suggested]) => missing !== suggested)
+  if (!suggestions.length) return null
+
+  const reportedPath = generatedPathFromTypeScriptLog(files, logs)
+  const candidatePaths = reportedPath
+    ? [reportedPath]
+    : Object.keys(files).filter((path) => /\.(?:ts|tsx)$/.test(path))
+  const repairedFiles: Record<string, string> = {}
+
+  for (const path of candidatePaths) {
+    const source = files[path]
+    if (!source) continue
+    let repaired = source
+    for (const [missing, suggested] of suggestions) {
+      const missingPattern = regexEscape(missing)
+      repaired = repaired
+        .replace(new RegExp(`\\.${missingPattern}\\b`, "g"), `.${suggested}`)
+        .replace(new RegExp(`\\[(['"])${missingPattern}\\1\\]`, "g"), `.${suggested}`)
+    }
+    if (repaired !== source) repairedFiles[path] = repaired
+  }
+
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
 function repairGeneratedBlobPutBody(files: Record<string, string>, logs: string) {
   if (!/Uint8Array(?:<[^>]+>)?[\s\S]{0,180}PutBody/i.test(logs)) return null
   const reportedPath = generatedPathFromTypeScriptLog(files, logs)
@@ -141,6 +174,12 @@ function repairMissingGeneratedAuthCurrentUser(files: Record<string, string>, lo
 export function repairMissingGeneratedDbHelper(files: Record<string, string>, logs: string) {
   let workingFiles = files
   const compatibilityRepairs: Record<string, string> = {}
+
+  const suggestedPropertyRepair = repairSuggestedTypeScriptProperty(workingFiles, logs)
+  if (suggestedPropertyRepair) {
+    Object.assign(compatibilityRepairs, suggestedPropertyRepair)
+    workingFiles = { ...workingFiles, ...suggestedPropertyRepair }
+  }
 
   const blobPutBodyRepair = repairGeneratedBlobPutBody(workingFiles, logs)
   if (blobPutBodyRepair) {
