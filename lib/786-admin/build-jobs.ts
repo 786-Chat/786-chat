@@ -1,5 +1,7 @@
 import { sql } from "./db"
 
+const QUEUED_BUILD_TIMEOUT_MS = 5 * 60 * 1000
+
 export type AdminProjectBuildStatus =
   | "queued"
   | "running"
@@ -43,6 +45,25 @@ function normalizeTerminalPublishRepairState(build: AdminProjectBuild | null): A
     return { ...build, repair_status: "not_needed" }
   }
   return build
+}
+
+async function expireStaleQueuedBuilds(projectId: string, ownerEmail: string): Promise<void> {
+  const staleBefore = new Date(Date.now() - QUEUED_BUILD_TIMEOUT_MS).toISOString()
+  await sql`
+    UPDATE admin_project_builds b
+    SET status = 'failed',
+        error_message = 'Build dispatch timed out before the isolated runner started. Safe to retry.',
+        logs = b.logs || E'\n[reconcile] Queued build exceeded dispatch timeout before runner start; released for retry.\n',
+        completed_at = NOW(),
+        updated_at = NOW()
+    FROM admin_projects p
+    WHERE b.project_id = ${projectId}
+      AND p.id = b.project_id
+      AND p.owner_email = ${normalizeEmail(ownerEmail)}
+      AND b.status = 'queued'
+      AND b.started_at IS NULL
+      AND b.updated_at < ${staleBefore}::timestamptz
+  `
 }
 
 export async function ensureBuildJobsSchema(): Promise<void> {
@@ -141,6 +162,7 @@ export async function getLatestBuildJob(
   ownerEmail: string,
 ): Promise<AdminProjectBuild | null> {
   await ensureBuildJobsSchema()
+  await expireStaleQueuedBuilds(projectId, ownerEmail)
 
   const rows = (await sql`
     SELECT b.*
