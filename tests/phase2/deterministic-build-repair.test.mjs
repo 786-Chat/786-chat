@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 
 const source = await readFile(new URL('../../lib/786-chat/deterministic-build-repair.ts', import.meta.url), 'utf8')
+const helperSource = await readFile(new URL('../../lib/786-chat/db-helper-contract-repair.ts', import.meta.url), 'utf8')
 const pipeline = await readFile(new URL('../../lib/786-chat/build-repair.ts', import.meta.url), 'utf8')
 
 test('repairs semantic Tailwind theme tokens reported by isolated builds', () => {
@@ -17,6 +18,13 @@ test('repairs zero-argument getDb factory mismatches', () => {
   assert.match(source, /Expected 0 arguments, but got 1/i)
   assert.match(source, /getDb\\s\*\\\(/)
   assert.match(source, /"getDb\(\)"/)
+})
+
+test('repairs TypeScript suggested property-name mismatches before AI repair', () => {
+  assert.match(helperSource, /repairSuggestedTypeScriptProperty/)
+  assert.match(helperSource, /Did you mean/)
+  assert.match(helperSource, /missingPattern/)
+  assert.match(helperSource, /suggestedPropertyRepair/)
 })
 
 test('multi-error deterministic repair runs before single-category and AI repair', () => {
