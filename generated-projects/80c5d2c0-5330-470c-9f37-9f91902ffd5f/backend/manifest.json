@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "providers": {
+    "neon": {
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    }
+  },
+  "migrations": ["sql/migrations/001_initial.sql", "sql/migrations/005_inventory.sql"],
+  "api": [
+    "/api/inventory",
+    "/api/inventory/adjustments"
+  ]
+}
