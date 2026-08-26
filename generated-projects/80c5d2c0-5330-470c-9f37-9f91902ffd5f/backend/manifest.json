@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "providers": {
+    "neon": {
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    }
+  },
+  "migrations": ["sql/migrations/001_initial.sql", "sql/migrations/005_inventory.sql", "sql/migrations/006_haccp_flow_confirmation.sql", "sql/migrations/007_haccp_daily_checks.sql"],
+  "api": [
+    "/api/inventory",
+    "/api/inventory/adjustments",
+    "/api/haccp-flow-confirmations",
+    "/api/haccp-flow-confirmations/[id]",
+    "/api/haccp-daily-checks",
+    "/api/haccp-daily-checks/[id]",
+    "/api/haccp-manager-reviews",
+    "/api/haccp-manager-reviews/[id]"
+  ]
+}
