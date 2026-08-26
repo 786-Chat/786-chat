@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "providers": {
+    "neon": {
+      "package": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    }
+  },
+  "migrations": ["sql/migrations/001_initial.sql", "sql/migrations/002_ingredient_usage.sql", "sql/migrations/003_cleaning.sql", "sql/migrations/004_stock.sql"],
+  "api": ["/api/production-records", "/api/production-records/[id]", "/api/products", "/api/products/[id]", "/api/ingredients", "/api/ingredients/[id]", "/api/freezer-equipment", "/api/freezer-equipment/[id]", "/api/freezer-options", "/api/temperature-checks", "/api/temperature-checks/[id]", "/api/cleaning-checks", "/api/cleaning-checks/[id]", "/api/cleaning-options", "/api/haccp-checks", "/api/haccp-checks/[id]", "/api/haccp-options", "/api/stock", "/api/stock-adjustments", "/api/stock-adjustments/[id]"]
+}
