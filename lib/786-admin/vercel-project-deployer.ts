@@ -30,6 +30,11 @@ type VercelDeploymentListPayload = {
   error?: { message?: unknown }
 }
 
+type VercelProjectPayload = {
+  id?: unknown
+  error?: { message?: unknown }
+}
+
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`${name} is not configured`)
@@ -71,6 +76,12 @@ function generatedUsesEmail(files: Record<string, string>): boolean {
   const manifest = files["backend/manifest.json"] || ""
   const email = files["lib/server/email.ts"] || ""
   return /RESEND_API_KEY|["']email["']\s*:/i.test(manifest) || /\bResend\b|RESEND_API_KEY/.test(email)
+}
+
+function generatedUsesBlob(files: Record<string, string>): boolean {
+  return Object.values(files).some((source) =>
+    /@vercel\/blob|BLOB_READ_WRITE_TOKEN|\bgetDownloadUrl\s*\(|\bput\s*\([^)]*access\s*:\s*["']private["']/i.test(source),
+  )
 }
 
 function generatedEmailFrom(): string {
@@ -195,12 +206,33 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
+async function getVercelProjectId(input: {
+  projectName: string
+  token: string
+  teamId?: string
+}): Promise<string> {
+  const endpoint = new URL(
+    `https://api.vercel.com/v9/projects/${encodeURIComponent(input.projectName)}`,
+  )
+  if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+  const response = await fetch(endpoint, {
+    headers: { Authorization: `Bearer ${input.token}` },
+    cache: "no-store",
+  })
+  const payload = (await response.json().catch(() => null)) as VercelProjectPayload | null
+  if (response.ok && typeof payload?.id === "string" && payload.id) return payload.id
+  const detail = typeof payload?.error?.message === "string"
+    ? payload.error.message
+    : `Vercel project lookup failed with ${response.status}`
+  throw new Error(detail.slice(0, 500))
+}
+
 async function ensureVercelProject(input: {
   projectName: string
   rootDirectory: string
   token: string
   teamId?: string
-}): Promise<void> {
+}): Promise<string> {
   const endpoint = new URL("https://api.vercel.com/v11/projects")
   if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
   const response = await fetch(endpoint, {
@@ -216,11 +248,44 @@ async function ensureVercelProject(input: {
     }),
     cache: "no-store",
   })
+  const payload = (await response.json().catch(() => null)) as VercelProjectPayload | null
+  if (response.ok) {
+    if (typeof payload?.id === "string" && payload.id) return payload.id
+    return getVercelProjectId(input)
+  }
+  if (response.status === 409) return getVercelProjectId(input)
+  const detail = typeof payload?.error?.message === "string"
+    ? payload.error.message
+    : `Vercel project setup failed with ${response.status}`
+  throw new Error(detail.slice(0, 500))
+}
+
+async function ensureGeneratedBlobStore(input: {
+  projectId: string
+  vercelProjectId: string
+  token: string
+  teamId?: string
+}): Promise<void> {
+  const endpoint = new URL("https://api.vercel.com/storage/stores/blob")
+  if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: `786-${projectSuffix(input.projectId)}-uploads`,
+      access: "private",
+      projectId: input.vercelProjectId,
+    }),
+    cache: "no-store",
+  })
   if (response.ok || response.status === 409) return
   const payload = (await response.json().catch(() => null)) as null | { error?: { message?: unknown } }
   const detail = typeof payload?.error?.message === "string"
     ? payload.error.message
-    : `Vercel project setup failed with ${response.status}`
+    : `Vercel Blob store setup failed with ${response.status}`
   throw new Error(detail.slice(0, 500))
 }
 
@@ -421,7 +486,15 @@ export async function deployGeneratedProjectToVercel(input: {
     files: input.files,
   })
 
-  await ensureVercelProject({ projectName, rootDirectory, token, teamId })
+  const vercelProjectId = await ensureVercelProject({ projectName, rootDirectory, token, teamId })
+  if (generatedUsesBlob(input.files)) {
+    await ensureGeneratedBlobStore({
+      projectId: input.projectId,
+      vercelProjectId,
+      token,
+      teamId,
+    })
+  }
   await upsertRuntimeEnvironment({
     projectId: input.projectId,
     projectName,
