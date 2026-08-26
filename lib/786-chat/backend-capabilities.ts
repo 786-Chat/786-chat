@@ -95,8 +95,8 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
     "backend/manifest.json must declare version 1 and may declare capabilities either as top-level provider objects or in a capabilities array. It must include every resource provider, required environment variable name, migration path and API route without containing secret values.",
     "lib/server/env.ts must be server-only, validate required environment variables with Zod and fail closed. Never use NEXT_PUBLIC_ for database, authentication, Blob or email secrets.",
     ...(capabilities.includes("database") ? ["Use @neondatabase/serverless through a lazy getDb/getSql function in lib/server/db.ts; do not instantiate the connection at module load and do not use a Proxy. A function declaration or const arrow function is valid. DATABASE_URL may be loaded through lib/server/env.ts, but the Neon client itself must still be created lazily inside getDb/getSql.", "Emit repeatable Neon/PostgreSQL SQL in both sql/schema.sql and sql/migrations/001_initial.sql, including primary keys, foreign keys, TIMESTAMPTZ timestamps, indexes and non-destructive IF NOT EXISTS statements.", "SQL table identifiers must use letters, numbers and underscores. Keep route slugs separate from table names: for example API resource production-records maps to SQL table production_records.", "scripts/migrate.mjs must read the checked-in migration and apply it only through DATABASE_URL. It must not run shell commands or silently ignore migration errors."] : []),
-    ...(requiresAuthentication ? ["AUTHENTICATION SQL CONTRACT: BOTH sql/schema.sql and sql/migrations/001_initial.sql must create tables with these exact names: users, sessions, email_verification_tokens, password_reset_tokens. Do not rename, alias or substitute any of these tables.", "Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.", "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.", "Use jose with an AUTH_SECRET that has no hard-coded fallback. Rotate/revoke sessions on password reset and never reveal whether a forgot-password email exists."] : []),
-    ...(capabilities.includes("storage") ? ["Use @vercel/blob private storage. Upload routes must authenticate first, enforce file size and MIME allowlists, prefix Blob paths with the authenticated owner/tenant, and persist upload metadata in Neon.", "Download/delete routes must re-check database ownership before issuing a private download URL or deleting a Blob."] : []),
+    ...(requiresAuthentication ? ["AUTHENTICATION SQL CONTRACT: BOTH sql/schema.sql and sql/migrations/001_initial.sql must create tables with these exact names: users, sessions, email_verification_tokens, password_reset_tokens. Do not rename, alias or substitute any of these tables.", "Implement Neon-backed users, sessions, email verification tokens and password reset tokens. Hash passwords with bcryptjs and hash stored one-time/session tokens before persistence.", "Authentication cookies must be HttpOnly, SameSite=Lax or Strict, Secure in production, scoped to Path=/ and expire server-side. Register, login, logout, session, verification and reset routes must be functional.", "Use jose with an AUTH_SECRET that has no hard-coded fallback. Sign sessions with SignJWT and verify them with jwtVerify. The bcryptjs and jose implementation may be split between lib/server/auth.ts and the auth route files, but both protections must be complete.", "Rotate/revoke sessions on password reset and never reveal whether a forgot-password email exists."] : []),
+    ...(capabilities.includes("storage") ? ["Use @vercel/blob private storage. Upload routes must authenticate first, enforce file size and MIME allowlists, prefix Blob paths with the authenticated owner/tenant, and persist upload metadata in Neon. Prefer an explicit pattern such as const user = await requireUser(); const pathname = `documents/${user.id}/${safeFilename}` before calling put(pathname, file, { access: 'private' }).", "Download/delete routes must re-check database ownership before issuing a private download URL or deleting a Blob."] : []),
     ...(capabilities.includes("email") ? ["Use Resend only in lib/server/email.ts with RESEND_API_KEY and EMAIL_FROM. Validate recipients, use an idempotency key, return a typed result and never expose provider errors or credentials to the browser.", "app/api/email/route.ts must validate the request with Zod and authenticate the user with requireUser/requireAuth/getSession/getCurrentUser, or enforce a persistent rate limit for an explicitly public contact form, before it sends email.", "For an authenticated business application, prefer authentication on app/api/email/route.ts. Do not treat a UI-only check, hidden field, or client-side token as authentication."] : []),
     ...(capabilities.includes("api") ? [`API resources: ${resources.join(", ") || "authentication routes only"}`, ...(requiresAuthentication ? ["Every protected data route must authenticate, validate path/body/query input with Zod, scope every query by owner or tenant, use parameterized Neon queries and return explicit 400/401/403/404/409/429/500 responses. An explicitly public scan/label route may be GET-only and token-scoped, must expose only safe fields, and must never create, update or delete data."] : ["The request does not require authentication. Do not invent an auth dependency. Public data routes must still validate path/body/query input with Zod, use parameterized Neon queries, avoid exposing secrets and return explicit 400/404/409/429/500 responses."]), "For every CRUD API resource, create both the collection route and [id] item route. The collection route must export GET and POST; the item route must export GET, PATCH and DELETE. Explicit public read-only scan routes are not CRUD resources and must remain GET-only. Both `export async function METHOD` and `export const METHOD = async` are valid."] : []),
     "package.json must contain explicit non-latest semver ranges for every imported server package, including server-only, zod and each selected provider SDK.",
@@ -106,6 +106,36 @@ export function backendCapabilityBrief(specification: ProjectSpecification): str
 
 function parsePackage(source: string | undefined) { try { const value = JSON.parse(source || "") as { dependencies?: Record<string, string> }; return value.dependencies || {} } catch { return {} as Record<string, string> } }
 function hasGuard(content: string) { return /\b(?:requireUser|requireAuth|requireTenant|requireCompany|assertTenant|getSession|getCurrentUser|getAuthenticatedUser|auth|session)\s*\(/.test(content) }
+function authenticationImplementationSource(files: Record<string, string>) {
+  return [
+    files["lib/server/auth.ts"],
+    files["app/api/auth/register/route.ts"],
+    files["app/api/auth/login/route.ts"],
+    files["app/api/auth/logout/route.ts"],
+    files["app/api/auth/session/route.ts"],
+    files["app/api/auth/forgot-password/route.ts"],
+    files["app/api/auth/reset-password/route.ts"],
+    files["app/api/auth/verify-email/route.ts"],
+  ].filter(Boolean).join("\n")
+}
+function hasSecurePasswordAndJoseAuth(files: Record<string, string>) {
+  const source = authenticationImplementationSource(files)
+  const importsBcrypt = /(?:from\s+["']bcryptjs["']|require\s*\(\s*["']bcryptjs["']\s*\))/.test(source)
+  const usesBcrypt = /\b(?:hash|compare|hashSync|compareSync)\s*\(/.test(source)
+  const importsJose = /(?:from\s+["']jose["']|require\s*\(\s*["']jose["']\s*\))/.test(source)
+  const signsSession = /\bSignJWT\b/.test(source)
+  const verifiesSession = /\bjwtVerify\b/.test(source)
+  return importsBcrypt && usesBcrypt && importsJose && signsSession && verifiesSession
+}
+function hasAuthenticatedBlobPathScope(content: string) {
+  if (!hasGuard(content)) return false
+  const identity = /\b(?:owner(?:Id|Email)?|tenant(?:Id)?|company(?:Id)?|user(?:Id|Email)?|currentUser|authenticatedUser|session(?:User)?|session|accountId)\b/i
+  const blobPath = /\b(?:pathname|path|key|blobName|blobPath)\b/i
+  if (!identity.test(content) || !blobPath.test(content)) return false
+  const forward = new RegExp(`${identity.source}[\\s\\S]{0,1200}${blobPath.source}`, "i")
+  const backward = new RegExp(`${blobPath.source}[\\s\\S]{0,1200}${identity.source}`, "i")
+  return forward.test(content) || backward.test(content)
+}
 function hasFile(files: Record<string, string>, path: string) { return typeof files[path] === "string" && Boolean(files[path].trim()) }
 function manifestDeclaresCapability(manifest: Record<string, unknown>, capability: BackendCapability) {
   if (manifest[capability]) return true
@@ -174,7 +204,7 @@ export function assessGeneratedBackend(specification: ProjectSpecification, file
       if (!hasSqlTable(schema, table)) errors.push(backendRepairError(`Authentication schema is missing ${table}.`))
       if (!hasSqlTable(migration, table)) errors.push(backendRepairError(`Authentication migration is missing ${table}.`))
     }
-    if (!/bcryptjs/.test(auth) || !/\b(?:hash|compare)\s*\(/.test(auth) || !/\bjose\b/.test(auth)) errors.push(backendRepairError("Authentication must hash passwords and sign/verify sessions with bcryptjs and jose."))
+    if (!hasSecurePasswordAndJoseAuth(files)) errors.push(backendRepairError("Authentication must hash passwords and sign/verify sessions with bcryptjs and jose."))
     if (!/\bAUTH_SECRET\b/.test(auth) || /AUTH_SECRET[^\n]*(?:\|\||\?\?)\s*["']/.test(auth)) errors.push(backendRepairError("Authentication must require AUTH_SECRET without a hard-coded fallback."))
     const cookieSource = [files["app/api/auth/login/route.ts"], files["app/api/auth/logout/route.ts"], auth].join("\n")
     if (!/httpOnly\s*:\s*true/.test(cookieSource) || !/sameSite\s*:[^,\n}]*(?:["'](?:lax|strict)["'])/.test(cookieSource) || !/secure\s*:/.test(cookieSource)) errors.push(backendRepairError("Authentication session cookie must be HttpOnly, SameSite and Secure in production."))
@@ -185,7 +215,7 @@ export function assessGeneratedBackend(specification: ProjectSpecification, file
     const upload = files["app/api/uploads/route.ts"] || ""; const item = files["app/api/uploads/[id]/route.ts"] || ""
     if (!/@vercel\/blob/.test(`${upload}\n${item}`) || !/access\s*:\s*["']private["']/.test(upload)) errors.push(backendRepairError("File uploads must use private Vercel Blob storage."))
     if (!hasGuard(upload) || !hasGuard(item) || !/(?:size|MAX_FILE)/.test(upload) || !/(?:type|mime|contentType)/i.test(upload)) errors.push(backendRepairError("Upload APIs must authenticate and validate file size and MIME type."))
-    if (!/(?:owner|tenant|company|user)[\s\S]*(?:pathname|path|key)|(?:pathname|path|key)[\s\S]*(?:owner|tenant|company|user)/i.test(upload)) errors.push(backendRepairError("Blob paths must be scoped to the authenticated owner or tenant."))
+    if (!hasAuthenticatedBlobPathScope(upload)) errors.push(backendRepairError("Blob paths must be scoped to the authenticated owner or tenant."))
   }
   if (capabilities.includes("email")) {
     const email = files["lib/server/email.ts"] || ""; const emailRoute = files["app/api/email/route.ts"] || ""
