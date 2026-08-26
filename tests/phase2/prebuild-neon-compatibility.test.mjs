@@ -16,6 +16,15 @@ test("Neon compatibility normalizer handles getSql/getDb query methods", async (
   assert.match(code, /@neondatabase\\\/serverless/)
 })
 
+test("database-backed generated API routes are forced dynamic before isolated builds", async () => {
+  const code = await source("lib/786-chat/neon-compatibility.ts")
+  assert.match(code, /normalizeDatabaseApiRouteRuntime/)
+  assert.match(code, /app\\\/api/)
+  assert.match(code, /force-dynamic/)
+  assert.match(code, /usesGeneratedDb/)
+  assert.match(code, /get\(\?:Db\|Sql\)/)
+})
+
 test("build route normalizes generated Neon code before validation and dispatch", async () => {
   const code = await source("app/api/786-admin/projects/[id]/build/route.ts")
   const normalizeAt = code.indexOf("normalizeKnownGeneratedCompatibility")
