@@ -25,11 +25,17 @@ function exportExistingDeclaration(source: string, name: string) {
   return repaired
 }
 
+function resolveGeneratedPath(files: Record<string, string>, reported: string) {
+  const normalized = reported.trim().replace(/^\.\//, "")
+  if (files[normalized]) return normalized
+  if (files[`src/${normalized}`]) return `src/${normalized}`
+  return null
+}
+
 function generatedPathFromTypeScriptLog(files: Record<string, string>, logs: string) {
   for (const match of logs.matchAll(/(?:^|\n)([^\n()]+\.(?:ts|tsx))\((\d+),(\d+)\):\s*error\s+TS\d+:/gi)) {
-    const reported = match[1].trim().replace(/^\.\//, "")
-    if (files[reported]) return reported
-    if (files[`src/${reported}`]) return `src/${reported}`
+    const path = resolveGeneratedPath(files, match[1])
+    if (path) return path
   }
   return null
 }
@@ -38,30 +44,83 @@ function regexEscape(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+type ReportedPropertyError = {
+  path: string
+  line: number
+  missing: string
+  suggested?: string
+}
+
+function reportedPropertyErrors(files: Record<string, string>, logs: string) {
+  const errors: ReportedPropertyError[] = []
+  const pattern = /(?:^|\n)([^\n()]+\.(?:ts|tsx))\((\d+),(\d+)\):\s*error\s+TS(2339|2551):\s*Property\s+['"]([A-Za-z_$][\w$]*)['"]\s+does not exist on type[^\n]*(?:Did you mean\s+['"]([A-Za-z_$][\w$]*)['"]\?)?/gi
+
+  for (const match of logs.matchAll(pattern)) {
+    const path = resolveGeneratedPath(files, match[1])
+    if (!path) continue
+    const missing = match[5]
+    const suggested = match[6]
+    errors.push({
+      path,
+      line: Number(match[2]),
+      missing,
+      suggested: suggested && suggested !== missing ? suggested : undefined,
+    })
+  }
+
+  return errors
+}
+
+function replacePropertyOnLine(source: string, lineNumber: number, missing: string, suggested: string) {
+  const lines = source.split("\n")
+  if (lineNumber < 1 || lineNumber > lines.length) return source
+  const missingPattern = regexEscape(missing)
+  lines[lineNumber - 1] = lines[lineNumber - 1]
+    .replace(new RegExp(`\\.${missingPattern}\\b`, "g"), `.${suggested}`)
+    .replace(new RegExp(`\\[(['"])${missingPattern}\\1\\]`, "g"), `.${suggested}`)
+  return lines.join("\n")
+}
+
 function repairSuggestedTypeScriptProperty(files: Record<string, string>, logs: string) {
-  const suggestions = Array.from(
-    logs.matchAll(/Property\s+['"]([A-Za-z_$][\w$]*)['"]\s+does not exist on type[\s\S]{0,1400}?Did you mean\s+['"]([A-Za-z_$][\w$]*)['"]\?/gi),
-    (match) => [match[1], match[2]] as const,
-  ).filter(([missing, suggested]) => missing !== suggested)
-  if (!suggestions.length) return null
+  const findings = reportedPropertyErrors(files, logs).filter((finding) => finding.suggested)
+  if (!findings.length) return null
 
-  const reportedPath = generatedPathFromTypeScriptLog(files, logs)
-  const candidatePaths = reportedPath
-    ? [reportedPath]
-    : Object.keys(files).filter((path) => /\.(?:ts|tsx)$/.test(path))
   const repairedFiles: Record<string, string> = {}
+  for (const finding of findings) {
+    const source = repairedFiles[finding.path] ?? files[finding.path]
+    if (!source || !finding.suggested) continue
+    const repaired = replacePropertyOnLine(source, finding.line, finding.missing, finding.suggested)
+    if (repaired !== source) repairedFiles[finding.path] = repaired
+  }
 
-  for (const path of candidatePaths) {
-    const source = files[path]
-    if (!source) continue
-    let repaired = source
-    for (const [missing, suggested] of suggestions) {
-      const missingPattern = regexEscape(missing)
-      repaired = repaired
-        .replace(new RegExp(`\\.${missingPattern}\\b`, "g"), `.${suggested}`)
-        .replace(new RegExp(`\\[(['"])${missingPattern}\\1\\]`, "g"), `.${suggested}`)
-    }
-    if (repaired !== source) repairedFiles[path] = repaired
+  return Object.keys(repairedFiles).length ? repairedFiles : null
+}
+
+function repairMissingSqlPatchProperties(files: Record<string, string>, logs: string) {
+  const findings = reportedPropertyErrors(files, logs)
+    .filter((finding) => !finding.suggested)
+    .sort((left, right) => left.path.localeCompare(right.path) || right.line - left.line)
+  if (!findings.length) return null
+
+  const repairedFiles: Record<string, string> = {}
+  for (const finding of findings) {
+    const source = repairedFiles[finding.path] ?? files[finding.path]
+    if (!source || !/^(?:src\/)?app\/api\//.test(finding.path)) continue
+
+    const lines = source.split("\n")
+    if (finding.line < 1 || finding.line > lines.length) continue
+    const line = lines[finding.line - 1]
+    const missingPattern = regexEscape(finding.missing)
+    const sqlAssignment = /^\s*[A-Za-z_][\w]*\s*=\s*\$\{[^}]+\},?\s*$/
+    const missingMember = new RegExp(`\\$\\{[^}]*?(?:\\.${missingPattern}\\b|\\[(['"])${missingPattern}\\1\\])[^}]*\\}`)
+
+    // A PATCH/UPDATE route must not overwrite a database column from a property
+    // that its validated request type does not expose. Removing only that SET
+    // assignment preserves the existing database value and is safer than
+    // inventing an unrelated replacement merely to satisfy TypeScript.
+    if (!sqlAssignment.test(line) || !missingMember.test(line)) continue
+    lines.splice(finding.line - 1, 1)
+    repairedFiles[finding.path] = lines.join("\n")
   }
 
   return Object.keys(repairedFiles).length ? repairedFiles : null
@@ -179,6 +238,12 @@ export function repairMissingGeneratedDbHelper(files: Record<string, string>, lo
   if (suggestedPropertyRepair) {
     Object.assign(compatibilityRepairs, suggestedPropertyRepair)
     workingFiles = { ...workingFiles, ...suggestedPropertyRepair }
+  }
+
+  const missingSqlPropertyRepair = repairMissingSqlPatchProperties(workingFiles, logs)
+  if (missingSqlPropertyRepair) {
+    Object.assign(compatibilityRepairs, missingSqlPropertyRepair)
+    workingFiles = { ...workingFiles, ...missingSqlPropertyRepair }
   }
 
   const blobPutBodyRepair = repairGeneratedBlobPutBody(workingFiles, logs)
