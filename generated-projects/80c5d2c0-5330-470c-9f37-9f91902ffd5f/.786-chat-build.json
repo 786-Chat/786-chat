@@ -1,0 +1,12 @@
+{
+  "projectId": "80c5d2c0-5330-470c-9f37-9f91902ffd5f",
+  "buildId": "b78f6bd1-7f20-4415-b76c-8d79dcd9344f",
+  "title": "Raja Catering Operations Platform",
+  "sourceVersion": "e1bd3a5c4886e480015af983d6f4afa59a4814528cff75a55b82d7398171e13f",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-26T23:05:30.968Z"
+}
