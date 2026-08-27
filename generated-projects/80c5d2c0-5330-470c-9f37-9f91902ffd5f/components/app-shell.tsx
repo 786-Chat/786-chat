@@ -38,7 +38,6 @@ const navItems: NavItem[] = [
   { href: "/delivery", label: "Delivery", icon: Truck },
   { href: "/stock", label: "Stock", icon: Boxes, child: true },
 
-  { href: "/chat-structure", label: "Chat Structure", icon: Factory },
   { href: "/products", label: "Products", icon: Package },
   { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/process-flow", label: "Process Flow", icon: Factory },
