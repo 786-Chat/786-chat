@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Factory,
+  Package,
   Snowflake,
   Boxes,
   SprayCan,
@@ -13,6 +14,7 @@ import {
   Menu,
   X,
   Truck,
+  Thermometer,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,11 +24,16 @@ const navItems = [
   { href: "/opening-checks", label: "Opening Checks", icon: ShieldCheck },
   { href: "/production", label: "Production", icon: Factory },
   { href: "/delivery", label: "Delivery", icon: Truck },
+  { href: "/chat-structure", label: "Chat Structure", icon: Factory },
+  { href: "/products", label: "Products", icon: Package },
+  { href: "/ingredients", label: "Ingredients", icon: Package },
   { href: "/freezers", label: "Freezers", icon: Snowflake },
   { href: "/stock", label: "Stock", icon: Boxes },
-  { href: "/inventory", label: "Ready Stock", icon: Boxes },
+  { href: "/inventory", label: "Inventory", icon: Boxes },
+  { href: "/temperature", label: "Temperature", icon: Thermometer },
   { href: "/cleaning", label: "Cleaning", icon: SprayCan },
   { href: "/haccp", label: "HACCP", icon: ShieldCheck },
+  { href: "/process-flow", label: "Process Flow", icon: Factory },
   { href: "/documents", label: "Documents", icon: FileText },
 ];
 
@@ -56,8 +63,8 @@ function SidebarLink({
           : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
       )}
     >
-      <item.icon className="h-4 w-4" />
-      {item.label}
+      <item.icon className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 break-words">{item.label}</span>
     </Link>
   );
 }
@@ -99,7 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
-          <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
+          <nav className="flex h-full min-h-0 flex-col gap-1 overflow-y-auto p-3">
             {navItems.map((item) => (
               <SidebarLink
                 key={item.href}
