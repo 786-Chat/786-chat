@@ -5,8 +5,9 @@ import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-adm
 import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
 import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
-import { getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
+import { deleteFile, getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
 import { findGeneratedPreviewState } from "@/lib/786-admin/preview-reconciliation"
+import { mergedGeneratedRepairDelta } from "@/lib/786-admin/generated-main-repair-sync"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
 import { changedGeneratedFiles, normalizeGeneratedNeonServerlessUsage } from "@/lib/786-chat/neon-compatibility"
@@ -158,6 +159,41 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { confirm?: unknown }
+  let mergedRepairSync = {
+    checked: false,
+    applied: false,
+    updatedPaths: [] as string[],
+    deletedPaths: [] as string[],
+    reason: "Merged repair sync was not requested.",
+  }
+
+  if (body.confirm === true) {
+    const latestBeforeSync = await getLatestBuildJob(id, email)
+    const delta = await mergedGeneratedRepairDelta({
+      projectId: id,
+      currentSourceVersion: sourceVersion(project.files || {}),
+      latestBuild: latestBeforeSync,
+    })
+    const updatedPaths = Object.keys(delta.updates)
+
+    if (updatedPaths.length || delta.deletes.length) {
+      if (updatedPaths.length) await upsertFiles(id, delta.updates)
+      for (const path of delta.deletes) await deleteFile(id, path)
+
+      project = await getProjectWithData(id, email)
+      if (!project) {
+        return NextResponse.json({ success: false, error: "Project not found after merged repair sync" }, { status: 404 })
+      }
+    }
+
+    mergedRepairSync = {
+      checked: delta.checked,
+      applied: updatedPaths.length > 0 || delta.deletes.length > 0,
+      updatedPaths,
+      deletedPaths: delta.deletes,
+      reason: delta.reason,
+    }
+  }
 
   const scaffoldRepaired = await repairMissingScaffold(id, project.files || {})
   if (scaffoldRepaired) {
@@ -197,6 +233,7 @@ export async function POST(request: Request, { params }: Ctx) {
         success: false,
         error: "Project is not ready to build.",
         validation,
+        mergedRepairSync,
         scaffoldRepaired,
         compatibilityRepaired,
       },
@@ -211,6 +248,7 @@ export async function POST(request: Request, { params }: Ctx) {
       queued: false,
       project: { id: project.id, title: project.title },
       validation,
+      mergedRepairSync,
       scaffoldRepaired,
       compatibilityRepaired,
       message: scaffoldRepaired
@@ -235,6 +273,7 @@ export async function POST(request: Request, { params }: Ctx) {
       reused: true,
       project: { id: project.id, title: project.title },
       validation,
+      mergedRepairSync,
       scaffoldRepaired,
       compatibilityRepaired,
       build: buildForClient(latest),
@@ -258,11 +297,14 @@ export async function POST(request: Request, { params }: Ctx) {
       projectId: id,
       baseUrl: new URL(request.url).origin,
     })
+    const syncPrefix = mergedRepairSync.applied
+      ? `[sync] Imported ${mergedRepairSync.updatedPaths.length} merged file update(s) and ${mergedRepairSync.deletedPaths.length} deletion(s). `
+      : ""
     await appendBuildLog({
       buildId: build.id,
       line: compatibilityRepaired
-        ? `[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
-        : `[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
+        ? `${syncPrefix}[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+        : `${syncPrefix}[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not dispatch isolated build"
@@ -291,6 +333,7 @@ export async function POST(request: Request, { params }: Ctx) {
         queued: false,
         error: message,
         validation,
+        mergedRepairSync,
         scaffoldRepaired,
         compatibilityRepaired,
         build: { ...build, status: "failed", error_message: message },
@@ -307,14 +350,17 @@ export async function POST(request: Request, { params }: Ctx) {
       reused: false,
       project: { id: project.id, title: project.title },
       validation,
+      mergedRepairSync,
       scaffoldRepaired,
       compatibilityRepaired,
       build,
-      message: compatibilityRepaired
-        ? "Known Neon serverless compatibility issues were normalized and the build was queued."
-        : scaffoldRepaired
-          ? "Missing Next.js scaffold files were repaired and the build was queued."
-          : "Build queued on the isolated GitHub Actions runner.",
+      message: mergedRepairSync.applied
+        ? "Merged generated-project repairs were synchronized and the build was queued."
+        : compatibilityRepaired
+          ? "Known Neon serverless compatibility issues were normalized and the build was queued."
+          : scaffoldRepaired
+            ? "Missing Next.js scaffold files were repaired and the build was queued."
+            : "Build queued on the isolated GitHub Actions runner.",
     },
     { status: 202 },
   )
