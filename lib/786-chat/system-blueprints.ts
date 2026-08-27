@@ -155,6 +155,15 @@ function hasCrmSalesIntent(prompt: string) {
   return /\b(?:sales\s+pipeline|sales\s+funnel|lead(?:s|\s+capture)?|opportunit(?:y|ies)|pipeline\s+stage|sales\s+stage|follow[-\s]?up|conversion|campaign\s+attribution|sales\s+notification)\b/i.test(prompt)
 }
 
+function hasManufacturingSystemIntent(prompt: string) {
+  const explicitSystemIntent = /\b(?:manufacturing\s+(?:system|management)|factory\s+management|production\s+planning|bill\s+of\s+materials|\bbom\b|traceability|recall|quality\s+release|downtime\s+maintenance)\b/i.test(prompt)
+  if (explicitSystemIntent) return true
+
+  const createManufacturingApp = /\b(?:create|build|develop|generate)\b[\s\S]{0,120}\b(?:manufacturing|food\s+production)\b[\s\S]{0,120}\b(?:app|application|system|platform)\b/i
+  const manufacturingAppCreate = /\b(?:app|application|system|platform)\b[\s\S]{0,120}\b(?:manufacturing|food\s+production)\b[\s\S]{0,120}\b(?:create|build|develop|generate)\b/i
+  return createManufacturingApp.test(prompt) || manufacturingAppCreate.test(prompt)
+}
+
 export function selectSystemBlueprint(prompt: string): SystemBlueprint | null {
   const request = normalize(prompt)
   const match = SYSTEM_BLUEPRINTS
@@ -163,7 +172,9 @@ export function selectSystemBlueprint(prompt: string): SystemBlueprint | null {
       alias: normalize(alias),
     })))
     .filter(({ candidate, alias }) =>
-      request.includes(alias) && (candidate.id !== "crm" || hasCrmSalesIntent(prompt))
+      request.includes(alias) &&
+      (candidate.id !== "crm" || hasCrmSalesIntent(prompt)) &&
+      (candidate.id !== "manufacturing" || hasManufacturingSystemIntent(prompt))
     )
     .sort((left, right) => right.alias.length - left.alias.length)[0]
   return match?.candidate || null
