@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --steel: #334155;
+  --navy: #0f172a;
+  --process-blue: #0ea5e9;
+  --safety-amber: #f59e0b;
+  --quality-green: #10b981;
+}
+
+body {
+  background-color: #0b1120;
+  background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.08) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+
+/* Responsive safety for phone, tablet and laptop */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 0;
+}
+
+main, section, article, form, fieldset, .card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img, canvas, video {
+  max-width: 100%;
+  height: auto;
+}
+
+input, select, textarea, button {
+  max-width: 100%;
+}
+
+th, td, p, dd, dt, label, span {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+}
