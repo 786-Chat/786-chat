@@ -1,5 +1,6 @@
 "use client";
 
+// Generated deployment sync after approved PR #598.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
