@@ -31,7 +31,17 @@ test("published recovery replaces builder files atomically and preserves a safet
   assert.match(restoreRoute, /Before last-successful published recovery/)
   assert.match(restoreRoute, /source: "restore-safety"/)
   assert.match(restoreRoute, /recoverLastSuccessfulPublishedSource/)
-  assert.match(restoreRoute, /queueRevisionRebuild/)
+})
+
+test("restore queues exactly one rebuild through the canonical workspace", async () => {
+  const [restoreRoute, workspace] = await Promise.all([
+    source("app/api/786-admin/projects/[id]/revisions/[revisionId]/restore/route.ts"),
+    source("components/786-chat/workspace.tsx"),
+  ])
+
+  assert.doesNotMatch(restoreRoute, /queueRevisionRebuild/)
+  assert.match(restoreRoute, /rebuildRequired: true/)
+  assert.match(workspace, /queueBuilderBuild\(restored\.project\.id\)/)
 })
 
 test("revisions API exposes recovery through the existing Restore UI", async () => {
