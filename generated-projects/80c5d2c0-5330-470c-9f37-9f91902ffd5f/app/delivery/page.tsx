@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 const units = ["kg", "g", "litres", "ml", "packs", "boxes", "pieces"];
 const storageLocations = ["Freezer 1", "Freezer 2", "Freezer 3", "Freezer 4", "Chiller 1", "Chiller 2", "Dry Store"];
@@ -41,7 +40,6 @@ export default function DeliveryPage() {
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRecords();
@@ -49,10 +47,10 @@ export default function DeliveryPage() {
 
   async function fetchRecords() {
     try {
-      const res = await fetch("/api/deliveries");
+      const res = await fetch("/api/deliveries", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load deliveries");
       const data = await res.json();
-      setRecords(data);
+      setRecords(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -75,28 +73,13 @@ export default function DeliveryPage() {
         body: JSON.stringify(form)
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || "Failed to save delivery");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error?.message || data.error || "Failed to save delivery");
       }
       setForm({ ...emptyForm });
       await fetchRecords();
     } catch (err: any) {
       setError(err.message);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!window.confirm("Delete this delivery record? It will also disappear from Stock.")) return;
-    setDeletingId(id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/deliveries/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete delivery");
-      setRecords((prev) => prev.filter((rec) => rec.id !== id));
-    } catch (err: any) {
-      setError(err.message || "Failed to delete delivery");
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -183,7 +166,7 @@ export default function DeliveryPage() {
             <p className="p-4 text-sm text-slate-400">No deliveries recorded yet</p>
           ) : (
             <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[900px] w-full text-left text-sm">
+              <table className="min-w-[820px] w-full text-left text-sm">
                 <thead className="border-b border-slate-800 text-slate-400">
                   <tr>
                     <th className="px-4 py-3 font-medium">Name</th>
@@ -194,7 +177,6 @@ export default function DeliveryPage() {
                     <th className="px-4 py-3 font-medium">Use By</th>
                     <th className="px-4 py-3 font-medium">Storage</th>
                     <th className="px-4 py-3 font-medium">Allergen</th>
-                    <th className="px-4 py-3 font-medium text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -208,23 +190,6 @@ export default function DeliveryPage() {
                       <td className="px-4 py-3">{rec.use_by_date}</td>
                       <td className="px-4 py-3">{rec.storage_location}</td>
                       <td className="px-4 py-3">{rec.allergen_yes_no === "Yes" ? rec.allergen_type || "Yes" : "No"}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(rec.id)}
-                          disabled={deletingId === rec.id}
-                          title="Delete delivery"
-                          aria-label={`Delete delivery ${rec.name}`}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M3 6h18" />
-                            <path d="M8 6V4h8v2" />
-                            <path d="M19 6l-1 14H6L5 6" />
-                            <path d="M10 11v5M14 11v5" />
-                          </svg>
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
