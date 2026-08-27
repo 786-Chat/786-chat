@@ -5,7 +5,6 @@ import {
   restoreProjectRevision,
 } from "@/lib/786-admin/project-revisions"
 import { getProjectWithData } from "@/lib/786-admin/projects"
-import { queueRevisionRebuild } from "@/lib/786-admin/revision-build-refresh"
 import {
   LAST_SUCCESSFUL_PUBLISHED_REVISION_ID,
   recoverLastSuccessfulPublishedSource,
@@ -20,7 +19,7 @@ async function requireOwnerEmail(): Promise<string | null> {
 
 type Ctx = { params: Promise<{ id: string; revisionId: string }> }
 
-export async function POST(request: Request, { params }: Ctx) {
+export async function POST(_request: Request, { params }: Ctx) {
   const email = await requireOwnerEmail()
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -60,21 +59,16 @@ export async function POST(request: Request, { params }: Ctx) {
     const project = await getProjectWithData(id, email)
     if (!project) throw new Error("Project not found after restore")
 
-    const buildResponse = await queueRevisionRebuild({ request, projectId: id })
-    const buildPayload = await buildResponse.json().catch(() => ({}))
-    if (!buildResponse.ok) {
-      const buildError = typeof buildPayload?.error === "string"
-        ? buildPayload.error
-        : "Restored project could not be queued for rebuild"
-      throw new Error(buildError)
-    }
-
+    // The canonical 786.Chat workspace queues the rebuild immediately after this
+    // restore response. Do not queue a second build here: double-dispatching the
+    // same restored source can create overlapping runner callbacks and 409s.
     return NextResponse.json({
       project,
       restoredRevision,
       recovery,
-      build: buildPayload?.build || null,
-      rebuildQueued: Boolean(buildPayload?.queued),
+      build: null,
+      rebuildQueued: false,
+      rebuildRequired: true,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not restore revision"
