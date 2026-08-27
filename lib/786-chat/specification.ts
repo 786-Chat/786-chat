@@ -288,7 +288,9 @@ export function analyseProjectPrompt(
   const requiredComponents = matches(positivePrompt, [
     [/\bnav\b|\bnavbar\b|\bnavigation\s+(?:bar|menu)\b|\bmenu\s+bar\b|\bheader\b/i, "navigation"],
     [/\bhero\b/i, "hero"],
-    [/\bform\b|log[ -]?in|register|sign[ -]?up/i, "form"],
+    [targetedExistingEdit
+      ? /(?:^|\n)[^\n]{0,120}\b(?:add|create|build|make|insert|include|update|change|edit|fix|redesign|replace)\b[^\n]{0,120}\bform\b|(?:^|\n)[^\n]{0,120}\bform\b[^\n]{0,120}\b(?:add|create|build|make|insert|include|update|change|edit|fix|redesign|replace)\b/i
+      : /\bform\b|log[ -]?in|register|sign[ -]?up/i, "form"],
     [/(?:\bdata\s+table\b|\badmin\s+table\b|\bresponsive\s+table\b|\border\s+table\b|\bcustomer\s+table\b|\btable\s+(?:view|component|grid)\b)/i, "data-table"],
     [/\bchart|analytics\b/i, "chart"],
     [/\bfooter\b/i, "footer"],
