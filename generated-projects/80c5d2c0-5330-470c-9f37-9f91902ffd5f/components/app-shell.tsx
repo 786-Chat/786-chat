@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Factory,
-  Package,
   Snowflake,
   Boxes,
   SprayCan,
@@ -20,17 +19,48 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/opening-checks", label: "Opening Checks", icon: ShieldCheck },
   { href: "/production", label: "Production", icon: Factory },
   { href: "/delivery", label: "Delivery", icon: Truck },
   { href: "/freezers", label: "Freezers", icon: Snowflake },
   { href: "/stock", label: "Stock", icon: Boxes },
   { href: "/inventory", label: "Ready Stock", icon: Boxes },
   { href: "/cleaning", label: "Cleaning", icon: SprayCan },
-  { href: "/opening-checks", label: "Opening Checks", icon: ShieldCheck },
-  { href: "/closing-checks", label: "Closing Checks", icon: ShieldCheck },
   { href: "/haccp", label: "HACCP", icon: ShieldCheck },
   { href: "/documents", label: "Documents", icon: FileText },
 ];
+
+const closingItem = {
+  href: "/closing-checks",
+  label: "Closing Checks",
+  icon: ShieldCheck,
+};
+
+function SidebarLink({
+  item,
+  active,
+  onClick,
+}: {
+  item: { href: string; label: string; icon: typeof LayoutDashboard };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        active
+          ? "bg-sky-500/10 text-sky-400"
+          : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+      )}
+    >
+      <item.icon className="h-4 w-4" />
+      {item.label}
+    </Link>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -70,25 +100,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         >
           <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
-            {navItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-sky-500/10 text-sky-400"
-                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
+            {navItems.map((item) => (
+              <SidebarLink
+                key={item.href}
+                item={item}
+                active={pathname === item.href}
+                onClick={() => setMobileOpen(false)}
+              />
+            ))}
+
+            <div className="mt-auto border-t border-slate-800 pt-3">
+              <SidebarLink
+                item={closingItem}
+                active={pathname === closingItem.href}
+                onClick={() => setMobileOpen(false)}
+              />
+            </div>
           </nav>
         </aside>
 
