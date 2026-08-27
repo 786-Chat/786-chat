@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 
 interface StockItem {
   id: string;
@@ -27,12 +27,14 @@ export function StockView() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [viewing, setViewing] = useState<StockItem | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStock();
   }, []);
 
   async function fetchStock() {
+    setError(null);
     try {
       const res = await fetch("/api/deliveries", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to load stock from Delivery");
@@ -42,6 +44,34 @@ export function StockView() {
       setError(err.message || "Failed to load stock");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDelete(item: StockItem) {
+    if (!window.confirm(`Delete ${item.name} from Stock?`)) return;
+
+    setDeletingId(item.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deliveries/${encodeURIComponent(item.id)}`, {
+        method: "DELETE",
+        cache: "no-store"
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = typeof payload?.error === "string"
+          ? payload.error
+          : payload?.error?.message || "Failed to delete stock item";
+        throw new Error(message);
+      }
+
+      setItems((current) => current.filter((stockItem) => stockItem.id !== item.id));
+      setViewing((current) => current?.id === item.id ? null : current);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete stock item");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -77,6 +107,12 @@ export function StockView() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Stock</h1>
 
+      {error && (
+        <div className="rounded border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300">
+          {error}
+        </div>
+      )}
+
       {items.length > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
@@ -104,15 +140,13 @@ export function StockView() {
 
       <Card>
         <CardContent className="p-0">
-          {error ? (
-            <p className="p-4 text-sm text-red-400">{error}</p>
-          ) : loading ? (
+          {loading ? (
             <p className="p-4 text-sm text-slate-400">Loading stock...</p>
           ) : filteredItems.length === 0 ? (
             <p className="p-4 text-sm text-slate-400">No stock received from Delivery yet</p>
           ) : (
             <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[900px] w-full text-left text-sm">
+              <table className="min-w-[940px] w-full text-left text-sm">
                 <thead className="border-b border-slate-800 text-slate-400">
                   <tr>
                     <th className="px-4 py-3 font-medium">Product / Ingredient</th>
@@ -142,12 +176,25 @@ export function StockView() {
                         <td className="px-4 py-3">{item.use_by_date}</td>
                         <td className="px-4 py-3"><Badge tone={status.tone}>{status.label}</Badge></td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => setViewing(item)}
-                            className="cursor-pointer rounded bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400"
-                          >
-                            View Stock
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewing(item)}
+                              className="cursor-pointer whitespace-nowrap rounded bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-sky-400"
+                            >
+                              View Stock
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(item)}
+                              disabled={deletingId === item.id}
+                              title="Delete stock"
+                              aria-label={`Delete ${item.name} from stock`}
+                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -164,7 +211,7 @@ export function StockView() {
           <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto overflow-x-hidden rounded-xl border border-slate-700 bg-slate-900 p-4 sm:p-6">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold">Stock Details</h2>
-              <button onClick={() => setViewing(null)} className="rounded p-2 text-slate-400 hover:bg-slate-800">✕</button>
+              <button type="button" onClick={() => setViewing(null)} className="rounded p-2 text-slate-400 hover:bg-slate-800">✕</button>
             </div>
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div><dt className="text-sm text-slate-400">Product / Ingredient</dt><dd className="font-medium">{viewing.name}</dd></div>
@@ -177,6 +224,23 @@ export function StockView() {
               <div><dt className="text-sm text-slate-400">Allergen</dt><dd className="font-medium">{viewing.allergen_yes_no === "Yes" ? (viewing.allergen_type || "Yes") : "No"}</dd></div>
               <div className="sm:col-span-2"><dt className="text-sm text-slate-400">Notes</dt><dd className="font-medium">{viewing.notes || "—"}</dd></div>
             </dl>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setViewing(null)}
+                className="h-10 rounded border border-slate-600 px-4 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(viewing)}
+                disabled={deletingId === viewing.id}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" /> Delete Stock
+              </button>
+            </div>
           </div>
         </div>
       )}
