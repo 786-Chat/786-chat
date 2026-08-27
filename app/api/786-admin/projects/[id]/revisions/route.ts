@@ -4,6 +4,10 @@ import {
   createProjectRevision,
   listProjectRevisions,
 } from "@/lib/786-admin/project-revisions"
+import {
+  getLastSuccessfulPublishedBuild,
+  lastSuccessfulPublishedRevision,
+} from "@/lib/786-admin/published-source-recovery"
 
 async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
@@ -20,8 +24,18 @@ export async function GET(request: Request, { params }: Ctx) {
 
   const { id } = await params
   const requested = Number(new URL(request.url).searchParams.get("limit") || 50)
-  const revisions = await listProjectRevisions(id, email, Number.isFinite(requested) ? requested : 50)
-  return NextResponse.json({ revisions })
+  const safeLimit = Number.isFinite(requested) ? requested : 50
+  const [revisions, recoveryBuild] = await Promise.all([
+    listProjectRevisions(id, email, safeLimit),
+    getLastSuccessfulPublishedBuild(id, email),
+  ])
+  const recoveryRevision = recoveryBuild ? lastSuccessfulPublishedRevision(recoveryBuild) : null
+
+  return NextResponse.json({
+    revisions: recoveryRevision
+      ? [recoveryRevision, ...revisions.filter((revision) => revision.id !== recoveryRevision.id)]
+      : revisions,
+  })
 }
 
 export async function POST(request: Request, { params }: Ctx) {
