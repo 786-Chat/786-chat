@@ -6,6 +6,10 @@ import {
 } from "@/lib/786-admin/project-revisions"
 import { getProjectWithData } from "@/lib/786-admin/projects"
 import { queueRevisionRebuild } from "@/lib/786-admin/revision-build-refresh"
+import {
+  LAST_SUCCESSFUL_PUBLISHED_REVISION_ID,
+  recoverLastSuccessfulPublishedSource,
+} from "@/lib/786-admin/published-source-recovery"
 
 async function requireOwnerEmail(): Promise<string | null> {
   const session = await getSession()
@@ -25,14 +29,34 @@ export async function POST(request: Request, { params }: Ctx) {
     await createProjectRevision({
       projectId: id,
       ownerEmail: email,
-      label: "Before restore",
+      label: revisionId === LAST_SUCCESSFUL_PUBLISHED_REVISION_ID
+        ? "Before last-successful published recovery"
+        : "Before restore",
       source: "restore-safety",
     })
-    const restoredRevision = await restoreProjectRevision({
-      revisionId,
-      projectId: id,
-      ownerEmail: email,
-    })
+
+    let restoredRevision
+    let recovery: { restoredFileCount: number; buildId: string; commitSha: string } | null = null
+
+    if (revisionId === LAST_SUCCESSFUL_PUBLISHED_REVISION_ID) {
+      const recovered = await recoverLastSuccessfulPublishedSource({
+        projectId: id,
+        ownerEmail: email,
+      })
+      restoredRevision = recovered.restoredRevision
+      recovery = {
+        restoredFileCount: recovered.restoredFileCount,
+        buildId: recovered.build.id,
+        commitSha: recovered.build.github_commit_sha || "",
+      }
+    } else {
+      restoredRevision = await restoreProjectRevision({
+        revisionId,
+        projectId: id,
+        ownerEmail: email,
+      })
+    }
+
     const project = await getProjectWithData(id, email)
     if (!project) throw new Error("Project not found after restore")
 
@@ -48,6 +72,7 @@ export async function POST(request: Request, { params }: Ctx) {
     return NextResponse.json({
       project,
       restoredRevision,
+      recovery,
       build: buildPayload?.build || null,
       rebuildQueued: Boolean(buildPayload?.queued),
     })
