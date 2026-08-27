@@ -41,6 +41,7 @@ import {
 } from "@/lib/786-chat/edit-intent"
 import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
 import { screenBuilderPrompt } from "@/lib/786-chat/security"
+import { isExplicitNewProjectIntent } from "@/lib/786-chat/project-intent"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -78,11 +79,6 @@ function validationRepairFilesFromErrors(errors: string[]) {
   return uniquePaths(files)
 }
 
-function isExplicitNewApplicationPrompt(prompt: string) {
-  const message = prompt.toLowerCase()
-  return /\bnew project\b|completely new|create (?:a |an )?new project|this is a new project|\b(?:create|build|develop)\s+(?:a|an)\s+(?:production-ready\s+)?[^\n]{0,140}\b(?:application|app|website|system)\s+called\b/.test(message)
-}
-
 export async function POST(request: Request) {
   const generationStartedAt = Date.now()
   const session = await getSession()
@@ -97,7 +93,7 @@ export async function POST(request: Request) {
   if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
   const repairPass = Math.max(0, Number(continuationState?.repairPass || 0))
   const prompt = String(continuationState?.prompt || payload.message || "").trim()
-  const explicitNewApplication = isExplicitNewApplicationPrompt(prompt)
+  const explicitNewApplication = isExplicitNewProjectIntent(prompt)
   if (explicitNewApplication) {
     delete payload.projectId
     delete payload.existing
