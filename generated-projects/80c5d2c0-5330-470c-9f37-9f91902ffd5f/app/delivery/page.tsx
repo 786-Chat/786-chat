@@ -90,6 +90,10 @@ export default function DeliveryPage() {
         <p className="mt-2 text-sm text-slate-400">
           Every delivery is checked for food safety, cold chain, packaging and labelling before stock is accepted.
         </p>
+        <p className="mt-2 text-sm text-slate-400">
+          This form records incoming raw ingredients (milk, sugar, dry fruits, flavours, packaging, etc.).
+          The quantity is added to Stock.
+        </p>
       </div>
 
       <Card className="border-2 border-slate-600 bg-white text-slate-900">
