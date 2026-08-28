@@ -7,6 +7,7 @@ const source = async (path) => readFile(new URL(`../../${path}`, import.meta.url
 test("device selector includes current iPhone, iPad and Android presets", async () => {
   const contracts = await source("components/786-chat/contracts.ts")
   for (const label of [
+    "iPhone 17 Pro Max",
     "iPhone 16 Pro Max",
     "iPhone 16 Pro",
     "iPhone 15 Pro Max",
@@ -40,4 +41,15 @@ test("preview iframe keeps touch scrolling and selected viewport fit", async () 
   assert.match(css, /touch-action: pan-x pan-y/)
   assert.match(css, /max-width: 100%/)
   assert.match(css, /overscroll-behavior: contain/)
+})
+
+test("phone presets render as complete handset frames inside live preview", async () => {
+  const css = await source("components/786-chat/workspace-theme.module.css")
+  assert.match(css, /width: 440px/)
+  assert.match(css, /height: 956px/)
+  assert.match(css, /border-radius: 50px/)
+  assert.match(css, /zoom: 0\.72/)
+  assert.match(css, /width: calc\(100% \+ 14px\)/)
+  assert.match(css, /::before/)
+  assert.match(css, /::after/)
 })
