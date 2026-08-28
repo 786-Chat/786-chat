@@ -67,7 +67,17 @@ function SidebarLink({
   return (
     <Link
       href={item.href}
-      onClick={onClick}
+      onClick={(event) => {
+        onClick();
+
+        // Opening Checks is a daily record. On mobile, always enter it with a
+        // fresh document navigation so cached App Router state cannot reopen an
+        // older selected day (for example Monday after returning from Dashboard).
+        if (item.href === "/opening-checks" && window.innerWidth < 768) {
+          event.preventDefault();
+          window.location.assign("/opening-checks");
+        }
+      }}
       className={cn(
         "flex items-center rounded-md text-sm font-medium transition-colors",
         item.child ? "ml-5 gap-2 px-3 py-1.5" : "gap-3 px-3 py-2",
