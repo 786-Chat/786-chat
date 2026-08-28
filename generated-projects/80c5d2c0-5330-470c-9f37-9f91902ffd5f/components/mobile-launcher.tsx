@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MobileOpeningChecks } from "@/components/mobile-opening-checks";
 import {
   LayoutDashboard,
   Factory,
@@ -15,7 +16,6 @@ import {
   ShieldCheck,
   FileText,
   ClipboardCheck,
-  ChevronRight,
   FolderOpen,
 } from "lucide-react";
 
@@ -61,10 +61,12 @@ export default function MobileLauncher() {
   const pathname = usePathname();
   const [isMobile, setIsMobile] = useState(false);
   const [orderedApps, setOrderedApps] = useState(apps);
+  const [activeMobileView, setActiveMobileView] = useState<null | "opening-checks">(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragStartPos = useRef<{ x: number; y: number } | null>(null);
   const dragStarted = useRef(false);
+  const suppressNextClick = useRef(false);
   const dragItemRef = useRef<HTMLAnchorElement | null>(null);
   const dragOverItemRef = useRef<HTMLAnchorElement | null>(null);
 
@@ -88,8 +90,15 @@ export default function MobileLauncher() {
     }
   }, []);
 
+  const releaseClickSuppression = useCallback(() => {
+    window.setTimeout(() => {
+      suppressNextClick.current = false;
+    }, 0);
+  }, []);
+
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     dragStarted.current = true;
+    suppressNextClick.current = true;
     setDraggingIndex(index);
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", String(index));
@@ -134,12 +143,14 @@ export default function MobileLauncher() {
       dragItemRef.current.style.opacity = "";
       dragItemRef.current.style.transform = "";
     }
-  }, []);
+    releaseClickSuppression();
+  }, [releaseClickSuppression]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent, index: number) => {
     const touch = e.touches[0];
     dragStartPos.current = { x: touch.clientX, y: touch.clientY };
     dragStarted.current = false;
+    suppressNextClick.current = false;
     setDraggingIndex(index);
   }, []);
 
@@ -152,6 +163,7 @@ export default function MobileLauncher() {
     const dy = touch.clientY - start.y;
     if (!dragStarted.current && Math.abs(dx) + Math.abs(dy) > 10) {
       dragStarted.current = true;
+      suppressNextClick.current = true;
     }
     if (!dragStarted.current) return;
     e.preventDefault();
@@ -171,6 +183,7 @@ export default function MobileLauncher() {
       setDraggingIndex(null);
       setDragOverIndex(null);
       dragStartPos.current = null;
+      suppressNextClick.current = false;
       return;
     }
     e.preventDefault();
@@ -193,9 +206,14 @@ export default function MobileLauncher() {
     setDragOverIndex(null);
     dragStartPos.current = null;
     dragStarted.current = false;
-  }, []);
+    releaseClickSuppression();
+  }, [releaseClickSuppression]);
 
   if (!isMobile || pathname !== "/") return null;
+
+  if (activeMobileView === "opening-checks") {
+    return <MobileOpeningChecks onBack={() => setActiveMobileView(null)} />;
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 text-slate-100">
@@ -222,6 +240,16 @@ export default function MobileLauncher() {
               data-launcher-index={index}
               ref={index === draggingIndex ? dragItemRef : index === dragOverIndex ? dragOverItemRef : undefined}
               draggable
+              onClick={(e) => {
+                if (suppressNextClick.current || dragStarted.current) {
+                  e.preventDefault();
+                  return;
+                }
+                if (app.href === "/opening-checks") {
+                  e.preventDefault();
+                  setActiveMobileView("opening-checks");
+                }
+              }}
               onDragStart={(e) => handleDragStart(e, index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDrop={(e) => handleDrop(e, index)}
@@ -241,9 +269,7 @@ export default function MobileLauncher() {
                 touchAction: "pan-y",
               }}
             >
-              <span
-                className={`flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg ${app.color}`}
-              >
+              <span className={`flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg ${app.color}`}>
                 <app.icon className="h-8 w-8 text-white" />
               </span>
               <span className="text-center text-xs font-medium leading-tight text-slate-200">
