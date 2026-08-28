@@ -50,5 +50,27 @@ export async function POST(request: Request) {
     ON CONFLICT (check_type, task_key, check_date)
     DO UPDATE SET completed = EXCLUDED.completed, updated_at = now()
   `;
+
+  // Auto-archive completed opening checks
+  if (data.checkType === "opening" && data.completed) {
+    const allRows = await db`
+      SELECT task_key, completed FROM weekly_check_results
+      WHERE check_type = 'opening' AND check_date = ${data.checkDate}
+    `;
+    const allCompleted = allRows.length > 0 && allRows.every(r => r.completed);
+    if (allCompleted) {
+      const existing = await db`SELECT id FROM my_documents WHERE document_type = 'opening_checks' AND check_date = ${data.checkDate}`;
+      if (existing.length === 0) {
+        const dayName = new Date(`${data.checkDate}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long" });
+        const docId = crypto.randomUUID();
+        const tasks = allRows.map(r => ({ taskKey: r.task_key, completed: r.completed }));
+        await db`
+          INSERT INTO my_documents (id, document_type, title, check_date, day_name, data)
+          VALUES (${docId}, 'opening_checks', 'Opening Checks', ${data.checkDate}, ${dayName}, ${JSON.stringify(tasks)})
+        `;
+      }
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
