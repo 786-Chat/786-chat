@@ -354,51 +354,6 @@ export function CleaningView() {
           </form>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="p-4 text-sm text-slate-400">Loading cleaning history...</p>
-          ) : checks.length === 0 ? (
-            <p className="p-4 text-sm text-slate-400">No cleaning checks recorded yet</p>
-          ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[900px] w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Time</th>
-                    <th className="px-4 py-3 font-medium">Area/Equipment</th>
-                    <th className="px-4 py-3 font-medium">Task</th>
-                    <th className="px-4 py-3 font-medium">Cleaned By</th>
-                    <th className="px-4 py-3 font-medium">Checked By</th>
-                    <th className="px-4 py-3 font-medium">Result</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {checks.map((check) => {
-                    const resultTone = check.result === "Satisfactory" ? "green" : "red";
-                    const statusTone = check.completed ? "green" : "amber";
-                    return (
-                      <tr key={check.id} className="text-slate-300">
-                        <td className="px-4 py-3">{check.cleaning_date}</td>
-                        <td className="px-4 py-3">{check.cleaning_time}</td>
-                        <td className="px-4 py-3 font-medium text-slate-100">{check.area_equipment}</td>
-                        <td className="px-4 py-3">{check.cleaning_task}</td>
-                        <td className="px-4 py-3">{check.cleaned_by}</td>
-                        <td className="px-4 py-3">{check.checked_by}</td>
-                        <td className="px-4 py-3"><Badge tone={resultTone as any}>{check.result}</Badge></td>
-                        <td className="px-4 py-3"><Badge tone={statusTone as any}>{check.completed ? "Completed" : "Incomplete"}</Badge></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
