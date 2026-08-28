@@ -13,7 +13,7 @@ const context = await readFile(
 
 test("chat-only questions use project source context instead of route names alone", () => {
   assert.match(askRoute, /projectQuestionContext/)
-  assert.match(askRoute, /Relevant project source excerpts/)
+  assert.match(context, /Relevant project source excerpts/)
   assert.match(askRoute, /Do not invent project facts/)
   assert.match(askRoute, /cannot verify it from the available project context/)
 })
