@@ -9,6 +9,7 @@ export type BuilderDevice =
   | "ipadAir"
   | "ipadMini"
   | "mobile"
+  | "iphone17ProMax"
   | "iphone16ProMax"
   | "iphone16Pro"
   | "iphone16"
@@ -176,6 +177,7 @@ export const BUILDER_DEVICES: Record<
   ipadAir: { label: "iPad Air · 820 × 1180", width: 820, height: 1180 },
   ipadMini: { label: "iPad mini · 744 × 1133", width: 744, height: 1133 },
   mobile: { label: "Mobile · 393 × 852", width: 393, height: 852 },
+  iphone17ProMax: { label: "iPhone 17 Pro Max · 440 × 956", width: 440, height: 956 },
   iphone16ProMax: { label: "iPhone 16 Pro Max · 440 × 956", width: 440, height: 956 },
   iphone16Pro: { label: "iPhone 16 Pro · 402 × 874", width: 402, height: 874 },
   iphone16: { label: "iPhone 16 · 393 × 852", width: 393, height: 852 },
