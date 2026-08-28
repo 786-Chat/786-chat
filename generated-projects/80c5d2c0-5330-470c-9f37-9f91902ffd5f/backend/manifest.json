@@ -22,7 +22,8 @@
   "migrations": [
     "sql/migrations/001_initial.sql",
     "sql/migrations/009_deliveries.sql",
-    "sql/migrations/010_weekly_checks.sql"
+    "sql/migrations/010_weekly_checks.sql",
+    "sql/migrations/011_my_documents.sql"
   ],
   "api": [
     "/api/auth/register",
@@ -37,6 +38,8 @@
     "/api/email",
     "/api/deliveries",
     "/api/deliveries/[id]",
-    "/api/weekly-checks"
+    "/api/weekly-checks",
+    "/api/my-documents",
+    "/api/my-documents/[id]"
   ]
 }
