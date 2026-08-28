@@ -38,16 +38,15 @@ const navItems: NavItem[] = [
   { href: "/delivery", label: "Delivery", icon: Truck },
   { href: "/stock", label: "Stock", icon: Boxes, child: true },
 
-  { href: "/chat-structure", label: "Chat Structure", icon: Factory },
   { href: "/products", label: "Products", icon: Package },
   { href: "/ingredients", label: "Ingredients", icon: Package },
-  { href: "/process-flow", label: "Process Flow", icon: Factory },
 
   // Daily food-safety operations kept together.
   { href: "/freezers", label: "Freezers", icon: Snowflake },
   { href: "/cleaning", label: "Cleaning", icon: SprayCan },
   { href: "/haccp", label: "HACCP", icon: ShieldCheck },
   { href: "/documents", label: "Documents", icon: FileText },
+  { href: "/process-flow", label: "Process Flow", icon: Factory, child: true },
 ];
 
 const closingItem: NavItem = {
