@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const TASK_CLASSES = [
   "bg-violet-600",
@@ -30,6 +29,10 @@ const OPENING_TASKS = [
   "No out-of-date food products; food correctly covered and stored",
 ];
 
+type MobileOpeningChecksProps = {
+  onBack?: () => void;
+};
+
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -49,8 +52,10 @@ function addDays(date: Date, amount: number) {
   return d;
 }
 
-export function MobileOpeningChecks() {
-  const [selectedDate, setSelectedDate] = useState(isoDate(new Date()));
+export function MobileOpeningChecks({ onBack }: MobileOpeningChecksProps) {
+  // The launcher always opens the current week's Monday first. Users can then
+  // swipe or use the arrow buttons to move day-by-day.
+  const [selectedDate, setSelectedDate] = useState(() => isoDate(mondayOf(new Date())));
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -63,7 +68,6 @@ export function MobileOpeningChecks() {
   const selected = new Date(`${selectedDate}T12:00:00`);
   const dayIndex = selected.getDay() === 0 ? 6 : selected.getDay() - 1;
   const dayLabel = DAYS[dayIndex];
-  const todayIso = isoDate(new Date());
 
   useEffect(() => {
     loadWeek();
@@ -147,6 +151,14 @@ export function MobileOpeningChecks() {
       ? "animate-slide-right"
       : "";
 
+  function goBack() {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    window.history.back();
+  }
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 text-slate-100" style={{ scrollbarWidth: "none" }}>
       <style>{`
@@ -156,12 +168,11 @@ export function MobileOpeningChecks() {
         @keyframes slideRight { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
       `}</style>
       <div className="mx-auto min-h-full w-full max-w-md px-4 pb-8 pt-4">
-        {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <button
-            onClick={() => window.history.back()}
+            onClick={goBack}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700"
-            aria-label="Back"
+            aria-label="Back to Raja launcher"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -169,16 +180,15 @@ export function MobileOpeningChecks() {
           <div className="w-10" />
         </div>
 
-        {/* Day title */}
         <div className="mb-4 text-center">
           <div className="text-2xl font-extrabold uppercase tracking-wide">{dayLabel}</div>
-          <div className="text-sm text-slate-400">{selected.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</div>
+          <div className="text-sm text-slate-400">
+            {selected.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+          </div>
         </div>
 
-        {/* Error */}
         {error && <div className="mb-3 rounded bg-red-950/70 px-3 py-2 text-sm font-semibold text-red-300">{error}</div>}
 
-        {/* Task cards */}
         <div
           className={`space-y-3 ${slideClass}`}
           onTouchStart={handleTouchStart}
@@ -216,7 +226,6 @@ export function MobileOpeningChecks() {
           )}
         </div>
 
-        {/* Navigation arrows */}
         <div className="mt-6 flex items-center justify-between">
           <button
             onClick={() => moveDay(-1)}
@@ -241,6 +250,8 @@ export function MobileOpeningChecks() {
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
+
+        <p className="mt-4 text-center text-xs text-slate-500">Swipe left/right to change day • Ticks save automatically</p>
       </div>
     </div>
   );

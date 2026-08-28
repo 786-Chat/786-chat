@@ -36,9 +36,9 @@ export default function MyDocumentsPage() {
         <p className="text-slate-400 mb-4">{selected.day_name} {formatDate(selected.check_date)}</p>
         <div className="space-y-2">
           {selected.data.map((item: any, idx: number) => (
-            <div key={idx} className="flex items-center justify-between rounded-lg bg-slate-800 p-3">
-              <span className="text-sm">{item.taskKey}</span>
-              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            <div key={idx} className="flex items-center justify-between gap-3 rounded-lg bg-slate-800 p-3">
+              <span className="text-sm">{item.task || item.taskKey}</span>
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
             </div>
           ))}
         </div>
