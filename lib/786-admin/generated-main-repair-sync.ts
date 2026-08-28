@@ -15,6 +15,10 @@ type ComparePayload = {
   files?: CompareFile[]
 }
 
+type CommitPayload = {
+  parents?: Array<{ sha?: unknown }>
+}
+
 type ContentPayload = {
   type?: unknown
   encoding?: unknown
@@ -83,6 +87,18 @@ async function fetchMainTextFile(path: string): Promise<string> {
   return Buffer.from(payload.content.replace(/\s/g, ""), "base64").toString("utf8")
 }
 
+async function compareAgainstMain(baseSha: string): Promise<ComparePayload> {
+  return githubJson<ComparePayload>(
+    `/compare/${encodeURIComponent(baseSha)}...${encodeURIComponent(baseBranch())}`,
+  )
+}
+
+async function firstParentSha(commitSha: string): Promise<string | null> {
+  const commit = await githubJson<CommitPayload>(`/commits/${encodeURIComponent(commitSha)}`)
+  const parentSha = commit.parents?.[0]?.sha
+  return typeof parentSha === "string" && parentSha.trim() ? parentSha : null
+}
+
 function projectRelativePath(projectPrefix: string, filename: string): string | null {
   if (!filename.startsWith(projectPrefix)) return null
   const relative = filename.slice(projectPrefix.length)
@@ -121,10 +137,29 @@ export async function mergedGeneratedRepairDelta(input: {
   }
 
   try {
-    const compare = await githubJson<ComparePayload>(
-      `/compare/${encodeURIComponent(latest.github_commit_sha)}...${encodeURIComponent(baseBranch())}`,
-    )
-    const status = typeof compare.status === "string" ? compare.status : "unknown"
+    let compare = await compareAgainstMain(latest.github_commit_sha)
+    let status = typeof compare.status === "string" ? compare.status : "unknown"
+    let usedGeneratedBaseFallback = false
+
+    // Generated preview commits normally live on isolated generated/* branches and are
+    // intentionally not merged into main. Once a manual repair is merged into main,
+    // GitHub therefore reports latest-generated...main as "diverged". Comparing from
+    // the generated commit's first parent (the main SHA it was built from) safely
+    // reveals only changes merged to main after that generated snapshot was created.
+    if (status === "diverged") {
+      const parentSha = await firstParentSha(latest.github_commit_sha)
+      if (!parentSha) {
+        return {
+          checked: true,
+          updates: {},
+          deletes: [],
+          reason: "Merged repair sync could not resolve the generated build base commit.",
+        }
+      }
+      compare = await compareAgainstMain(parentSha)
+      status = typeof compare.status === "string" ? compare.status : "unknown"
+      usedGeneratedBaseFallback = true
+    }
 
     if (status === "identical" || !Array.isArray(compare.files) || compare.files.length === 0) {
       return { checked: true, updates: {}, deletes: [], reason: "No merged generated-project repairs found." }
@@ -184,7 +219,7 @@ export async function mergedGeneratedRepairDelta(input: {
       checked: true,
       updates,
       deletes: [...deleteSet].filter((path) => !(path in updates)),
-      reason: `Found ${Object.keys(updates).length} merged file update(s) and ${deleteSet.size} deletion(s) for this project.`,
+      reason: `Found ${Object.keys(updates).length} merged file update(s) and ${deleteSet.size} deletion(s) for this project.${usedGeneratedBaseFallback ? " Compared from the generated build base because the preview branch diverged from main." : ""}`,
     }
   } catch (error) {
     return {
