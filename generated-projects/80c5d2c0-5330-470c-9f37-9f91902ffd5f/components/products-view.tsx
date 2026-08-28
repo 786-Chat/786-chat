@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
 
 const storageOptions = ["Keep Frozen", "Keep Refrigerated", "Store in a Cool Dry Place"];
 
@@ -32,11 +33,13 @@ const emptyForm = {
 };
 
 export function ProductsView() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -64,6 +67,7 @@ export function ProductsView() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     const payload = {
       ...form,
       shelfLifeDays: Number(form.shelfLifeDays),
@@ -84,6 +88,7 @@ export function ProductsView() {
       setForm({ ...emptyForm });
       setEditingId(null);
       await fetchProducts();
+      setSuccessMessage(editingId ? "Product updated successfully." : "Product saved successfully.");
     } catch (err: any) {
       setError(err.message);
     }
@@ -124,6 +129,18 @@ export function ProductsView() {
         <CardContent className="p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-bold">{editingId ? "Edit Product" : "Add Product"}</h2>
           {error && <p className="mb-3 text-sm font-semibold text-red-600">{error}</p>}
+          {successMessage && (
+            <div className="mb-3 rounded border border-emerald-300 bg-emerald-50 p-3">
+              <p className="text-sm font-semibold text-emerald-700">{successMessage}</p>
+              <button
+                type="button"
+                onClick={() => router.push("/production")}
+                className="mt-2 h-10 cursor-pointer rounded bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
+              >
+                Start Production
+              </button>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col">
               <label className="mb-1 text-sm font-semibold">Product Name</label>
@@ -185,43 +202,77 @@ export function ProductsView() {
           ) : products.length === 0 ? (
             <p className="p-4 text-sm text-slate-400">No products added yet</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium">Flavour</th>
-                    <th className="px-4 py-3 font-medium">SKU</th>
-                    <th className="px-4 py-3 font-medium">Net Weight</th>
-                    <th className="px-4 py-3 font-medium">Storage</th>
-                    <th className="px-4 py-3 font-medium">Shelf Life</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {products.map((p) => (
-                    <tr key={p.id} className="text-slate-300">
-                      <td className="px-4 py-3 font-medium text-slate-100">{p.name}</td>
-                      <td className="px-4 py-3">{p.flavour}</td>
-                      <td className="px-4 py-3">{p.sku}</td>
-                      <td className="px-4 py-3">{p.net_weight}</td>
-                      <td className="px-4 py-3">{p.storage_instruction}</td>
-                      <td className="px-4 py-3">{p.shelf_life_days} days</td>
-                      <td className="px-4 py-3">
-                        <Badge tone={p.active ? "green" : "amber"}>{p.active ? "Active" : "Inactive"}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <button onClick={() => handleEdit(p)} className="cursor-pointer rounded bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">Edit</button>
-                          <button onClick={() => handleDelete(p.id)} className="cursor-pointer rounded bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400">Delete</button>
-                        </div>
-                      </td>
+            <>
+              {/* Mobile card grid - 2 columns */}
+              <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
+                {products.map((p) => (
+                  <div key={p.id} className="flex flex-col rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-sm">
+                    <div className="mb-2 min-w-0">
+                      <div className="break-words text-sm font-bold text-slate-100">{p.name}</div>
+                      <div className="break-words text-xs text-slate-400">{p.flavour}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">SKU</div>
+                      <div className="break-words text-xs font-medium text-slate-200">{p.sku}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Net Weight</div>
+                      <div className="break-words text-xs text-slate-300">{p.net_weight}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Storage</div>
+                      <div className="break-words text-xs text-slate-300">{p.storage_instruction}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Shelf Life</div>
+                      <div className="break-words text-xs text-slate-300">{p.shelf_life_days} days</div>
+                    </div>
+                    <div className="mt-auto">
+                      <Badge tone={p.active ? "green" : "amber"}>{p.active ? "Active" : "Inactive"}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop/tablet table - unchanged */}
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Product</th>
+                      <th className="px-4 py-3 font-medium">Flavour</th>
+                      <th className="px-4 py-3 font-medium">SKU</th>
+                      <th className="px-4 py-3 font-medium">Net Weight</th>
+                      <th className="px-4 py-3 font-medium">Storage</th>
+                      <th className="px-4 py-3 font-medium">Shelf Life</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-4 py-3 font-medium">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {products.map((p) => (
+                      <tr key={p.id} className="text-slate-300">
+                        <td className="px-4 py-3 font-medium text-slate-100">{p.name}</td>
+                        <td className="px-4 py-3">{p.flavour}</td>
+                        <td className="px-4 py-3">{p.sku}</td>
+                        <td className="px-4 py-3">{p.net_weight}</td>
+                        <td className="px-4 py-3">{p.storage_instruction}</td>
+                        <td className="px-4 py-3">{p.shelf_life_days} days</td>
+                        <td className="px-4 py-3">
+                          <Badge tone={p.active ? "green" : "amber"}>{p.active ? "Active" : "Inactive"}</Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => handleEdit(p)} className="cursor-pointer rounded bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">Edit</button>
+                            <button onClick={() => handleDelete(p.id)} className="cursor-pointer rounded bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-400">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
