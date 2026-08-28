@@ -132,3 +132,25 @@ table {
     font-size: clamp(1.125rem, 5.5vw, 1.5rem);
   }
 }
+
+/* Hide scrollbars on mobile launcher and page containers while keeping scroll */
+html,
+body,
+#__next,
+main,
+.mobile-launcher,
+.fixed.inset-0 {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#__next::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.mobile-launcher::-webkit-scrollbar,
+.fixed.inset-0::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+  width: 0;
+  height: 0;
+}
