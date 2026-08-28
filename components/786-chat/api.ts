@@ -10,6 +10,7 @@ import type {
   GenerationResult,
 } from "./contracts"
 import { trySurgicalTextEdit } from "./surgical-edit"
+import { isBuilderChatOnlyMessage } from "@/lib/786-chat/message-intent"
 import {
   normalizeVisualEditorState,
   type VisualEditorState,
@@ -42,6 +43,16 @@ type VisionResult = {
   usage?: GenerationResult["usage"]
   error?: string
 }
+
+type ChatOnlyResult = {
+  success?: boolean
+  response?: string
+  model?: string
+  reason?: string
+  error?: string
+}
+
+const skipNextBuildProjectIds = new Set<string>()
 
 function errorMessage(payload: unknown, fallback: string) {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -155,7 +166,7 @@ export async function generateBuilderProject(request: GenerationRequest) {
       }
       return {
         response: vision.response,
-        model: "gemini-vision",
+        model: `chat-only:${vision.model || "gemini-vision"}`,
         reason: `${vision.reason} Project files were kept unchanged.`,
         usage: vision.usage,
         project: {
@@ -179,6 +190,28 @@ export async function generateBuilderProject(request: GenerationRequest) {
         "Use the image analysis above only as visual/reference context. DeepSeek must perform all project code generation, editing and repair. Do not claim the coding model can directly see the attachment.",
       ].join("\n"),
     }
+  }
+
+  if (request.existing && request.projectId && isBuilderChatOnlyMessage(request.message)) {
+    const response = await fetch("/api/786-chat/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: request.message, projectId: request.projectId }),
+    })
+    const payload = (await response.json().catch(() => ({}))) as ChatOnlyResult
+    if (!response.ok || !payload.success || !payload.response) {
+      throw new Error(payload.error || "786.Chat could not answer this question.")
+    }
+    return {
+      response: payload.response,
+      model: `chat-only:${payload.model || "assistant"}`,
+      reason: payload.reason || "Chat-only answer. Project files were kept unchanged.",
+      project: {
+        title: request.existing.title,
+        description: request.existing.description,
+        files: { ...request.existing.keyFiles },
+      },
+    } satisfies GenerationResult
   }
 
   const surgicalEdit = trySurgicalTextEdit(effectiveRequest)
@@ -248,6 +281,34 @@ export async function saveBuilderProject(input: {
   userPrompt: string
   generated: GenerationResult
 }) {
+  const chatOnly = String(input.generated.model || "").startsWith("chat-only:")
+  if (chatOnly) {
+    if (!input.currentProjectId) {
+      throw new Error("Open or create a project before using chat-only mode.")
+    }
+    const response = await fetch(`/api/786-chat/projects/${input.currentProjectId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [
+          { role: "user", content: input.userPrompt },
+          {
+            role: "assistant",
+            content: input.generated.response,
+            model: input.generated.model,
+            reason: input.generated.reason,
+          },
+        ],
+      }),
+    })
+    const payload = (await response.json().catch(() => ({}))) as { project?: StoredProject; error?: string }
+    if (!response.ok || !payload.project) {
+      throw new Error(payload.error || "Chat answer could not be saved.")
+    }
+    skipNextBuildProjectIds.add(input.currentProjectId)
+    return toProject(payload.project)
+  }
+
   const activeFile = input.generated.project.files["app/page.tsx"]
     ? "app/page.tsx"
     : Object.keys(input.generated.project.files)[0] || "app/page.tsx"
@@ -349,6 +410,10 @@ export async function undoBuilderProject(projectId: string, message = "Undo the 
 }
 
 export async function queueBuilderBuild(projectId: string) {
+  if (skipNextBuildProjectIds.delete(projectId)) {
+    return loadBuilderBuild(projectId)
+  }
+
   const response = await fetch(`/api/786-chat/projects/${projectId}/build`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
