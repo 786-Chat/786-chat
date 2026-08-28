@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Wheat, Snowflake, Boxes, Thermometer, SprayCan, ShieldCheck, FileText, Factory, AlertTriangle, Activity } from "lucide-react";
+import { Package, Wheat, Snowflake, Boxes, Thermometer, SprayCan, ShieldCheck, FileText, Factory, AlertTriangle, Activity, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface ProductionRecord {
   id: string;
@@ -183,6 +184,7 @@ interface FreezerOption {
 }
 
 export function DashboardView() {
+  const router = useRouter();
   const [production, setProduction] = useState<ProductionRecord[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -349,9 +351,19 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex items-center justify-between pt-2">
+        <button
+          onClick={() => router.push("/")}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-200 transition hover:bg-slate-700 active:scale-95"
+          aria-label="Back to launcher"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="w-10" />
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3">
         <StatCard icon={Factory} label="Production Today" value={productionToday.length.toString()} />
         <StatCard icon={Boxes} label="Finished Inventory Available" value={inventoryAvailable.toString()} />
         <StatCard icon={Package} label="Products" value={products.length.toString()} />
@@ -368,15 +380,14 @@ export function DashboardView() {
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
   return (
-    <Card>
-      <CardContent className="flex items-center gap-3 p-4">
-        <Icon className="h-8 w-8 text-sky-400" />
-        <div>
-          <p className="text-sm text-slate-400">{label}</p>
-          <p className="text-2xl font-bold text-slate-100">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-500/10 active:scale-95">
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="relative flex flex-col items-start gap-2">
+        <Icon className="h-6 w-6 text-sky-400" />
+        <p className="text-xs font-medium text-slate-400">{label}</p>
+        <p className="text-2xl font-bold text-slate-100">{value}</p>
+      </div>
+    </div>
   );
 }
 
