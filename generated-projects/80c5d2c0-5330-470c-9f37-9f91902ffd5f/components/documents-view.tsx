@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, Upload, X, ZoomIn, ZoomOut, Maximize, Minus, Printer, Download, FileText, Image as ImageIcon, RotateCcw, RotateCw } from "lucide-react";
 import { SecurePdfViewer } from "@/components/secure-pdf-viewer";
+import { ProcessFlowView } from "@/components/process-flow-view";
 
 const categories = [
   "SFBB / Safer Food Better Business",
@@ -287,6 +288,9 @@ export function DocumentsView() {
           </div>
         </div>
       )}
+
+      {/* Process Flow placed above the upload lane */}
+      <ProcessFlowView />
 
       {!authRequired && (
       <Card className="border-2 border-slate-600 bg-white text-slate-900">

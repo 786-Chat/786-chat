@@ -12,7 +12,7 @@ const steps = [
   {
     number: 1,
     title: "Ingredients",
-    description: "Receive and inspect milk, sugar, dry fruits, flavours and other ingredients.",
+    description: "Receive and inspect milk, sugar, dry fruits, flavours, packaging and other raw ingredients.",
     icon: Package,
     cardClass: "border-blue-200 bg-blue-50",
     iconClass: "bg-blue-500 text-white",
@@ -21,6 +21,16 @@ const steps = [
   },
   {
     number: 2,
+    title: "Delivery → Stock",
+    description: "When raw ingredients arrive, staff fill the Delivery / Goods Received form. The quantity is added to Stock.",
+    icon: Truck,
+    cardClass: "border-emerald-200 bg-emerald-50",
+    iconClass: "bg-emerald-500 text-white",
+    titleClass: "text-emerald-800",
+    numberClass: "bg-emerald-500 text-white",
+  },
+  {
+    number: 3,
     title: "Mixing",
     description: "Blend all ingredients to ensure uniform consistency.",
     icon: RefreshCw,
@@ -30,7 +40,7 @@ const steps = [
     numberClass: "bg-green-500 text-white",
   },
   {
-    number: 3,
+    number: 4,
     title: "Heat Treatment",
     description: "Pasteurize the mix using the approved heat-treatment control.",
     icon: Thermometer,
@@ -40,7 +50,7 @@ const steps = [
     numberClass: "bg-amber-500 text-white",
   },
   {
-    number: 4,
+    number: 5,
     title: "Cooling",
     description: "Rapidly cool the mix to the required safe temperature.",
     icon: Snowflake,
@@ -50,7 +60,7 @@ const steps = [
     numberClass: "bg-cyan-500 text-white",
   },
   {
-    number: 5,
+    number: 6,
     title: "Freezing / Hardening",
     description: "Freeze the mix in moulds and harden to the required texture.",
     icon: Snowflake,
@@ -60,7 +70,7 @@ const steps = [
     numberClass: "bg-violet-500 text-white",
   },
   {
-    number: 6,
+    number: 7,
     title: "Packaging & Labelling",
     description: "Demould, pack and label with batch details and best-before information.",
     icon: PackageCheck,
@@ -70,7 +80,7 @@ const steps = [
     numberClass: "bg-pink-500 text-white",
   },
   {
-    number: 7,
+    number: 8,
     title: "Frozen Storage",
     description: "Store frozen product under the approved freezer controls.",
     icon: Boxes,
@@ -80,7 +90,7 @@ const steps = [
     numberClass: "bg-blue-500 text-white",
   },
   {
-    number: 8,
+    number: 9,
     title: "Distribution",
     description: "Dispatch using suitable refrigerated transport to maintain the cold chain.",
     icon: Truck,
