@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Factory,
@@ -57,6 +58,7 @@ function saveOrder(order: string[]) {
 }
 
 export default function MobileLauncher() {
+  const pathname = usePathname();
   const [isMobile, setIsMobile] = useState(false);
   const [orderedApps, setOrderedApps] = useState(apps);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -193,7 +195,7 @@ export default function MobileLauncher() {
     dragStarted.current = false;
   }, []);
 
-  if (!isMobile) return null;
+  if (!isMobile || pathname !== "/") return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 text-slate-100">
