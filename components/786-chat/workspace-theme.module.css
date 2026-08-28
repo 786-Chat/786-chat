@@ -111,6 +111,124 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/*
+ * Phone mockups are selected by the actual viewport dimensions written inline by the
+ * builder. This also covers phone presets that pre-date the JSX phonePreview allow-list.
+ * Keep the CSS viewport dimensions intact (content-box), then scale only the visual
+ * handset so the complete device remains visible inside the Live Preview panel.
+ */
+.previewPanel div[style*="width: 440px"][style*="height: 956px"],
+.previewPanel div[style*="width: 430px"][style*="height: 932px"],
+.previewPanel div[style*="width: 402px"][style*="height: 874px"],
+.previewPanel div[style*="width: 393px"][style*="height: 852px"],
+.previewPanel div[style*="width: 390px"][style*="height: 844px"],
+.previewPanel div[style*="width: 375px"][style*="height: 667px"],
+.previewPanel div[style*="width: 360px"][style*="height: 800px"],
+.previewPanel div[style*="width: 412px"][style*="height: 915px"],
+.previewPanel div[style*="width: 360px"][style*="height: 780px"] {
+  position: relative;
+  box-sizing: content-box !important;
+  overflow: hidden !important;
+  border: 9px solid #03050a !important;
+  border-radius: 50px !important;
+  background: #03050a !important;
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+  zoom: 0.72;
+}
+
+.previewPanel div[style*="width: 440px"][style*="height: 956px"]::before,
+.previewPanel div[style*="width: 430px"][style*="height: 932px"]::before,
+.previewPanel div[style*="width: 402px"][style*="height: 874px"]::before,
+.previewPanel div[style*="width: 393px"][style*="height: 852px"]::before,
+.previewPanel div[style*="width: 390px"][style*="height: 844px"]::before,
+.previewPanel div[style*="width: 375px"][style*="height: 667px"]::before,
+.previewPanel div[style*="width: 360px"][style*="height: 800px"]::before,
+.previewPanel div[style*="width: 412px"][style*="height: 915px"]::before,
+.previewPanel div[style*="width: 360px"][style*="height: 780px"]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  z-index: 30;
+  width: 112px;
+  height: 29px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: #000;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.03);
+  pointer-events: none;
+}
+
+.previewPanel div[style*="width: 440px"][style*="height: 956px"]::after,
+.previewPanel div[style*="width: 430px"][style*="height: 932px"]::after,
+.previewPanel div[style*="width: 402px"][style*="height: 874px"]::after,
+.previewPanel div[style*="width: 393px"][style*="height: 852px"]::after,
+.previewPanel div[style*="width: 390px"][style*="height: 844px"]::after,
+.previewPanel div[style*="width: 375px"][style*="height: 667px"]::after,
+.previewPanel div[style*="width: 360px"][style*="height: 800px"]::after,
+.previewPanel div[style*="width: 412px"][style*="height: 915px"]::after,
+.previewPanel div[style*="width: 360px"][style*="height: 780px"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 9px;
+  z-index: 30;
+  width: 116px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  pointer-events: none;
+}
+
+.previewPanel div[style*="width: 440px"][style*="height: 956px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 430px"][style*="height: 932px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 402px"][style*="height: 874px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 393px"][style*="height: 852px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 390px"][style*="height: 844px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 375px"][style*="height: 667px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 360px"][style*="height: 800px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 412px"][style*="height: 915px"] > :global(iframe[title$="compiled preview"]),
+.previewPanel div[style*="width: 360px"][style*="height: 780px"] > :global(iframe[title$="compiled preview"]) {
+  width: calc(100% + 14px) !important;
+  max-width: none !important;
+  height: 100% !important;
+  margin-right: -14px;
+  border-radius: 40px !important;
+}
+
+@media (max-height: 820px) {
+  .previewPanel div[style*="width: 440px"][style*="height: 956px"],
+  .previewPanel div[style*="width: 430px"][style*="height: 932px"],
+  .previewPanel div[style*="width: 402px"][style*="height: 874px"],
+  .previewPanel div[style*="width: 393px"][style*="height: 852px"],
+  .previewPanel div[style*="width: 390px"][style*="height: 844px"],
+  .previewPanel div[style*="width: 375px"][style*="height: 667px"],
+  .previewPanel div[style*="width: 360px"][style*="height: 800px"],
+  .previewPanel div[style*="width: 412px"][style*="height: 915px"],
+  .previewPanel div[style*="width: 360px"][style*="height: 780px"] {
+    zoom: 0.62;
+  }
+}
+
+@media (min-height: 1000px) {
+  .previewPanel div[style*="width: 440px"][style*="height: 956px"],
+  .previewPanel div[style*="width: 430px"][style*="height: 932px"],
+  .previewPanel div[style*="width: 402px"][style*="height: 874px"],
+  .previewPanel div[style*="width: 393px"][style*="height: 852px"],
+  .previewPanel div[style*="width: 390px"][style*="height: 844px"],
+  .previewPanel div[style*="width: 375px"][style*="height: 667px"],
+  .previewPanel div[style*="width: 360px"][style*="height: 800px"],
+  .previewPanel div[style*="width: 412px"][style*="height: 915px"],
+  .previewPanel div[style*="width: 360px"][style*="height: 780px"] {
+    zoom: 0.76;
+  }
+}
+
 .codePanel {
   background: var(--code-bg) !important;
   border-color: rgba(96, 165, 250, 0.3) !important;
