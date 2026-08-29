@@ -4,8 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import MobileLauncher from "@/components/mobile-launcher";
 
 export const metadata: Metadata = {
-  title: "Raja Catering Operations",
-  description: "Production, quality and stock control for Raja Catering",
+  title: "Super Business Mujeeb – Master Template",
+  description: "Clean master template for Super Admin. No live data.",
 };
 
 export default function RootLayout({
