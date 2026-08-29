@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Clock3,
+  Copy,
   FileCode2,
   FolderOpen,
   Loader2,
@@ -15,7 +16,8 @@ import {
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 
-import { deleteBuilderProject, listBuilderProjects, loadBuilderBuild } from "./api"
+import { deleteBuilderProject, listBuilderProjects, loadBuilderBuild, queueBuilderBuild } from "./api"
+import { duplicateBuilderProject } from "./duplicate-project"
 import type { BuilderBuild, BuilderProjectSummary } from "./contracts"
 
 const ACTIVE_PROJECT_KEY = "786chat_builder_active_project"
@@ -97,7 +99,9 @@ export function ProjectsGallery() {
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
   const [deleting, setDeleting] = useState(false)
+  const [duplicatingProjectId, setDuplicatingProjectId] = useState<string | null>(null)
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
 
   useEffect(() => {
@@ -147,6 +151,48 @@ export function ProjectsGallery() {
   function startNewProject() {
     localStorage.removeItem(ACTIVE_PROJECT_KEY)
     router.push("/786.chat")
+  }
+
+  async function watchDuplicatedBuild(projectId: string) {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2000))
+      try {
+        const latest = await loadBuilderBuild(projectId)
+        setBuilds((current) => ({ ...current, [projectId]: latest }))
+        if (!latest || !["queued", "running"].includes(latest.status)) return
+      } catch {
+        return
+      }
+    }
+  }
+
+  async function duplicateProject(project: BuilderProjectSummary) {
+    if (duplicatingProjectId) return
+    setDuplicatingProjectId(project.id)
+    setError("")
+    setNotice("")
+
+    try {
+      const duplicated = await duplicateBuilderProject(project.id)
+      const saved = await listBuilderProjects()
+      setProjects(saved)
+      setBuilds((current) => ({ ...current, [duplicated.projectId]: null }))
+      setNotice(`${duplicated.title} created as a separate project.`)
+
+      try {
+        const build = await queueBuilderBuild(duplicated.projectId)
+        setBuilds((current) => ({ ...current, [duplicated.projectId]: build }))
+        if (["queued", "running"].includes(build.status)) {
+          void watchDuplicatedBuild(duplicated.projectId)
+        }
+      } catch (buildError) {
+        setError(`Duplicate created, but its first build could not start: ${buildError instanceof Error ? buildError.message : "Build failed to start."}`)
+      }
+    } catch (duplicateError) {
+      setError(duplicateError instanceof Error ? duplicateError.message : "Project could not be duplicated.")
+    } finally {
+      setDuplicatingProjectId(null)
+    }
   }
 
   async function confirmDelete() {
@@ -225,6 +271,10 @@ export function ProjectsGallery() {
           <div className="mb-6 rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div>
         )}
 
+        {notice && (
+          <div className="mb-6 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-100">{notice}</div>
+        )}
+
         {loading ? (
           <div className="grid min-h-[46vh] place-items-center rounded-3xl border border-white/10 bg-white/[.025]">
             <span className="inline-flex items-center gap-3 text-sm font-bold text-slate-300"><Loader2 className="h-5 w-5 animate-spin text-cyan-300" />Loading projects…</span>
@@ -242,6 +292,7 @@ export function ProjectsGallery() {
             {filteredProjects.map((saved, index) => {
               const build = builds[saved.id]
               const status = buildLabel(build)
+              const duplicating = duplicatingProjectId === saved.id
               return (
                 <article key={saved.id} className="group overflow-hidden rounded-2xl border border-white/10 bg-[#0c1220] shadow-[0_20px_55px_rgba(0,0,0,.28)] transition hover:-translate-y-1 hover:border-violet-300/35 hover:shadow-[0_28px_75px_rgba(37,20,80,.34)]">
                   <button
@@ -276,6 +327,17 @@ export function ProjectsGallery() {
                       <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${status.classes}`}>{status.label}</span>
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[.035] px-2.5 py-1 text-[11px] font-bold text-slate-300"><FileCode2 className="h-3 w-3" />{saved.file_count} files</span>
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[.035] px-2.5 py-1 text-[11px] font-bold text-slate-300"><MessageSquare className="h-3 w-3" />{saved.message_count}</span>
+                      <button
+                        type="button"
+                        onClick={() => void duplicateProject(saved)}
+                        disabled={Boolean(duplicatingProjectId)}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-violet-300/25 bg-violet-400/10 px-2.5 py-1 text-[11px] font-black text-violet-100 transition hover:border-violet-200/45 hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`Duplicate ${saved.title}`}
+                        title="Duplicate project"
+                      >
+                        {duplicating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}
+                        {duplicating ? "Duplicating…" : "Duplicate"}
+                      </button>
                     </div>
 
                     <div className="mt-4 space-y-2 border-t border-white/10 pt-3 text-[12px] text-slate-500">
