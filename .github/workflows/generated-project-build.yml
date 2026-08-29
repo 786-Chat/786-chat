@@ -108,6 +108,7 @@ jobs:
           const fs = require('fs')
           const commands = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/commands.json', 'utf8'))
           const allowed = /^(npm ci --ignore-scripts|npm install --ignore-scripts|npm run (lint|build)|npx tsc --noEmit|pnpm install --frozen-lockfile --ignore-scripts|pnpm install --ignore-scripts|pnpm (lint|build)|yarn install --frozen-lockfile --ignore-scripts|yarn install --ignore-scripts|yarn (lint|build))$/
+          process.stdout.write('set -euo pipefail\n')
           for (const command of commands) {
             if (typeof command !== 'string' || !allowed.test(command)) throw new Error(`Rejected command: ${command}`)
             process.stdout.write(`echo '$ ${command.replaceAll("'", "'\\''")}'\n`)
@@ -128,7 +129,7 @@ jobs:
           const logs = fs.existsSync(logsPath) ? fs.readFileSync(logsPath, 'utf8').slice(-900000) : ''
           const clean = logs.replace(/\u001b\[[0-9;]*m/g, '')
           const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-          const isActionable = (line) => /error TS\d+:|Type error:|Failed to compile\.|Module not found:|Cannot find module|SyntaxError:|ReferenceError:|Invalid environment variables|invalid route|Route .* has an invalid|Argument of type|Build error|Error occurred prerendering|Error: /i.test(line)
+          const isActionable = (line) => /npm ERR!|ERESOLVE|ETARGET|EAI_AGAIN|ENOTFOUND|ECONNRESET|ETIMEDOUT|error TS\d+:|Type error:|Failed to compile\.|Module not found:|Cannot find module|SyntaxError:|ReferenceError:|Invalid environment variables|invalid route|Route .* has an invalid|Argument of type|Build error|Error occurred prerendering|Error: /i.test(line)
           const actionable = lines.find(isActionable)
           const lastActionable = [...lines].reverse().find(isActionable)
           const tail = lines.slice(-12).join(' | ')
