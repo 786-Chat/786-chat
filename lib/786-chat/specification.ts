@@ -264,7 +264,12 @@ export function analyseProjectPrompt(
   const requestedPageRoutes = requestedRoutes.filter((route) => !route.startsWith("/api/"))
   const requestedApiResources = explicitApiResources(capabilityPrompt)
   const explicitTables = explicitDatabaseTables(capabilityPrompt)
-  const databaseRequested = /\bdatabase|postgres|neon|relational\b/i.test(capabilityPrompt)
+  const databaseMentioned = /\bdatabase|postgres|neon|relational\b/i.test(capabilityPrompt)
+  const explicitDatabaseChangeRequested =
+    explicitTables.length > 0 ||
+    requestedApiResources.length > 0 ||
+    /\b(?:create|add|provision|configure|connect|use|migrate|move|separate|isolate|switch)\b[^\n]{0,120}\b(?:database|postgres|neon|schema|table)\b/i.test(capabilityPrompt)
+  const databaseRequested = databaseMentioned && (!targetedExistingEdit || explicitDatabaseChangeRequested)
   const routes = unique([
     "/",
     ...(explicitPages?.routes || pageMatches.map(([, , route]) => route)),
@@ -385,7 +390,7 @@ export function analyseProjectPrompt(
       [/\bfont combination|text preset|text effect|outline text|shadow text|glow text|neon text|curved text\b/i, "advanced-text-styles"],
     ])),
     backendRequirements: unique(matches(capabilityPrompt, [
-      [/\bdatabase|postgres|neon\b/i, "database"],
+      [databaseRequested ? /[\s\S]/ : /(?!)/, "database"],
       [functionalAuthRequested ? /[\s\S]/ : /(?!)/, "authentication"],
       [/\bapi\b/i, "api"],
       [/\bpayment|stripe\b/i, "payments"],
