@@ -3,8 +3,10 @@ import { ensureBuildJobsSchema } from "./build-jobs"
 import { sql, transaction } from "./db"
 
 const DEFAULT_REPOSITORY = "786-Chat/786-chat"
+const DEFAULT_BASE_BRANCH = "main"
 const MAX_RECOVERY_FILES = 500
 const BLOB_BATCH_SIZE = 12
+const MAX_BUILD_CANDIDATES = 50
 
 export const LAST_SUCCESSFUL_PUBLISHED_REVISION_ID = "last-successful-published"
 
@@ -26,6 +28,16 @@ type GitBlobPayload = {
   content?: unknown
 }
 
+type GitComparePayload = {
+  status?: unknown
+}
+
+type GitRefPayload = {
+  object?: {
+    sha?: unknown
+  }
+}
+
 function normalizeEmail(email: string) {
   return email.toLowerCase().trim()
 }
@@ -38,6 +50,10 @@ function githubToken(): string {
 
 function repository(): string {
   return process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
+}
+
+function baseBranch(): string {
+  return process.env.GITHUB_GENERATED_BASE_BRANCH?.trim() || DEFAULT_BASE_BRANCH
 }
 
 function cleanProjectSegment(value: string): string {
@@ -68,6 +84,27 @@ async function githubJson<T>(path: string): Promise<T> {
   return (await response.json()) as T
 }
 
+async function isCommitMergedIntoBase(commitSha: string): Promise<boolean> {
+  try {
+    const compare = await githubJson<GitComparePayload>(
+      `/compare/${encodeURIComponent(commitSha)}...${encodeURIComponent(baseBranch())}`,
+    )
+    return compare.status === "ahead" || compare.status === "identical"
+  } catch {
+    return false
+  }
+}
+
+async function getBaseBranchCommitSha(): Promise<string> {
+  const refPath = baseBranch().split("/").map(encodeURIComponent).join("/")
+  const ref = await githubJson<GitRefPayload>(`/git/ref/heads/${refPath}`)
+  const sha = ref.object?.sha
+  if (typeof sha !== "string" || !sha.trim()) {
+    throw new Error("Accepted production branch commit could not be resolved")
+  }
+  return sha
+}
+
 export async function getLastSuccessfulPublishedBuild(
   projectId: string,
   ownerEmail: string,
@@ -83,10 +120,19 @@ export async function getLastSuccessfulPublishedBuild(
       AND b.github_commit_sha IS NOT NULL
       AND b.deployment_url IS NOT NULL
     ORDER BY COALESCE(b.completed_at, b.updated_at, b.created_at) DESC, b.created_at DESC
-    LIMIT 1
+    LIMIT ${MAX_BUILD_CANDIDATES}
   `) as unknown as AdminProjectBuild[]
 
-  return rows[0] ?? null
+  // A successful preview deployment is not necessarily an accepted/published project.
+  // Ignore generated draft/unmerged preview commits so Restore can never recover a
+  // rejected experiment such as a closed or unmerged generated PR.
+  for (const build of rows) {
+    if (build.github_commit_sha && await isCommitMergedIntoBase(build.github_commit_sha)) {
+      return build
+    }
+  }
+
+  return null
 }
 
 export function lastSuccessfulPublishedRevision(build: AdminProjectBuild) {
@@ -129,7 +175,7 @@ async function readPublishedFiles(projectId: string, commitSha: string): Promise
   })
 
   if (!entries.length) {
-    throw new Error("No published project files were found in the last successful build")
+    throw new Error("No published project files were found in the accepted production source")
   }
   if (entries.length > MAX_RECOVERY_FILES) {
     throw new Error(`Published source has ${entries.length} files; safe recovery limit is ${MAX_RECOVERY_FILES}`)
@@ -178,10 +224,14 @@ export async function recoverLastSuccessfulPublishedSource(input: {
 }) {
   const build = await getLastSuccessfulPublishedBuild(input.projectId, input.ownerEmail)
   if (!build?.github_commit_sha) {
-    throw new Error("No successful published build is available for recovery")
+    throw new Error("No successful merged published build is available for recovery")
   }
 
-  const files = await readPublishedFiles(input.projectId, build.github_commit_sha)
+  // Recover the current accepted base-branch project tree, not the newest preview
+  // commit. This preserves merged manual repairs and prevents draft/unmerged preview
+  // source from replacing the user's working project.
+  const acceptedCommitSha = await getBaseBranchCommitSha()
+  const files = await readPublishedFiles(input.projectId, acceptedCommitSha)
   await replaceProjectFiles(input.projectId, files)
 
   return {
