@@ -102,6 +102,8 @@ export function ProjectsGallery() {
   const [notice, setNotice] = useState("")
   const [deleting, setDeleting] = useState(false)
   const [duplicatingProjectId, setDuplicatingProjectId] = useState<string | null>(null)
+  const [projectToDuplicate, setProjectToDuplicate] = useState<BuilderProjectSummary | null>(null)
+  const [duplicateName, setDuplicateName] = useState("")
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
 
   useEffect(() => {
@@ -153,6 +155,14 @@ export function ProjectsGallery() {
     router.push("/786.chat")
   }
 
+  function prepareDuplicate(project: BuilderProjectSummary) {
+    if (duplicatingProjectId) return
+    setProjectToDuplicate(project)
+    setDuplicateName(`${project.title} Copy`)
+    setError("")
+    setNotice("")
+  }
+
   async function watchDuplicatedBuild(projectId: string) {
     for (let attempt = 0; attempt < 60; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 2000))
@@ -166,18 +176,26 @@ export function ProjectsGallery() {
     }
   }
 
-  async function duplicateProject(project: BuilderProjectSummary) {
+  async function duplicateProject(project: BuilderProjectSummary, title: string) {
     if (duplicatingProjectId) return
+    const cleanTitle = title.trim()
+    if (!cleanTitle) {
+      setError("Enter a name for the duplicated project.")
+      return
+    }
+
     setDuplicatingProjectId(project.id)
     setError("")
     setNotice("")
 
     try {
-      const duplicated = await duplicateBuilderProject(project.id)
+      const duplicated = await duplicateBuilderProject(project.id, cleanTitle)
       const saved = await listBuilderProjects()
       setProjects(saved)
       setBuilds((current) => ({ ...current, [duplicated.projectId]: null }))
       setNotice(`${duplicated.title} created as a separate project.`)
+      setProjectToDuplicate(null)
+      setDuplicateName("")
 
       try {
         const build = await queueBuilderBuild(duplicated.projectId)
@@ -329,7 +347,7 @@ export function ProjectsGallery() {
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[.035] px-2.5 py-1 text-[11px] font-bold text-slate-300"><MessageSquare className="h-3 w-3" />{saved.message_count}</span>
                       <button
                         type="button"
-                        onClick={() => void duplicateProject(saved)}
+                        onClick={() => prepareDuplicate(saved)}
                         disabled={Boolean(duplicatingProjectId)}
                         className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-violet-300/25 bg-violet-400/10 px-2.5 py-1 text-[11px] font-black text-violet-100 transition hover:border-violet-200/45 hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label={`Duplicate ${saved.title}`}
@@ -351,6 +369,44 @@ export function ProjectsGallery() {
           </div>
         )}
       </div>
+
+      {projectToDuplicate && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/85 p-4 backdrop-blur-md">
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="projects-duplicate-title"
+            className="w-full max-w-md rounded-3xl border border-violet-300/25 bg-[#0b1020] p-6 shadow-[0_35px_110px_rgba(0,0,0,.75)]"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void duplicateProject(projectToDuplicate, duplicateName)
+            }}
+          >
+            <span className="grid h-12 w-12 place-items-center rounded-2xl border border-violet-300/20 bg-violet-400/10 text-violet-100"><Copy className="h-5 w-5" /></span>
+            <h2 id="projects-duplicate-title" className="mt-5 text-xl font-black">Duplicate project</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Create a separate copy of <strong className="text-slate-200">{projectToDuplicate.title}</strong>. You can choose the new business/project name now.</p>
+            <label className="mt-5 block text-sm font-bold text-slate-300">
+              New project name
+              <input
+                autoFocus
+                value={duplicateName}
+                onChange={(event) => setDuplicateName(event.target.value)}
+                maxLength={120}
+                className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 text-sm text-white outline-none transition focus:border-violet-300/50 focus:ring-2 focus:ring-violet-400/15"
+                placeholder="e.g. Super Business Mujeeb"
+              />
+            </label>
+            <p className="mt-3 text-xs leading-5 text-slate-500">The original project is not changed. This step copies the project source only; customer database isolation is handled separately.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => { setProjectToDuplicate(null); setDuplicateName("") }} disabled={Boolean(duplicatingProjectId)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-white/5 disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={Boolean(duplicatingProjectId) || !duplicateName.trim()} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white hover:bg-violet-500 disabled:opacity-50">
+                {duplicatingProjectId && <Loader2 className="h-4 w-4 animate-spin" />}
+                {duplicatingProjectId ? "Creating…" : "Create duplicate"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {projectToDelete && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/85 p-4 backdrop-blur-md">
