@@ -1,6 +1,8 @@
-export async function duplicateBuilderProject(projectId: string) {
+export async function duplicateBuilderProject(projectId: string, title?: string) {
   const response = await fetch(`/api/786-chat/projects/${projectId}/duplicate`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: title?.trim() || undefined }),
   })
   const payload = (await response.json().catch(() => ({}))) as {
     project?: { id: string; title: string }
