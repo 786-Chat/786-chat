@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { completeRunnerBuild, getRunnerBuildBundle, recordRunnerPublishProgress } from "@/lib/786-admin/build-runner-store"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
+import { runtimeDeploymentFiles } from "@/lib/786-admin/runtime-deployment-files"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
 import { repairFailedBuild } from "@/lib/786-chat/build-repair"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
         projectId: bundle.projectId,
         branch: published.branch,
         commitSha: published.commitSha,
-        files: bundle.files,
+        files: runtimeDeploymentFiles(bundle.files),
       })
       deploymentUrl = deployment.url
       lifecycleLogs.push(
