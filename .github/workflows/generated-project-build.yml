@@ -84,6 +84,16 @@ jobs:
         shell: bash
         run: corepack enable
 
+      - name: Synchronize npm lockfile for generated source
+        working-directory: ${{ runner.temp }}/generated-project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            echo "[runner] Synchronizing package-lock.json with generated package.json before npm ci."
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          fi
+
       - name: Install, lint, type-check, and build
         id: execute
         continue-on-error: true
