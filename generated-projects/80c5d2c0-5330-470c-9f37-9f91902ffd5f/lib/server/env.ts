@@ -9,7 +9,9 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email"),
 });
 
-export function getEnv() {
+export type ServerEnv = z.infer<typeof envSchema>;
+
+export function getEnv(): ServerEnv {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
     throw new Error("Invalid environment variables: " + JSON.stringify(parsed.error.flatten().fieldErrors));
