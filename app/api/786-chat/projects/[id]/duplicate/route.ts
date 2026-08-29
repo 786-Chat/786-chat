@@ -25,7 +25,18 @@ function duplicateTitle(sourceTitle: string, existingTitles: string[]) {
   return `${base} ${suffix}`
 }
 
-export async function POST(_request: Request, { params }: Context) {
+function requestedDuplicateTitle(value: unknown, existingTitles: string[]) {
+  if (typeof value !== "string") return null
+  const title = value.trim().replace(/\s+/g, " ").slice(0, 120)
+  if (!title) return null
+  const taken = new Set(existingTitles.map((existing) => existing.trim().toLowerCase()))
+  if (taken.has(title.toLowerCase())) {
+    throw new Error("A project with this name already exists. Choose a different duplicate name.")
+  }
+  return title
+}
+
+export async function POST(request: Request, { params }: Context) {
   const session = await ownerSession()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -42,8 +53,17 @@ export async function POST(_request: Request, { params }: Context) {
   const source = await getProjectWithData(id, session.email)
   if (!source) return NextResponse.json({ error: "Project not found." }, { status: 404 })
 
+  const body = (await request.json().catch(() => ({}))) as { title?: unknown }
   const existing = await listProjects(session.email)
-  const title = duplicateTitle(source.title, existing.map((project) => project.title))
+  let title: string
+  try {
+    title = requestedDuplicateTitle(body.title, existing.map((project) => project.title))
+      || duplicateTitle(source.title, existing.map((project) => project.title))
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : "Invalid duplicate project name.",
+    }, { status: 409 })
+  }
 
   try {
     const project = await saveGeneratedProjectAtomic({
