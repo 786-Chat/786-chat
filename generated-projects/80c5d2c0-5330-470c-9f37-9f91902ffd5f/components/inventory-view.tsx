@@ -190,52 +190,95 @@ export function InventoryView() {
           ) : filteredItems.length === 0 ? (
             <p className="p-4 text-sm text-slate-400">No ready stock items found</p>
           ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[900px] w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium">Flavour</th>
-                    <th className="px-4 py-3 font-medium">Batch Number</th>
-                    <th className="px-4 py-3 font-medium">Production Date</th>
-                    <th className="px-4 py-3 font-medium">Qty Produced</th>
-                    <th className="px-4 py-3 font-medium">Qty Available</th>
-                    <th className="px-4 py-3 font-medium">Net Weight</th>
-                    <th className="px-4 py-3 font-medium">Storage Location</th>
-                    <th className="px-4 py-3 font-medium">Use By Date</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {filteredItems.map(item => {
-                    const status = getStatus(item);
-                    return (
-                      <tr key={item.id} className="text-slate-300">
-                        <td className="px-4 py-3 font-medium text-slate-100">{item.product_name}</td>
-                        <td className="px-4 py-3">{item.flavour}</td>
-                        <td className="px-4 py-3">{item.batch_number}</td>
-                        <td className="px-4 py-3">{item.production_date}</td>
-                        <td className="px-4 py-3">{item.quantity_produced}</td>
-                        <td className="px-4 py-3">{item.quantity_available}</td>
-                        <td className="px-4 py-3">{item.net_weight}</td>
-                        <td className="px-4 py-3">{item.storage_location}</td>
-                        <td className="px-4 py-3">{item.use_by_date}</td>
-                        <td className="px-4 py-3"><Badge tone={status.tone}>{status.label}</Badge></td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => setViewing(item)} className="cursor-pointer rounded bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">View Batch</button>
-                            <button onClick={() => handleDelete(item)} className="inline-flex cursor-pointer items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20" title="Delete Ready Stock item">
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Mobile card grid - 2 columns */}
+              <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
+                {filteredItems.map(item => {
+                  const status = getStatus(item);
+                  return (
+                    <div key={item.id} className="flex flex-col rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-sm">
+                      <div className="mb-2 min-w-0">
+                        <div className="break-words text-sm font-bold text-slate-100">{item.product_name}</div>
+                        <div className="break-words text-xs text-slate-400">{item.flavour}</div>
+                      </div>
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Batch Number</div>
+                        <div className="break-words text-xs font-medium text-slate-200">{item.batch_number}</div>
+                      </div>
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Production Date</div>
+                        <div className="break-words text-xs text-slate-300">{item.production_date}</div>
+                      </div>
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Qty Produced</div>
+                        <div className="break-words text-xs text-slate-300">{item.quantity_produced} {item.unit}</div>
+                      </div>
+                      <div className="mt-auto">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Qty Available</div>
+                        <div className="break-words text-base font-bold text-emerald-400">{item.quantity_available} {item.unit}</div>
+                      </div>
+                      <div className="mt-2">
+                        <Badge tone={status.tone}>{status.label}</Badge>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <button onClick={() => setViewing(item)} className="flex-1 cursor-pointer rounded bg-sky-500 px-2 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">View</button>
+                        <button onClick={() => handleDelete(item)} className="inline-flex cursor-pointer items-center justify-center rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20" title="Delete Ready Stock item">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop/tablet table - unchanged */}
+              <div className="hidden overflow-x-auto scrollbar-thin sm:block">
+                <table className="min-w-[900px] w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Product</th>
+                      <th className="px-4 py-3 font-medium">Flavour</th>
+                      <th className="px-4 py-3 font-medium">Batch Number</th>
+                      <th className="px-4 py-3 font-medium">Production Date</th>
+                      <th className="px-4 py-3 font-medium">Qty Produced</th>
+                      <th className="px-4 py-3 font-medium">Qty Available</th>
+                      <th className="px-4 py-3 font-medium">Net Weight</th>
+                      <th className="px-4 py-3 font-medium">Storage Location</th>
+                      <th className="px-4 py-3 font-medium">Use By Date</th>
+                      <th className="px-4 py-3 font-medium">Status</th>
+                      <th className="px-4 py-3 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filteredItems.map(item => {
+                      const status = getStatus(item);
+                      return (
+                        <tr key={item.id} className="text-slate-300">
+                          <td className="px-4 py-3 font-medium text-slate-100">{item.product_name}</td>
+                          <td className="px-4 py-3">{item.flavour}</td>
+                          <td className="px-4 py-3">{item.batch_number}</td>
+                          <td className="px-4 py-3">{item.production_date}</td>
+                          <td className="px-4 py-3">{item.quantity_produced}</td>
+                          <td className="px-4 py-3">{item.quantity_available}</td>
+                          <td className="px-4 py-3">{item.net_weight}</td>
+                          <td className="px-4 py-3">{item.storage_location}</td>
+                          <td className="px-4 py-3">{item.use_by_date}</td>
+                          <td className="px-4 py-3"><Badge tone={status.tone}>{status.label}</Badge></td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setViewing(item)} className="cursor-pointer rounded bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">View Batch</button>
+                              <button onClick={() => handleDelete(item)} className="inline-flex cursor-pointer items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-2.5 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20" title="Delete Ready Stock item">
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
