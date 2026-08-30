@@ -1,3 +1,46 @@
+function ensureScaffoldBuildDependencies(files: Record<string, string>): Record<string, string> {
+  const repaired = { ...files }
+  const rawPackage = repaired["package.json"]
+  if (!rawPackage) return repaired
+
+  try {
+    const parsed = JSON.parse(rawPackage) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+      [key: string]: unknown
+    }
+    const dependencies = { ...(parsed.dependencies || {}) }
+    const devDependencies = { ...(parsed.devDependencies || {}) }
+    let changed = false
+
+    const ensureDevDependency = (name: string, version: string) => {
+      if (dependencies[name] || devDependencies[name]) return
+      devDependencies[name] = version
+      changed = true
+    }
+
+    // The generated scaffold always supplies Tailwind/PostCSS configuration files.
+    // Ensure an existing package.json has the matching build dependencies too,
+    // otherwise isolated builds fail with "Cannot find module tailwindcss/autoprefixer".
+    ensureDevDependency("tailwindcss", "^3.4.17")
+    ensureDevDependency("postcss", "^8.4.49")
+    ensureDevDependency("autoprefixer", "^10.4.20")
+
+    if (changed) {
+      repaired["package.json"] = `${JSON.stringify({
+        ...parsed,
+        dependencies,
+        devDependencies,
+      }, null, 2)}\n`
+    }
+  } catch {
+    // Validation will report malformed package.json separately. Do not replace
+    // customer package content when it cannot be parsed safely here.
+  }
+
+  return repaired
+}
+
 export function ensureGeneratedScaffold(files: Record<string, string>): Record<string, string> {
   const repaired: Record<string, string> = { ...files }
 
@@ -80,12 +123,12 @@ export function ensureGeneratedScaffold(files: Record<string, string>): Record<s
     repaired["tailwind.config.ts"] = "import type { Config } from 'tailwindcss'\n\nconst config: Config = {\n  content: ['./app/**/*.{js,ts,jsx,tsx,mdx}', './components/**/*.{js,ts,jsx,tsx,mdx}', './src/**/*.{js,ts,jsx,tsx,mdx}'],\n  theme: { extend: {} },\n  plugins: [],\n}\n\nexport default config\n"
   }
 
-  return repaired
+  return ensureScaffoldBuildDependencies(repaired)
 }
 
 export function scaffoldAdditions(files: Record<string, string>): Record<string, string> {
   const repaired = ensureGeneratedScaffold(files)
   return Object.fromEntries(
-    Object.entries(repaired).filter(([path]) => !(path in files)),
+    Object.entries(repaired).filter(([path, content]) => files[path] !== content),
   )
 }

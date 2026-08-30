@@ -4,6 +4,7 @@ import test from "node:test"
 import * as ts from "typescript"
 
 const template = readFileSync(new URL("../../lib/786-chat/templates/food-safety-template.ts", import.meta.url), "utf8")
+const scaffold = readFileSync(new URL("../../lib/786-chat/generated-scaffold.ts", import.meta.url), "utf8")
 const route = readFileSync(new URL("../../app/api/786-chat/templates/food-safety/route.ts", import.meta.url), "utf8")
 const launcher = readFileSync(new URL("../../components/786-chat/food-safety-template-launcher.tsx", import.meta.url), "utf8")
 const projectPage = readFileSync(new URL("../../app/786.chat/projects/page.tsx", import.meta.url), "utf8")
@@ -27,6 +28,7 @@ const completeTemplateSource = `${template}\n${generatedApp}\n${generatedCss}`
 
 test("food-safety starter is a separate reusable 197-page project template", () => {
   assert.match(template, /FOOD_SAFETY_TEMPLATE_ID = "food-safety-record-book"/)
+  assert.match(template, /FOOD_SAFETY_TEMPLATE_VERSION = 2/)
   assert.match(template, /page_count: 197/)
   assert.match(template, /week_count: 26/)
   assert.match(template, /daily_page_count: 182/)
@@ -41,6 +43,19 @@ test("food-safety starter is a separate reusable 197-page project template", () 
   assert.match(completeTemplateSource, /Print \/ Save PDF/)
   assert.match(template, /new_customer/)
   assert.match(template, /renewal/)
+})
+
+test("food-safety starter includes its complete Tailwind and PostCSS build toolchain", () => {
+  assert.match(template, /tailwindcss/)
+  assert.match(template, /postcss/)
+  assert.match(template, /autoprefixer/)
+  assert.match(template, /postcss\.config\.mjs/)
+  assert.match(template, /tailwind\.config\.ts/)
+  assert.match(scaffold, /ensureScaffoldBuildDependencies/)
+  assert.match(scaffold, /ensureDevDependency\("tailwindcss"/)
+  assert.match(scaffold, /ensureDevDependency\("postcss"/)
+  assert.match(scaffold, /ensureDevDependency\("autoprefixer"/)
+  assert.match(scaffold, /files\[path\] !== content/)
 })
 
 test("generated Food Safety Book component is valid TSX source", () => {
