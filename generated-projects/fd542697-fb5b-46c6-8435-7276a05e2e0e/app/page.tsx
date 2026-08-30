@@ -1,5 +1,5 @@
-import FoodSafetyBook from "@/components/food-safety-book"
+import FoodSafetyProject from "@/components/food-safety-project"
 
 export default function Page() {
-  return <FoodSafetyBook />
+  return <FoodSafetyProject />
 }
