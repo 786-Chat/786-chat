@@ -28,7 +28,7 @@ const completeTemplateSource = `${template}\n${generatedApp}\n${generatedCss}`
 
 test("food-safety starter is a separate reusable 197-page project template", () => {
   assert.match(template, /FOOD_SAFETY_TEMPLATE_ID = "food-safety-record-book"/)
-  assert.match(template, /FOOD_SAFETY_TEMPLATE_VERSION = 2/)
+  assert.match(template, /FOOD_SAFETY_TEMPLATE_VERSION = 3/)
   assert.match(template, /page_count: 197/)
   assert.match(template, /week_count: 26/)
   assert.match(template, /daily_page_count: 182/)
@@ -56,6 +56,15 @@ test("food-safety starter includes its complete Tailwind and PostCSS build toolc
   assert.match(scaffold, /ensureDevDependency\("postcss"/)
   assert.match(scaffold, /ensureDevDependency\("autoprefixer"/)
   assert.match(scaffold, /files\[path\] !== content/)
+})
+
+test("generated projects pin Turbopack to their own app root", () => {
+  assert.match(template, /turbopack/)
+  assert.match(template, /root: process\.cwd\(\)/)
+  assert.match(scaffold, /ISOLATED_NEXT_CONFIG_MJS/)
+  assert.match(scaffold, /ensureGeneratedRootIsolation/)
+  assert.match(scaffold, /root: process\.cwd\(\)/)
+  assert.match(scaffold, /custom customer Next configs are preserved/)
 })
 
 test("generated Food Safety Book component is valid TSX source", () => {

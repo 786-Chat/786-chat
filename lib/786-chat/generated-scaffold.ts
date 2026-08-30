@@ -1,3 +1,21 @@
+const ISOLATED_NEXT_CONFIG_MJS = "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  turbopack: {\n    root: process.cwd(),\n  },\n}\n\nexport default nextConfig\n"
+
+function ensureGeneratedRootIsolation(files: Record<string, string>): Record<string, string> {
+  const repaired = { ...files }
+  const config = repaired["next.config.mjs"]
+  if (!config) return repaired
+
+  const normalized = config.replace(/\r\n/g, "\n").trim()
+  const emptyGeneratedConfig = /\/\*\* @type \{import\('next'\)\.NextConfig\} \*\/\s*const nextConfig = \{\}\s*export default nextConfig/.test(normalized)
+
+  // Generated apps live below generated-projects/<id> inside the 786.Chat monorepo.
+  // Without an explicit Turbopack root, Next.js 16 can infer the repository root and
+  // accidentally compile 786.Chat's own middleware.ts inside the customer app. Only
+  // replace the known empty generated config; custom customer Next configs are preserved.
+  if (emptyGeneratedConfig) repaired["next.config.mjs"] = ISOLATED_NEXT_CONFIG_MJS
+  return repaired
+}
+
 function ensureScaffoldBuildDependencies(files: Record<string, string>): Record<string, string> {
   const repaired = { ...files }
   const rawPackage = repaired["package.json"]
@@ -112,7 +130,7 @@ export function ensureGeneratedScaffold(files: Record<string, string>): Record<s
   }
 
   if (!repaired["next.config.mjs"] && !repaired["next.config.js"] && !repaired["next.config.ts"]) {
-    repaired["next.config.mjs"] = "/** @type {import('next').NextConfig} */\nconst nextConfig = {}\n\nexport default nextConfig\n"
+    repaired["next.config.mjs"] = ISOLATED_NEXT_CONFIG_MJS
   }
 
   if (!repaired["postcss.config.mjs"] && !repaired["postcss.config.js"]) {
@@ -123,7 +141,7 @@ export function ensureGeneratedScaffold(files: Record<string, string>): Record<s
     repaired["tailwind.config.ts"] = "import type { Config } from 'tailwindcss'\n\nconst config: Config = {\n  content: ['./app/**/*.{js,ts,jsx,tsx,mdx}', './components/**/*.{js,ts,jsx,tsx,mdx}', './src/**/*.{js,ts,jsx,tsx,mdx}'],\n  theme: { extend: {} },\n  plugins: [],\n}\n\nexport default config\n"
   }
 
-  return ensureScaffoldBuildDependencies(repaired)
+  return ensureScaffoldBuildDependencies(ensureGeneratedRootIsolation(repaired))
 }
 
 export function scaffoldAdditions(files: Record<string, string>): Record<string, string> {
