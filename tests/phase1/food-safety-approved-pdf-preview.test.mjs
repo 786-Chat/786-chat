@@ -6,19 +6,19 @@ import * as ts from "typescript"
 const overlay = readFileSync(new URL("../../components/786-chat/food-safety-approved-pdf-overlay.tsx", import.meta.url), "utf8")
 const wrapper = readFileSync(new URL("../../components/786-chat/workspace-with-projects-route.tsx", import.meta.url), "utf8")
 
-test("Food Safety workspace mounts the approved PDF exact-view overlay", () => {
+test("Food Safety workspace mounts the approved PDF-only overlay", () => {
   assert.match(wrapper, /FoodSafetyApprovedPdfOverlay/)
   assert.match(overlay, /food-safety-record-book/)
-  assert.match(overlay, /Approved PDF - Exact View/)
-  assert.match(overlay, /Editable Master Setup/)
+  assert.match(overlay, /Approved 197-page PDF - Exact View/)
   assert.match(overlay, /Raja_Catering_FINAL_197_Page_Record_Book_FOOTER_FIXED\.pdf/)
   assert.match(overlay, /TOTAL_PAGES = 197/)
+  assert.doesNotMatch(overlay, /Editable Master Setup/)
 })
 
 test("repaired Raja Catering Food Safety project is recognized even when template metadata is missing", () => {
   assert.match(overlay, /fd542697-fb5b-46c6-8435-7276a05e2e0e/)
-  assert.match(overlay, /food safety record book/i)
-  assert.match(overlay, /components\/food-safety-book\.tsx/)
+  assert.match(overlay, /food\\s\+safety\\s\+record\\s\+book/i)
+  assert.match(overlay, /food-safety-book\|approved-pdf-mode/)
 })
 
 test("approved PDF uses the real PDF blob and IndexedDB rather than redrawing pages", () => {
@@ -27,16 +27,16 @@ test("approved PDF uses the real PDF blob and IndexedDB rather than redrawing pa
   assert.match(overlay, /application\/pdf/)
   assert.match(overlay, /Open Full PDF/)
   assert.match(overlay, /Save PDF Copy/)
+  assert.match(overlay, /old recreated HTML book is no longer shown/i)
   assert.doesNotMatch(overlay, /localStorage\.setItem\([^\n]*pdf/i)
 })
 
-test("real PDF page fills the preview and keeps native portrait or landscape orientation", () => {
+test("real PDF page fills the live preview and keeps the PDF native orientation", () => {
   assert.match(overlay, /view=Fit/)
   assert.match(overlay, /zoom=page-fit/)
   assert.match(overlay, /width: "100%"/)
   assert.match(overlay, /height: "100%"/)
-  assert.match(overlay, /portrait pages fill portrait A4/i)
-  assert.match(overlay, /landscape HACCP pages fill landscape A4/i)
+  assert.match(overlay, /native landscape HACCP pages/i)
 })
 
 test("approved PDF overlay is valid TSX", () => {
