@@ -18,7 +18,6 @@ type PreviewBounds = {
   top: number
   width: number
   height: number
-  editableUrl: string
 }
 
 type StoredPdf = {
@@ -38,7 +37,7 @@ function openPdfDb() {
       }
     }
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error || new Error("Could not open PDF storage."))
+    request.onerror = () => reject(request.error || new Error("Could not open approved PDF storage."))
   })
 }
 
@@ -85,41 +84,30 @@ function locateLivePreview(): PreviewBounds | null {
   const rect = panel.getBoundingClientRect()
   if (rect.width < 220 || rect.height < 220 || rect.bottom < 0 || rect.top > window.innerHeight) return null
 
-  const compiledFrame = panel.querySelector('iframe[title$="compiled preview"]') as HTMLIFrameElement | null
-  const editableUrl = compiledFrame?.src || ""
-
   return {
     left: Math.max(0, rect.left + 8),
     top: Math.max(0, rect.top + 49),
     width: Math.max(220, rect.width - 16),
     height: Math.max(220, rect.height - 57),
-    editableUrl,
   }
 }
 
 function sameBounds(a: PreviewBounds | null, b: PreviewBounds | null) {
   if (!a || !b) return a === b
-  return Math.abs(a.left - b.left) < 1 &&
-    Math.abs(a.top - b.top) < 1 &&
-    Math.abs(a.width - b.width) < 1 &&
-    Math.abs(a.height - b.height) < 1 &&
-    a.editableUrl === b.editableUrl
+  return Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1
 }
 
-function isFoodSafetyProject(project: Awaited<ReturnType<typeof loadBuilderProject>>["project"]) {
-  const title = String(project.title || "")
-  const files = project.files || {}
-  return project.id === KNOWN_FOOD_SAFETY_PROJECT_ID ||
-    project.metadata?.template_id === TEMPLATE_ID ||
-    /food safety record book/i.test(title) ||
-    Boolean(files["components/food-safety-book.tsx"])
+function isFoodSafetyProject(project: { id: string; title?: string; files?: Record<string, string>; metadata?: Record<string, unknown> }) {
+  if (project.id === KNOWN_FOOD_SAFETY_PROJECT_ID) return true
+  if (project.metadata?.template_id === TEMPLATE_ID) return true
+  if (/food\s+safety\s+record\s+book/i.test(project.title || "")) return true
+  return Object.keys(project.files || {}).some((path) => /food-safety-book|approved-pdf-mode/i.test(path))
 }
 
 export function FoodSafetyApprovedPdfOverlay() {
   const [projectId, setProjectId] = useState("")
-  const [isFoodSafety, setIsFoodSafety] = useState(false)
+  const [active, setActive] = useState(false)
   const [bounds, setBounds] = useState<PreviewBounds | null>(null)
-  const [mode, setMode] = useState<"approved" | "editable">("approved")
   const [pdfUrl, setPdfUrl] = useState("")
   const [pdfName, setPdfName] = useState("")
   const [page, setPage] = useState(1)
@@ -154,8 +142,7 @@ export function FoodSafetyApprovedPdfOverlay() {
       if (id === lastId) return
       lastId = id
       setProjectId(id)
-      setIsFoodSafety(false)
-      setMode("approved")
+      setActive(false)
       setPage(1)
       setPageInput("1")
       setMessage("")
@@ -166,21 +153,19 @@ export function FoodSafetyApprovedPdfOverlay() {
         const result = await loadBuilderProject(id)
         if (cancelled) return
         const foodSafety = isFoodSafetyProject(result.project)
-        setIsFoodSafety(foodSafety)
+        setActive(foodSafety)
         if (!foodSafety) return
 
         const stored = await readStoredPdf(id).catch(() => null)
         if (cancelled || !stored?.blob) return
         replaceObjectUrl(stored.blob, stored.name || EXPECTED_FILE)
       } catch {
-        if (!cancelled) {
-          setIsFoodSafety(id === KNOWN_FOOD_SAFETY_PROJECT_ID)
-        }
+        if (!cancelled) setActive(false)
       }
     }
 
     void inspectProject()
-    const timer = window.setInterval(() => void inspectProject(), 700)
+    const timer = window.setInterval(() => void inspectProject(), 900)
     return () => {
       cancelled = true
       window.clearInterval(timer)
@@ -188,7 +173,7 @@ export function FoodSafetyApprovedPdfOverlay() {
   }, [hydrated, replaceObjectUrl])
 
   useEffect(() => {
-    if (!isFoodSafety) {
+    if (!active) {
       setBounds(null)
       return
     }
@@ -199,7 +184,7 @@ export function FoodSafetyApprovedPdfOverlay() {
     }
 
     update()
-    const timer = window.setInterval(update, 250)
+    const timer = window.setInterval(update, 350)
     window.addEventListener("resize", update)
     window.addEventListener("scroll", update, true)
     return () => {
@@ -207,11 +192,11 @@ export function FoodSafetyApprovedPdfOverlay() {
       window.removeEventListener("resize", update)
       window.removeEventListener("scroll", update, true)
     }
-  }, [isFoodSafety])
+  }, [active])
 
   const pdfPageUrl = useMemo(() => {
     if (!pdfUrl) return ""
-    return `${pdfUrl}#page=${page}&view=Fit&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`
+    return `${pdfUrl}#page=${page}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0&view=Fit`
   }, [pdfUrl, page])
 
   const jumpToPage = useCallback(() => {
@@ -224,7 +209,7 @@ export function FoodSafetyApprovedPdfOverlay() {
   const choosePdf = useCallback(async (file: File | null) => {
     if (!file || !projectId) return
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      setMessage("Please select the approved 197-page PDF file.")
+      setMessage("Please select the approved 197-page PDF.")
       return
     }
     if (file.size > 30 * 1024 * 1024) {
@@ -232,20 +217,19 @@ export function FoodSafetyApprovedPdfOverlay() {
       return
     }
 
+    replaceObjectUrl(file, file.name || EXPECTED_FILE)
+    setPage(1)
+    setPageInput("1")
+    setMessage("Approved PDF loaded. The old recreated HTML book is no longer shown in Live Preview.")
+
     try {
       await writeStoredPdf(projectId, file)
-      replaceObjectUrl(file, file.name || EXPECTED_FILE)
-      setMode("approved")
-      setPage(1)
-      setPageInput("1")
-      setMessage("Approved PDF loaded. Each real PDF page now fills the viewer using its original portrait or landscape orientation.")
     } catch {
-      setMessage("The PDF opened, but this browser could not save it for future refreshes.")
-      replaceObjectUrl(file, file.name || EXPECTED_FILE)
+      setMessage("Approved PDF loaded. This browser could not remember it after refresh, so you may need to select it again.")
     }
   }, [projectId, replaceObjectUrl])
 
-  if (!hydrated || !isFoodSafety || !bounds) return null
+  if (!hydrated || !active || !bounds) return null
 
   const shellStyle: React.CSSProperties = {
     position: "fixed",
@@ -253,7 +237,7 @@ export function FoodSafetyApprovedPdfOverlay() {
     top: bounds.top,
     width: bounds.width,
     height: bounds.height,
-    zIndex: 70,
+    zIndex: 90,
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -275,7 +259,7 @@ export function FoodSafetyApprovedPdfOverlay() {
     cursor: "pointer",
   }
 
-  const activeButtonStyle: React.CSSProperties = {
+  const goldButtonStyle: React.CSSProperties = {
     ...buttonStyle,
     border: "1px solid #d6a82c",
     background: "linear-gradient(135deg,#f5d36b,#d9a520)",
@@ -283,36 +267,25 @@ export function FoodSafetyApprovedPdfOverlay() {
   }
 
   const overlay = (
-    <div style={shellStyle} data-food-safety-approved-pdf-overlay="true">
+    <div style={shellStyle} data-food-safety-approved-pdf-only="true">
       <div style={{ minHeight: 52, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 10px", borderBottom: "1px solid #263550", background: "#081522" }}>
-        <button type="button" style={mode === "approved" ? activeButtonStyle : buttonStyle} onClick={() => setMode("approved")}>Approved PDF - Exact View</button>
-        <button type="button" style={mode === "editable" ? activeButtonStyle : buttonStyle} onClick={() => setMode("editable")}>Editable Master Setup</button>
-        {mode === "approved" && (
-          <>
-            <button type="button" style={buttonStyle} onClick={() => fileInputRef.current?.click()}>{pdfUrl ? "Replace Approved PDF" : "Load Approved 197-page PDF"}</button>
-            <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => {
-              const file = event.target.files?.[0] || null
-              void choosePdf(file)
-              event.currentTarget.value = ""
-            }} />
-            {pdfUrl && <button type="button" style={buttonStyle} onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}>Open Full PDF</button>}
-            {pdfUrl && <button type="button" style={buttonStyle} onClick={() => {
-              const anchor = document.createElement("a")
-              anchor.href = pdfUrl
-              anchor.download = pdfName || EXPECTED_FILE
-              anchor.click()
-            }}>Save PDF Copy</button>}
-          </>
-        )}
+        <strong style={{ color: "#f5d36b", fontSize: 13, marginRight: 4 }}>Approved 197-page PDF - Exact View</strong>
+        <button type="button" style={pdfUrl ? buttonStyle : goldButtonStyle} onClick={() => fileInputRef.current?.click()}>{pdfUrl ? "Replace PDF" : "Load Approved PDF"}</button>
+        <input ref={fileInputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => {
+          const file = event.target.files?.[0] || null
+          void choosePdf(file)
+          event.currentTarget.value = ""
+        }} />
+        {pdfUrl && <button type="button" style={buttonStyle} onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}>Open Full PDF</button>}
+        {pdfUrl && <button type="button" style={buttonStyle} onClick={() => {
+          const anchor = document.createElement("a")
+          anchor.href = pdfUrl
+          anchor.download = pdfName || EXPECTED_FILE
+          anchor.click()
+        }}>Save PDF Copy</button>}
       </div>
 
-      {mode === "editable" ? (
-        bounds.editableUrl ? (
-          <iframe src={bounds.editableUrl} title="Editable Food Safety Master Setup" style={{ width: "100%", height: "100%", border: 0, background: "white" }} />
-        ) : (
-          <div style={{ flex: 1, display: "grid", placeItems: "center", padding: 24, color: "#b7c5d9", textAlign: "center" }}>The editable preview is rebuilding. Switch back to Exact View or wait for Preview ready.</div>
-        )
-      ) : pdfUrl ? (
+      {pdfUrl ? (
         <>
           <div style={{ minHeight: 46, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid #263550", background: "#0a1525", color: "#dce7f8", fontSize: 13 }}>
             <button type="button" style={buttonStyle} disabled={page <= 1} onClick={() => {
@@ -328,16 +301,9 @@ export function FoodSafetyApprovedPdfOverlay() {
               setPage(next)
               setPageInput(String(next))
             }}>Next</button>
-            <span style={{ marginLeft: 8, maxWidth: "34%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#8fa1b8" }}>{pdfName || EXPECTED_FILE}</span>
           </div>
-          <div style={{ flex: 1, minHeight: 0, width: "100%", overflow: "hidden", background: "#dfe5e2" }}>
-            <iframe
-              key={pdfPageUrl}
-              src={pdfPageUrl}
-              title="Approved 197-page Raja Catering Food Safety PDF"
-              style={{ display: "block", width: "100%", height: "100%", minHeight: 0, border: 0, background: "#dfe5e2" }}
-            />
-          </div>
+          <iframe key={pdfPageUrl} src={pdfPageUrl} title="Approved Raja Catering 197-page Food Safety PDF" style={{ width: "100%", height: "100%", flex: "1 1 auto", minHeight: 0, border: 0, background: "#dfe7e4" }} />
+          {message && <div style={{ padding: "5px 10px", borderTop: "1px solid #263550", background: "#07101d", color: "#b6c5d8", fontSize: 11 }}>{message}</div>}
         </>
       ) : (
         <div onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
@@ -345,17 +311,16 @@ export function FoodSafetyApprovedPdfOverlay() {
           void choosePdf(event.dataTransfer.files?.[0] || null)
         }} style={{ flex: 1, display: "grid", placeItems: "center", padding: 24, overflow: "auto", background: "linear-gradient(145deg,#081522,#0b2630)" }}>
           <div style={{ width: "min(620px,92%)", borderRadius: 18, border: "1px solid rgba(217,165,32,.55)", background: "rgba(8,22,31,.92)", padding: 28, textAlign: "center", boxShadow: "0 18px 60px rgba(0,0,0,.28)" }}>
-            <div style={{ color: "#f1c24d", fontSize: 12, fontWeight: 900, letterSpacing: ".14em" }}>APPROVED 197-PAGE VISUAL MASTER</div>
-            <h2 style={{ margin: "10px 0 8px", color: "white", fontSize: 24 }}>Show the exact approved PDF</h2>
-            <p style={{ margin: "0 auto 18px", maxWidth: 510, color: "#b9c7d7", lineHeight: 1.6, fontSize: 14 }}>The recreated HTML pages are hidden in Exact View. Select the approved PDF once. Portrait pages fill portrait A4 and landscape HACCP pages fill landscape A4 using the PDF&apos;s own page orientation.</p>
+            <div style={{ color: "#f1c24d", fontSize: 12, fontWeight: 900, letterSpacing: ".14em" }}>APPROVED CHATGPT PDF MASTER</div>
+            <h2 style={{ margin: "10px 0 8px", color: "white", fontSize: 24 }}>Use the real approved 197-page book</h2>
+            <p style={{ margin: "0 auto 18px", maxWidth: 520, color: "#b9c7d7", lineHeight: 1.6, fontSize: 14 }}>The old recreated HTML cover, HACCP tables and half-empty pages are hidden. Select the approved PDF and Live Preview will show the PDF itself exactly, including portrait A4 pages and native landscape HACCP pages.</p>
             <div style={{ margin: "0 auto 18px", maxWidth: 520, borderRadius: 10, background: "#06111c", border: "1px solid #263550", padding: "10px 12px", color: "#e7edf6", fontFamily: "monospace", fontSize: 12, overflowWrap: "anywhere" }}>{EXPECTED_FILE}</div>
-            <button type="button" style={{ ...activeButtonStyle, minHeight: 42, padding: "0 18px" }} onClick={() => fileInputRef.current?.click()}>Choose Approved 197-page PDF</button>
-            <p style={{ margin: "14px 0 0", color: "#7f93aa", fontSize: 12 }}>You can also drag the PDF onto this panel. It is stored in IndexedDB for this project on this browser.</p>
+            <button type="button" style={{ ...goldButtonStyle, minHeight: 42, padding: "0 18px" }} onClick={() => fileInputRef.current?.click()}>Choose Approved 197-page PDF</button>
+            <p style={{ margin: "14px 0 0", color: "#7f93aa", fontSize: 12 }}>Choose it once on this browser. 786.Chat stores the PDF in IndexedDB for this project.</p>
             {message && <p style={{ margin: "12px 0 0", color: "#f5d36b", fontSize: 13, fontWeight: 700 }}>{message}</p>}
           </div>
         </div>
       )}
-      {message && pdfUrl && <div style={{ padding: "5px 10px", borderTop: "1px solid #263550", background: "#07101d", color: "#b6c5d8", fontSize: 11 }}>{message}</div>}
     </div>
   )
 
