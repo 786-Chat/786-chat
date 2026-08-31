@@ -144,22 +144,22 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
-    // First cover the complete original RAJA CATERING wordmark area. The original
-    // artwork extends farther right than the editable name field. Keep this cleanup
-    // mask wide enough to remove the final old "G" while stopping before the FS logo.
-    const cleanup = topBox(page, { x: 83, y: 92, width: 365, height: 43 })
+    // Clean only the approved wordmark band: start after the Quality badge so no
+    // cream strip overflows on the left, and finish just before the FS logo while
+    // still covering the final old RAJA CATERING letter.
+    const cleanup = topBox(page, { x: 104, y: 96, width: 356, height: 36 })
     page.drawRectangle({ ...cleanup, color: CREAM })
 
-    // Keep the replacement customer name in a smaller safe area so it never runs
-    // underneath the FS Food & Safety logo. Long names auto-shrink inside this box.
-    paintText(page, { x: 91, y: 95, width: 292, height: 37 }, details.businessName.toUpperCase(), {
+    // Keep the replacement name inside a narrower safe zone. Long customer names
+    // auto-shrink and never run into either the left badge or the FS logo.
+    paintText(page, { x: 108, y: 97, width: 274, height: 34 }, details.businessName.toUpperCase(), {
       fill: CREAM,
       color: TEXT_GREEN,
       font: times,
-      size: 22,
-      minSize: 8,
+      size: 21,
+      minSize: 7.5,
       align: "center",
-      padding: 6,
+      padding: 5,
     })
   }
   if (changed(details, "approvedBy")) {
