@@ -64,21 +64,33 @@ const DARK_GREEN = rgb(0.03, 0.31, 0.22)
 const TEXT_GREEN = rgb(0.02, 0.28, 0.20)
 const GOLD = rgb(0.92, 0.66, 0.10)
 const BLACK = rgb(0.08, 0.10, 0.10)
+const DAILY_BLUE = rgb(47 / 255, 110 / 255, 165 / 255)
 
 type TopBox = { x: number; y: number; width: number; height: number }
 type PaintOptions = {
   fill?: RGB
   color?: RGB
-  font?: PDFFont
+  font: PDFFont
   size?: number
   minSize?: number
   padding?: number
   align?: "left" | "center" | "right"
+  inset?: number
 }
 
 function topBox(page: PDFPage, box: TopBox) {
   const { height } = page.getSize()
   return { x: box.x, y: height - box.y - box.height, width: box.width, height: box.height }
+}
+
+function insetBox(box: TopBox, inset: number): TopBox {
+  const amount = Math.max(0, Math.min(inset, box.width / 4, box.height / 4))
+  return {
+    x: box.x + amount,
+    y: box.y + amount,
+    width: Math.max(1, box.width - amount * 2),
+    height: Math.max(1, box.height - amount * 2),
+  }
 }
 
 function fitSize(font: PDFFont, text: string, maxWidth: number, initial: number, minimum = 5) {
@@ -88,30 +100,34 @@ function fitSize(font: PDFFont, text: string, maxWidth: number, initial: number,
 }
 
 function paintText(page: PDFPage, box: TopBox, text: string, options: PaintOptions) {
-  const font = options.font!
+  const target = insetBox(box, options.inset ?? 0)
+  const rect = topBox(page, target)
   const padding = options.padding ?? 2
-  const rect = topBox(page, box)
   page.drawRectangle({ ...rect, color: options.fill ?? WHITE })
-  const size = fitSize(font, text, rect.width - padding * 2, options.size ?? 10, options.minSize ?? 5)
-  const textWidth = font.widthOfTextAtSize(text, size)
+  const size = fitSize(options.font, text, Math.max(1, rect.width - padding * 2), options.size ?? 10, options.minSize ?? 5)
+  const textWidth = options.font.widthOfTextAtSize(text, size)
   let x = rect.x + padding
   if (options.align === "center") x = rect.x + Math.max(padding, (rect.width - textWidth) / 2)
   if (options.align === "right") x = rect.x + rect.width - textWidth - padding
   const y = rect.y + Math.max(1, (rect.height - size) / 2 + 1.2)
-  page.drawText(text, { x, y, size, font, color: options.color ?? BLACK })
+  page.drawText(text, { x, y, size, font: options.font, color: options.color ?? BLACK })
+}
+
+function paintCellText(page: PDFPage, box: TopBox, text: string, options: Omit<PaintOptions, "inset"> & { inset?: number }) {
+  paintText(page, box, text, { ...options, inset: options.inset ?? 1.35 })
 }
 
 function paintMultiline(page: PDFPage, box: TopBox, lines: string[], options: PaintOptions) {
-  const font = options.font!
-  const rect = topBox(page, box)
-  page.drawRectangle({ ...rect, color: options.fill ?? WHITE })
+  const target = insetBox(box, options.inset ?? 0)
+  const rect = topBox(page, target)
   const pad = options.padding ?? 2
   const initial = options.size ?? 9
   const lineHeight = initial + 1.5
+  page.drawRectangle({ ...rect, color: options.fill ?? WHITE })
   lines.slice(0, 3).forEach((line, index) => {
-    const size = fitSize(font, line, rect.width - pad * 2, initial, options.minSize ?? 5)
+    const size = fitSize(options.font, line, Math.max(1, rect.width - pad * 2), initial, options.minSize ?? 5)
     const y = rect.y + rect.height - pad - size - index * lineHeight
-    page.drawText(line, { x: rect.x + pad, y, size, font, color: options.color ?? BLACK })
+    page.drawText(line, { x: rect.x + pad, y, size, font: options.font, color: options.color ?? BLACK })
   })
 }
 
@@ -129,7 +145,8 @@ function parseDate(value: string) {
   const normalized = normalizeDate(value)
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(normalized)
   if (!match) return null
-  return new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])))
+  const date = new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])))
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
 function formatDate(date: Date) {
@@ -144,22 +161,16 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
-    // Clean only the approved wordmark band: start after the Quality badge so no
-    // cream strip overflows on the left, and finish just before the FS logo while
-    // still covering the final old RAJA CATERING letter.
-    const cleanup = topBox(page, { x: 104, y: 96, width: 356, height: 36 })
-    page.drawRectangle({ ...cleanup, color: CREAM })
-
-    // Keep the replacement name inside a narrower safe zone. Long customer names
-    // auto-shrink and never run into either the left badge or the FS logo.
-    paintText(page, { x: 108, y: 97, width: 274, height: 34 }, details.businessName.toUpperCase(), {
+    const cleanup = topBox(page, { x: 128, y: 88, width: 274, height: 40 })
+    page.drawRectangle({ ...cleanup, color: CREAM, borderColor: GOLD, borderWidth: 0.7 })
+    paintText(page, { x: 132, y: 94, width: 245, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM,
       color: TEXT_GREEN,
       font: times,
-      size: 21,
-      minSize: 7.5,
+      size: 20,
+      minSize: 7,
       align: "center",
-      padding: 5,
+      padding: 4,
     })
   }
   if (changed(details, "approvedBy")) {
@@ -181,22 +192,22 @@ function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDF
     })
   }
   if (changed(details, "consultant")) {
-    paintText(page, { x: 204, y: 228, width: 188, height: 32 }, details.consultant.toUpperCase(), {
+    paintCellText(page, { x: 204, y: 228, width: 188, height: 32 }, details.consultant.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 17, minSize: 8, align: "center",
     })
   }
   if (changed(details, "director")) {
-    paintText(page, { x: 170, y: 418, width: 255, height: 32 }, details.director.toUpperCase(), {
+    paintCellText(page, { x: 170, y: 418, width: 255, height: 32 }, details.director.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 15, minSize: 7, align: "center",
     })
   }
   if (changed(details, "preparationStaff")) {
-    paintText(page, { x: 83, y: 624, width: 130, height: 31 }, details.preparationStaff.toUpperCase(), {
+    paintCellText(page, { x: 83, y: 624, width: 130, height: 31 }, details.preparationStaff.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
     })
   }
   if (changed(details, "storageStaff")) {
-    paintText(page, { x: 365, y: 624, width: 130, height: 31 }, details.storageStaff.toUpperCase(), {
+    paintCellText(page, { x: 365, y: 624, width: 130, height: 31 }, details.storageStaff.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
     })
   }
@@ -208,22 +219,22 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     const compact = pageNumber >= 5
     const yHeader = compact ? 37 : 46
     if (changed(details, "businessName")) {
-      paintText(page, { x: 44, y: yHeader, width: 105, height: 25 }, details.businessName.toUpperCase(), {
+      paintCellText(page, { x: 44, y: yHeader, width: 105, height: 25 }, details.businessName.toUpperCase(), {
         fill: DARK_GREEN, color: WHITE, font: bold, size: 10.5, minSize: 6, align: "left", padding: 4,
       })
     }
     if (changed(details, "addressLine1") || changed(details, "addressLine2")) {
       paintMultiline(page, { x: 540, y: compact ? 37 : 46, width: 190, height: 35 }, [details.addressLine1, details.addressLine2], {
-        fill: CREAM, color: BLACK, font: bold, size: 8, minSize: 5, padding: 3,
+        fill: CREAM, color: BLACK, font: bold, size: 8, minSize: 5, padding: 3, inset: 1.35,
       })
     }
     if (changed(details, "haccpCompletedBy")) {
-      paintText(page, { x: compact ? 345 : 333, y: compact ? 98 : 117, width: 105, height: 18 }, details.haccpCompletedBy, {
+      paintCellText(page, { x: compact ? 345 : 333, y: compact ? 98 : 117, width: 105, height: 18 }, details.haccpCompletedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
     }
     if (changed(details, "approvedBy")) {
-      paintText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
+      paintCellText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
       paintText(page, { x: 98, y: pageNumber === 4 ? 537 : pageNumber === 11 ? 551 : compact ? 510 : 515, width: 90, height: 17 }, details.approvedBy, {
@@ -237,31 +248,31 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       })
     }
     if (changed(details, "assessmentDate")) {
-      paintText(page, { x: compact ? 122 : 118, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 88, height: 18 }, normalizeDate(details.assessmentDate), {
+      paintCellText(page, { x: compact ? 122 : 118, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 88, height: 18 }, normalizeDate(details.assessmentDate), {
         fill: WHITE, color: BLACK, font: helv, size: 7.5, minSize: 5,
       })
     }
     if (changed(details, "reviewDate")) {
-      paintText(page, { x: compact ? 306 : 292, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 86, height: 18 }, normalizeDate(details.reviewDate), {
+      paintCellText(page, { x: compact ? 306 : 292, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 86, height: 18 }, normalizeDate(details.reviewDate), {
         fill: WHITE, color: BLACK, font: helv, size: 7.5, minSize: 5,
       })
     }
     if (changed(details, "documentName")) {
-      paintText(page, { x: compact ? 507 : 472, y: compact ? (pageNumber === 11 ? 75 : 80) : 94, width: 150, height: 18 }, details.documentName, {
+      paintCellText(page, { x: compact ? 507 : 472, y: compact ? (pageNumber === 11 ? 75 : 80) : 94, width: 150, height: 18 }, details.documentName, {
         fill: CREAM, color: BLACK, font: helv, size: 7.2, minSize: 4.5,
       })
     }
   }
 
   if (changed(details, "heatTreatmentTarget")) {
-    paintText(pages[4], { x: 484, y: 479, width: 90, height: 18 }, details.heatTreatmentTarget, { fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5 })
-    paintText(pages[6], { x: 608, y: 429, width: 95, height: 18 }, details.heatTreatmentTarget, { fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5 })
+    paintCellText(pages[4], { x: 484, y: 479, width: 90, height: 18 }, details.heatTreatmentTarget, { fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5 })
+    paintCellText(pages[6], { x: 608, y: 429, width: 95, height: 18 }, details.heatTreatmentTarget, { fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5 })
   }
   if (changed(details, "coldRoomTarget")) {
-    paintText(pages[8], { x: 397, y: 512, width: 90, height: 20 }, details.coldRoomTarget, { fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5 })
+    paintCellText(pages[8], { x: 397, y: 512, width: 90, height: 20 }, details.coldRoomTarget, { fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5 })
   }
   if (changed(details, "frozenStorageTarget")) {
-    paintText(pages[8], { x: 178, y: 512, width: 55, height: 20 }, details.frozenStorageTarget, { fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5, align: "center" })
+    paintCellText(pages[8], { x: 178, y: 512, width: 55, height: 20 }, details.frozenStorageTarget, { fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5, align: "center" })
   }
 }
 
@@ -288,72 +299,83 @@ const ALLERGEN_MATRIX_PRODUCT_BOXES: TopBox[] = [
   { x: 28, y: 403, width: 105, height: 17 },
   { x: 28, y: 437, width: 90, height: 17 },
 ]
+const ALLERGEN_MATRIX_PRODUCT_INDEX = [3, 4, 5, 0, 1, 2, 6, 7, 8]
 
 function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
     paintText(page, { x: 27, y: 40, width: 105, height: 22 }, details.businessName.toUpperCase(), { fill: WHITE, color: TEXT_GREEN, font: bold, size: 9.5, minSize: 5.5 })
   }
   if (changed(details, "products")) {
-    details.products.slice(0, 9).forEach((product, index) => {
-      paintText(page, ALLERGEN_MATRIX_PRODUCT_BOXES[index], product, { fill: WHITE, color: BLACK, font: helv, size: 7.2, minSize: 4.3 })
+    ALLERGEN_MATRIX_PRODUCT_BOXES.forEach((box, index) => {
+      const product = details.products[ALLERGEN_MATRIX_PRODUCT_INDEX[index]] ?? ""
+      paintCellText(page, box, product, { fill: WHITE, color: BLACK, font: helv, size: 7.2, minSize: 4.3 })
     })
   }
   if (changed(details, "allergens")) {
-    paintText(page, { x: 119, y: 469, width: 85, height: 20 }, details.allergens, { fill: WHITE, color: BLACK, font: helv, size: 7.2, minSize: 4.5 })
+    paintCellText(page, { x: 119, y: 469, width: 85, height: 20 }, details.allergens, { fill: WHITE, color: BLACK, font: helv, size: 7.2, minSize: 4.5 })
   }
+}
+
+function paintDailyDates(page: PDFPage, date: Date, helv: PDFFont, bold: PDFFont) {
+  const dateText = formatDate(date)
+  paintText(page, { x: 531.5, y: 10.1, width: 35.5, height: 10.5 }, dateText, {
+    fill: WHITE, color: BLACK, font: helv, size: 6.2, minSize: 5.2, align: "center", padding: 0.5,
+  })
+  paintText(page, { x: 504.5, y: 47.0, width: 49.0, height: 15.2 }, dateText, {
+    fill: DAILY_BLUE, color: WHITE, font: bold, size: 9.2, minSize: 7.5, align: "center", padding: 1,
+  })
+  paintCellText(page, { x: 104.5, y: 114.4, width: 36.0, height: 12.0 }, dateText, {
+    fill: WHITE, color: rgb(0.55, 0.61, 0.67), font: helv, size: 6.2, minSize: 5.2, align: "center", padding: 0.5, inset: 0.7,
+  })
+  paintText(page, { x: 70.5, y: 814.8, width: 27.0, height: 9.0 }, dateText, {
+    fill: WHITE, color: rgb(0.35, 0.42, 0.48), font: helv, size: 4.8, minSize: 4.1, align: "center", padding: 0.2,
+  })
+  paintText(page, { x: 78.8, y: 826.7, width: 32.0, height: 9.5 }, dateText, {
+    fill: WHITE, color: rgb(0.35, 0.42, 0.48), font: helv, size: 5.2, minSize: 4.3, align: "center", padding: 0.2,
+  })
 }
 
 function paintDailyPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   const start = parseDate(details.firstMonday)
+  if (changed(details, "firstMonday")) {
+    if (!start) throw new Error("First Monday / 26-week Start Date must be a valid DD/MM/YYYY date.")
+    if (start.getUTCDay() !== 1) throw new Error("First Monday / 26-week Start Date must be a Monday.")
+  }
+
   for (let pageNumber = 15; pageNumber <= 196; pageNumber += 1) {
     const page = pages[pageNumber - 1]
     if (changed(details, "businessName")) {
-      paintText(page, { x: 28, y: 7, width: 105, height: 18 }, details.businessName.toUpperCase(), { fill: WHITE, color: TEXT_GREEN, font: bold, size: 7.3, minSize: 4.5 })
+      paintText(page, { x: 29, y: 9, width: 105, height: 11 }, details.businessName.toUpperCase(), { fill: WHITE, color: TEXT_GREEN, font: bold, size: 7.3, minSize: 4.5 })
     }
     if (changed(details, "products")) {
       details.products.slice(0, 9).forEach((product, index) => {
-        paintText(page, DAILY_PRODUCT_BOXES[index], product, { fill: WHITE, color: BLACK, font: helv, size: 6.8, minSize: 4.3 })
+        paintCellText(page, DAILY_PRODUCT_BOXES[index], product, { fill: WHITE, color: BLACK, font: helv, size: 6.8, minSize: 4.3 })
       })
     }
     if (changed(details, "ingredients")) {
-      paintText(page, { x: 105, y: 202, width: 355, height: 18 }, details.ingredients, { fill: WHITE, color: BLACK, font: helv, size: 7.1, minSize: 4.4 })
+      paintCellText(page, { x: 105, y: 202, width: 355, height: 18 }, details.ingredients, { fill: WHITE, color: BLACK, font: helv, size: 7.1, minSize: 4.4 })
     }
     if (changed(details, "allergens")) {
-      paintText(page, { x: 101, y: 229, width: 175, height: 18 }, details.allergens, { fill: WHITE, color: BLACK, font: helv, size: 7.1, minSize: 4.5 })
+      paintCellText(page, { x: 101, y: 229, width: 175, height: 18 }, details.allergens, { fill: WHITE, color: BLACK, font: helv, size: 7.1, minSize: 4.5 })
     }
     if (changed(details, "heatTreatmentTarget")) {
-      paintText(page, { x: 503, y: 408, width: 61, height: 17 }, details.heatTreatmentTarget.toUpperCase(), { fill: WHITE, color: BLACK, font: bold, size: 6.3, minSize: 4.2, align: "center" })
+      paintCellText(page, { x: 503, y: 408, width: 61, height: 17 }, details.heatTreatmentTarget.toUpperCase(), { fill: WHITE, color: BLACK, font: bold, size: 6.3, minSize: 4.2, align: "center" })
     }
     if (changed(details, "coolingTarget")) {
       const coolingText = details.coolingTarget
-      paintText(page, { x: 397, y: 479, width: 55, height: 16 }, coolingText, { fill: WHITE, color: BLACK, font: bold, size: 5.8, minSize: 3.8, align: "center" })
-      paintText(page, { x: 486, y: 502, width: 55, height: 15 }, coolingText, { fill: WHITE, color: BLACK, font: helv, size: 5.3, minSize: 3.6, align: "center" })
-      paintText(page, { x: 35, y: 526, width: 55, height: 15 }, coolingText, { fill: WHITE, color: BLACK, font: helv, size: 5.3, minSize: 3.6, align: "center" })
+      paintCellText(page, { x: 397, y: 479, width: 55, height: 16 }, coolingText, { fill: WHITE, color: BLACK, font: bold, size: 5.8, minSize: 3.8, align: "center" })
+      paintCellText(page, { x: 486, y: 502, width: 55, height: 15 }, coolingText, { fill: WHITE, color: BLACK, font: helv, size: 5.3, minSize: 3.6, align: "center" })
+      paintCellText(page, { x: 35, y: 526, width: 55, height: 15 }, coolingText, { fill: WHITE, color: BLACK, font: helv, size: 5.3, minSize: 3.6, align: "center" })
     }
     if (changed(details, "coldRoomTarget")) {
-      paintText(page, { x: 393, y: 551, width: 78, height: 15 }, details.coldRoomTarget, { fill: WHITE, color: BLACK, font: bold, size: 5.5, minSize: 3.8, align: "center" })
+      paintCellText(page, { x: 393, y: 551, width: 78, height: 15 }, details.coldRoomTarget, { fill: WHITE, color: BLACK, font: bold, size: 5.5, minSize: 3.8, align: "center" })
     }
     if (changed(details, "frozenStorageTarget")) {
-      paintText(page, { x: 507, y: 720, width: 57, height: 17 }, `TARGET: ${details.frozenStorageTarget}`, { fill: WHITE, color: BLACK, font: bold, size: 5.8, minSize: 3.8, align: "center" })
+      paintCellText(page, { x: 507, y: 720, width: 57, height: 17 }, `TARGET: ${details.frozenStorageTarget}`, { fill: WHITE, color: BLACK, font: bold, size: 5.8, minSize: 3.8, align: "center" })
     }
     if (start && changed(details, "firstMonday")) {
       const date = new Date(start.getTime() + (pageNumber - 15) * 86400000)
-      const dateText = formatDate(date)
-      const boxes: TopBox[] = [
-        { x: 522, y: 8, width: 48, height: 14 },
-        { x: 493, y: 45, width: 70, height: 19 },
-        { x: 98, y: 113, width: 50, height: 15 },
-        { x: 58, y: 812, width: 65, height: 14 },
-        { x: 62, y: 824, width: 65, height: 15 },
-      ]
-      boxes.forEach((box, index) => paintText(page, box, dateText, {
-        fill: WHITE,
-        color: BLACK,
-        font: index === 1 ? bold : helv,
-        size: index === 1 ? 8.5 : 6.1,
-        minSize: 4.4,
-        align: "center",
-      }))
+      paintDailyDates(page, date, helv, bold)
     }
   }
 }
@@ -369,25 +391,16 @@ function paintFinalPage(page: PDFPage, details: FoodSafetyBookDetails, helv: PDF
     paintText(page, { x: 184, y: 798, width: 230, height: 33 }, details.telephone, { fill: CREAM, color: TEXT_GREEN, font: times, size: 21, minSize: 10, align: "center" })
   }
   if (changed(details, "heatTreatmentTarget")) {
-    paintText(page, { x: 275, y: 354, width: 95, height: 20 }, details.heatTreatmentTarget, { fill: CREAM, color: rgb(0.80,0.18,0.05), font: bold, size: 8.2, minSize: 5.2, align: "center" })
+    paintText(page, { x: 275, y: 354, width: 95, height: 20 }, details.heatTreatmentTarget, { fill: CREAM, color: rgb(0.80, 0.18, 0.05), font: bold, size: 8.2, minSize: 5.2, align: "center" })
   }
   if (changed(details, "coolingTarget")) {
-    paintText(page, { x: 420, y: 354, width: 85, height: 20 }, details.coolingTarget, { fill: CREAM, color: rgb(0.05,0.25,0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
+    paintText(page, { x: 420, y: 354, width: 85, height: 20 }, details.coolingTarget, { fill: CREAM, color: rgb(0.05, 0.25, 0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
   }
   if (changed(details, "coldRoomTarget")) {
-    paintText(page, { x: 137, y: 433, width: 90, height: 20 }, details.coldRoomTarget, { fill: CREAM, color: rgb(0.28,0.18,0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
+    paintText(page, { x: 137, y: 433, width: 90, height: 20 }, details.coldRoomTarget, { fill: CREAM, color: rgb(0.28, 0.18, 0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
   }
   if (changed(details, "frozenStorageTarget")) {
-    paintText(page, { x: 330, y: 433, width: 80, height: 20 }, details.frozenStorageTarget, { fill: CREAM, color: rgb(0.05,0.25,0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
-  }
-}
-
-function ensureSingleHaccpPageNumbers(pages: PDFPage[], helv: PDFFont) {
-  for (let pageNumber = 3; pageNumber <= 12; pageNumber += 1) {
-    const page = pages[pageNumber - 1]
-    paintText(page, { x: 804, y: 558, width: 26, height: 20 }, String(pageNumber), {
-      fill: WHITE, color: TEXT_GREEN, font: helv, size: 9, minSize: 8, align: "right", padding: 2,
-    })
+    paintText(page, { x: 330, y: 433, width: 80, height: 20 }, details.frozenStorageTarget, { fill: CREAM, color: rgb(0.05, 0.25, 0.55), font: bold, size: 8.2, minSize: 5.2, align: "center" })
   }
 }
 
@@ -407,7 +420,6 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   paintAllergenMatrix(pages[12], details, helv, bold)
   paintDailyPages(pages, details, helv, bold)
   paintFinalPage(pages[196], details, helv, bold, times)
-  ensureSingleHaccpPageNumbers(pages, helv)
 
   const output = await document.save({ useObjectStreams: true })
   return new Blob([output], { type: "application/pdf" })
