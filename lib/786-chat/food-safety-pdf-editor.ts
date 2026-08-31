@@ -145,9 +145,9 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
     // First cover the complete original RAJA CATERING wordmark area. The original
-    // artwork extends farther right than the editable name field, which previously
-    // left the final "NG" visible beside the FS logo after a customer-name change.
-    const cleanup = topBox(page, { x: 83, y: 92, width: 347, height: 43 })
+    // artwork extends farther right than the editable name field. Keep this cleanup
+    // mask wide enough to remove the final old "G" while stopping before the FS logo.
+    const cleanup = topBox(page, { x: 83, y: 92, width: 365, height: 43 })
     page.drawRectangle({ ...cleanup, color: CREAM })
 
     // Keep the replacement customer name in a smaller safe area so it never runs
