@@ -144,15 +144,20 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
-    // Keep the editable business name entirely inside the clear centre-left area.
-    // The original FS Food & Safety logo starts at the right side of the cover,
-    // so this box deliberately ends before it and uses stronger auto-shrinking.
-    paintText(page, { x: 104, y: 94, width: 306, height: 39 }, details.businessName.toUpperCase(), {
+    // First cover the complete original RAJA CATERING wordmark area. The original
+    // artwork extends farther right than the editable name field, which previously
+    // left the final "NG" visible beside the FS logo after a customer-name change.
+    const cleanup = topBox(page, { x: 83, y: 92, width: 347, height: 43 })
+    page.drawRectangle({ ...cleanup, color: CREAM })
+
+    // Keep the replacement customer name in a smaller safe area so it never runs
+    // underneath the FS Food & Safety logo. Long names auto-shrink inside this box.
+    paintText(page, { x: 91, y: 95, width: 292, height: 37 }, details.businessName.toUpperCase(), {
       fill: CREAM,
       color: TEXT_GREEN,
       font: times,
-      size: 24,
-      minSize: 9,
+      size: 22,
+      minSize: 8,
       align: "center",
       padding: 6,
     })
