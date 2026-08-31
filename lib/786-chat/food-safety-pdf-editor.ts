@@ -144,8 +144,17 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
-    paintText(page, { x: 129, y: 89, width: 345, height: 44 }, details.businessName.toUpperCase(), {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 29, minSize: 13, align: "center", padding: 5,
+    // Keep the editable business name entirely inside the clear centre-left area.
+    // The original FS Food & Safety logo starts at the right side of the cover,
+    // so this box deliberately ends before it and uses stronger auto-shrinking.
+    paintText(page, { x: 104, y: 94, width: 306, height: 39 }, details.businessName.toUpperCase(), {
+      fill: CREAM,
+      color: TEXT_GREEN,
+      font: times,
+      size: 24,
+      minSize: 9,
+      align: "center",
+      padding: 6,
     })
   }
   if (changed(details, "approvedBy")) {
@@ -332,7 +341,14 @@ function paintDailyPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
         { x: 58, y: 812, width: 65, height: 14 },
         { x: 62, y: 824, width: 65, height: 15 },
       ]
-      boxes.forEach((box, index) => paintText(page, box, dateText, { fill: WHITE, color: BLACK, font: index === 1 ? bold : helv, size: index === 1 ? 8.5 : 6.1, minSize: 4.4, align: "center" }))
+      boxes.forEach((box, index) => paintText(page, box, dateText, {
+        fill: WHITE,
+        color: BLACK,
+        font: index === 1 ? bold : helv,
+        size: index === 1 ? 8.5 : 6.1,
+        minSize: 4.4,
+        align: "center",
+      }))
     }
   }
 }
