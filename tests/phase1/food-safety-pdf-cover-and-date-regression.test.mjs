@@ -9,35 +9,25 @@ test("cover business name is centered in the crown title area", () => {
   assert.match(pdfEditor, /align: "center"/)
 })
 
-test("cover does not restamp the preprinted approver name or telephone", () => {
+test("clean cover fills approved-by value and telephone once in the blank areas", () => {
   const start = pdfEditor.indexOf("function paintCover")
   const end = pdfEditor.indexOf("function paintTeamPage")
   const cover = pdfEditor.slice(start, end)
-  assert.doesNotMatch(cover, /hasValue\(details, "telephone"\)/)
-  assert.doesNotMatch(cover, /hasValue\(details, "approvedBy"\)/)
-  assert.doesNotMatch(cover, /Approved By:/)
-  assert.match(cover, /already contains the approved-by name and telephone number/i)
+  assert.match(cover, /hasValue\(details, "approvedBy"\)/)
+  assert.match(cover, /x: 292, y: 759, width: 96, height: 18/)
+  assert.match(cover, /hasValue\(details, "telephone"\)/)
+  assert.match(cover, /x: 193, y: 805, width: 211, height: 29/)
+  assert.doesNotMatch(cover, /`Approved By: \$\{details\.approvedBy\}`/)
 })
 
-test("page 2 does not restamp static team names already printed in approved artwork", () => {
+test("clean page 2 fills all staff team values from the form", () => {
   const start = pdfEditor.indexOf("function paintTeamPage")
   const end = pdfEditor.indexOf("function paintHaccpPages")
   const team = pdfEditor.slice(start, end)
-  assert.match(team, /businessName/)
-  assert.doesNotMatch(team, /details\.consultant/)
-  assert.doesNotMatch(team, /details\.director/)
-  assert.doesNotMatch(team, /details\.preparationStaff/)
-  assert.doesNotMatch(team, /details\.storageStaff/)
-})
-
-test("HACCP pages keep the real approved-by field but do not duplicate name and phone in footer", () => {
-  const start = pdfEditor.indexOf("function paintHaccpPages")
-  const end = pdfEditor.indexOf("const DAILY_PRODUCT_BOXES")
-  const haccp = pdfEditor.slice(start, end)
-  assert.match(haccp, /details\.approvedBy/)
-  assert.doesNotMatch(haccp, /x: 98, y:/)
-  assert.doesNotMatch(haccp, /details\.telephone/)
-  assert.match(haccp, /decorative footer/i)
+  assert.match(team, /details\.consultant/)
+  assert.match(team, /details\.director/)
+  assert.match(team, /details\.preparationStaff/)
+  assert.match(team, /details\.storageStaff/)
 })
 
 test("daily generated date is stamped only once", () => {
@@ -45,5 +35,4 @@ test("daily generated date is stamped only once", () => {
   const end = pdfEditor.indexOf("function paintDailyPages")
   const dailyDates = pdfEditor.slice(start, end)
   assert.equal((dailyDates.match(/paint(?:Cell)?Text\(/g) || []).length, 1)
-  assert.match(dailyDates, /Production Date field only/)
 })
