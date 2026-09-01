@@ -39,6 +39,18 @@ test("PDF customer edits stamp text only and do not cover approved borders or ar
   assert.match(pdfEditor, /never let text cross a printed border/i)
 })
 
+test("complete PDF form values stamp even when they equal Raja Catering defaults", () => {
+  assert.match(pdfEditor, /function hasValue/)
+  assert.doesNotMatch(pdfEditor, /function changed/)
+  assert.doesNotMatch(pdfEditor, /JSON\.stringify\(details\[key\]\)/)
+  assert.match(pdfEditor, /paintTeamPage\(pages\[1\]/)
+  assert.match(pdfEditor, /paintAllergenMatrix\(pages\[12\]/)
+  assert.match(pdfEditor, /paintProcessFlowPage\(pages\[13\]/)
+  assert.match(pdfEditor, /details\.products\.slice\(0, 9\)\.forEach/)
+  assert.doesNotMatch(pdfEditor, /ALLERGEN_MATRIX_PRODUCT_INDEX/)
+  assert.match(pdfEditor, /if \(start\) \{/)
+})
+
 test("real PDF page fills the live preview and keeps the PDF native orientation", () => {
   assert.match(overlay, /view=Fit/)
   assert.match(overlay, /zoom=page-fit/)
