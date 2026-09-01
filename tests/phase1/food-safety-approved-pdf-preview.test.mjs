@@ -5,12 +5,13 @@ import * as ts from "typescript"
 
 const overlay = readFileSync(new URL("../../components/786-chat/food-safety-approved-pdf-overlay.tsx", import.meta.url), "utf8")
 const wrapper = readFileSync(new URL("../../components/786-chat/workspace-with-projects-route.tsx", import.meta.url), "utf8")
+const pdfEditor = readFileSync(new URL("../../lib/786-chat/food-safety-pdf-editor.ts", import.meta.url), "utf8")
 
 test("Food Safety workspace mounts the approved PDF-only overlay", () => {
   assert.match(wrapper, /FoodSafetyApprovedPdfOverlay/)
   assert.match(overlay, /food-safety-record-book/)
   assert.match(overlay, /Approved 197-page PDF - Exact View/)
-  assert.match(overlay, /Raja_Catering_FINAL_197_Page_Record_Book_FOOTER_FIXED\.pdf/)
+  assert.match(overlay, /Raja_Catering_FINAL_197_Page_Record_Book_FINAL_CLEAN\.pdf/)
   assert.match(overlay, /TOTAL_PAGES = 197/)
   assert.doesNotMatch(overlay, /Editable Master Setup/)
 })
@@ -31,6 +32,13 @@ test("approved PDF uses the real PDF blob and IndexedDB rather than redrawing pa
   assert.doesNotMatch(overlay, /localStorage\.setItem\([^\n]*pdf/i)
 })
 
+test("PDF customer edits stamp text only and do not cover approved borders or artwork", () => {
+  assert.match(pdfEditor, /Text-only stamping/)
+  assert.match(pdfEditor, /page\.drawText/)
+  assert.doesNotMatch(pdfEditor, /drawRectangle/)
+  assert.match(pdfEditor, /never let text cross a printed border/i)
+})
+
 test("real PDF page fills the live preview and keeps the PDF native orientation", () => {
   assert.match(overlay, /view=Fit/)
   assert.match(overlay, /zoom=page-fit/)
@@ -43,6 +51,18 @@ test("approved PDF overlay is valid TSX", () => {
   const result = ts.transpileModule(overlay, {
     compilerOptions: {
       jsx: ts.JsxEmit.Preserve,
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+    reportDiagnostics: true,
+  })
+  const errors = (result.diagnostics || []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
+  assert.deepEqual(errors.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")), [])
+})
+
+test("approved PDF editor is valid TypeScript", () => {
+  const result = ts.transpileModule(pdfEditor, {
+    compilerOptions: {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
     },
