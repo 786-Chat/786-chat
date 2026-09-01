@@ -17,6 +17,7 @@ const TOTAL_PAGES = 197
 const DB_NAME = "786-chat-approved-food-safety-pdf"
 const STORE_NAME = "approved-pdfs"
 const EXPECTED_FILE = "Raja_Catering_FINAL_197_Page_Record_Book_FINAL_CLEAN.pdf"
+const MASTER_VERSION = 2
 
 type PreviewBounds = { left: number; top: number; width: number; height: number }
 type StoredPdf = {
@@ -24,6 +25,7 @@ type StoredPdf = {
   name: string
   blob: Blob
   masterBlob?: Blob
+  masterVersion?: number
   details?: FoodSafetyBookDetails
   updatedAt: number
 }
@@ -114,6 +116,7 @@ export function FoodSafetyApprovedPdfOverlay() {
   const objectUrlRef=useRef("")
   const currentBlobRef=useRef<Blob|null>(null)
   const masterBlobRef=useRef<Blob|null>(null)
+  const masterVersionRef=useRef(0)
 
   const replaceObjectUrl=useCallback((blob:Blob|null,name="")=>{
     if(objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
@@ -131,15 +134,24 @@ export function FoodSafetyApprovedPdfOverlay() {
     const inspectProject=async()=>{
       const id=window.localStorage.getItem(ACTIVE_PROJECT_KEY)||""
       if(id===lastId) return
-      lastId=id; setProjectId(id); setActive(false); setPage(1); setPageInput("1"); setMessage(""); setEditorOpen(false); replaceObjectUrl(null); masterBlobRef.current=null; setDetails(freshDefaults())
+      lastId=id; setProjectId(id); setActive(false); setPage(1); setPageInput("1"); setMessage(""); setEditorOpen(false); replaceObjectUrl(null); masterBlobRef.current=null; masterVersionRef.current=0; setDetails(freshDefaults())
       if(!id) return
       try{
         const result=await loadBuilderProject(id); if(cancelled) return
         const foodSafety=isFoodSafetyProject(result.project); setActive(foodSafety); if(!foodSafety) return
         const stored=await readStoredPdf(id).catch(()=>null); if(cancelled||!stored?.blob) return
-        masterBlobRef.current=stored.masterBlob||stored.blob
+
+        // Never silently promote an old edited PDF to the clean master. Older records did not
+        // distinguish the untouched upload from a stamped copy, which is what caused duplicate
+        // business names, addresses, dates, temperatures and staff values after another Apply.
+        const trustedMaster=stored.masterVersion===MASTER_VERSION&&stored.masterBlob?stored.masterBlob:null
+        masterBlobRef.current=trustedMaster
+        masterVersionRef.current=trustedMaster?MASTER_VERSION:0
         setDetails(stored.details?{...stored.details,products:[...stored.details.products]}:freshDefaults())
         replaceObjectUrl(stored.blob,stored.name||EXPECTED_FILE)
+        if(!trustedMaster){
+          setMessage("This saved PDF may already contain earlier 786.Chat text. Click Replace PDF once and select the clean approved 197-page PDF before Apply to Book. This prevents duplicate values.")
+        }
       }catch{ if(!cancelled) setActive(false) }
     }
     void inspectProject(); const timer=window.setInterval(()=>void inspectProject(),900)
@@ -160,30 +172,30 @@ export function FoodSafetyApprovedPdfOverlay() {
     if(!file||!projectId)return
     if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){setMessage("Please select the approved 197-page PDF.");return}
     if(file.size>30*1024*1024){setMessage("The approved PDF must be 30MB or smaller.");return}
-    masterBlobRef.current=file; const defaults=freshDefaults(); setDetails(defaults); replaceObjectUrl(file,file.name||EXPECTED_FILE); setPage(1);setPageInput("1");setMessage("Approved PDF loaded. Use Edit Customer / Book Details to make a new customer or six-month renewal.")
-    try{await writeStoredPdf({projectId,name:file.name||EXPECTED_FILE,blob:file,masterBlob:file,details:defaults,updatedAt:Date.now()})}catch{setMessage("Approved PDF loaded, but this browser could not remember it after refresh.")}
+    masterBlobRef.current=file; masterVersionRef.current=MASTER_VERSION; const defaults=freshDefaults(); setDetails(defaults); replaceObjectUrl(file,file.name||EXPECTED_FILE); setPage(1);setPageInput("1");setMessage("Clean approved PDF master loaded. 786.Chat will always rebuild edits from this clean copy, so Apply to Book will not stack duplicate values.")
+    try{await writeStoredPdf({projectId,name:file.name||EXPECTED_FILE,blob:file,masterBlob:file,masterVersion:MASTER_VERSION,details:defaults,updatedAt:Date.now()})}catch{setMessage("Approved PDF loaded, but this browser could not remember it after refresh.")}
   },[projectId,replaceObjectUrl])
 
   const applyEdits=useCallback(async()=>{
     const master=masterBlobRef.current
-    if(!master||!projectId){setMessage("Load the approved 197-page PDF first.");return}
-    setApplying(true);setMessage("Updating the real approved PDF...")
+    if(!master||masterVersionRef.current!==MASTER_VERSION||!projectId){setMessage("Do not Apply to the already-edited PDF. Click Replace PDF once and select the clean approved 197-page PDF, then enter the values and Apply to Book.");return}
+    setApplying(true);setMessage("Updating the real approved PDF from the clean master...")
     try{
       const edited=await applyFoodSafetyBookDetails(master,details)
       const name=safeFileName(details)
       replaceObjectUrl(edited,name);setPage(1);setPageInput("1")
-      await writeStoredPdf({projectId,name,blob:edited,masterBlob:master,details:{...details,products:[...details.products]},updatedAt:Date.now()})
-      setEditorOpen(false);setMessage("Book updated. The approved design is unchanged; customer details and selected global fields were applied to the PDF.")
+      await writeStoredPdf({projectId,name,blob:edited,masterBlob:master,masterVersion:MASTER_VERSION,details:{...details,products:[...details.products]},updatedAt:Date.now()})
+      setEditorOpen(false);setMessage("Book updated from the clean master. Existing PDF artwork is unchanged and the entered values were applied once only.")
     }catch(error){setMessage(error instanceof Error?error.message:"Could not update the approved PDF.")}
     finally{setApplying(false)}
   },[details,projectId,replaceObjectUrl])
 
   const resetChanges=useCallback(async()=>{
     const master=masterBlobRef.current
-    if(!master||!projectId)return
+    if(!master||masterVersionRef.current!==MASTER_VERSION||!projectId){setMessage("Click Replace PDF and select the clean approved 197-page PDF first.");return}
     const defaults=freshDefaults();setDetails(defaults);replaceObjectUrl(master,EXPECTED_FILE);setPage(1);setPageInput("1")
-    await writeStoredPdf({projectId,name:EXPECTED_FILE,blob:master,masterBlob:master,details:defaults,updatedAt:Date.now()}).catch(()=>{})
-    setMessage("Restored the approved master PDF and Raja Catering default details.")
+    await writeStoredPdf({projectId,name:EXPECTED_FILE,blob:master,masterBlob:master,masterVersion:MASTER_VERSION,details:defaults,updatedAt:Date.now()}).catch(()=>{})
+    setMessage("Removed the 786.Chat edited copy and restored the clean approved master PDF. You can now enter new values and Apply to Book once.")
   },[projectId,replaceObjectUrl])
 
   const setField=<K extends keyof FoodSafetyBookDetails>(key:K,value:FoodSafetyBookDetails[K])=>setDetails((current)=>({...current,[key]:value}))
@@ -239,7 +251,7 @@ export function FoodSafetyApprovedPdfOverlay() {
         <div style={sectionStyle}><strong style={{color:"#0b513e"}}>Controlled heading</strong><label style={labelStyle}>Document Name<input style={inputStyle} value={details.documentName} onChange={(e)=>setField("documentName",e.target.value)}/></label></div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",paddingBottom:6}}>
           <button type="button" style={{...goldButtonStyle,minHeight:42}} disabled={applying} onClick={()=>void applyEdits()}>{applying?"Applying...":"Apply to Book"}</button>
-          <button type="button" style={buttonStyle} disabled={applying} onClick={()=>void resetChanges()}>Restore Raja Catering Defaults</button>
+          <button type="button" style={buttonStyle} disabled={applying} onClick={()=>void resetChanges()}>Restore Clean PDF / Raja Defaults</button>
         </div>
       </div>
     </div>
