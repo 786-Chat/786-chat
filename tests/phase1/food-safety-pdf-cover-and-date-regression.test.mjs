@@ -9,15 +9,15 @@ test("cover business name is centered in the crown title area", () => {
   assert.match(pdfEditor, /align: "center"/)
 })
 
-test("clean cover fills approved-by value and telephone once in the blank areas", () => {
-  const start = pdfEditor.indexOf("function paintCover")
-  const end = pdfEditor.indexOf("function paintTeamPage")
-  const cover = pdfEditor.slice(start, end)
-  assert.match(cover, /hasValue\(details, "approvedBy"\)/)
-  assert.match(cover, /x: 292, y: 759, width: 96, height: 18/)
-  assert.match(cover, /hasValue\(details, "telephone"\)/)
-  assert.match(cover, /x: 193, y: 805, width: 211, height: 29/)
-  assert.doesNotMatch(cover, /`Approved By: \$\{details\.approvedBy\}`/)
+test("approved-by and telephone stamping is centralized for pages 1 through 196", () => {
+  const start = pdfEditor.indexOf("function paintContactFooters")
+  const end = pdfEditor.indexOf("function paintFinalPage")
+  const contact = pdfEditor.slice(start, end)
+  assert.match(contact, /Page 1 uses the existing decorative Approved By and Telephone areas/)
+  assert.match(contact, /for \(let pageNumber = 15; pageNumber <= 196; pageNumber \+= 1\)/)
+  assert.match(contact, /Page 197 is intentionally excluded/)
+  assert.match(contact, /x: 292, y: 751, width: 96, height: 18/)
+  assert.match(contact, /x: 193, y: 790, width: 211, height: 28/)
 })
 
 test("clean page 2 fills all staff team values from the form", () => {

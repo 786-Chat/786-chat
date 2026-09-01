@@ -206,25 +206,10 @@ function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBook
   return String(value ?? "").trim().length > 0
 }
 
-function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
+function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
   if (hasValue(details, "businessName")) {
     paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 20, minSize: 7, align: "center", padding: 4,
-    })
-  }
-
-  // The clean master has a printed "Approved By:" label with a blank value area.
-  // Stamp only the value, never the label again.
-  if (hasValue(details, "approvedBy")) {
-    paintText(page, { x: 292, y: 759, width: 96, height: 18 }, details.approvedBy, {
-      fill: CREAM, color: TEXT_GREEN, font: helv, size: 8.5, minSize: 5.5, align: "center",
-    })
-  }
-
-  // The clean master has a large blank telephone area under the printed Telephone heading.
-  if (hasValue(details, "telephone")) {
-    paintText(page, { x: 193, y: 805, width: 211, height: 29 }, details.telephone, {
-      fill: DARK_GREEN, color: GOLD, font: bold, size: 22, minSize: 10, align: "center",
     })
   }
 }
@@ -236,7 +221,6 @@ function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDF
     })
   }
 
-  // Page 2 in the clean master intentionally has empty staff boxes; fill those values from the form.
   if (hasValue(details, "consultant")) {
     paintCellText(page, { x: 204, y: 228, width: 188, height: 32 }, details.consultant.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 17, minSize: 8, align: "center",
@@ -264,7 +248,6 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     const page = pages[pageNumber - 1]
     const compact = pageNumber >= 5
     const yHeader = compact ? 37 : 46
-    const footerY = pageNumber === 4 ? 537 : pageNumber === 11 ? 551 : compact ? 510 : 515
 
     if (hasValue(details, "businessName")) {
       paintCellText(page, { x: 44, y: yHeader, width: 105, height: 25 }, details.businessName.toUpperCase(), {
@@ -285,16 +268,6 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       paintCellText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
-      // Footer label ends at about x=100 on the approved landscape pages.
-      paintText(page, { x: 103, y: footerY, width: 104, height: 17 }, details.approvedBy, {
-        fill: CREAM, color: BLACK, font: helv, size: 6.8, minSize: 4.5,
-      })
-    }
-    if (hasValue(details, "telephone")) {
-      // Keep the number between the printed Telephone label and the Freephone separator.
-      paintText(page, { x: 259, y: footerY, width: 52, height: 17 }, details.telephone, {
-        fill: CREAM, color: BLACK, font: bold, size: 6.5, minSize: 4.2, align: "center",
-      })
     }
     if (hasValue(details, "assessmentDate")) {
       paintCellText(page, { x: compact ? 122 : 118, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 88, height: 18 }, normalizeDate(details.assessmentDate), {
@@ -312,10 +285,6 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       })
     }
   }
-
-  // Do not stamp food-safety target values onto HACCP reminder sentences.
-  // Those areas are printed guidance, not blank form fields. Targets are stamped only
-  // in the dedicated daily-production fields and the final summary page below.
 }
 
 const DAILY_PRODUCT_BOXES: TopBox[] = [
@@ -353,7 +322,6 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
     const { width } = page.getSize()
     paintMultiline(
       page,
-      // Page 13 only: shift the address slightly left so it sits comfortably inside the cream header area.
       { x: Math.max(530, width - 275), y: 36, width: 190, height: 32 },
       [details.addressLine1, details.addressLine2],
       { fill: CREAM, color: TEXT_GREEN, font: bold, size: 7.2, minSize: 4.8, padding: 2, align: "right", inset: 1.5 },
@@ -373,21 +341,10 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
       fill: WHITE, color: BLACK, font: helv, size: 7.2, minSize: 4.5,
     })
   }
-  if (hasValue(details, "approvedBy")) {
-    paintCellText(page, { x: 50, y: 603, width: 120, height: 18 }, details.approvedBy, {
-      fill: WHITE, color: BLACK, font: helv, size: 6.8, minSize: 4.5,
-    })
-  }
-  if (hasValue(details, "telephone")) {
-    paintCellText(page, { x: 205, y: 603, width: 92, height: 18 }, details.telephone, {
-      fill: WHITE, color: BLACK, font: helv, size: 6.8, minSize: 4.5, align: "center",
-    })
-  }
 }
 
 function paintProcessFlowPage(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   const { width } = page.getSize()
-  // Page 14 only: move the right-side identity block slightly left inside the yellow banner.
   const rightX = Math.max(325, width - 270)
 
   if (hasValue(details, "businessName")) {
@@ -475,6 +432,105 @@ function paintDailyPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
   }
 }
 
+const HACCP_CONTACT_Y: Record<number, number> = {
+  3: 518,
+  4: 541,
+  5: 513,
+  6: 490,
+  7: 465,
+  8: 521,
+  9: 547,
+  10: 450,
+  11: 555,
+  12: 499,
+}
+
+function paintContactFooters(pages: PDFPage[], details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
+  // Page 1 uses the existing decorative Approved By and Telephone areas. Move both values
+  // slightly upward so they do not touch the lower Freephone line.
+  if (hasValue(details, "approvedBy")) {
+    paintText(pages[0], { x: 292, y: 751, width: 96, height: 18 }, details.approvedBy, {
+      color: TEXT_GREEN, font: helv, size: 8.5, minSize: 5.5, align: "center", padding: 1,
+    })
+  }
+  if (hasValue(details, "telephone")) {
+    paintText(pages[0], { x: 193, y: 790, width: 211, height: 28 }, details.telephone, {
+      color: GOLD, font: bold, size: 22, minSize: 10, align: "center", padding: 1,
+    })
+  }
+
+  // Page 2 portrait footer.
+  if (hasValue(details, "approvedBy")) {
+    paintText(pages[1], { x: 105, y: 748, width: 155, height: 17 }, details.approvedBy, {
+      color: BLACK, font: helv, size: 7.2, minSize: 5, align: "left", padding: 1,
+    })
+  }
+  if (hasValue(details, "telephone")) {
+    paintText(pages[1], { x: 360, y: 748, width: 150, height: 17 }, details.telephone, {
+      color: BLACK, font: bold, size: 7.2, minSize: 4.8, align: "left", padding: 1,
+    })
+  }
+
+  // Pages 3-12 have footer rows at different vertical positions. Use the real row for each page
+  // instead of one hard-coded Y value, so Page 6 and the other shorter HACCP pages stay aligned.
+  for (let pageNumber = 3; pageNumber <= 12; pageNumber += 1) {
+    const page = pages[pageNumber - 1]
+    const y = HACCP_CONTACT_Y[pageNumber]
+    if (hasValue(details, "approvedBy")) {
+      paintText(page, { x: 103, y, width: 100, height: 15 }, details.approvedBy, {
+        color: BLACK, font: helv, size: 6.8, minSize: 4.5, align: "left", padding: 1,
+      })
+    }
+    if (hasValue(details, "telephone")) {
+      paintText(page, { x: 259, y, width: 52, height: 15 }, details.telephone, {
+        color: BLACK, font: bold, size: 6.3, minSize: 4.1, align: "center", padding: 1,
+      })
+    }
+  }
+
+  // Page 13 landscape allergen footer.
+  if (hasValue(details, "approvedBy")) {
+    paintText(pages[12], { x: 82, y: 524, width: 108, height: 15 }, details.approvedBy, {
+      color: BLACK, font: helv, size: 6.8, minSize: 4.5, align: "left", padding: 1,
+    })
+  }
+  if (hasValue(details, "telephone")) {
+    paintText(pages[12], { x: 240, y: 524, width: 40, height: 15 }, details.telephone, {
+      color: BLACK, font: bold, size: 6.1, minSize: 3.9, align: "center", padding: 1,
+    })
+  }
+
+  // Page 14 portrait Process Flow footer.
+  if (hasValue(details, "approvedBy")) {
+    paintText(pages[13], { x: 90, y: 792, width: 165, height: 16 }, details.approvedBy, {
+      color: BLACK, font: helv, size: 7, minSize: 4.8, align: "left", padding: 1,
+    })
+  }
+  if (hasValue(details, "telephone")) {
+    paintText(pages[13], { x: 355, y: 792, width: 155, height: 16 }, details.telephone, {
+      color: BLACK, font: bold, size: 7, minSize: 4.6, align: "left", padding: 1,
+    })
+  }
+
+  // Daily pages 15-196 all use the same footer row. Keep identical left padding and spacing
+  // on every page so the values appear consistently throughout the 26-week book.
+  for (let pageNumber = 15; pageNumber <= 196; pageNumber += 1) {
+    const page = pages[pageNumber - 1]
+    if (hasValue(details, "approvedBy")) {
+      paintText(page, { x: 88, y: 783, width: 175, height: 16 }, details.approvedBy, {
+        color: BLACK, font: helv, size: 7, minSize: 4.8, align: "left", padding: 1,
+      })
+    }
+    if (hasValue(details, "telephone")) {
+      paintText(page, { x: 345, y: 783, width: 165, height: 16 }, details.telephone, {
+        color: BLACK, font: bold, size: 7, minSize: 4.6, align: "left", padding: 1,
+      })
+    }
+  }
+
+  // Page 197 is intentionally excluded: the user wants no Approved By / Telephone stamping there.
+}
+
 function paintFinalPage(page: PDFPage, details: FoodSafetyBookDetails, bold: PDFFont, times: PDFFont) {
   if (hasValue(details, "businessName")) {
     paintText(page, { x: 214, y: 79, width: 170, height: 29 }, details.businessName.toUpperCase(), {
@@ -513,12 +569,13 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   const times = await document.embedFont(StandardFonts.TimesRomanBold)
 
-  paintCover(pages[0], details, times, helv, bold)
+  paintCover(pages[0], details, times)
   paintTeamPage(pages[1], details, times)
   paintHaccpPages(pages, details, helv, bold)
   paintAllergenMatrix(pages[12], details, helv, bold)
   paintProcessFlowPage(pages[13], details, helv, bold)
   paintDailyPages(pages, details, helv, bold)
+  paintContactFooters(pages, details, helv, bold)
   paintFinalPage(pages[196], details, bold, times)
 
   const output = await document.save({ useObjectStreams: true })
