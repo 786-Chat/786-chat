@@ -214,17 +214,16 @@ function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBook
   return String(value ?? "").trim().length > 0
 }
 
-function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
+function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, bold: PDFFont) {
   if (hasValue(details, "businessName")) {
-    paintText(page, { x: 132, y: 94, width: 245, height: 31 }, details.businessName.toUpperCase(), {
+    // The cover title area is centered on the physical A4 page, directly under the crown.
+    paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 20, minSize: 7, align: "center", padding: 4,
     })
   }
-  if (hasValue(details, "approvedBy")) {
-    paintText(page, { x: 212, y: 759, width: 172, height: 18 }, `Approved By: ${details.approvedBy}`, {
-      fill: CREAM, color: TEXT_GREEN, font: helv, size: 8.5, minSize: 5.5, align: "center",
-    })
-  }
+
+  // The approved cover already contains the approver name. Never stamp Mujeeb Sardar
+  // a second time on page 1. Only the telephone number is added in the bottom area.
   if (hasValue(details, "telephone")) {
     paintText(page, { x: 193, y: 805, width: 211, height: 29 }, details.telephone, {
       fill: DARK_GREEN, color: GOLD, font: bold, size: 22, minSize: 10, align: "center",
@@ -418,22 +417,13 @@ function paintProcessFlowPage(page: PDFPage, details: FoodSafetyBookDetails, hel
   }
 }
 
-function paintDailyDates(page: PDFPage, date: Date, helv: PDFFont, bold: PDFFont) {
+function paintDailyDates(page: PDFPage, date: Date, helv: PDFFont) {
   const dateText = formatDate(date)
-  paintText(page, { x: 531.5, y: 10.1, width: 35.5, height: 10.5 }, dateText, {
-    fill: WHITE, color: BLACK, font: helv, size: 6.2, minSize: 5.2, align: "center", padding: 0.5,
-  })
-  paintText(page, { x: 504.5, y: 47.0, width: 49.0, height: 15.2 }, dateText, {
-    fill: DAILY_BLUE, color: WHITE, font: bold, size: 9.2, minSize: 7.5, align: "center", padding: 1,
-  })
+
+  // Stamp the generated date once, in the Production Date field only.
+  // The other former date stamps caused a duplicate date/number to appear in the top row.
   paintCellText(page, { x: 104.5, y: 114.4, width: 36.0, height: 12.0 }, dateText, {
     fill: WHITE, color: rgb(0.55, 0.61, 0.67), font: helv, size: 6.2, minSize: 5.2, align: "center", padding: 0.5, inset: 0.7,
-  })
-  paintText(page, { x: 70.5, y: 814.8, width: 27.0, height: 9.0 }, dateText, {
-    fill: WHITE, color: rgb(0.35, 0.42, 0.48), font: helv, size: 4.8, minSize: 4.1, align: "center", padding: 0.2,
-  })
-  paintText(page, { x: 78.8, y: 826.7, width: 32.0, height: 9.5 }, dateText, {
-    fill: WHITE, color: rgb(0.35, 0.42, 0.48), font: helv, size: 5.2, minSize: 4.3, align: "center", padding: 0.2,
   })
 }
 
@@ -498,7 +488,7 @@ function paintDailyPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     }
     if (start) {
       const date = new Date(start.getTime() + (pageNumber - 15) * 86400000)
-      paintDailyDates(page, date, helv, bold)
+      paintDailyDates(page, date, helv)
     }
   }
 }
@@ -551,7 +541,7 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   const times = await document.embedFont(StandardFonts.TimesRomanBold)
 
-  paintCover(pages[0], details, times, helv, bold)
+  paintCover(pages[0], details, times, bold)
   paintTeamPage(pages[1], details, times)
   paintHaccpPages(pages, details, helv, bold)
   paintAllergenMatrix(pages[12], details, helv, bold)
