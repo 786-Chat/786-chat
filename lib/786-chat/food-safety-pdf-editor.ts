@@ -68,6 +68,8 @@ const DAILY_BLUE = rgb(47 / 255, 110 / 255, 165 / 255)
 
 type TopBox = { x: number; y: number; width: number; height: number }
 type PaintOptions = {
+  // Kept on call sites as a visual reference for the approved artwork.
+  // Text-only stamping deliberately never paints this fill onto the PDF.
   fill?: RGB
   color?: RGB
   font: PDFFont
@@ -93,40 +95,77 @@ function insetBox(box: TopBox, inset: number): TopBox {
   }
 }
 
-function fitSize(font: PDFFont, text: string, maxWidth: number, initial: number, minimum = 5) {
-  let size = initial
-  while (size > minimum && font.widthOfTextAtSize(text, size) > maxWidth) size -= 0.5
-  return Math.max(size, minimum)
+function fitSize(
+  font: PDFFont,
+  text: string,
+  maxWidth: number,
+  initial: number,
+  minimum = 5,
+  maxHeight = Number.POSITIVE_INFINITY,
+) {
+  const safeWidth = Math.max(1, maxWidth)
+  const safeHeight = Math.max(1.5, maxHeight)
+  const preferredMinimum = Math.min(minimum, safeHeight)
+  let size = Math.min(initial, safeHeight)
+
+  while (size > preferredMinimum && font.widthOfTextAtSize(text, size) > safeWidth) size -= 0.5
+  // Containment is more important than the preferred minimum: never let text cross a printed border.
+  while (size > 1.5 && font.widthOfTextAtSize(text, size) > safeWidth) size -= 0.25
+
+  return Math.max(1.5, Math.min(size, safeHeight))
 }
 
+// Text-only stamping: draw glyphs into the blank area of the approved PDF.
+// Never draw a replacement rectangle, border or fake input field over the original artwork.
 function paintText(page: PDFPage, box: TopBox, text: string, options: PaintOptions) {
+  if (!text) return
   const target = insetBox(box, options.inset ?? 0)
   const rect = topBox(page, target)
-  const padding = options.padding ?? 2
-  page.drawRectangle({ ...rect, color: options.fill ?? WHITE })
-  const size = fitSize(options.font, text, Math.max(1, rect.width - padding * 2), options.size ?? 10, options.minSize ?? 5)
+  const padding = Math.max(0, options.padding ?? 2)
+  const innerWidth = Math.max(1, rect.width - padding * 2)
+  const innerHeight = Math.max(1.5, rect.height - padding * 2)
+  const size = fitSize(
+    options.font,
+    text,
+    innerWidth,
+    options.size ?? 10,
+    options.minSize ?? 5,
+    Math.max(1.5, innerHeight - 0.5),
+  )
   const textWidth = options.font.widthOfTextAtSize(text, size)
   let x = rect.x + padding
   if (options.align === "center") x = rect.x + Math.max(padding, (rect.width - textWidth) / 2)
   if (options.align === "right") x = rect.x + rect.width - textWidth - padding
-  const y = rect.y + Math.max(1, (rect.height - size) / 2 + 1.2)
+  const y = rect.y + padding + Math.max(0, (innerHeight - size) / 2) + 0.2
   page.drawText(text, { x, y, size, font: options.font, color: options.color ?? BLACK })
 }
 
 function paintCellText(page: PDFPage, box: TopBox, text: string, options: Omit<PaintOptions, "inset"> & { inset?: number }) {
-  paintText(page, box, text, { ...options, inset: options.inset ?? 1.35 })
+  paintText(page, box, text, { ...options, inset: options.inset ?? 1.8 })
 }
 
 function paintMultiline(page: PDFPage, box: TopBox, lines: string[], options: PaintOptions) {
+  const cleanLines = lines.map((line) => line.trim()).filter(Boolean).slice(0, 3)
+  if (cleanLines.length === 0) return
+
   const target = insetBox(box, options.inset ?? 0)
   const rect = topBox(page, target)
-  const pad = options.padding ?? 2
+  const pad = Math.max(0, options.padding ?? 2)
   const initial = options.size ?? 9
-  const lineHeight = initial + 1.5
-  page.drawRectangle({ ...rect, color: options.fill ?? WHITE })
-  lines.slice(0, 3).forEach((line, index) => {
-    const size = fitSize(options.font, line, Math.max(1, rect.width - pad * 2), initial, options.minSize ?? 5)
-    const y = rect.y + rect.height - pad - size - index * lineHeight
+  const availableHeight = Math.max(1.5, rect.height - pad * 2)
+  const lineSlot = availableHeight / cleanLines.length
+
+  cleanLines.forEach((line, index) => {
+    const size = fitSize(
+      options.font,
+      line,
+      Math.max(1, rect.width - pad * 2),
+      Math.min(initial, Math.max(1.5, lineSlot - 0.6)),
+      options.minSize ?? 5,
+      Math.max(1.5, lineSlot - 0.6),
+    )
+    const slotBottom = rect.y + rect.height - pad - (index + 1) * lineSlot
+    const y = slotBottom + Math.max(0, (lineSlot - size) / 2) + 0.2
     page.drawText(line, { x: rect.x + pad, y, size, font: options.font, color: options.color ?? BLACK })
   })
 }
@@ -161,8 +200,6 @@ function changed<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookD
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (changed(details, "businessName")) {
-    const cleanup = topBox(page, { x: 128, y: 88, width: 274, height: 40 })
-    page.drawRectangle({ ...cleanup, color: CREAM, borderColor: GOLD, borderWidth: 0.7 })
     paintText(page, { x: 132, y: 94, width: 245, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM,
       color: TEXT_GREEN,
@@ -225,7 +262,7 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     }
     if (changed(details, "addressLine1") || changed(details, "addressLine2")) {
       paintMultiline(page, { x: 540, y: compact ? 37 : 46, width: 190, height: 35 }, [details.addressLine1, details.addressLine2], {
-        fill: CREAM, color: BLACK, font: bold, size: 8, minSize: 5, padding: 3, inset: 1.35,
+        fill: CREAM, color: BLACK, font: bold, size: 8, minSize: 5, padding: 3, inset: 1.8,
       })
     }
     if (changed(details, "haccpCompletedBy")) {
