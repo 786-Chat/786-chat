@@ -6,6 +6,8 @@ import * as ts from "typescript"
 const overlay = readFileSync(new URL("../../components/786-chat/food-safety-approved-pdf-overlay.tsx", import.meta.url), "utf8")
 const wrapper = readFileSync(new URL("../../components/786-chat/workspace-with-projects-route.tsx", import.meta.url), "utf8")
 const pdfEditor = readFileSync(new URL("../../lib/786-chat/food-safety-pdf-editor.ts", import.meta.url), "utf8")
+const pdfEditorBase = readFileSync(new URL("../../lib/786-chat/food-safety-pdf-editor-base.ts", import.meta.url), "utf8")
+const completePdfEditor = `${pdfEditor}\n${pdfEditorBase}`
 
 test("Food Safety workspace mounts the approved PDF-only overlay", () => {
   assert.match(wrapper, /FoodSafetyApprovedPdfOverlay/)
@@ -39,16 +41,19 @@ test("PDF customer edits stamp text only and do not cover approved borders or ar
   assert.match(pdfEditor, /never let text cross a printed border/i)
 })
 
-test("complete PDF form values stamp even when they equal Raja Catering defaults", () => {
-  assert.match(pdfEditor, /function hasValue/)
-  assert.doesNotMatch(pdfEditor, /function changed/)
-  assert.doesNotMatch(pdfEditor, /JSON\.stringify\(details\[key\]\)/)
-  assert.match(pdfEditor, /paintTeamPage\(pages\[1\]/)
-  assert.match(pdfEditor, /paintAllergenMatrix\(pages\[12\]/)
-  assert.match(pdfEditor, /paintProcessFlowPage\(pages\[13\]/)
-  assert.match(pdfEditor, /details\.products\.slice\(0, 9\)\.forEach/)
-  assert.doesNotMatch(pdfEditor, /ALLERGEN_MATRIX_PRODUCT_INDEX/)
-  assert.match(pdfEditor, /if \(start\) \{/)
+test("complete PDF form values still stamp through the base editor plus corrected contact overlay", () => {
+  assert.match(completePdfEditor, /function hasValue/)
+  assert.doesNotMatch(completePdfEditor, /function changed/)
+  assert.doesNotMatch(completePdfEditor, /JSON\.stringify\(details\[key\]\)/)
+  assert.match(pdfEditorBase, /paintTeamPage\(pages\[1\]/)
+  assert.match(pdfEditorBase, /paintAllergenMatrix\(pages\[12\]/)
+  assert.match(pdfEditorBase, /paintProcessFlowPage\(pages\[13\]/)
+  assert.match(pdfEditorBase, /details\.products\.slice\(0, 9\)\.forEach/)
+  assert.doesNotMatch(pdfEditorBase, /ALLERGEN_MATRIX_PRODUCT_INDEX/)
+  assert.match(pdfEditorBase, /if \(start\) \{/)
+  assert.match(pdfEditor, /applyBaseFoodSafetyBookDetails/)
+  assert.match(pdfEditor, /approvedBy: ""/)
+  assert.match(pdfEditor, /telephone: ""/)
 })
 
 test("real PDF page fills the live preview and keeps the PDF native orientation", () => {
@@ -59,27 +64,22 @@ test("real PDF page fills the live preview and keeps the PDF native orientation"
   assert.match(overlay, /native landscape HACCP pages/i)
 })
 
-test("approved PDF overlay is valid TSX", () => {
-  const result = ts.transpileModule(overlay, {
+function assertValidTypeScript(source, label) {
+  const result = ts.transpileModule(source, {
     compilerOptions: {
-      jsx: ts.JsxEmit.Preserve,
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
     },
     reportDiagnostics: true,
   })
   const errors = (result.diagnostics || []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
-  assert.deepEqual(errors.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")), [])
-})
+  assert.deepEqual(
+    errors.map((diagnostic) => `${label}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`),
+    [],
+  )
+}
 
-test("approved PDF editor is valid TypeScript", () => {
-  const result = ts.transpileModule(pdfEditor, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      target: ts.ScriptTarget.ES2022,
-    },
-    reportDiagnostics: true,
-  })
-  const errors = (result.diagnostics || []).filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
-  assert.deepEqual(errors.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")), [])
+test("approved PDF editor files are valid TypeScript", () => {
+  assertValidTypeScript(pdfEditor, "wrapper")
+  assertValidTypeScript(pdfEditorBase, "base")
 })
