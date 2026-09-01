@@ -67,8 +67,6 @@ const BLACK = rgb(0.08, 0.10, 0.10)
 
 type TopBox = { x: number; y: number; width: number; height: number }
 type PaintOptions = {
-  // Kept on call sites only as a visual reference for the approved artwork.
-  // Text-only stamping deliberately never paints fills, borders, or replacement boxes.
   fill?: RGB
   color?: RGB
   font: PDFFont
@@ -108,14 +106,11 @@ function fitSize(
   let size = Math.min(initial, safeHeight)
 
   while (size > preferredMinimum && font.widthOfTextAtSize(text, size) > safeWidth) size -= 0.5
-  // Containment is more important than the preferred minimum: never let text cross a printed border.
   while (size > 1.5 && font.widthOfTextAtSize(text, size) > safeWidth) size -= 0.25
 
   return Math.max(1.5, Math.min(size, safeHeight))
 }
 
-// Text-only stamping: draw glyphs into the existing blank area of the approved PDF.
-// Never draw a replacement rectangle, border, background, or fake input field.
 function paintText(page: PDFPage, box: TopBox, text: string, options: PaintOptions) {
   const clean = String(text ?? "").trim()
   if (!clean) return
@@ -205,8 +200,6 @@ function formatDate(date: Date) {
   return `${day}/${month}/${date.getUTCFullYear()}`
 }
 
-// The form represents the values that must be stamped into the approved book.
-// Default Raja Catering values are real values too; they must not be suppressed in blank mapped areas.
 function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookDetails, key: K) {
   const value = details[key]
   if (Array.isArray(value)) return value.some((item) => String(item ?? "").trim().length > 0)
@@ -215,14 +208,10 @@ function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBook
 
 function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
   if (hasValue(details, "businessName")) {
-    // The cover title area is centered on the physical A4 page, directly under the crown.
     paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 20, minSize: 7, align: "center", padding: 4,
     })
   }
-
-  // Page 1 already contains the approved-by name and telephone number in the artwork.
-  // Do not stamp either value again or it appears doubled on top of the approved text.
 }
 
 function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
@@ -231,9 +220,6 @@ function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDF
       fill: WHITE, color: TEXT_GREEN, font: times, size: 12, minSize: 7, align: "center",
     })
   }
-
-  // The approved page-2 organisation chart already contains the consultant/director/team names.
-  // Never stamp those static names again; doing so creates the doubled text seen in the preview.
 }
 
 function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
@@ -241,6 +227,7 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     const page = pages[pageNumber - 1]
     const compact = pageNumber >= 5
     const yHeader = compact ? 37 : 46
+    const footerY = pageNumber === 4 ? 537 : pageNumber === 11 ? 551 : compact ? 510 : 515
 
     if (hasValue(details, "businessName")) {
       paintCellText(page, { x: 44, y: yHeader, width: 105, height: 25 }, details.businessName.toUpperCase(), {
@@ -258,13 +245,18 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       })
     }
     if (hasValue(details, "approvedBy")) {
-      // Keep the real Approved By field inside the HACCP form, but never write the same
-      // name again in the decorative footer below the form.
       paintCellText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
+      paintText(page, { x: 98, y: footerY, width: 92, height: 17 }, details.approvedBy, {
+        fill: CREAM, color: BLACK, font: helv, size: 6.8, minSize: 4.5,
+      })
     }
-    // Telephone is already present in the approved HACCP footer artwork. Do not restamp it.
+    if (hasValue(details, "telephone")) {
+      paintText(page, { x: 247, y: footerY, width: 82, height: 17 }, details.telephone, {
+        fill: CREAM, color: BLACK, font: helv, size: 6.8, minSize: 4.5, align: "center",
+      })
+    }
     if (hasValue(details, "assessmentDate")) {
       paintCellText(page, { x: compact ? 122 : 118, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 88, height: 18 }, normalizeDate(details.assessmentDate), {
         fill: WHITE, color: BLACK, font: helv, size: 7.5, minSize: 5,
@@ -282,24 +274,9 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
     }
   }
 
-  if (hasValue(details, "heatTreatmentTarget")) {
-    paintCellText(pages[4], { x: 484, y: 479, width: 90, height: 18 }, details.heatTreatmentTarget, {
-      fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5,
-    })
-    paintCellText(pages[6], { x: 608, y: 429, width: 95, height: 18 }, details.heatTreatmentTarget, {
-      fill: WHITE, color: BLACK, font: bold, size: 7.5, minSize: 5,
-    })
-  }
-  if (hasValue(details, "coldRoomTarget")) {
-    paintCellText(pages[8], { x: 397, y: 512, width: 90, height: 20 }, details.coldRoomTarget, {
-      fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5,
-    })
-  }
-  if (hasValue(details, "frozenStorageTarget")) {
-    paintCellText(pages[8], { x: 178, y: 512, width: 55, height: 20 }, details.frozenStorageTarget, {
-      fill: CREAM, color: BLACK, font: bold, size: 7.5, minSize: 5, align: "center",
-    })
-  }
+  // Do not stamp food-safety target values onto HACCP reminder sentences.
+  // Those areas are printed guidance, not blank form fields. Targets are stamped only
+  // in the dedicated daily-production fields and the final summary page below.
 }
 
 const DAILY_PRODUCT_BOXES: TopBox[] = [
@@ -333,13 +310,11 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
     })
   }
 
-  // Page 13 has a dedicated blank cream area at the right side of the heading.
-  // Keep the original heading/artwork and stamp only the address text into that blank space.
   if (hasValue(details, "addressLine1") || hasValue(details, "addressLine2")) {
     const { width } = page.getSize()
     paintMultiline(
       page,
-      { x: Math.max(590, width - 215), y: 36, width: 190, height: 32 },
+      { x: Math.max(555, width - 250), y: 36, width: 190, height: 32 },
       [details.addressLine1, details.addressLine2],
       { fill: CREAM, color: TEXT_GREEN, font: bold, size: 7.2, minSize: 4.8, padding: 2, align: "right", inset: 1.5 },
     )
@@ -372,10 +347,8 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
 
 function paintProcessFlowPage(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   const { width } = page.getSize()
-  const rightX = Math.max(375, width - 210)
+  const rightX = Math.max(350, width - 245)
 
-  // Page 14's yellow process-flow heading has an intentional blank area on the right.
-  // Add only text in that area; do not repaint or resize the yellow banner.
   if (hasValue(details, "businessName")) {
     paintText(page, { x: rightX, y: 56, width: 180, height: 18 }, details.businessName.toUpperCase(), {
       fill: GOLD, color: WHITE, font: bold, size: 9.5, minSize: 5.5, align: "right", padding: 1.5,
@@ -390,9 +363,6 @@ function paintProcessFlowPage(page: PDFPage, details: FoodSafetyBookDetails, hel
 
 function paintDailyDates(page: PDFPage, date: Date, helv: PDFFont) {
   const dateText = formatDate(date)
-
-  // Stamp the generated date once, in the Production Date field only.
-  // The other former date stamps caused a duplicate date/number to appear in the top row.
   paintCellText(page, { x: 104.5, y: 114.4, width: 36.0, height: 12.0 }, dateText, {
     fill: WHITE, color: rgb(0.55, 0.61, 0.67), font: helv, size: 6.2, minSize: 5.2, align: "center", padding: 0.5, inset: 0.7,
   })
@@ -470,9 +440,6 @@ function paintFinalPage(page: PDFPage, details: FoodSafetyBookDetails, bold: PDF
       fill: CREAM, color: TEXT_GREEN, font: times, size: 15, minSize: 8, align: "center",
     })
   }
-
-  // The approved final page already carries the approved-by/contact identity artwork.
-  // Do not stamp the same name or telephone number a second time.
   if (hasValue(details, "heatTreatmentTarget")) {
     paintText(page, { x: 275, y: 354, width: 95, height: 20 }, details.heatTreatmentTarget, {
       fill: CREAM, color: rgb(0.80, 0.18, 0.05), font: bold, size: 8.2, minSize: 5.2, align: "center",
