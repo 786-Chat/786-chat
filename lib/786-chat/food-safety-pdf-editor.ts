@@ -358,8 +358,8 @@ const ALLERGEN_MATRIX_PRODUCT_BOXES: TopBox[] = [
 
 function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   if (hasValue(details, "businessName")) {
-    paintText(page, { x: 27, y: 40, width: 105, height: 22 }, details.businessName.toUpperCase(), {
-      fill: WHITE, color: TEXT_GREEN, font: bold, size: 9.5, minSize: 5.5,
+    paintText(page, { x: 27, y: 40, width: 130, height: 22 }, details.businessName.toUpperCase(), {
+      fill: WHITE, color: WHITE, font: bold, size: 9.5, minSize: 5.5,
     })
   }
 
