@@ -214,18 +214,16 @@ function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBook
   return String(value ?? "").trim().length > 0
 }
 
-function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
+function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, bold: PDFFont) {
   if (hasValue(details, "businessName")) {
     // The cover title area is centered on the physical A4 page, directly under the crown.
     paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 20, minSize: 7, align: "center", padding: 4,
     })
   }
-  if (hasValue(details, "approvedBy")) {
-    paintText(page, { x: 212, y: 759, width: 172, height: 18 }, `Approved By: ${details.approvedBy}`, {
-      fill: CREAM, color: TEXT_GREEN, font: helv, size: 8.5, minSize: 5.5, align: "center",
-    })
-  }
+
+  // The approved cover already contains the approver name. Never stamp Mujeeb Sardar
+  // a second time on page 1. Only the telephone number is added in the bottom area.
   if (hasValue(details, "telephone")) {
     paintText(page, { x: 193, y: 805, width: 211, height: 29 }, details.telephone, {
       fill: DARK_GREEN, color: GOLD, font: bold, size: 22, minSize: 10, align: "center",
@@ -543,7 +541,7 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   const times = await document.embedFont(StandardFonts.TimesRomanBold)
 
-  paintCover(pages[0], details, times, helv, bold)
+  paintCover(pages[0], details, times, bold)
   paintTeamPage(pages[1], details, times)
   paintHaccpPages(pages, details, helv, bold)
   paintAllergenMatrix(pages[12], details, helv, bold)
