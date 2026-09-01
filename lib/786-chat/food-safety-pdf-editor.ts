@@ -11,6 +11,7 @@ export type { FoodSafetyBookDetails }
 const TEXT_GREEN = rgb(0.02, 0.28, 0.20)
 const GOLD = rgb(0.92, 0.66, 0.10)
 const BLACK = rgb(0.08, 0.10, 0.10)
+const HIDDEN_VIEWER_TITLE = "\u200B"
 
 type TopBox = { x: number; y: number; width: number; height: number }
 
@@ -175,6 +176,10 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const helv = await document.embedFont(StandardFonts.Helvetica)
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   paintContactFooters(pages, details, helv, bold)
+
+  // Chrome's built-in PDF viewer displays the PDF metadata Title in its top-left toolbar.
+  // Keep a real title entry but make it visually empty so no master/internal name is exposed.
+  document.setTitle(HIDDEN_VIEWER_TITLE)
 
   const output = await document.save({ useObjectStreams: true })
   return new Blob([output], { type: "application/pdf" })
