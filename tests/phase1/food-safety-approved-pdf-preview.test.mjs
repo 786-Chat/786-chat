@@ -56,6 +56,18 @@ test("complete PDF form values still stamp through the base editor plus correcte
   assert.match(pdfEditor, /telephone: ""/)
 })
 
+test("page 1 Approved By value uses a larger native serif style centered in the cream artwork", () => {
+  assert.match(pdfEditor, /StandardFonts\.TimesRomanBold/)
+  assert.match(pdfEditor, /x: 300, y: 761, width: 112, height: 20/)
+  assert.match(pdfEditor, /font: times, size: 10\.5, minSize: 7, align: "center", color: TEXT_GREEN/)
+})
+
+test("edited PDF hides the internal master title from Chrome Open Full PDF toolbar", () => {
+  assert.match(pdfEditor, /const HIDDEN_VIEWER_TITLE = "\\u200B"/)
+  assert.match(pdfEditor, /document\.setTitle\(HIDDEN_VIEWER_TITLE\)/)
+  assert.doesNotMatch(pdfEditor, /Raja Catering - Approved 197 Page Empty Master - Border Fixed/)
+})
+
 test("real PDF page fills the live preview and keeps the PDF native orientation", () => {
   assert.match(overlay, /view=Fit/)
   assert.match(overlay, /zoom=page-fit/)

@@ -11,6 +11,7 @@ export type { FoodSafetyBookDetails }
 const TEXT_GREEN = rgb(0.02, 0.28, 0.20)
 const GOLD = rgb(0.92, 0.66, 0.10)
 const BLACK = rgb(0.08, 0.10, 0.10)
+const HIDDEN_VIEWER_TITLE = "\u200B"
 
 type TopBox = { x: number; y: number; width: number; height: number }
 
@@ -62,12 +63,19 @@ const HACCP_CONTACT_Y: Record<number, number> = {
   12: 499,
 }
 
-function paintContactFooters(pages: PDFPage[], details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
-  // Page 1: keep both values inside the decorative blank areas.
-  // Approved By is moved down from the top edge; telephone is moved slightly lower below its heading.
+function paintContactFooters(
+  pages: PDFPage[],
+  details: FoodSafetyBookDetails,
+  helv: PDFFont,
+  bold: PDFFont,
+  times: PDFFont,
+) {
+  // Page 1 only: make the Approved By value look like part of the printed artwork.
+  // Use the same classic serif character as the decorative cover, keep it centered in the
+  // blank cream value area, and lower the baseline so it does not sit on the top edge.
   if (hasValue(details.approvedBy)) {
-    stampText(pages[0], { x: 292, y: 758, width: 96, height: 18 }, details.approvedBy, {
-      font: helv, size: 8.2, minSize: 5.5, align: "center", color: TEXT_GREEN,
+    stampText(pages[0], { x: 300, y: 761, width: 112, height: 20 }, details.approvedBy, {
+      font: times, size: 10.5, minSize: 7, align: "center", color: TEXT_GREEN,
     })
   }
   if (hasValue(details.telephone)) {
@@ -174,7 +182,12 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
 
   const helv = await document.embedFont(StandardFonts.Helvetica)
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
-  paintContactFooters(pages, details, helv, bold)
+  const times = await document.embedFont(StandardFonts.TimesRomanBold)
+  paintContactFooters(pages, details, helv, bold, times)
+
+  // Chrome's built-in PDF viewer displays the PDF metadata Title in its top-left toolbar.
+  // Keep a real title entry but make it visually empty so no master/internal name is exposed.
+  document.setTitle(HIDDEN_VIEWER_TITLE)
 
   const output = await document.save({ useObjectStreams: true })
   return new Blob([output], { type: "application/pdf" })
