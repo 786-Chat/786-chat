@@ -64,7 +64,6 @@ const DARK_GREEN = rgb(0.03, 0.31, 0.22)
 const TEXT_GREEN = rgb(0.02, 0.28, 0.20)
 const GOLD = rgb(0.92, 0.66, 0.10)
 const BLACK = rgb(0.08, 0.10, 0.10)
-const DAILY_BLUE = rgb(47 / 255, 110 / 255, 165 / 255)
 
 type TopBox = { x: number; y: number; width: number; height: number }
 type PaintOptions = {
@@ -207,14 +206,14 @@ function formatDate(date: Date) {
 }
 
 // The form represents the values that must be stamped into the approved book.
-// Default Raja Catering values are real values too; they must not be suppressed.
+// Default Raja Catering values are real values too; they must not be suppressed in blank mapped areas.
 function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBookDetails, key: K) {
   const value = details[key]
   if (Array.isArray(value)) return value.some((item) => String(item ?? "").trim().length > 0)
   return String(value ?? "").trim().length > 0
 }
 
-function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, bold: PDFFont) {
+function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
   if (hasValue(details, "businessName")) {
     // The cover title area is centered on the physical A4 page, directly under the crown.
     paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
@@ -222,13 +221,8 @@ function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFon
     })
   }
 
-  // The approved cover already contains the approver name. Never stamp Mujeeb Sardar
-  // a second time on page 1. Only the telephone number is added in the bottom area.
-  if (hasValue(details, "telephone")) {
-    paintText(page, { x: 193, y: 805, width: 211, height: 29 }, details.telephone, {
-      fill: DARK_GREEN, color: GOLD, font: bold, size: 22, minSize: 10, align: "center",
-    })
-  }
+  // Page 1 already contains the approved-by name and telephone number in the artwork.
+  // Do not stamp either value again or it appears doubled on top of the approved text.
 }
 
 function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
@@ -237,26 +231,9 @@ function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDF
       fill: WHITE, color: TEXT_GREEN, font: times, size: 12, minSize: 7, align: "center",
     })
   }
-  if (hasValue(details, "consultant")) {
-    paintCellText(page, { x: 204, y: 228, width: 188, height: 32 }, details.consultant.toUpperCase(), {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 17, minSize: 8, align: "center",
-    })
-  }
-  if (hasValue(details, "director")) {
-    paintCellText(page, { x: 170, y: 418, width: 255, height: 32 }, details.director.toUpperCase(), {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 15, minSize: 7, align: "center",
-    })
-  }
-  if (hasValue(details, "preparationStaff")) {
-    paintCellText(page, { x: 83, y: 624, width: 130, height: 31 }, details.preparationStaff.toUpperCase(), {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
-    })
-  }
-  if (hasValue(details, "storageStaff")) {
-    paintCellText(page, { x: 365, y: 624, width: 130, height: 31 }, details.storageStaff.toUpperCase(), {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
-    })
-  }
+
+  // The approved page-2 organisation chart already contains the consultant/director/team names.
+  // Never stamp those static names again; doing so creates the doubled text seen in the preview.
 }
 
 function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
@@ -281,19 +258,13 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       })
     }
     if (hasValue(details, "approvedBy")) {
+      // Keep the real Approved By field inside the HACCP form, but never write the same
+      // name again in the decorative footer below the form.
       paintCellText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
-      paintText(page, { x: 98, y: pageNumber === 4 ? 537 : pageNumber === 11 ? 551 : compact ? 510 : 515, width: 90, height: 17 }, details.approvedBy, {
-        fill: CREAM, color: BLACK, font: bold, size: 7.2, minSize: 5,
-      })
     }
-    if (hasValue(details, "telephone")) {
-      const footerY = pageNumber === 4 ? 537 : pageNumber === 11 ? 551 : compact ? 510 : 515
-      paintText(page, { x: 251, y: footerY, width: 74, height: 17 }, details.telephone, {
-        fill: CREAM, color: BLACK, font: bold, size: 7.2, minSize: 4.7, align: "center",
-      })
-    }
+    // Telephone is already present in the approved HACCP footer artwork. Do not restamp it.
     if (hasValue(details, "assessmentDate")) {
       paintCellText(page, { x: compact ? 122 : 118, y: compact ? (pageNumber === 11 ? 122 : 130) : 151, width: 88, height: 18 }, normalizeDate(details.assessmentDate), {
         fill: WHITE, color: BLACK, font: helv, size: 7.5, minSize: 5,
@@ -493,22 +464,15 @@ function paintDailyPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
   }
 }
 
-function paintFinalPage(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont, times: PDFFont) {
+function paintFinalPage(page: PDFPage, details: FoodSafetyBookDetails, bold: PDFFont, times: PDFFont) {
   if (hasValue(details, "businessName")) {
     paintText(page, { x: 214, y: 79, width: 170, height: 29 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 15, minSize: 8, align: "center",
     })
   }
-  if (hasValue(details, "approvedBy")) {
-    paintText(page, { x: 222, y: 733, width: 175, height: 18 }, `Approved By: ${details.approvedBy}`, {
-      fill: CREAM, color: TEXT_GREEN, font: helv, size: 8.2, minSize: 5.2, align: "center",
-    })
-  }
-  if (hasValue(details, "telephone")) {
-    paintText(page, { x: 184, y: 798, width: 230, height: 33 }, details.telephone, {
-      fill: CREAM, color: TEXT_GREEN, font: times, size: 21, minSize: 10, align: "center",
-    })
-  }
+
+  // The approved final page already carries the approved-by/contact identity artwork.
+  // Do not stamp the same name or telephone number a second time.
   if (hasValue(details, "heatTreatmentTarget")) {
     paintText(page, { x: 275, y: 354, width: 95, height: 20 }, details.heatTreatmentTarget, {
       fill: CREAM, color: rgb(0.80, 0.18, 0.05), font: bold, size: 8.2, minSize: 5.2, align: "center",
@@ -541,13 +505,13 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   const times = await document.embedFont(StandardFonts.TimesRomanBold)
 
-  paintCover(pages[0], details, times, bold)
+  paintCover(pages[0], details, times)
   paintTeamPage(pages[1], details, times)
   paintHaccpPages(pages, details, helv, bold)
   paintAllergenMatrix(pages[12], details, helv, bold)
   paintProcessFlowPage(pages[13], details, helv, bold)
   paintDailyPages(pages, details, helv, bold)
-  paintFinalPage(pages[196], details, helv, bold, times)
+  paintFinalPage(pages[196], details, bold, times)
 
   const output = await document.save({ useObjectStreams: true })
   return new Blob([output], { type: "application/pdf" })

@@ -9,14 +9,35 @@ test("cover business name is centered in the crown title area", () => {
   assert.match(pdfEditor, /align: "center"/)
 })
 
-test("cover adds telephone but does not stamp the approver name again", () => {
+test("cover does not restamp the preprinted approver name or telephone", () => {
   const start = pdfEditor.indexOf("function paintCover")
   const end = pdfEditor.indexOf("function paintTeamPage")
   const cover = pdfEditor.slice(start, end)
-  assert.match(cover, /hasValue\(details, "telephone"\)/)
+  assert.doesNotMatch(cover, /hasValue\(details, "telephone"\)/)
   assert.doesNotMatch(cover, /hasValue\(details, "approvedBy"\)/)
   assert.doesNotMatch(cover, /Approved By:/)
-  assert.match(cover, /approved cover already contains the approver name/i)
+  assert.match(cover, /already contains the approved-by name and telephone number/i)
+})
+
+test("page 2 does not restamp static team names already printed in approved artwork", () => {
+  const start = pdfEditor.indexOf("function paintTeamPage")
+  const end = pdfEditor.indexOf("function paintHaccpPages")
+  const team = pdfEditor.slice(start, end)
+  assert.match(team, /businessName/)
+  assert.doesNotMatch(team, /details\.consultant/)
+  assert.doesNotMatch(team, /details\.director/)
+  assert.doesNotMatch(team, /details\.preparationStaff/)
+  assert.doesNotMatch(team, /details\.storageStaff/)
+})
+
+test("HACCP pages keep the real approved-by field but do not duplicate name and phone in footer", () => {
+  const start = pdfEditor.indexOf("function paintHaccpPages")
+  const end = pdfEditor.indexOf("const DAILY_PRODUCT_BOXES")
+  const haccp = pdfEditor.slice(start, end)
+  assert.match(haccp, /details\.approvedBy/)
+  assert.doesNotMatch(haccp, /x: 98, y:/)
+  assert.doesNotMatch(haccp, /details\.telephone/)
+  assert.match(haccp, /decorative footer/i)
 })
 
 test("daily generated date is stamped only once", () => {
