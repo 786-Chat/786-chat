@@ -206,10 +206,25 @@ function hasValue<K extends keyof FoodSafetyBookDetails>(details: FoodSafetyBook
   return String(value ?? "").trim().length > 0
 }
 
-function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont) {
+function paintCover(page: PDFPage, details: FoodSafetyBookDetails, times: PDFFont, helv: PDFFont, bold: PDFFont) {
   if (hasValue(details, "businessName")) {
     paintText(page, { x: 160, y: 94, width: 275, height: 31 }, details.businessName.toUpperCase(), {
       fill: CREAM, color: TEXT_GREEN, font: times, size: 20, minSize: 7, align: "center", padding: 4,
+    })
+  }
+
+  // The clean master has a printed "Approved By:" label with a blank value area.
+  // Stamp only the value, never the label again.
+  if (hasValue(details, "approvedBy")) {
+    paintText(page, { x: 292, y: 759, width: 96, height: 18 }, details.approvedBy, {
+      fill: CREAM, color: TEXT_GREEN, font: helv, size: 8.5, minSize: 5.5, align: "center",
+    })
+  }
+
+  // The clean master has a large blank telephone area under the printed Telephone heading.
+  if (hasValue(details, "telephone")) {
+    paintText(page, { x: 193, y: 805, width: 211, height: 29 }, details.telephone, {
+      fill: DARK_GREEN, color: GOLD, font: bold, size: 22, minSize: 10, align: "center",
     })
   }
 }
@@ -218,6 +233,28 @@ function paintTeamPage(page: PDFPage, details: FoodSafetyBookDetails, times: PDF
   if (hasValue(details, "businessName")) {
     paintText(page, { x: 218, y: 81, width: 160, height: 25 }, details.businessName.toUpperCase(), {
       fill: WHITE, color: TEXT_GREEN, font: times, size: 12, minSize: 7, align: "center",
+    })
+  }
+
+  // Page 2 in the clean master intentionally has empty staff boxes; fill those values from the form.
+  if (hasValue(details, "consultant")) {
+    paintCellText(page, { x: 204, y: 228, width: 188, height: 32 }, details.consultant.toUpperCase(), {
+      fill: CREAM, color: TEXT_GREEN, font: times, size: 17, minSize: 8, align: "center",
+    })
+  }
+  if (hasValue(details, "director")) {
+    paintCellText(page, { x: 170, y: 418, width: 255, height: 32 }, details.director.toUpperCase(), {
+      fill: CREAM, color: TEXT_GREEN, font: times, size: 15, minSize: 7, align: "center",
+    })
+  }
+  if (hasValue(details, "preparationStaff")) {
+    paintCellText(page, { x: 83, y: 624, width: 130, height: 31 }, details.preparationStaff.toUpperCase(), {
+      fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
+    })
+  }
+  if (hasValue(details, "storageStaff")) {
+    paintCellText(page, { x: 365, y: 624, width: 130, height: 31 }, details.storageStaff.toUpperCase(), {
+      fill: CREAM, color: TEXT_GREEN, font: times, size: 14, minSize: 7, align: "center",
     })
   }
 }
@@ -248,13 +285,15 @@ function paintHaccpPages(pages: PDFPage[], details: FoodSafetyBookDetails, helv:
       paintCellText(page, { x: 570, y: compact ? 98 : 117, width: 105, height: 18 }, details.approvedBy, {
         fill: WHITE, color: BLACK, font: helv, size: 7.7, minSize: 5,
       })
-      paintText(page, { x: 98, y: footerY, width: 92, height: 17 }, details.approvedBy, {
+      // Footer label ends at about x=100 on the approved landscape pages.
+      paintText(page, { x: 103, y: footerY, width: 104, height: 17 }, details.approvedBy, {
         fill: CREAM, color: BLACK, font: helv, size: 6.8, minSize: 4.5,
       })
     }
     if (hasValue(details, "telephone")) {
-      paintText(page, { x: 247, y: footerY, width: 82, height: 17 }, details.telephone, {
-        fill: CREAM, color: BLACK, font: helv, size: 6.8, minSize: 4.5, align: "center",
+      // Keep the number between the printed Telephone label and the Freephone separator.
+      paintText(page, { x: 259, y: footerY, width: 52, height: 17 }, details.telephone, {
+        fill: CREAM, color: BLACK, font: bold, size: 6.5, minSize: 4.2, align: "center",
       })
     }
     if (hasValue(details, "assessmentDate")) {
@@ -314,7 +353,8 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
     const { width } = page.getSize()
     paintMultiline(
       page,
-      { x: Math.max(555, width - 250), y: 36, width: 190, height: 32 },
+      // Page 13 only: shift the address slightly left so it sits comfortably inside the cream header area.
+      { x: Math.max(530, width - 275), y: 36, width: 190, height: 32 },
       [details.addressLine1, details.addressLine2],
       { fill: CREAM, color: TEXT_GREEN, font: bold, size: 7.2, minSize: 4.8, padding: 2, align: "right", inset: 1.5 },
     )
@@ -347,7 +387,8 @@ function paintAllergenMatrix(page: PDFPage, details: FoodSafetyBookDetails, helv
 
 function paintProcessFlowPage(page: PDFPage, details: FoodSafetyBookDetails, helv: PDFFont, bold: PDFFont) {
   const { width } = page.getSize()
-  const rightX = Math.max(350, width - 245)
+  // Page 14 only: move the right-side identity block slightly left inside the yellow banner.
+  const rightX = Math.max(325, width - 270)
 
   if (hasValue(details, "businessName")) {
     paintText(page, { x: rightX, y: 56, width: 180, height: 18 }, details.businessName.toUpperCase(), {
@@ -472,7 +513,7 @@ export async function applyFoodSafetyBookDetails(master: Blob, details: FoodSafe
   const bold = await document.embedFont(StandardFonts.HelveticaBold)
   const times = await document.embedFont(StandardFonts.TimesRomanBold)
 
-  paintCover(pages[0], details, times)
+  paintCover(pages[0], details, times, helv, bold)
   paintTeamPage(pages[1], details, times)
   paintHaccpPages(pages, details, helv, bold)
   paintAllergenMatrix(pages[12], details, helv, bold)
