@@ -9,6 +9,7 @@ import {
   upsertFiles,
 } from "@/lib/786-admin/projects"
 import { builderPlanUsage } from "@/lib/786-chat/billing"
+import { isAdminUser } from "@/lib/admin-config"
 import { getSession } from "@/lib/auth"
 
 const MAX_BATCH_FILES = 60
@@ -55,13 +56,15 @@ export async function POST(request: Request) {
     const title = String(body.title || "").trim().slice(0, 160)
     if (!title) return NextResponse.json({ error: "Project title is required." }, { status: 400 })
 
-    const allowance = await builderPlanUsage({ userId: session.id, ownerEmail: session.email })
-    if (allowance.usage.projects >= allowance.subscription.planConfig.projects) {
-      return NextResponse.json({
-        error: `${allowance.subscription.planConfig.name} supports ${allowance.subscription.planConfig.projects} projects. Upgrade or remove an old project.`,
-        code: "PROJECT_LIMIT_REACHED",
-        plan: allowance.subscription.plan,
-      }, { status: 402 })
+    if (!isAdminUser(session.email)) {
+      const allowance = await builderPlanUsage({ userId: session.id, ownerEmail: session.email })
+      if (allowance.usage.projects >= allowance.subscription.planConfig.projects) {
+        return NextResponse.json({
+          error: `${allowance.subscription.planConfig.name} supports ${allowance.subscription.planConfig.projects} projects. Upgrade or remove an old project.`,
+          code: "PROJECT_LIMIT_REACHED",
+          plan: allowance.subscription.plan,
+        }, { status: 402 })
+      }
     }
 
     const sourceName = String(body.sourceName || "uploaded project").slice(0, 240)
