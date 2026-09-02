@@ -89,11 +89,17 @@ function readU32(view: DataView, offset: number) {
   return view.getUint32(offset, true)
 }
 
+function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer
+}
+
 async function inflateRaw(bytes: Uint8Array) {
   if (typeof DecompressionStream === "undefined") {
     throw new Error("This browser cannot unpack ZIP files. Please use a current Chrome, Edge or Firefox browser.")
   }
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw" as never))
+  const stream = new Blob([copyArrayBuffer(bytes)]).stream().pipeThrough(new DecompressionStream("deflate-raw" as never))
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
@@ -170,7 +176,7 @@ async function api(body: Record<string, unknown>) {
 
 async function uploadAsset(path: string, bytes: Uint8Array) {
   const type = ASSET_TYPES[extension(path)] || "application/octet-stream"
-  const file = new File([bytes], basename(path), { type })
+  const file = new File([copyArrayBuffer(bytes)], basename(path), { type })
   const formData = new FormData()
   formData.append("file", file)
   const response = await fetch("/api/upload", { method: "POST", body: formData })
