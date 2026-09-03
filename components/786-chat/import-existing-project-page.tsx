@@ -39,10 +39,12 @@ export function ImportExistingProjectPage() {
       localStorage.setItem(ACTIVE_PROJECT_KEY, result.project.id)
       setProgress({
         stage: "done",
-        detail: `Imported ${result.sourceFileCount} source files and ${result.assetCount} assets. Opening the new project…`,
+        detail: result.buildQueued
+          ? `Imported ${result.sourceFileCount} source files and ${result.assetCount} assets. Preview build queued — opening the project…`
+          : `Imported ${result.sourceFileCount} source files and ${result.assetCount} assets. Opening the project so the preview issue can be repaired: ${result.buildError || "build was not queued"}`,
       })
       setDone(true)
-      window.setTimeout(() => window.location.assign("/786.chat"), 900)
+      window.setTimeout(() => window.location.assign("/786.chat"), 1200)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Project import failed.")
     } finally {
@@ -61,7 +63,7 @@ export function ImportExistingProjectPage() {
             <p className="text-sm font-bold uppercase tracking-[.18em] text-violet-300">786.Chat migration</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-white">Import an existing project</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              Creates a brand-new project. Existing Raja Catering and other saved projects are not changed.
+              Creates a new separate 786.Chat project. Your existing saved projects are not changed.
             </p>
           </div>
         </div>
@@ -92,8 +94,8 @@ export function ImportExistingProjectPage() {
           </label>
 
           <div className="rounded-2xl border border-amber-300/15 bg-amber-300/[.04] p-4 text-sm leading-6 text-slate-300">
-            <div className="flex items-center gap-2 font-bold text-amber-100"><ShieldCheck className="h-4 w-4" /> Safe migration rules</div>
-            <p className="mt-1">The original Replit project is not deleted or modified. Binary web assets are copied to managed storage. Deployment is not started automatically; compatibility and security review happen first.</p>
+            <div className="flex items-center gap-2 font-bold text-amber-100"><ShieldCheck className="h-4 w-4" /> Import and preview</div>
+            <p className="mt-1">Supported source files are added to the 786.Chat code workspace, web assets are copied to managed storage, and a verified preview build is queued automatically. Required secrets are never copied from the ZIP.</p>
           </div>
 
           {(progress || busy || done) && (
