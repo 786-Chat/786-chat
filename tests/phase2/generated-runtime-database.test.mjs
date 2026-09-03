@@ -52,3 +52,9 @@ test("first failed generated deployment may reset only its exact isolated databa
   assert.match(deployer, /DROP DATABASE IF EXISTS/)
   assert.match(deployer, /WITH \(FORCE\)/)
 })
+
+test("partial generated database recovery includes duplicate Postgres enum types", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+  assert.match(deployer, /column\|relation\|constraint\|index\|type/)
+  assert.match(deployer, /duplicate \(\?:column\|table\|object\|type\)/)
+})
