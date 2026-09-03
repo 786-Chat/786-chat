@@ -11,6 +11,7 @@
 
 import { randomUUID } from "node:crypto"
 import { sql, transaction } from "./db"
+import { expandImportedFileBundle, IMPORT_BUNDLE_PATH } from "./import-bundle"
 import type {
   AdminMessage,
   AdminMessageRole,
@@ -165,8 +166,22 @@ export async function getFiles(
     WHERE project_id = ${projectId}
     ORDER BY path ASC
   `) as unknown as { path: string; content: string }[]
+
   const map: AdminProjectFileMap = {}
-  for (const row of rows) map[row.path] = row.content
+
+  // Large imported projects can be persisted as one gzip+base64 JSON file map.
+  // Expand the bundle first, then apply normal rows so later edits override the
+  // original imported content without rewriting the whole archive.
+  for (const row of rows) {
+    if (row.path !== IMPORT_BUNDLE_PATH) continue
+    Object.assign(map, expandImportedFileBundle(row.content))
+  }
+
+  for (const row of rows) {
+    if (row.path === IMPORT_BUNDLE_PATH) continue
+    map[row.path] = row.content
+  }
+
   return map
 }
 
