@@ -17,3 +17,15 @@ test("generated runtime normalizes Drizzle statement breakpoints before Neon mig
   assert.match(helper, /statement-breakpoint/)
   assert.match(helper, /source\.replace\(/)
 })
+
+test("imported Express runtime exposes a Vercel-recognized root entrypoint without rewriting saved source", () => {
+  const helper = readFileSync("lib/786-admin/runtime-deployment-files.ts", "utf8")
+
+  assert.match(helper, /prepareImportedExpressRuntime/)
+  assert.match(helper, /server\/index\.ts/)
+  assert.match(helper, /runtimeFiles\["index\.ts"\]/)
+  assert.match(helper, /import express from "express"/)
+  assert.match(helper, /import \{ app \} from "\.\/server\/index"/)
+  assert.match(helper, /export default app/)
+  assert.match(helper, /export \$1 app = express\(\);/)
+})
