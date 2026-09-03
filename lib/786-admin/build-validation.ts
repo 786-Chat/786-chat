@@ -15,9 +15,17 @@ export type BuildValidationResult = {
   commands: string[]
 }
 
-const MAX_FILES = 500
-const MAX_FILE_BYTES = 500_000
-const MAX_TOTAL_BYTES = 8_000_000
+export type BuildValidationOptions = {
+  imported?: boolean
+  framework?: string
+}
+
+const DEFAULT_MAX_FILES = 500
+const DEFAULT_MAX_FILE_BYTES = 500_000
+const DEFAULT_MAX_TOTAL_BYTES = 8_000_000
+const IMPORT_MAX_FILES = 900
+const IMPORT_MAX_FILE_BYTES = 1_500_000
+const IMPORT_MAX_TOTAL_BYTES = 24_000_000
 const FORBIDDEN_PATH_PARTS = ["node_modules", ".git", ".next", ".vercel"]
 const SECRET_FILE_NAMES = new Set([
   ".env",
@@ -32,6 +40,7 @@ const PROHIBITED_PROVIDER_PACKAGES = [
   "openai",
   "@ai-sdk/openai",
 ]
+const IMPORT_SECURITY_BLOCKERS = /(?:SECRET|PRIVATE_KEY|DATABASE_CREDENTIAL|PROVIDER_API_KEY|DEPENDENCY_LIFECYCLE_SCRIPT|UNTRUSTED_DEPENDENCY_SOURCE|INVALID_DEPENDENCY_NAME|UNPINNED_DEPENDENCY)/
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "")
@@ -79,20 +88,38 @@ function recordOfStrings(value: unknown): Record<string, string> {
   )
 }
 
+function importedFramework(
+  requested: string | undefined,
+  allDependencies: Record<string, string>,
+) {
+  const explicit = String(requested || "").trim().toLowerCase()
+  if (explicit && explicit !== "unknown") return explicit
+  if (allDependencies.next) return "nextjs"
+  if (allDependencies.vite && allDependencies.express) return "vite-express"
+  if (allDependencies.vite) return "vite"
+  if (allDependencies.express) return "express"
+  return "node"
+}
+
 export function validateGeneratedProject(
   files: Record<string, string>,
+  options: BuildValidationOptions = {},
 ): BuildValidationResult {
   const errors: BuildValidationIssue[] = []
   const warnings: BuildValidationIssue[] = []
   const entries = Object.entries(files)
+  const imported = options.imported === true
+  const maxFiles = imported ? IMPORT_MAX_FILES : DEFAULT_MAX_FILES
+  const maxFileBytes = imported ? IMPORT_MAX_FILE_BYTES : DEFAULT_MAX_FILE_BYTES
+  const maxTotalBytes = imported ? IMPORT_MAX_TOTAL_BYTES : DEFAULT_MAX_TOTAL_BYTES
 
   if (entries.length === 0) {
     errors.push({ code: "NO_FILES", message: "The project has no files." })
   }
-  if (entries.length > MAX_FILES) {
+  if (entries.length > maxFiles) {
     errors.push({
       code: "TOO_MANY_FILES",
-      message: `The project contains ${entries.length} files; the limit is ${MAX_FILES}.`,
+      message: `The project contains ${entries.length} files; the limit is ${maxFiles}.`,
     })
   }
 
@@ -112,35 +139,19 @@ export function validateGeneratedProject(
         message: "Environment and credential files cannot be published unless they contain placeholders only.",
       })
     }
-    if (bytes > MAX_FILE_BYTES) {
+    if (bytes > maxFileBytes) {
       errors.push({
         code: "FILE_TOO_LARGE",
         path,
-        message: `File exceeds the ${MAX_FILE_BYTES.toLocaleString()} byte limit.`,
+        message: `File exceeds the ${maxFileBytes.toLocaleString()} byte limit.`,
       })
     }
   }
 
-  if (totalBytes > MAX_TOTAL_BYTES) {
+  if (totalBytes > maxTotalBytes) {
     errors.push({
       code: "PROJECT_TOO_LARGE",
-      message: `Project source exceeds the ${MAX_TOTAL_BYTES.toLocaleString()} byte limit.`,
-    })
-  }
-
-  const homePage = entries.find(([path]) => /^(src\/)?app\/page\.(tsx?|jsx?)$/.test(normalizePath(path)))
-  if (!homePage) {
-    errors.push({
-      code: "MISSING_HOME_PAGE",
-      message: "A Next.js App Router entry file (app/page.tsx or src/app/page.tsx) is required.",
-    })
-  }
-
-  if (files["next.config.ts"]) {
-    errors.push({
-      code: "UNSUPPORTED_NEXT_CONFIG_TS",
-      path: "next.config.ts",
-      message: "Use next.config.mjs or next.config.js; next.config.ts is not portable across allowed Next.js versions.",
+      message: `Project source exceeds the ${maxTotalBytes.toLocaleString()} byte limit.`,
     })
   }
 
@@ -156,12 +167,61 @@ export function validateGeneratedProject(
   const devDependencies = recordOfStrings(packageJson?.devDependencies)
   const allDependencies = { ...dependencies, ...devDependencies }
   const scripts = recordOfStrings(packageJson?.scripts)
+  const framework = importedFramework(options.framework, allDependencies)
+
+  if (imported) {
+    if (!allDependencies.react || !allDependencies["react-dom"]) {
+      errors.push({ code: "MISSING_REACT", path: "package.json", message: "Imported web projects must include React and React DOM." })
+    }
+    if (framework === "nextjs") {
+      const homePage = entries.find(([path]) => /^(src\/)?app\/page\.(tsx?|jsx?)$/.test(normalizePath(path)))
+      if (!homePage) {
+        errors.push({ code: "MISSING_HOME_PAGE", message: "The imported Next.js project is missing its App Router home page." })
+      }
+      if (!allDependencies.next) {
+        errors.push({ code: "MISSING_NEXT", path: "package.json", message: "The imported Next.js project is missing the Next.js dependency." })
+      }
+    } else if (framework === "vite-express") {
+      if (!allDependencies.vite) {
+        errors.push({ code: "MISSING_VITE", path: "package.json", message: "The imported Vite project is missing Vite." })
+      }
+      if (!allDependencies.express) {
+        errors.push({ code: "MISSING_EXPRESS", path: "package.json", message: "The imported Express project is missing Express." })
+      }
+      if (!files["client/index.html"] && !files["index.html"]) {
+        errors.push({ code: "MISSING_VITE_ENTRY", message: "The imported Vite project is missing client/index.html or index.html." })
+      }
+      if (!files["server/index.ts"] && !files["server/index.js"] && !files["index.ts"] && !files["index.js"]) {
+        errors.push({ code: "MISSING_SERVER_ENTRY", message: "The imported Express project is missing its server entrypoint." })
+      }
+    } else if (framework === "vite" && !allDependencies.vite) {
+      errors.push({ code: "MISSING_VITE", path: "package.json", message: "The imported Vite project is missing Vite." })
+    } else if (framework === "express" && !allDependencies.express) {
+      errors.push({ code: "MISSING_EXPRESS", path: "package.json", message: "The imported Express project is missing Express." })
+    }
+  } else {
+    const homePage = entries.find(([path]) => /^(src\/)?app\/page\.(tsx?|jsx?)$/.test(normalizePath(path)))
+    if (!homePage) {
+      errors.push({
+        code: "MISSING_HOME_PAGE",
+        message: "A Next.js App Router entry file (app/page.tsx or src/app/page.tsx) is required.",
+      })
+    }
+
+    if (files["next.config.ts"]) {
+      errors.push({
+        code: "UNSUPPORTED_NEXT_CONFIG_TS",
+        path: "next.config.ts",
+        message: "Use next.config.mjs or next.config.js; next.config.ts is not portable across allowed Next.js versions.",
+      })
+    }
+  }
 
   if (packageJson) {
-    if (!allDependencies.next) {
+    if (!imported && !allDependencies.next) {
       errors.push({ code: "MISSING_NEXT", path: "package.json", message: "The Next.js dependency is required." })
     }
-    if (!allDependencies.react || !allDependencies["react-dom"]) {
+    if (!imported && (!allDependencies.react || !allDependencies["react-dom"])) {
       errors.push({ code: "MISSING_REACT", path: "package.json", message: "React and React DOM are required." })
     }
     if (!scripts.build) {
@@ -172,19 +232,28 @@ export function validateGeneratedProject(
     }
 
     for (const packageName of PROHIBITED_PROVIDER_PACKAGES) {
-      if (allDependencies[packageName]) {
-        errors.push({
-          code: "PROHIBITED_AI_PROVIDER",
-          path: "package.json",
-          message: `${packageName} is not allowed. Use DeepSeek or Gemini only.`,
-        })
+      if (!allDependencies[packageName]) continue
+      const issue = {
+        code: "PROHIBITED_AI_PROVIDER",
+        path: "package.json",
+        message: `${packageName} is not allowed for newly generated applications. Imported legacy source may keep it temporarily, but no provider secret is imported automatically.`,
       }
+      if (imported) warnings.push(issue)
+      else errors.push(issue)
     }
   }
 
   const security = validateGeneratedSecurity(files)
-  errors.push(...security.errors)
-  warnings.push(...security.warnings)
+  if (imported) {
+    for (const issue of security.errors) {
+      if (IMPORT_SECURITY_BLOCKERS.test(issue.code)) errors.push(issue)
+      else warnings.push({ ...issue, message: `Imported source warning: ${issue.message}` })
+    }
+    warnings.push(...security.warnings)
+  } else {
+    errors.push(...security.errors)
+    warnings.push(...security.warnings)
+  }
 
   const packageManager: BuildValidationResult["packageManager"] = files["pnpm-lock.yaml"]
     ? "pnpm"
@@ -205,7 +274,9 @@ export function validateGeneratedProject(
         : "yarn install --ignore-scripts"
   const commands = [install]
   if (scripts.lint) commands.push(`${runner} lint`)
-  commands.push("npx tsc --noEmit", `${runner} build`)
+  if (imported && scripts.check) commands.push(`${runner} check`)
+  else commands.push("npx tsc --noEmit")
+  commands.push(`${runner} build`)
 
   return {
     valid: errors.length === 0,
