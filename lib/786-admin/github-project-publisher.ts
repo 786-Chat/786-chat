@@ -1,5 +1,8 @@
 const DEFAULT_REPOSITORY = "786-Chat/786-chat"
 const DEFAULT_BASE_BRANCH = "main"
+const GITHUB_REQUEST_ATTEMPTS = 4
+const GITHUB_RETRY_BASE_MS = 2_000
+const GITHUB_RETRY_MAX_MS = 30_000
 
 type GitHubRef = { object: { sha: string } }
 type GitHubCommit = { tree: { sha: string } }
@@ -30,32 +33,69 @@ function cleanSegment(value: string): string {
     .slice(0, 80)
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function isRetryableGitHubLimit(status: number, detail: string): boolean {
+  return status === 429 || (
+    status === 403 && /secondary rate limit|rate limit|abuse detection/i.test(detail)
+  )
+}
+
+function githubRetryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = Number(response.headers.get("retry-after"))
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1_000, 60_000)
+  }
+
+  const resetSeconds = Number(response.headers.get("x-ratelimit-reset"))
+  if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+    const untilReset = Math.max(0, resetSeconds * 1_000 - Date.now())
+    if (untilReset > 0) return Math.min(untilReset, 60_000)
+  }
+
+  return Math.min(GITHUB_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1), GITHUB_RETRY_MAX_MS)
+}
+
 async function githubRequest<T>(
   repository: string,
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${requiredToken()}`,
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(init.headers || {}),
-    },
-    cache: "no-store",
-  })
+  for (let attempt = 1; attempt <= GITHUB_REQUEST_ATTEMPTS; attempt += 1) {
+    const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
+      ...init,
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${requiredToken()}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(init.headers || {}),
+      },
+      cache: "no-store",
+    })
 
-  if (!response.ok) {
+    if (response.ok) {
+      if (response.status === 204) return undefined as T
+      return (await response.json()) as T
+    }
+
     const detail = await response.text().catch(() => "")
+    if (
+      attempt < GITHUB_REQUEST_ATTEMPTS &&
+      isRetryableGitHubLimit(response.status, detail)
+    ) {
+      await wait(githubRetryDelayMs(response, attempt))
+      continue
+    }
+
     throw new Error(
       `GitHub publishing failed (${response.status})${detail ? `: ${detail.slice(0, 500)}` : ""}`,
     )
   }
 
-  if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  throw new Error("GitHub publishing failed after retry attempts")
 }
 
 export async function publishGeneratedProjectToGitHub(input: {
