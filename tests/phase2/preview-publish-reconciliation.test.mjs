@@ -5,6 +5,7 @@ import test from "node:test"
 const callback = readFileSync("app/api/786-admin/build-runner/callback/route.ts", "utf8")
 const buildRoute = readFileSync("app/api/786-admin/projects/[id]/build/route.ts", "utf8")
 const store = readFileSync("lib/786-admin/build-runner-store.ts", "utf8")
+const publisher = readFileSync("lib/786-admin/github-project-publisher.ts", "utf8")
 const reconciliation = readFileSync("lib/786-admin/preview-reconciliation.ts", "utf8")
 
 test("publisher checkpoints commit metadata before waiting for Vercel", () => {
@@ -13,6 +14,23 @@ test("publisher checkpoints commit metadata before waiting for Vercel", () => {
   const checkpointIndex = callback.indexOf("recordRunnerPublishProgress")
   const deployIndex = callback.indexOf("deployGeneratedProjectToVercel")
   assert.ok(checkpointIndex >= 0 && deployIndex >= 0 && checkpointIndex < deployIndex)
+})
+
+test("identical source retries reuse prior GitHub publish metadata", () => {
+  assert.match(store, /getReusableRunnerPublish/)
+  assert.match(store, /source_version = \$\{input\.sourceVersion\}/)
+  assert.match(store, /id <> \$\{input\.excludeBuildId\}/)
+  assert.match(callback, /getReusableRunnerPublish/)
+  assert.match(callback, /reusablePublish \?\? await publishGeneratedProjectToGitHub/)
+  assert.match(callback, /skipped duplicate GitHub upload/)
+})
+
+test("GitHub publisher backs off on secondary rate limits", () => {
+  assert.match(publisher, /GITHUB_REQUEST_ATTEMPTS = 4/)
+  assert.match(publisher, /isRetryableGitHubLimit/)
+  assert.match(publisher, /secondary rate limit/)
+  assert.match(publisher, /retry-after/)
+  assert.match(publisher, /x-ratelimit-reset/)
 })
 
 test("build polling reconciles a READY Vercel preview", () => {

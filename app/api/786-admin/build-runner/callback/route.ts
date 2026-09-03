@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { completeRunnerBuild, getRunnerBuildBundle, recordRunnerPublishProgress } from "@/lib/786-admin/build-runner-store"
+import {
+  completeRunnerBuild,
+  getReusableRunnerPublish,
+  getRunnerBuildBundle,
+  recordRunnerPublishProgress,
+} from "@/lib/786-admin/build-runner-store"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { runtimeDeploymentFiles } from "@/lib/786-admin/runtime-deployment-files"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
@@ -53,7 +58,12 @@ export async function POST(request: Request) {
       const bundle = await getRunnerBuildBundle(body.buildId)
       if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
-      const published = await publishGeneratedProjectToGitHub({
+      const reusablePublish = await getReusableRunnerPublish({
+        projectId: bundle.projectId,
+        sourceVersion: bundle.sourceVersion,
+        excludeBuildId: bundle.buildId,
+      })
+      const published = reusablePublish ?? await publishGeneratedProjectToGitHub({
         buildId: bundle.buildId,
         projectId: bundle.projectId,
         title: bundle.title,
@@ -70,8 +80,15 @@ export async function POST(request: Request) {
         githubBranch: published.branch,
         githubCommitSha: published.commitSha,
         githubPrUrl: published.pullRequestUrl,
+        reused: Boolean(reusablePublish),
       })
       if (!checkpointed) throw new Error("Build publish metadata could not be checkpointed")
+
+      if (reusablePublish) {
+        lifecycleLogs.push(
+          `[publisher] Reused previously published source ${published.pullRequestUrl}; skipped duplicate GitHub upload.`,
+        )
+      }
 
       const deployment = await deployGeneratedProjectToVercel({
         projectId: bundle.projectId,
