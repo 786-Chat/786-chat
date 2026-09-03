@@ -117,7 +117,7 @@ jobs:
           node <<'NODE' > "$RUNNER_TEMP/run-commands.sh"
           const fs = require('fs')
           const commands = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/commands.json', 'utf8'))
-          const allowed = /^(npm ci --ignore-scripts|npm install --ignore-scripts|npm run (lint|build)|npx tsc --noEmit|pnpm install --frozen-lockfile --ignore-scripts|pnpm install --ignore-scripts|pnpm (lint|build)|yarn install --frozen-lockfile --ignore-scripts|yarn install --ignore-scripts|yarn (lint|build))$/
+          const allowed = /^(npm ci --ignore-scripts|npm install --ignore-scripts|npm run (lint|check|build)|npx tsc --noEmit|pnpm install --frozen-lockfile --ignore-scripts|pnpm install --ignore-scripts|pnpm (lint|check|build)|yarn install --frozen-lockfile --ignore-scripts|yarn install --ignore-scripts|yarn (lint|check|build))$/
           process.stdout.write('set -euo pipefail\n')
           for (const command of commands) {
             if (typeof command !== 'string' || !allowed.test(command)) throw new Error(`Rejected command: ${command}`)
