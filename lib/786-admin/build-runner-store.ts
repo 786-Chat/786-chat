@@ -11,6 +11,12 @@ export type RunnerBuildBundle = {
   sourceVersion: string
 }
 
+export type ReusableRunnerPublish = {
+  branch: string
+  commitSha: string
+  pullRequestUrl: string
+}
+
 function sanitizePostgresText(value: string | null | undefined): string | null {
   if (value == null) return null
   return value.replace(/\u0000/g, "")
@@ -71,18 +77,57 @@ export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuild
   }
 }
 
+export async function getReusableRunnerPublish(input: {
+  projectId: string
+  sourceVersion: string
+  excludeBuildId: string
+}): Promise<ReusableRunnerPublish | null> {
+  const rows = (await sql`
+    SELECT github_branch, github_commit_sha, github_pr_url
+    FROM admin_project_builds
+    WHERE project_id = ${input.projectId}
+      AND source_version = ${input.sourceVersion}
+      AND id <> ${input.excludeBuildId}
+      AND github_branch IS NOT NULL
+      AND github_branch <> ''
+      AND github_commit_sha IS NOT NULL
+      AND github_commit_sha <> ''
+      AND github_pr_url IS NOT NULL
+      AND github_pr_url <> ''
+    ORDER BY updated_at DESC
+    LIMIT 1
+  `) as unknown as Array<{
+    github_branch: string
+    github_commit_sha: string
+    github_pr_url: string
+  }>
+
+  const row = rows[0]
+  if (!row) return null
+  return {
+    branch: row.github_branch,
+    commitSha: row.github_commit_sha,
+    pullRequestUrl: row.github_pr_url,
+  }
+}
+
 export async function recordRunnerPublishProgress(input: {
   buildId: string
   githubBranch: string
   githubCommitSha: string
   githubPrUrl: string
+  reused?: boolean
 }): Promise<boolean> {
+  const publishLog = input.reused
+    ? `[publisher] Reused existing branch ${input.githubBranch}.\n[publisher] Commit ${input.githubCommitSha}.\n[publisher] Existing PR ${input.githubPrUrl}.\n`
+    : `[publisher] Created branch ${input.githubBranch}.\n[publisher] Commit ${input.githubCommitSha}.\n[publisher] Draft PR ${input.githubPrUrl}.\n`
+
   const rows = (await sql`
     UPDATE admin_project_builds
     SET github_branch = ${input.githubBranch},
         github_commit_sha = ${input.githubCommitSha},
         github_pr_url = ${input.githubPrUrl},
-        logs = logs || ${`[publisher] Created branch ${input.githubBranch}.\n[publisher] Commit ${input.githubCommitSha}.\n[publisher] Draft PR ${input.githubPrUrl}.\n`},
+        logs = logs || ${publishLog},
         updated_at = NOW()
     WHERE id = ${input.buildId}
       AND status IN ('queued','running')
