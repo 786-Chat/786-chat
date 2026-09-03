@@ -110,7 +110,7 @@ async function hasSuccessfulDeployment(projectId: string): Promise<boolean> {
 
 function isRecoverablePartialDatabaseError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || "")
-  return /(?:column|relation|constraint|index).*(?:does not exist|already exists)|duplicate (?:column|table|object)|undefined (?:column|table)/i.test(message)
+  return /(?:column|relation|constraint|index|type).*(?:does not exist|already exists)|duplicate (?:column|table|object|type)|undefined (?:column|table|type)/i.test(message)
 }
 
 function scopedDatabaseUrl(baseUrl: string, database: string): string {
