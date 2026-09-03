@@ -109,7 +109,7 @@ jobs:
           EMAIL_FROM: build@example.com
           APP_URL: https://example.com
           NEXT_PUBLIC_APP_URL: https://example.com
-          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_786_chat_isolated_build-placeholder
+          BLOB_READ_WRITE_TOKEN: vercel_blob_rw_786_chat_isolated_build_placeholder
         run: |
           set -o pipefail
           LOG_FILE="$RUNNER_TEMP/build.log"
