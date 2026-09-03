@@ -16,6 +16,8 @@ type ImportResult = {
   assetCount: number
   skippedSecretFiles: string[]
   skippedUnsupportedFiles: string[]
+  buildQueued: boolean
+  buildError?: string
 }
 
 type ZipEntry = {
@@ -32,14 +34,20 @@ const TEXT_EXTENSIONS = new Set([
 
 const ASSET_TYPES: Record<string, string> = {
   ".gif": "image/gif",
+  ".ico": "image/x-icon",
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
+  ".mp3": "audio/mpeg",
   ".mp4": "video/mp4",
   ".pdf": "application/pdf",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".ttf": "font/ttf",
+  ".wav": "audio/wav",
   ".webm": "video/webm",
   ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
 }
 
 function extension(path: string) {
@@ -206,6 +214,28 @@ function rewriteAssetReferences(content: string, assetMap: Record<string, string
   return next
 }
 
+function repairMissingReplitAssetImports(
+  content: string,
+  sourcePaths: Set<string>,
+  assetMap: Record<string, string>,
+) {
+  const managedImages = Object.entries(assetMap)
+    .filter(([path]) => /\.(?:gif|jpe?g|png|svg|webp)$/i.test(path))
+    .map(([, url]) => url)
+  if (!managedImages.length) return content
+  let fallbackIndex = 0
+  return content.replace(
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s+["']@assets\/([^"']+)["'];?/g,
+    (statement, variable: string, relative: string) => {
+      const expected = normalizePath(`attached_assets/${relative}`)
+      if (sourcePaths.has(expected)) return statement
+      const url = managedImages[fallbackIndex % managedImages.length]
+      fallbackIndex += 1
+      return `const ${variable} = ${JSON.stringify(url)} // 786.Chat: Replit export omitted ${expected}`
+    },
+  )
+}
+
 function detectFramework(files: Record<string, string>) {
   const pkg = files["package.json"]
   if (!pkg) return "unknown"
@@ -220,6 +250,47 @@ function detectFramework(files: Record<string, string>) {
     return "unknown"
   }
   return "node"
+}
+
+function addRuntimeCompatibilityFiles(files: Record<string, string>, framework: string) {
+  if (framework !== "vite-express" && framework !== "express" && framework !== "vite") return
+
+  if (!files["vercel.ts"]) {
+    files["vercel.ts"] = [
+      "// Added by 786.Chat during import. The original application source is otherwise preserved.",
+      "export const config = {",
+      '  framework: "other",',
+      '  buildCommand: "npm run build",',
+      "}",
+      "",
+    ].join("\n")
+  }
+
+  if ((framework === "vite-express" || framework === "express") && files["server/index.ts"] && !files["index.ts"]) {
+    files["index.ts"] = [
+      "// 786.Chat/Vercel Node entrypoint for the imported Express application.",
+      'import "./server/index"',
+      "",
+    ].join("\n")
+  }
+
+  const migrationEntries = Object.entries(files)
+    .filter(([path]) => /^migrations\/(?!meta\/).+\.sql$/i.test(path))
+    .sort(([left], [right]) => left.localeCompare(right))
+  if (files["server/db.ts"]?.trim() && migrationEntries.length) {
+    if (!files["lib/server/db.ts"]) {
+      files["lib/server/db.ts"] = [
+        "// 786.Chat runtime database marker for an imported application.",
+        "// The application continues to use server/db.ts; this marker enables isolated Neon provisioning.",
+        "",
+      ].join("\n")
+    }
+    if (!files["sql/migrations/001_initial.sql"] && !files["sql/schema.sql"]) {
+      files["sql/migrations/001_initial.sql"] = migrationEntries
+        .map(([path, source]) => `-- Imported from ${path}\n${source.trim()}\n`)
+        .join("\n")
+    }
+  }
 }
 
 function chooseActiveFile(files: Record<string, string>) {
@@ -247,6 +318,27 @@ function batchFiles(files: Record<string, string>) {
   return batches
 }
 
+async function queueImportedBuild(projectId: string) {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/build`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true }),
+  })
+  const payload = (await response.json().catch(() => ({}))) as {
+    build?: unknown
+    error?: string
+    validation?: { errors?: Array<{ path?: string; message?: string }> }
+  }
+  if (response.ok && payload.build) return { queued: true as const }
+  const detail = payload.validation?.errors?.slice(0, 3).map((issue) =>
+    `${issue.path ? `${issue.path}: ` : ""}${issue.message || "invalid source"}`,
+  ).join("; ")
+  return {
+    queued: false as const,
+    error: [payload.error || "Preview build could not be queued.", detail].filter(Boolean).join(" "),
+  }
+}
+
 export async function importExistingProjectZip(
   file: File,
   title: string,
@@ -254,6 +346,7 @@ export async function importExistingProjectZip(
 ): Promise<ImportResult> {
   onProgress?.({ stage: "read", detail: "Reading ZIP source…" })
   const entries = await readZip(file)
+  const sourcePaths = new Set(entries.map((entry) => entry.path))
   const skippedSecretFiles: string[] = []
   const skippedUnsupportedFiles: string[] = []
   const textFiles: Record<string, string> = {}
@@ -296,19 +389,27 @@ export async function importExistingProjectZip(
   }
 
   const rewrittenFiles = Object.fromEntries(
-    Object.entries(textFiles).map(([path, content]) => [path, rewriteAssetReferences(content, assetMap)]),
+    Object.entries(textFiles).map(([path, content]) => [
+      path,
+      repairMissingReplitAssetImports(rewriteAssetReferences(content, assetMap), sourcePaths, assetMap),
+    ]),
   )
+  const framework = detectFramework(rewrittenFiles)
+  addRuntimeCompatibilityFiles(rewrittenFiles, framework)
+
   rewrittenFiles["migration/asset-map.json"] = JSON.stringify(assetMap, null, 2)
   rewrittenFiles["migration/IMPORT_NOTES.md"] = [
     "# Existing Project Import",
     "",
     `Source archive: ${file.name}`,
     `Imported at: ${new Date().toISOString()}`,
-    `Detected framework: ${detectFramework(rewrittenFiles)}`,
+    `Detected framework: ${framework}`,
     "",
+    "All supported text/source files were preserved in the 786.Chat code workspace.",
     "Binary web assets were copied to managed storage and source references were updated to their managed URLs.",
-    "Secret files such as .env are intentionally not imported. Recreate required values in 786.Chat Secrets before deployment.",
-    "This imported project must pass compatibility and security review before deployment.",
+    "Secret files such as .env are intentionally not imported. Recreate required values in 786.Chat Secrets before production use.",
+    "For Vite/Express projects, 786.Chat may add small runtime bridge files for Vercel entrypoint and isolated Neon migration provisioning.",
+    "Missing Replit-only image assets are replaced only when the archive omitted the referenced file, using another image that was actually present in the imported archive.",
   ].join("\n")
 
   const batches = batchFiles(rewrittenFiles)
@@ -322,7 +423,6 @@ export async function importExistingProjectZip(
     await api({ action: "files", projectId: project.id, files: batches[index] })
   }
 
-  const framework = detectFramework(rewrittenFiles)
   const activeFile = chooseActiveFile(rewrittenFiles)
   onProgress?.({ stage: "finalize", detail: "Finalizing imported project…" })
   await api({
@@ -337,11 +437,16 @@ export async function importExistingProjectZip(
     activeFile,
   })
 
+  onProgress?.({ stage: "preview", detail: "Queueing compatibility check and live preview build…" })
+  const build = await queueImportedBuild(project.id)
+
   return {
     project,
     sourceFileCount: Object.keys(rewrittenFiles).length,
     assetCount: Object.keys(assetMap).length,
     skippedSecretFiles,
     skippedUnsupportedFiles,
+    buildQueued: build.queued,
+    buildError: build.queued ? undefined : build.error,
   }
 }
