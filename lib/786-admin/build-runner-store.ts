@@ -11,6 +11,11 @@ export type RunnerBuildBundle = {
   sourceVersion: string
 }
 
+function sanitizePostgresText(value: string | null | undefined): string | null {
+  if (value == null) return null
+  return value.replace(/\u0000/g, "")
+}
+
 export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuildBundle | null> {
   const builds = (await sql`
     SELECT b.id, b.project_id, b.commands, b.package_manager, b.source_version, p.title
@@ -98,11 +103,14 @@ export async function completeRunnerBuild(input: {
   deploymentUrl?: string | null
   repairStatus?: "not_needed" | "pending" | "running" | "repaired" | "exhausted" | null
 }): Promise<boolean> {
+  const safeLogs = sanitizePostgresText(input.logs) ?? ""
+  const safeErrorMessage = sanitizePostgresText(input.errorMessage)
+
   const rows = (await sql`
     UPDATE admin_project_builds
     SET status = ${input.status},
-        logs = logs || ${input.logs.slice(0, 1_000_000)},
-        error_message = ${input.errorMessage?.slice(0, 4000) ?? null},
+        logs = logs || ${safeLogs.slice(0, 1_000_000)},
+        error_message = ${safeErrorMessage?.slice(0, 4000) ?? null},
         github_branch = COALESCE(${input.githubBranch ?? null}, github_branch),
         github_commit_sha = COALESCE(${input.githubCommitSha ?? null}, github_commit_sha),
         github_pr_url = COALESCE(${input.githubPrUrl ?? null}, github_pr_url),
