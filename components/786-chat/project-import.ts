@@ -89,6 +89,14 @@ function isSecretPath(path: string) {
   )
 }
 
+function sanitizeEmbeddedCredentials(content: string) {
+  return content
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}\b/g, "REPLACE_WITH_VITE_GOOGLE_MAPS_API_KEY")
+    .replace(/\bsk-(?:live|proj)?-[A-Za-z0-9_-]{20,}\b/g, "REPLACE_WITH_PROVIDER_API_KEY")
+    .replace(/\bxox[baprs]-[0-9A-Za-z-]{20,}\b/g, "REPLACE_WITH_SLACK_TOKEN")
+    .replace(/\bpostgres(?:ql)?:\/\/[^\s:'"`]+:[^\s@'"`]+@[^\s'"`]+/gi, "DATABASE_URL_FROM_786_CHAT_SECRETS")
+}
+
 function readU16(view: DataView, offset: number) {
   return view.getUint16(offset, true)
 }
@@ -255,15 +263,12 @@ function detectFramework(files: Record<string, string>) {
 function addRuntimeCompatibilityFiles(files: Record<string, string>, framework: string) {
   if (framework !== "vite-express" && framework !== "express" && framework !== "vite") return
 
-  if (!files["vercel.ts"]) {
-    files["vercel.ts"] = [
-      "// Added by 786.Chat during import. The original application source is otherwise preserved.",
-      "export const config = {",
-      '  framework: "other",',
-      '  buildCommand: "npm run build",',
-      "}",
-      "",
-    ].join("\n")
+  if (!files["vercel.json"]) {
+    files["vercel.json"] = JSON.stringify({
+      $schema: "https://openapi.vercel.sh/vercel.json",
+      framework: framework === "vite" ? "vite" : "express",
+      buildCommand: "npm run build",
+    }, null, 2)
   }
 
   if ((framework === "vite-express" || framework === "express") && files["server/index.ts"] && !files["index.ts"]) {
@@ -360,7 +365,7 @@ export async function importExistingProjectZip(
       continue
     }
     const ext = extension(entry.path)
-    if (TEXT_EXTENSIONS.has(ext)) textFiles[entry.path] = decoder.decode(entry.bytes)
+    if (TEXT_EXTENSIONS.has(ext)) textFiles[entry.path] = sanitizeEmbeddedCredentials(decoder.decode(entry.bytes))
     else if (ASSET_TYPES[ext]) binaryEntries.push(entry)
     else skippedUnsupportedFiles.push(entry.path)
   }
@@ -408,6 +413,7 @@ export async function importExistingProjectZip(
     "All supported text/source files were preserved in the 786.Chat code workspace.",
     "Binary web assets were copied to managed storage and source references were updated to their managed URLs.",
     "Secret files such as .env are intentionally not imported. Recreate required values in 786.Chat Secrets before production use.",
+    "Embedded provider-style credential literals are replaced with non-secret placeholders during import.",
     "For Vite/Express projects, 786.Chat may add small runtime bridge files for Vercel entrypoint and isolated Neon migration provisioning.",
     "Missing Replit-only image assets are replaced only when the archive omitted the referenced file, using another image that was actually present in the imported archive.",
   ].join("\n")
