@@ -28,7 +28,7 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { registerDisplayMenuRoutes } from "./display-menu-routes";
 import { registerTvDisplayRoutes, ensureTvDisplayTable } from "./tv-display-routes";
 
-const app = express();
+export const app = express();
 const httpServer = createServer(app);
 
 declare module "http" {
