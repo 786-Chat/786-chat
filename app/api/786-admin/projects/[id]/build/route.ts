@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth"
 import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
 import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
-import { validateGeneratedProject } from "@/lib/786-admin/build-validation"
+import { validateGeneratedProject, type BuildValidationOptions } from "@/lib/786-admin/build-validation"
 import { deleteFile, getProjectWithData, upsertFiles } from "@/lib/786-admin/projects"
 import { findGeneratedPreviewState } from "@/lib/786-admin/preview-reconciliation"
 import { mergedGeneratedRepairDelta } from "@/lib/786-admin/generated-main-repair-sync"
@@ -32,6 +32,17 @@ function sourceVersion(files: Record<string, string>): string {
     .join("\0")
 
   return createHash("sha256").update(canonical).digest("hex")
+}
+
+function importedBuildOptions(metadata: Record<string, unknown> | undefined): BuildValidationOptions {
+  const rawImport = metadata?.import
+  if (!rawImport || typeof rawImport !== "object" || Array.isArray(rawImport)) return {}
+  const info = rawImport as Record<string, unknown>
+  if (info.status !== "complete") return {}
+  return {
+    imported: true,
+    framework: typeof info.framework === "string" ? info.framework : undefined,
+  }
 }
 
 function repairIsActive(build: Awaited<ReturnType<typeof getLatestBuildJob>>): boolean {
@@ -84,7 +95,10 @@ export async function GET(_request: Request, { params }: Ctx) {
     return NextResponse.json({ success: false, error: "Project not found" }, { status: 404 })
   }
 
-  const repaired = await repairMissingScaffold(id, project.files || {})
+  const buildOptions = importedBuildOptions(project.metadata)
+  const repaired = buildOptions.imported
+    ? false
+    : await repairMissingScaffold(id, project.files || {})
   if (repaired) {
     project = await getProjectWithData(id, email)
     if (!project) {
@@ -92,7 +106,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     }
   }
 
-  const validation = validateGeneratedProject(project.files || {})
+  const validation = validateGeneratedProject(project.files || {}, buildOptions)
   let build = await getLatestBuildJob(id, email)
   if (
     build?.status === "running" &&
@@ -159,15 +173,18 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   const body = (await request.json().catch(() => ({}))) as { confirm?: unknown }
+  let buildOptions = importedBuildOptions(project.metadata)
   let mergedRepairSync = {
     checked: false,
     applied: false,
     updatedPaths: [] as string[],
     deletedPaths: [] as string[],
-    reason: "Merged repair sync was not requested.",
+    reason: buildOptions.imported
+      ? "Generated-project repair sync is not applied to imported source."
+      : "Merged repair sync was not requested.",
   }
 
-  if (body.confirm === true) {
+  if (body.confirm === true && !buildOptions.imported) {
     const latestBeforeSync = await getLatestBuildJob(id, email)
     const delta = await mergedGeneratedRepairDelta({
       projectId: id,
@@ -195,7 +212,9 @@ export async function POST(request: Request, { params }: Ctx) {
     }
   }
 
-  const scaffoldRepaired = await repairMissingScaffold(id, project.files || {})
+  const scaffoldRepaired = buildOptions.imported
+    ? false
+    : await repairMissingScaffold(id, project.files || {})
   if (scaffoldRepaired) {
     project = await getProjectWithData(id, email)
     if (!project) {
@@ -204,7 +223,7 @@ export async function POST(request: Request, { params }: Ctx) {
   }
 
   let compatibilityRepaired = false
-  if (body.confirm === true) {
+  if (body.confirm === true && !buildOptions.imported) {
     compatibilityRepaired = await normalizeKnownGeneratedCompatibility(id, project.files || {})
     if (compatibilityRepaired) {
       project = await getProjectWithData(id, email)
@@ -225,7 +244,9 @@ export async function POST(request: Request, { params }: Ctx) {
       }
     }
   }
-  const validation = validateGeneratedProject(project.files || {})
+
+  buildOptions = importedBuildOptions(project.metadata)
+  const validation = validateGeneratedProject(project.files || {}, buildOptions)
 
   if (!validation.valid) {
     return NextResponse.json(
@@ -251,9 +272,11 @@ export async function POST(request: Request, { params }: Ctx) {
       mergedRepairSync,
       scaffoldRepaired,
       compatibilityRepaired,
-      message: scaffoldRepaired
-        ? "Missing Next.js scaffold files were repaired. Static validation passed. Send confirm=true to queue the build."
-        : "Static validation passed. Send confirm=true to queue the build.",
+      message: buildOptions.imported
+        ? "Imported-project compatibility validation passed. Send confirm=true to queue the build."
+        : scaffoldRepaired
+          ? "Missing Next.js scaffold files were repaired. Static validation passed. Send confirm=true to queue the build."
+          : "Static validation passed. Send confirm=true to queue the build.",
     })
   }
 
@@ -302,9 +325,11 @@ export async function POST(request: Request, { params }: Ctx) {
       : ""
     await appendBuildLog({
       buildId: build.id,
-      line: compatibilityRepaired
-        ? `${syncPrefix}[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
-        : `${syncPrefix}[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
+      line: buildOptions.imported
+        ? `${syncPrefix}[dispatcher] Imported ${buildOptions.framework || "web"} project sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+        : compatibilityRepaired
+          ? `${syncPrefix}[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+          : `${syncPrefix}[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not dispatch isolated build"
@@ -354,13 +379,15 @@ export async function POST(request: Request, { params }: Ctx) {
       scaffoldRepaired,
       compatibilityRepaired,
       build,
-      message: mergedRepairSync.applied
-        ? "Merged generated-project repairs were synchronized and the build was queued."
-        : compatibilityRepaired
-          ? "Known Neon serverless compatibility issues were normalized and the build was queued."
-          : scaffoldRepaired
-            ? "Missing Next.js scaffold files were repaired and the build was queued."
-            : "Build queued on the isolated GitHub Actions runner.",
+      message: buildOptions.imported
+        ? "Imported project passed compatibility validation and the preview build was queued."
+        : mergedRepairSync.applied
+          ? "Merged generated-project repairs were synchronized and the build was queued."
+          : compatibilityRepaired
+            ? "Known Neon serverless compatibility issues were normalized and the build was queued."
+            : scaffoldRepaired
+              ? "Missing Next.js scaffold files were repaired and the build was queued."
+              : "Build queued on the isolated GitHub Actions runner.",
     },
     { status: 202 },
   )
