@@ -10,3 +10,10 @@ test("generated runtime provisioning prefers 001_initial over a partial schema s
   assert.match(helper, /delete runtimeFiles\["sql\/schema\.sql"\]/)
   assert.match(callback, /files: runtimeDeploymentFiles\(bundle\.files\)/)
 })
+
+test("generated runtime normalizes Drizzle statement breakpoints before Neon migrations", () => {
+  const helper = readFileSync("lib/786-admin/runtime-deployment-files.ts", "utf8")
+
+  assert.match(helper, /statement-breakpoint/)
+  assert.match(helper, /source\.replace\(/)
+})
