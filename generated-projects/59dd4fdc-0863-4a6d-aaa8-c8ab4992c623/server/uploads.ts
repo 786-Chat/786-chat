@@ -15,7 +15,13 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
-const UPLOAD_DIR = process.env.VERCEL
+const serverlessRuntime = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
+  process.cwd().startsWith("/var/task"),
+);
+const UPLOAD_DIR = serverlessRuntime
   ? path.join("/tmp", "uploads")
   : path.join(process.cwd(), "uploads");
 
