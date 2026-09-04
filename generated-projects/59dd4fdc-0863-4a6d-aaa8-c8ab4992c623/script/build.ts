@@ -33,6 +33,28 @@ const allowlist = [
   "zod-validation-error",
 ];
 
+// Replit writes uploaded files under process.cwd()/uploads. Vercel's deployed
+// function filesystem is read-only except for /tmp. Keep the imported source
+// unchanged and patch only the bundled server runtime used for deployment.
+const vercelUploadPathPlugin = {
+  name: "vercel-upload-path",
+  setup(build: any) {
+    build.onLoad({ filter: /server[\\/]routes\.ts$/ }, async (args: any) => {
+      let contents = await readFile(args.path, "utf-8");
+      contents = contents
+        .replace(
+          'const uploadDir = path.join(process.cwd(), "uploads");',
+          'const uploadDir = process.env.VERCEL ? "/tmp/uploads" : path.join(process.cwd(), "uploads");',
+        )
+        .replace(
+          'const filepath = path.join(process.cwd(), "uploads", fname);',
+          'const filepath = path.join(uploadDir, fname);',
+        );
+      return { contents, loader: "ts" };
+    });
+  },
+};
+
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
 
@@ -58,6 +80,7 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
+    plugins: [vercelUploadPathPlugin],
     logLevel: "info",
   });
 
