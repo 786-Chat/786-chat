@@ -48,7 +48,41 @@ const vercelRuntimeCompatibilityPlugin = {
         .replace(
           'const filepath = path.join(process.cwd(), "uploads", fname);',
           'const filepath = path.join(uploadDir, fname);',
+        )
+        .replace(
+          'const wss = new WebSocketServer({ server: httpServer, path: "/ws" });',
+          'const wss = process.env.VERCEL ? new WebSocketServer({ noServer: true }) : new WebSocketServer({ server: httpServer, path: "/ws" });',
         );
+      return { contents, loader: "ts" };
+    });
+
+    build.onLoad({ filter: /server[\\/]index\.ts$/ }, async (args: any) => {
+      let contents = await readFile(args.path, "utf-8");
+
+      const serverDeclaration = `export const app = express();\nconst httpServer = createServer(app);`;
+      const serverlessDeclaration = `export const app = express();\nconst httpServer = createServer(app);\nconst isServerlessRuntime = Boolean(\n  process.env.VERCEL ||\n  process.env.AWS_LAMBDA_FUNCTION_NAME ||\n  process.env.LAMBDA_TASK_ROOT ||\n  process.cwd().startsWith(\"/var/task\"),\n);`;
+
+      if (!contents.includes(serverDeclaration)) {
+        throw new Error("FoodSafetyMenu Express server declaration was not found for Vercel compatibility patch");
+      }
+      contents = contents.replace(serverDeclaration, serverlessDeclaration);
+
+      const listenBlock = `  // LISTEN ON PORT FIRST so deployment health checks pass immediately\n  const port = parseInt(process.env.PORT || \"5000\", 10);\n  httpServer.listen({ port, host: \"0.0.0.0\", reusePort: true }, () => {\n    log(\`serving on port \${port}\`);\n  });`;
+      const serverlessListenBlock = `  // Replit needs a listening HTTP server. Vercel invokes the exported Express\n  // app directly, so binding a port inside a serverless function crashes the\n  // invocation. Keep the original listener only outside serverless runtimes.\n  const port = parseInt(process.env.PORT || \"5000\", 10);\n  if (!isServerlessRuntime) {\n    httpServer.listen({ port, host: \"0.0.0.0\", reusePort: true }, () => {\n      log(\`serving on port \${port}\`);\n    });\n  }`;
+
+      if (!contents.includes(listenBlock)) {
+        throw new Error("FoodSafetyMenu HTTP listener was not found for Vercel compatibility patch");
+      }
+      contents = contents.replace(listenBlock, serverlessListenBlock);
+
+      const websocketBlock = `  // Setup grocery WebSocket on /grocery-ws path\n  const { WebSocketServer } = await import(\"ws\");\n  const groceryWss = new WebSocketServer({ server: httpServer, path: \"/grocery-ws\" });\n  setupGroceryWebSocket(groceryWss);\n\n  // Setup taxi WebSocket on /taxi-ws path\n  setupTaxiWebSocket(httpServer);\n\n  // Setup clothing WebSocket on /clothing-ws path\n  const { setupClothingWebSocket } = await import(\"./clothing-routes\");\n  setupClothingWebSocket(httpServer);\n\n  // Setup furniture WebSocket on /furniture-ws path\n  const { setupFurnitureWebSocket } = await import(\"./furniture-routes\");\n  setupFurnitureWebSocket(httpServer);`;
+      const serverlessWebsocketBlock = `  // Vercel Functions do not expose a persistent Node HTTP server for WebSocket\n  // upgrades. Preserve all HTTP/API behaviour and only attach the Replit socket\n  // servers when this app is running as a normal long-lived Node process.\n  if (!isServerlessRuntime) {\n    const { WebSocketServer } = await import(\"ws\");\n    const groceryWss = new WebSocketServer({ server: httpServer, path: \"/grocery-ws\" });\n    setupGroceryWebSocket(groceryWss);\n    setupTaxiWebSocket(httpServer);\n    const { setupClothingWebSocket } = await import(\"./clothing-routes\");\n    setupClothingWebSocket(httpServer);\n    const { setupFurnitureWebSocket } = await import(\"./furniture-routes\");\n    setupFurnitureWebSocket(httpServer);\n  }`;
+
+      if (!contents.includes(websocketBlock)) {
+        throw new Error("FoodSafetyMenu WebSocket startup block was not found for Vercel compatibility patch");
+      }
+      contents = contents.replace(websocketBlock, serverlessWebsocketBlock);
+
       return { contents, loader: "ts" };
     });
 
@@ -91,7 +125,7 @@ async function buildAll() {
     format: "cjs",
     outfile: "dist/index.cjs",
     define: {
-      "process.env.NODE_ENV": '"production"',
+      "process.env.NODE_ENV": '\"production\"',
     },
     minify: true,
     external: externals,
