@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff00aa;
+  --neon-acid: #ccff00;
+  --bg-dark: #0a0a0f;
+  --bg-panel: #12121a;
+}
+
+body {
+  background: var(--bg-dark);
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+@layer components {
+  .panel {
+    @apply relative border-2 border-cyan-400/30 bg-[#12121a] p-4;
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  }
+  .panel::before {
+    content: "";
+    @apply absolute inset-0 border border-cyan-400/10 pointer-events-none;
+    clip-path: inherit;
+  }
+  .btn-neon {
+    @apply inline-flex items-center justify-center gap-2 border-2 border-cyan-400 bg-cyan-400/10 px-4 py-2 font-mono text-sm font-bold uppercase tracking-wider text-cyan-300 transition-all hover:bg-cyan-400/20 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] active:scale-95;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  .input-neon {
+    @apply w-full border-2 border-cyan-400/30 bg-black/50 px-3 py-2 font-mono text-sm text-cyan-100 placeholder-cyan-500/50 focus:border-cyan-400 focus:outline-none focus:shadow-[0_0_10px_rgba(0,240,255,0.2)];
+  }
+  .scanline {
+    position: relative;
+    overflow: hidden;
+  }
+  .scanline::after {
+    content: "";
+    position: absolute;
+    top: -100%;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.05), transparent);
+    animation: scan 4s linear infinite;
+  }
+  @keyframes scan {
+    0% { top: -100%; }
+    100% { top: 100%; }
+  }
+  .glitch {
+    animation: glitch 3s infinite;
+  }
+  @keyframes glitch {
+    0%, 100% { text-shadow: 0 0 10px rgba(0,240,255,0.5); }
+    20% { text-shadow: -2px 0 rgba(255,0,170,0.5), 2px 0 rgba(0,240,255,0.5); }
+    40% { text-shadow: 2px 0 rgba(255,0,170,0.5), -2px 0 rgba(0,240,255,0.5); }
+    60% { text-shadow: 0 0 10px rgba(0,240,255,0.5); }
+  }
+  .cursor-blink {
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+}
