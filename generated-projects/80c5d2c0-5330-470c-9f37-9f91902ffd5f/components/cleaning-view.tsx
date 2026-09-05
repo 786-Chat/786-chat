@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CheckCircle2 } from "lucide-react";
 
 const defaultAreas = ["Kitchen", "Freezer 1", "Freezer 2", "Chiller 1", "Production Area", "Packaging Area", "Cold Room"];
 const defaultTasks = ["Deep Clean", "Surface Wipe", "Defrost", "Sanitise", "Sweep", "Mop"];
@@ -42,7 +43,7 @@ const emptyForm = {
   completed: true
 };
 
-export function CleaningView() {
+export function CleaningView({ mobile = false }: { mobile?: boolean }) {
   const [checks, setChecks] = useState<CleaningCheck[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function CleaningView() {
   const [newStaff, setNewStaff] = useState("");
   const [newChemical, setNewChemical] = useState("");
   const [newNote, setNewNote] = useState("");
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetchChecks();
@@ -130,6 +132,7 @@ export function CleaningView() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSaved(false);
     try {
       const res = await fetch("/api/cleaning-checks", {
         method: "POST",
@@ -140,10 +143,55 @@ export function CleaningView() {
         const data = await res.json();
         throw new Error(data.error?.message || "Failed to save check");
       }
+      const savedCheck = await res.json();
+      await syncMyDocument(savedCheck);
       setForm({ ...emptyForm });
+      setSaved(true);
       await fetchChecks();
     } catch (err: any) {
       setError(err.message);
+    }
+  }
+
+  async function syncMyDocument(check: any) {
+    try {
+      const res = await fetch("/api/my-documents");
+      if (!res.ok) return;
+      const docs = await res.json();
+      const existing = docs.find((d: any) => d.document_type === "cleaning_checks" && d.check_date === check.cleaning_date);
+
+      const entry = {
+        cleaningDate: check.cleaning_date,
+        cleaningTime: check.cleaning_time,
+        areaEquipment: check.area_equipment,
+        cleaningTask: check.cleaning_task,
+        cleanedBy: check.cleaned_by,
+        checkedBy: check.checked_by,
+        chemicalUsed: check.chemical_used,
+        result: check.result,
+        notes: check.notes || "",
+        completed: check.completed
+      };
+
+      const data = existing ? existing.data : [];
+      data.push(entry);
+
+      const payload = {
+        documentType: "cleaning_checks",
+        title: "Cleaning Checks",
+        checkDate: check.cleaning_date,
+        dayName: new Date(`${check.cleaning_date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long" }),
+        data,
+        status: "Completed"
+      };
+
+      await fetch("/api/my-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.error("Failed to sync My Documents", err);
     }
   }
 
@@ -214,6 +262,13 @@ export function CleaningView() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Cleaning</h1>
+
+      {saved && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-emerald-300">
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="font-semibold">Cleaning check saved ✓</span>
+        </div>
+      )}
 
       <Card className="border-2 border-slate-600 bg-white text-slate-900">
         <CardContent className="p-4 sm:p-6">
@@ -355,32 +410,31 @@ export function CleaningView() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="p-4 text-sm text-slate-400">Loading cleaning history...</p>
-          ) : checks.length === 0 ? (
-            <p className="p-4 text-sm text-slate-400">No cleaning checks recorded yet</p>
-          ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[900px] w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Time</th>
-                    <th className="px-4 py-3 font-medium">Area/Equipment</th>
-                    <th className="px-4 py-3 font-medium">Task</th>
-                    <th className="px-4 py-3 font-medium">Cleaned By</th>
-                    <th className="px-4 py-3 font-medium">Checked By</th>
-                    <th className="px-4 py-3 font-medium">Result</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {checks.map((check) => {
-                    const resultTone = check.result === "Satisfactory" ? "green" : "red";
-                    const statusTone = check.completed ? "green" : "amber";
-                    return (
+      {!mobile && (
+        <Card>
+          <CardContent className="p-0">
+            {loading ? (
+              <p className="p-4 text-sm text-slate-400">Loading cleaning checks...</p>
+            ) : checks.length === 0 ? (
+              <p className="p-4 text-sm text-slate-400">No cleaning checks recorded yet</p>
+            ) : (
+              <div className="overflow-x-auto scrollbar-thin">
+                <table className="min-w-[900px] w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Date</th>
+                      <th className="px-4 py-3 font-medium">Time</th>
+                      <th className="px-4 py-3 font-medium">Area / Equipment</th>
+                      <th className="px-4 py-3 font-medium">Task</th>
+                      <th className="px-4 py-3 font-medium">Cleaned By</th>
+                      <th className="px-4 py-3 font-medium">Checked By</th>
+                      <th className="px-4 py-3 font-medium">Chemical</th>
+                      <th className="px-4 py-3 font-medium">Result</th>
+                      <th className="px-4 py-3 font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {checks.map((check) => (
                       <tr key={check.id} className="text-slate-300">
                         <td className="px-4 py-3">{check.cleaning_date}</td>
                         <td className="px-4 py-3">{check.cleaning_time}</td>
@@ -388,17 +442,18 @@ export function CleaningView() {
                         <td className="px-4 py-3">{check.cleaning_task}</td>
                         <td className="px-4 py-3">{check.cleaned_by}</td>
                         <td className="px-4 py-3">{check.checked_by}</td>
-                        <td className="px-4 py-3"><Badge tone={resultTone as any}>{check.result}</Badge></td>
-                        <td className="px-4 py-3"><Badge tone={statusTone as any}>{check.completed ? "Completed" : "Incomplete"}</Badge></td>
+                        <td className="px-4 py-3">{check.chemical_used}</td>
+                        <td className="px-4 py-3"><Badge tone={check.result === "Satisfactory" ? "green" : "red"}>{check.result}</Badge></td>
+                        <td className="px-4 py-3">{check.notes}</td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
