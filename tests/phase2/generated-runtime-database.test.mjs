@@ -58,3 +58,19 @@ test("partial generated database recovery includes duplicate Postgres enum types
   assert.match(deployer, /column\|relation\|constraint\|index\|type/)
   assert.match(deployer, /duplicate \(\?:column\|table\|object\|type\)/)
 })
+
+test("repeated generated migrations tolerate objects already created by an earlier publish", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+  assert.match(deployer, /isAlreadyAppliedMigrationError/)
+  assert.match(deployer, /42710/)
+  assert.match(deployer, /42P07/)
+  assert.match(deployer, /42701/)
+  assert.match(deployer, /if \(isAlreadyAppliedMigrationError\(error\)\) continue/)
+})
+
+test("large imported Vercel previews get enough time to become ready", async () => {
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+  assert.match(deployer, /VERCEL_READY_TIMEOUT_MS\s*=\s*240_000/)
+  assert.match(deployer, /Date\.now\(\) \+ VERCEL_READY_TIMEOUT_MS/)
+  assert.doesNotMatch(deployer, /Date\.now\(\) \+ 75_000/)
+})
