@@ -1,0 +1,12 @@
+{
+  "projectId": "fbbb7174-98bf-4405-8444-123e88535755",
+  "buildId": "017ecd80-56f3-4ce3-9748-2b1e9f8c6740",
+  "title": "Neon Kids Arcade",
+  "sourceVersion": "874684a21580a183a6e2a963f579cf45df94eaacaa391ee16c57ddd656ae0891",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-24T00:21:28.829Z"
+}
