@@ -5,6 +5,7 @@ import { sql } from "./db"
 const DEFAULT_REPOSITORY_ID = "1250394192"
 const GIT_REF_RETRY_ATTEMPTS = 5
 const GIT_REF_RETRY_DELAY_MS = 2_000
+const VERCEL_READY_TIMEOUT_MS = 240_000
 
 export type GeneratedProjectDeployment = {
   id: string
@@ -113,6 +114,17 @@ function isRecoverablePartialDatabaseError(error: unknown): boolean {
   return /(?:column|relation|constraint|index|type).*(?:does not exist|already exists)|duplicate (?:column|table|object|type)|undefined (?:column|table|type)/i.test(message)
 }
 
+function isAlreadyAppliedMigrationError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code || "")
+      : ""
+  if (["42710", "42P07", "42701"].includes(code)) return true
+
+  const message = error instanceof Error ? error.message : String(error || "")
+  return /(?:type|relation|table|column|constraint|index).*(?:already exists)|duplicate (?:object|table|column|type|constraint|index)/i.test(message)
+}
+
 function scopedDatabaseUrl(baseUrl: string, database: string): string {
   const url = new URL(baseUrl)
   url.pathname = `/${database}`
@@ -155,19 +167,30 @@ async function prepareGeneratedRuntimeDatabase(input: {
   const runtimeUrl = scopedDatabaseUrl(baseUrl, database)
   let runtimeSql = neon(runtimeUrl)
 
+  const runMigrationStatements = async (source: string) => {
+    for (const statement of migrationStatements(source)) {
+      try {
+        await runtimeSql.query(statement, [])
+      } catch (error) {
+        // Generated previews can retry the same schema after a slow/failed publish.
+        // PostgreSQL reports already-created enums, tables, indexes and columns as
+        // duplicate-object errors. Those statements are safe to skip; unexpected
+        // migration errors still fail the build.
+        if (isAlreadyAppliedMigrationError(error)) continue
+        throw error
+      }
+    }
+  }
+
   const applyMigrations = async () => {
     const schemaSource = input.files["sql/schema.sql"] || input.files["sql/migrations/001_initial.sql"] || ""
-    for (const statement of migrationStatements(schemaSource)) {
-      await runtimeSql.query(statement, [])
-    }
+    await runMigrationStatements(schemaSource)
 
     const extraMigrations = Object.entries(input.files)
       .filter(([path]) => /^sql\/migrations\/(?!001_initial\.sql$).+\.sql$/i.test(path))
       .sort(([left], [right]) => left.localeCompare(right))
     for (const [, source] of extraMigrations) {
-      for (const statement of migrationStatements(source)) {
-        await runtimeSql.query(statement, [])
-      }
+      await runMigrationStatements(source)
     }
   }
 
@@ -412,7 +435,7 @@ async function waitForReadyDeployment(input: {
   token: string
   teamId?: string
 }): Promise<GeneratedProjectDeployment> {
-  const deadline = Date.now() + 75_000
+  const deadline = Date.now() + VERCEL_READY_TIMEOUT_MS
   const endpoint = new URL(`https://api.vercel.com/v13/deployments/${input.id}`)
   if (input.teamId) endpoint.searchParams.set("teamId", input.teamId)
   let terminalState: string | null = null
@@ -438,7 +461,7 @@ async function waitForReadyDeployment(input: {
   if (terminalState) {
     throw new Error(`Vercel deployment finished with state ${terminalState}`)
   }
-  throw new Error("Vercel deployment did not become ready within 75 seconds")
+  throw new Error(`Vercel deployment did not become ready within ${Math.round(VERCEL_READY_TIMEOUT_MS / 1000)} seconds`)
 }
 
 async function allowEmbeddedRuntimePreview(input: {
