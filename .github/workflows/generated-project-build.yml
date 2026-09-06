@@ -85,34 +85,58 @@ jobs:
           const root = path.resolve(process.env.RUNNER_TEMP, 'generated-project')
           const extensions = new Set(['.ts', '.tsx', '.js', '.jsx'])
           const operators = ['and', 'or', 'not', 'eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'inArray', 'notInArray', 'isNull', 'isNotNull', 'like', 'ilike', 'sql']
+          const sourceFiles = []
 
-          function walk(dir) {
+          function collect(dir) {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
               if (['node_modules', '.git', '.next', 'dist'].includes(entry.name)) continue
               const full = path.join(dir, entry.name)
-              if (entry.isDirectory()) walk(full)
-              else if (extensions.has(path.extname(entry.name))) normalizeFile(full)
+              if (entry.isDirectory()) collect(full)
+              else if (extensions.has(path.extname(entry.name))) sourceFiles.push(full)
             }
           }
 
+          collect(root)
+          const projectSource = sourceFiles.map((file) => fs.readFileSync(file, 'utf8')).join('\n')
+          const hasRestaurantLatitude = /\brestaurantLatitude\b/.test(projectSource)
+          const hasRestaurantLongitude = /\brestaurantLongitude\b/.test(projectSource)
+
           function normalizeFile(file) {
             let source = fs.readFileSync(file, 'utf8')
+            let changed = false
+
             const importPattern = /import\s*\{([^}]*)\}\s*from\s*["']drizzle-orm["'];?/m
             const match = source.match(importPattern)
-            if (!match) return
+            if (match) {
+              const names = new Set(match[1].split(',').map((part) => part.trim()).filter(Boolean).map((part) => part.split(/\s+as\s+/i)[0].trim()))
+              const missing = operators.filter((name) => new RegExp(`\\b${name}\\s*\\(`).test(source) && !names.has(name))
+              if (missing.length) {
+                const existing = match[1].split(',').map((part) => part.trim()).filter(Boolean)
+                const nextImport = `import { ${[...existing, ...missing].join(', ')} } from "drizzle-orm";`
+                source = source.replace(importPattern, nextImport)
+                changed = true
+                console.log(`[compat] Added missing drizzle-orm import(s) ${missing.join(', ')} to ${path.relative(root, file)}`)
+              }
+            }
 
-            const names = new Set(match[1].split(',').map((part) => part.trim()).filter(Boolean).map((part) => part.split(/\s+as\s+/i)[0].trim()))
-            const missing = operators.filter((name) => new RegExp(`\\b${name}\\s*\\(`).test(source) && !names.has(name))
-            if (!missing.length) return
+            const relative = path.relative(root, file).replaceAll(path.sep, '/')
+            if (/server\/routes\.(?:ts|js)$/.test(relative)) {
+              if (hasRestaurantLatitude && /\.addressLat\b/.test(source)) {
+                source = source.replace(/\.addressLat\b/g, '.restaurantLatitude')
+                changed = true
+                console.log(`[compat] Replaced legacy addressLat with restaurantLatitude in ${relative}`)
+              }
+              if (hasRestaurantLongitude && /\.addressLng\b/.test(source)) {
+                source = source.replace(/\.addressLng\b/g, '.restaurantLongitude')
+                changed = true
+                console.log(`[compat] Replaced legacy addressLng with restaurantLongitude in ${relative}`)
+              }
+            }
 
-            const existing = match[1].split(',').map((part) => part.trim()).filter(Boolean)
-            const nextImport = `import { ${[...existing, ...missing].join(', ')} } from "drizzle-orm";`
-            source = source.replace(importPattern, nextImport)
-            fs.writeFileSync(file, source, 'utf8')
-            console.log(`[compat] Added missing drizzle-orm import(s) ${missing.join(', ')} to ${path.relative(root, file)}`)
+            if (changed) fs.writeFileSync(file, source, 'utf8')
           }
 
-          walk(root)
+          for (const file of sourceFiles) normalizeFile(file)
           NODE
 
       - uses: actions/setup-node@v4
@@ -139,9 +163,6 @@ jobs:
         working-directory: ${{ runner.temp }}/generated-project
         shell: bash
         env:
-          # Generated applications must compile without requiring customer runtime secrets.
-          # These values are non-secret build-only placeholders. Real runtime values are
-          # supplied later by the generated deployment environment.
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
           AUTH_SECRET: 786-chat-isolated-build-placeholder-auth-secret-not-for-runtime
           RESEND_API_KEY: re_786_chat_isolated_build_placeholder
