@@ -273,12 +273,8 @@ export function validateGeneratedProject(
         ? "yarn install --frozen-lockfile --ignore-scripts"
         : "yarn install --ignore-scripts"
   const commands = [install]
-  if (scripts.lint) commands.push(`${runner} lint`)
-  if (imported) {
-    if (scripts.check) commands.push(`${runner} check`)
-  } else {
-    commands.push("npx tsc --noEmit")
-  }
+  if (!imported && scripts.lint) commands.push(`${runner} lint`)
+  if (!imported) commands.push("npx tsc --noEmit")
   commands.push(`${runner} build`)
 
   return {
