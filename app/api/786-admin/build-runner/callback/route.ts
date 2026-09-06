@@ -24,6 +24,14 @@ function isAuthorized(request: Request): boolean {
   return request.headers.get("authorization") === `Bearer ${secret}`
 }
 
+function runtimeFilesDiffer(saved: Record<string, string>, runtimeFiles: Record<string, string>): boolean {
+  const keys = new Set([...Object.keys(saved), ...Object.keys(runtimeFiles)])
+  for (const key of keys) {
+    if ((saved[key] ?? null) !== (runtimeFiles[key] ?? null)) return true
+  }
+  return false
+}
+
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -58,17 +66,23 @@ export async function POST(request: Request) {
       const bundle = await getRunnerBuildBundle(body.buildId)
       if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
-      const reusablePublish = await getReusableRunnerPublish({
-        projectId: bundle.projectId,
-        sourceVersion: bundle.sourceVersion,
-        excludeBuildId: bundle.buildId,
-      })
+      const deploymentFiles = runtimeDeploymentFiles(bundle.files)
+      const hasRuntimeCompatibilityRewrite = runtimeFilesDiffer(bundle.files, deploymentFiles)
+
+      const reusablePublish = hasRuntimeCompatibilityRewrite
+        ? null
+        : await getReusableRunnerPublish({
+            projectId: bundle.projectId,
+            sourceVersion: bundle.sourceVersion,
+            excludeBuildId: bundle.buildId,
+          })
+
       const published = reusablePublish ?? await publishGeneratedProjectToGitHub({
         buildId: bundle.buildId,
         projectId: bundle.projectId,
         title: bundle.title,
         sourceVersion: bundle.sourceVersion,
-        files: bundle.files,
+        files: deploymentFiles,
       })
 
       githubBranch = published.branch
@@ -88,13 +102,15 @@ export async function POST(request: Request) {
         lifecycleLogs.push(
           `[publisher] Reused previously published source ${published.pullRequestUrl}; skipped duplicate GitHub upload.`,
         )
+      } else if (hasRuntimeCompatibilityRewrite) {
+        lifecycleLogs.push("[publisher] Published runtime compatibility files for imported project deployment.")
       }
 
       const deployment = await deployGeneratedProjectToVercel({
         projectId: bundle.projectId,
         branch: published.branch,
         commitSha: published.commitSha,
-        files: runtimeDeploymentFiles(bundle.files),
+        files: deploymentFiles,
       })
       deploymentUrl = deployment.url
       lifecycleLogs.push(
