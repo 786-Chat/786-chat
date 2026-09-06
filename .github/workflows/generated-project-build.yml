@@ -76,6 +76,45 @@ jobs:
           fs.writeFileSync(process.env.RUNNER_TEMP + '/commands.json', JSON.stringify(payload.bundle.commands || []))
           NODE
 
+      - name: Normalize imported TypeScript compatibility
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const root = path.resolve(process.env.RUNNER_TEMP, 'generated-project')
+          const extensions = new Set(['.ts', '.tsx', '.js', '.jsx'])
+          const operators = ['and', 'or', 'not', 'eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'inArray', 'notInArray', 'isNull', 'isNotNull', 'like', 'ilike', 'sql']
+
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (['node_modules', '.git', '.next', 'dist'].includes(entry.name)) continue
+              const full = path.join(dir, entry.name)
+              if (entry.isDirectory()) walk(full)
+              else if (extensions.has(path.extname(entry.name))) normalizeFile(full)
+            }
+          }
+
+          function normalizeFile(file) {
+            let source = fs.readFileSync(file, 'utf8')
+            const importPattern = /import\s*\{([^}]*)\}\s*from\s*["']drizzle-orm["'];?/m
+            const match = source.match(importPattern)
+            if (!match) return
+
+            const names = new Set(match[1].split(',').map((part) => part.trim()).filter(Boolean).map((part) => part.split(/\s+as\s+/i)[0].trim()))
+            const missing = operators.filter((name) => new RegExp(`\\b${name}\\s*\\(`).test(source) && !names.has(name))
+            if (!missing.length) return
+
+            const existing = match[1].split(',').map((part) => part.trim()).filter(Boolean)
+            const nextImport = `import { ${[...existing, ...missing].join(', ')} } from "drizzle-orm";`
+            source = source.replace(importPattern, nextImport)
+            fs.writeFileSync(file, source, 'utf8')
+            console.log(`[compat] Added missing drizzle-orm import(s) ${missing.join(', ')} to ${path.relative(root, file)}`)
+          }
+
+          walk(root)
+          NODE
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
