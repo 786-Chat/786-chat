@@ -17,6 +17,11 @@ test("imported Express runtime emits resolvable directory imports and skips list
 
   const output = runtimeDeploymentFiles({
     "package.json": JSON.stringify({ dependencies: { express: "^4.21.2" } }),
+    "script/build.ts": [
+      'import { build as esbuild } from "esbuild"',
+      "const allowlist = [\"@google/genai\"]",
+      "await esbuild({ bundle: true })",
+    ].join("\n"),
     "vercel.json": JSON.stringify({ framework: "express", buildCommand: "npm run build" }),
     "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@shared/*": ["./shared/*"] } } }),
     "server/index.ts": originalServer,
@@ -54,5 +59,6 @@ test("imported Express runtime emits resolvable directory imports and skips list
   )
   assert.match(output["index.ts"], /from "\.\/dist\/index\.cjs"/)
   assert.match(output["index.ts"], /export default runtime\.app/)
+  assert.match(output["script/build.ts"], /["']p-retry["']/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })
