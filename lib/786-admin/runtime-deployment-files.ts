@@ -8,6 +8,55 @@ function normalizeRelativeModulePath(fromPath: string, specifier: string) {
   return fromParts.join("/")
 }
 
+type RuntimeAlias = { key: string; target: string }
+
+function relativeRuntimeSpecifier(fromPath: string, targetPath: string) {
+  const fromParts = fromPath.split("/").slice(0, -1)
+  const targetParts = targetPath.split("/").filter(Boolean)
+  while (fromParts.length && targetParts.length && fromParts[0] === targetParts[0]) {
+    fromParts.shift()
+    targetParts.shift()
+  }
+  const relative = [...fromParts.map(() => ".."), ...targetParts].join("/")
+  return relative.startsWith(".") ? relative : `./${relative}`
+}
+
+function rewriteRuntimeAliases(
+  runtimeFiles: Record<string, string>,
+  filePath: string,
+  source: string,
+  aliases: RuntimeAlias[],
+) {
+  const resolveAlias = (specifier: string) => {
+    for (const alias of aliases) {
+      const wildcard = alias.key.indexOf("*")
+      const prefix = wildcard >= 0 ? alias.key.slice(0, wildcard) : alias.key
+      const suffix = wildcard >= 0 ? alias.key.slice(wildcard + 1) : ""
+      if (!specifier.startsWith(prefix) || (suffix && !specifier.endsWith(suffix))) continue
+      if (wildcard < 0 && specifier !== alias.key) continue
+      const value = wildcard >= 0
+        ? specifier.slice(prefix.length, suffix ? -suffix.length : undefined)
+        : ""
+      const target = alias.target.replace("*", value).replace(/^\.\//, "")
+      const runtimeTarget = runtimeFiles[`${target}.ts`] || runtimeFiles[`${target}.tsx`]
+        ? `${target}.js`
+        : runtimeFiles[`${target}/index.ts`] || runtimeFiles[`${target}/index.tsx`]
+          ? `${target}/index.js`
+          : null
+      if (runtimeTarget) return relativeRuntimeSpecifier(filePath, runtimeTarget)
+    }
+    return null
+  }
+
+  const rewrite = (full: string, prefix: string, specifier: string, suffix: string) => {
+    const target = resolveAlias(specifier)
+    return target ? `${prefix}${target}${suffix}` : full
+  }
+  return source
+    .replace(/(\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'])([^."'][^"']*)(["'])/g, rewrite)
+    .replace(/(\bimport\(\s*["'])([^."'][^"']*)(["']\s*\))/g, rewrite)
+}
+
 function addRuntimeJsExtensions(runtimeFiles: Record<string, string>, filePath: string, source: string) {
   const runtimeSpecifier = (specifier: string) => {
     if (!specifier.startsWith(".")) return null
@@ -113,12 +162,19 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   if (!packageSource?.trim() || !serverSource?.trim()) return
 
   let usesExpress = false
+  let runtimeAliases: RuntimeAlias[] = []
   try {
     const pkg = JSON.parse(packageSource) as {
       dependencies?: Record<string, string>
       devDependencies?: Record<string, string>
     }
     usesExpress = Boolean(pkg.dependencies?.express || pkg.devDependencies?.express)
+    const tsconfig = JSON.parse(runtimeFiles["tsconfig.json"] || "{}") as {
+      compilerOptions?: { paths?: Record<string, string[]> }
+    }
+    runtimeAliases = Object.entries(tsconfig.compilerOptions?.paths || {}).flatMap(([key, targets]) =>
+      typeof targets?.[0] === "string" ? [{ key, target: targets[0] }] : [],
+    )
   } catch {
     return
   }
@@ -131,7 +187,11 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
       : `// @ts-nocheck\n${source}`
     runtimeFiles[path] = makeImportedEsmRuntimeSafe(
       makeOptionalAiClientsBootSafe(
-        addRuntimeJsExtensions(runtimeFiles, path, relaxedSource),
+        addRuntimeJsExtensions(
+          runtimeFiles,
+          path,
+          rewriteRuntimeAliases(runtimeFiles, path, relaxedSource, runtimeAliases),
+        ),
       ),
     )
   }
