@@ -94,11 +94,18 @@ function patchImportedBuildScript(runtimeFiles: Record<string, string>) {
   if (!source?.includes('from "esbuild"') || !source.includes("await esbuild({")) return
 
   // @google/genai's CommonJS entry requires p-retry, whose current package is
-  // ESM-only. Leaving p-retry external makes the generated CJS server crash at
-  // cold start with ERR_REQUIRE_ESM. Bundle it into the server artifact when an
-  // imported Replit build uses an allowlist.
-  if (source.includes("const allowlist = [") && !/["']p-retry["']/.test(source)) {
-    source = source.replace("const allowlist = [", 'const allowlist = [\n  "p-retry",')
+  // ESM-only. Both packages must be bundled; bundling only p-retry has no effect
+  // while @google/genai itself remains external.
+  if (source.includes("const allowlist = [")) {
+    const bundledEsmDeps = ["@google/genai", "p-retry"].filter(
+      (dependency) => !source.includes(`"${dependency}"`) && !source.includes(`'${dependency}'`),
+    )
+    if (bundledEsmDeps.length) {
+      source = source.replace(
+        "const allowlist = [",
+        `const allowlist = [\n${bundledEsmDeps.map((dependency) => `  "${dependency}",`).join("\n")}`,
+      )
+    }
   }
 
   if (!source.includes('from "path"')) {
