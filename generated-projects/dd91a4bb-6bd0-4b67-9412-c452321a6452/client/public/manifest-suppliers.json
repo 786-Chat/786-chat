@@ -1,0 +1,26 @@
+{
+  "name": "App Suppliers",
+  "short_name": "App Suppliers",
+  "description": "Supplier ordering and management for restaurants",
+  "start_url": "/suppliers-login",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#8b5cf6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722793020-ed866a4d-bef4-4ef4-8cbc-afd64185e1b4-icon-suppliers-192-G3m0iij3loAGOzynXKUSiO8IIFRhbP.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722793858-5269d09b-bdc9-4439-be9a-2601dbab64b5-icon-suppliers-512-JpFroZ2a0WyyiWEh03SOfCC3WJ8aE9.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "business", "productivity"],
+  "prefer_related_applications": false
+}
