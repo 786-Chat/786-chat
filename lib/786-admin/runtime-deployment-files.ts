@@ -148,6 +148,15 @@ function makeImportedEsmRuntimeSafe(source: string) {
   // Express entry as ESM. Point the conventional Vite output at the build
   // directory and remove remaining CommonJS-only __dirname lookups.
   return source
+    // Vercel Functions can only write beneath /tmp. Imported Express apps
+    // commonly create a local uploads directory at module scope; leaving that
+    // rooted at process.cwd() makes every cold start fail because /var/task is
+    // read-only. Keep the same directory shape while moving only upload storage
+    // to the serverless temporary filesystem.
+    .replace(
+      /path\.(resolve|join)\(\s*process\.cwd\(\)\s*,\s*(["'])uploads\2\s*\)/gi,
+      'path.$1(process.env.TMPDIR || "/tmp", "uploads")',
+    )
     .replace(
       /path\.(?:resolve|join)\(\s*__dirname\s*,\s*["']public["']\s*\)/g,
       'path.resolve(process.cwd(), "dist", "public")',
