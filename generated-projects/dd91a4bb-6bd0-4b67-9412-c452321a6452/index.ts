@@ -2,12 +2,12 @@
 // @ts-nocheck
 import express from "express";
 import fs from "fs";
-import path from "path";
+import { fileURLToPath } from "url";
 import runtime from "./dist/index.cjs";
 
 const app = express();
-const publicDir = path.join(process.cwd(), "dist", "public");
-const indexFile = path.join(publicDir, "index.html");
+const publicDir = fileURLToPath(new URL("./dist/public/", import.meta.url));
+const indexFile = fileURLToPath(new URL("./dist/public/index.html", import.meta.url));
 const previewStatic = express.static(publicDir, {
   index: false,
   setHeaders(res, filePath) {
