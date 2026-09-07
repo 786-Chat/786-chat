@@ -199,9 +199,9 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     }
     const functions = vercelConfig.functions || {}
     const rootFunction = functions["index.ts"] || {}
-    if (!rootFunction.includeFiles) rootFunction.includeFiles = "dist/public/**"
-    else if (!rootFunction.includeFiles.includes("dist/public")) {
-      rootFunction.includeFiles = `{${rootFunction.includeFiles},dist/public/**}`
+    if (!rootFunction.includeFiles) rootFunction.includeFiles = "dist/**"
+    else if (!rootFunction.includeFiles.includes("dist/")) {
+      rootFunction.includeFiles = `{${rootFunction.includeFiles},dist/**}`
     }
     functions["index.ts"] = rootFunction
     vercelConfig.functions = functions
@@ -279,9 +279,10 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     "// 786.Chat runtime-only Vercel Express bridge. Saved imported source is unchanged.",
     "// @ts-nocheck",
     'import express from "express"',
-    'import { app } from "./server/index.js"',
+    '// Load the build artifact so Vercel traces the generated server and its sibling Vite assets.',
+    'import runtime from "./dist/index.cjs"',
     "void express",
-    "export default app",
+    "export default runtime.app",
     "",
   ].join("\n")
 }
