@@ -48,8 +48,9 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.doesNotMatch(output["server/routes.ts"], /path\.join\(process\.cwd\(\), "uploads"\)/)
   assert.doesNotMatch(output["server/routes.ts"], /@shared\/schema/)
   assert.match(output["shared/schema.ts"], /from "\.\/models\/chat\.js"/)
-  assert.deepEqual(JSON.parse(output["vercel.json"]).functions["index.ts"].includeFiles, [
+  assert.equal(
+    JSON.parse(output["vercel.json"]).functions["index.ts"].includeFiles,
     "dist/public/**",
-  ])
+  )
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })

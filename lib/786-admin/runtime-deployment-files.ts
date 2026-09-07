@@ -195,16 +195,14 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   // but /var/task/dist/public does not exist at runtime.
   try {
     const vercelConfig = JSON.parse(runtimeFiles["vercel.json"] || "{}") as {
-      functions?: Record<string, { includeFiles?: string | string[] }>
+      functions?: Record<string, { includeFiles?: string }>
     }
     const functions = vercelConfig.functions || {}
     const rootFunction = functions["index.ts"] || {}
-    const current = Array.isArray(rootFunction.includeFiles)
-      ? rootFunction.includeFiles
-      : rootFunction.includeFiles
-        ? [rootFunction.includeFiles]
-        : []
-    rootFunction.includeFiles = Array.from(new Set([...current, "dist/public/**"]))
+    if (!rootFunction.includeFiles) rootFunction.includeFiles = "dist/public/**"
+    else if (!rootFunction.includeFiles.includes("dist/public")) {
+      rootFunction.includeFiles = `{${rootFunction.includeFiles},dist/public/**}`
+    }
     functions["index.ts"] = rootFunction
     vercelConfig.functions = functions
     runtimeFiles["vercel.json"] = `${JSON.stringify(vercelConfig, null, 2)}\n`
