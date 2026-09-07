@@ -1,0 +1,26 @@
+{
+  "name": "App Kitchen",
+  "short_name": "App Kitchen",
+  "description": "Kitchen display system for chefs",
+  "start_url": "/kitchen-login",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#f97316",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722788876-38b59fba-515a-4e6e-8e09-ad94d8d79619-icon-kitchen-192-Rmf5LkOjuOl0JpSn96wJmzC6xTYetM.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722789988-0b270daa-7c45-404f-ae45-9766035aac35-icon-kitchen-512-kuHGpG5tdybDVD8HZs6PHS82S6wrpX.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "business", "productivity"],
+  "prefer_related_applications": false
+}
