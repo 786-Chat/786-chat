@@ -43,8 +43,7 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.match(output["server/index.ts"], /from "\.\/routes\.js"/)
   assert.match(output["server/index.ts"], /if \(!process\.env\.VERCEL\) httpServer\.listen\(5000\)/)
   assert.match(output["server/index.ts"], /OPENAI_API_KEY \|\| "786-chat-disabled"/)
-  assert.match(output["server/index.ts"], /path\.resolve\(process\.cwd\(\), "dist", "public"\)/)
-  assert.doesNotMatch(output["server/index.ts"], /\b__dirname\b/)
+  assert.match(output["server/index.ts"], /path\.resolve\(__dirname, "public"\)/)
   assert.match(output["server/routes.ts"], /from "\.\.\/shared\/schema\.js"/)
   assert.match(
     output["server/routes.ts"],

@@ -159,9 +159,9 @@ function makeOptionalAiClientsBootSafe(source: string) {
 }
 
 function makeImportedEsmRuntimeSafe(source: string) {
-  // Replit's production bundle is CommonJS, but Vercel loads the generated
-  // Express entry as ESM. Point the conventional Vite output at the build
-  // directory and remove remaining CommonJS-only __dirname lookups.
+  // The generated Vercel bridge loads the imported project's CommonJS build.
+  // Preserve __dirname because it correctly points at dist/ inside the nested
+  // generated-project directory; process.cwd() points at /var/task instead.
   return source
     // Vercel Functions can only write beneath /tmp. Imported Express apps
     // commonly create a local uploads directory at module scope; leaving that
@@ -172,11 +172,6 @@ function makeImportedEsmRuntimeSafe(source: string) {
       /path\.(resolve|join)\(\s*process\.cwd\(\)\s*,\s*(["'])uploads\2\s*\)/gi,
       'path.$1(process.env.TMPDIR || "/tmp", "uploads")',
     )
-    .replace(
-      /path\.(?:resolve|join)\(\s*__dirname\s*,\s*["']public["']\s*\)/g,
-      'path.resolve(process.cwd(), "dist", "public")',
-    )
-    .replace(/\b__dirname\b/g, "process.cwd()")
 }
 
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
