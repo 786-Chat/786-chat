@@ -181,7 +181,7 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   if (!usesExpress) return
 
   for (const [path, source] of Object.entries(runtimeFiles)) {
-    if (!/^server\/.*\.(?:ts|tsx)$/i.test(path)) continue
+    if (!/^(?:server|shared)\/.*\.(?:ts|tsx)$/i.test(path)) continue
     const relaxedSource = source.startsWith("// @ts-nocheck")
       ? source
       : `// @ts-nocheck\n${source}`

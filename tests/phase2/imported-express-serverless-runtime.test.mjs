@@ -23,7 +23,11 @@ test("imported Express runtime emits resolvable directory imports and skips list
       'import * as schema from "@shared/schema"',
       "export const registerRoutes = () => schema",
     ].join("\n"),
-    "shared/schema.ts": "export const restaurants = true",
+    "shared/schema.ts": [
+      'export * from "./models/chat"',
+      "export const restaurants = true",
+    ].join("\n"),
+    "shared/models/chat.ts": "export const conversations = true",
     "server/replit_integrations/image/index.ts": "export const registerImageRoutes = () => undefined",
   })
 
@@ -35,5 +39,6 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.doesNotMatch(output["server/index.ts"], /\b__dirname\b/)
   assert.match(output["server/routes.ts"], /from "\.\.\/shared\/schema\.js"/)
   assert.doesNotMatch(output["server/routes.ts"], /@shared\/schema/)
+  assert.match(output["shared/schema.ts"], /from "\.\/models\/chat\.js"/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })
