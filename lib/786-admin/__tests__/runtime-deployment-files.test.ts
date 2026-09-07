@@ -32,6 +32,7 @@ describe("runtimeDeploymentFiles imported Express compatibility", () => {
     expect(files["server/index.ts"]).toContain('from "./routes.js"')
     expect(files["server/index.ts"]).toContain("if (!process.env.VERCEL) app.listen(5000)")
     expect(files["index.ts"]).toContain('import express from "express"')
-    expect(files["index.ts"]).toContain('import { app } from "./server/index"')
+    expect(files["index.ts"]).toContain('import runtime from "./dist/index.cjs"')
+    expect(files["index.ts"]).toContain("export default runtime.app")
   })
 })

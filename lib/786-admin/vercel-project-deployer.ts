@@ -5,7 +5,9 @@ import { sql } from "./db"
 const DEFAULT_REPOSITORY_ID = "1250394192"
 const GIT_REF_RETRY_ATTEMPTS = 5
 const GIT_REF_RETRY_DELAY_MS = 2_000
-const VERCEL_READY_TIMEOUT_MS = 240_000
+// Large imported Vite/Express projects can spend several minutes tracing a
+// serverless bundle after their application build has completed.
+const VERCEL_READY_TIMEOUT_MS = 420_000
 
 export type GeneratedProjectDeployment = {
   id: string

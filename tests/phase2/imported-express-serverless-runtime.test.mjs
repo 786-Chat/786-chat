@@ -50,7 +50,9 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.match(output["shared/schema.ts"], /from "\.\/models\/chat\.js"/)
   assert.equal(
     JSON.parse(output["vercel.json"]).functions["index.ts"].includeFiles,
-    "dist/public/**",
+    "dist/**",
   )
+  assert.match(output["index.ts"], /from "\.\/dist\/index\.cjs"/)
+  assert.match(output["index.ts"], /export default runtime\.app/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })
