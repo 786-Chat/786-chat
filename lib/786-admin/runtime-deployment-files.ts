@@ -93,6 +93,14 @@ function patchImportedBuildScript(runtimeFiles: Record<string, string>) {
   let source = runtimeFiles[buildPath]
   if (!source?.includes('from "esbuild"') || !source.includes("await esbuild({")) return
 
+  // @google/genai's CommonJS entry requires p-retry, whose current package is
+  // ESM-only. Leaving p-retry external makes the generated CJS server crash at
+  // cold start with ERR_REQUIRE_ESM. Bundle it into the server artifact when an
+  // imported Replit build uses an allowlist.
+  if (source.includes("const allowlist = [") && !/["']p-retry["']/.test(source)) {
+    source = source.replace("const allowlist = [", 'const allowlist = [\n  "p-retry",')
+  }
+
   if (!source.includes('from "path"')) {
     source = source.replace(
       /((?:import[^\n]+\n)+)/,
