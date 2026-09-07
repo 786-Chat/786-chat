@@ -21,6 +21,8 @@ test("imported Express runtime emits resolvable directory imports and skips list
     "server/index.ts": originalServer,
     "server/routes.ts": [
       'import * as schema from "@shared/schema"',
+      'const uploadsDir = path.join(process.cwd(), "uploads")',
+      'if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir)',
       "export const registerRoutes = () => schema",
     ].join("\n"),
     "shared/schema.ts": [
@@ -38,6 +40,11 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.match(output["server/index.ts"], /path\.resolve\(process\.cwd\(\), "dist", "public"\)/)
   assert.doesNotMatch(output["server/index.ts"], /\b__dirname\b/)
   assert.match(output["server/routes.ts"], /from "\.\.\/shared\/schema\.js"/)
+  assert.match(
+    output["server/routes.ts"],
+    /path\.join\(process\.env\.TMPDIR \|\| "\/tmp", "uploads"\)/,
+  )
+  assert.doesNotMatch(output["server/routes.ts"], /path\.join\(process\.cwd\(\), "uploads"\)/)
   assert.doesNotMatch(output["server/routes.ts"], /@shared\/schema/)
   assert.match(output["shared/schema.ts"], /from "\.\/models\/chat\.js"/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
