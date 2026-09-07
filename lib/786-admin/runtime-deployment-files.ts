@@ -1,3 +1,41 @@
+function normalizeRelativeModulePath(fromPath: string, specifier: string) {
+  const fromParts = fromPath.split("/").slice(0, -1)
+  for (const part of specifier.split("/")) {
+    if (!part || part === ".") continue
+    if (part === "..") fromParts.pop()
+    else fromParts.push(part)
+  }
+  return fromParts.join("/")
+}
+
+function addRuntimeJsExtensions(runtimeFiles: Record<string, string>, filePath: string, source: string) {
+  const hasRuntimeTarget = (specifier: string) => {
+    if (!specifier.startsWith(".")) return false
+    const resolved = normalizeRelativeModulePath(filePath, specifier)
+    return Boolean(
+      runtimeFiles[`${resolved}.ts`] ||
+      runtimeFiles[`${resolved}.tsx`] ||
+      runtimeFiles[`${resolved}/index.ts`] ||
+      runtimeFiles[`${resolved}/index.tsx`],
+    )
+  }
+
+  const rewrite = (full: string, prefix: string, specifier: string, suffix: string) => {
+    if (/\.[a-z0-9]+$/i.test(specifier) || !hasRuntimeTarget(specifier)) return full
+    return `${prefix}${specifier}.js${suffix}`
+  }
+
+  let next = source.replace(
+    /(\b(?:import|export)\s+(?:[^"']*?\s+from\s+)?["'])(\.{1,2}\/[^"']+)(["'])/g,
+    rewrite,
+  )
+  next = next.replace(
+    /(\bimport\(\s*["'])(\.{1,2}\/[^"']+)(["']\s*\))/g,
+    rewrite,
+  )
+  return next
+}
+
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   const packageSource = runtimeFiles["package.json"]
   const serverPath = "server/index.ts"
@@ -18,9 +56,10 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
 
   for (const [path, source] of Object.entries(runtimeFiles)) {
     if (!/^server\/.*\.(?:ts|tsx)$/i.test(path)) continue
-    runtimeFiles[path] = source.startsWith("// @ts-nocheck")
+    const relaxedSource = source.startsWith("// @ts-nocheck")
       ? source
       : `// @ts-nocheck\n${source}`
+    runtimeFiles[path] = addRuntimeJsExtensions(runtimeFiles, path, relaxedSource)
   }
 
   const routesPath = "server/routes.ts"
@@ -61,8 +100,6 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     "// 786.Chat runtime-only Vercel Express bridge. Saved imported source is unchanged.",
     "// @ts-nocheck",
     'import express from "express"',
-    '// Use an explicit .js extension because Vercel emits this bridge as ESM index.js.',
-    '// TypeScript/Vercel resolves this to server/index.ts during packaging and Node can resolve server/index.js at runtime.',
     'import { app } from "./server/index.js"',
     "void express",
     "export default app",
