@@ -1,0 +1,26 @@
+{
+  "name": "App Driver",
+  "short_name": "App Driver",
+  "description": "Driver delivery app for restaurant orders",
+  "start_url": "/driver-login",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#f59e0b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722782937-fa78d57d-c3d4-4011-8a08-fe07fda99a7f-icon-driver-192-NQUpXheYVOH82AOb2GJEcTUhkGd40C.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722783902-13f6208b-3811-48df-9efc-954d405bfa19-icon-driver-512-gRzMVomShn63ANEu0ZBGylJOZH2jwD.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "business", "productivity"],
+  "prefer_related_applications": false
+}
