@@ -36,6 +36,42 @@ function addRuntimeJsExtensions(runtimeFiles: Record<string, string>, filePath: 
   return next
 }
 
+function patchImportedBuildScript(runtimeFiles: Record<string, string>) {
+  const buildPath = "script/build.ts"
+  let source = runtimeFiles[buildPath]
+  if (!source?.includes('from "esbuild"') || !source.includes("await esbuild({")) return
+
+  if (!source.includes('from "path"')) {
+    source = source.replace(
+      /((?:import[^\n]+\n)+)/,
+      `$1import { dirname, resolve } from "path";\n`,
+    )
+  } else if (!source.includes("dirname") || !source.includes("resolve")) {
+    source = source.replace(/import\s*\{([^}]*)\}\s*from\s*["']path["'];?/, (_full, names) => {
+      const values = names.split(",").map((value: string) => value.trim()).filter(Boolean)
+      if (!values.includes("dirname")) values.push("dirname")
+      if (!values.includes("resolve")) values.push("resolve")
+      return `import { ${values.join(", ")} } from "path";`
+    })
+  }
+
+  if (!source.includes("runtimeJsAliasPlugin")) {
+    source = source.replace(
+      /async function buildAll\(\) \{/,
+      `const runtimeJsAliasPlugin = {\n  name: "786-runtime-js-alias",\n  setup(build: any) {\n    build.onResolve({ filter: /^\\.{1,2}\\/.*\\.js$/ }, (args: any) => {\n      const basePath = resolve(dirname(args.importer), args.path.slice(0, -3));\n      for (const ext of [".ts", ".tsx"]) {\n        const candidate = basePath + ext;\n        if (existsSync(candidate)) return { path: candidate };\n      }\n      return null;\n    });\n  },\n};\n\nasync function buildAll() {`,
+    )
+  }
+
+  if (!source.includes("plugins: [runtimeJsAliasPlugin]")) {
+    source = source.replace(
+      /bundle:\s*true,/, 
+      `bundle: true,\n    plugins: [runtimeJsAliasPlugin],`,
+    )
+  }
+
+  runtimeFiles[buildPath] = source
+}
+
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   const packageSource = runtimeFiles["package.json"]
   const serverPath = "server/index.ts"
@@ -61,6 +97,11 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
       : `// @ts-nocheck\n${source}`
     runtimeFiles[path] = addRuntimeJsExtensions(runtimeFiles, path, relaxedSource)
   }
+
+  // The runtime copy uses explicit .js specifiers so Node ESM can resolve emitted
+  // server files. The imported app's own esbuild step still sees TypeScript sources,
+  // so teach that build to map those .js specifiers back to matching .ts/.tsx files.
+  patchImportedBuildScript(runtimeFiles)
 
   const routesPath = "server/routes.ts"
   const schemaSource = runtimeFiles["shared/schema.ts"] || runtimeFiles["server/schema.ts"] || ""
