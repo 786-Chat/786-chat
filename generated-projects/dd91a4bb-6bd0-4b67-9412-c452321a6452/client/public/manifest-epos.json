@@ -1,0 +1,26 @@
+{
+  "name": "App Epos",
+  "short_name": "App Epos",
+  "description": "EPOS till system for restaurant ordering",
+  "start_url": "/epos-login",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#06b6d4",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722784908-dd22e0e6-588c-48ff-b99f-eac54597dcf9-icon-epos-192-T6AiXEE6TcHi21OLYb2Y32idw15QCv.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722785958-aed361a7-430c-4b35-9cd1-c994ce6d1f38-icon-epos-512-RTAiKovQ13EofiCsOvxT8IZwHDM4Z9.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "business", "productivity"],
+  "prefer_related_applications": false
+}
