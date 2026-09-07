@@ -17,6 +17,7 @@ test("imported Express runtime emits resolvable directory imports and skips list
 
   const output = runtimeDeploymentFiles({
     "package.json": JSON.stringify({ dependencies: { express: "^4.21.2" } }),
+    "vercel.json": JSON.stringify({ framework: "express", buildCommand: "npm run build" }),
     "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@shared/*": ["./shared/*"] } } }),
     "server/index.ts": originalServer,
     "server/routes.ts": [
@@ -47,5 +48,8 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.doesNotMatch(output["server/routes.ts"], /path\.join\(process\.cwd\(\), "uploads"\)/)
   assert.doesNotMatch(output["server/routes.ts"], /@shared\/schema/)
   assert.match(output["shared/schema.ts"], /from "\.\/models\/chat\.js"/)
+  assert.deepEqual(JSON.parse(output["vercel.json"]).functions["index.ts"].includeFiles, [
+    "dist/public/**",
+  ])
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })
