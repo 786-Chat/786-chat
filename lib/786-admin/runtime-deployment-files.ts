@@ -189,6 +189,29 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   }
   if (!usesExpress) return
 
+  // Vite writes the imported frontend during the custom build, after Vercel's
+  // source scan. Explicitly include that generated directory in the root
+  // Express Function bundle; otherwise serveStatic() sees a successful build
+  // but /var/task/dist/public does not exist at runtime.
+  try {
+    const vercelConfig = JSON.parse(runtimeFiles["vercel.json"] || "{}") as {
+      functions?: Record<string, { includeFiles?: string | string[] }>
+    }
+    const functions = vercelConfig.functions || {}
+    const rootFunction = functions["index.ts"] || {}
+    const current = Array.isArray(rootFunction.includeFiles)
+      ? rootFunction.includeFiles
+      : rootFunction.includeFiles
+        ? [rootFunction.includeFiles]
+        : []
+    rootFunction.includeFiles = Array.from(new Set([...current, "dist/public/**"]))
+    functions["index.ts"] = rootFunction
+    vercelConfig.functions = functions
+    runtimeFiles["vercel.json"] = `${JSON.stringify(vercelConfig, null, 2)}\n`
+  } catch {
+    // Invalid imported config is handled by the normal deployment validator.
+  }
+
   for (const [path, source] of Object.entries(runtimeFiles)) {
     if (!/^(?:server|shared)\/.*\.(?:ts|tsx)$/i.test(path)) continue
     const relaxedSource = source.startsWith("// @ts-nocheck")
