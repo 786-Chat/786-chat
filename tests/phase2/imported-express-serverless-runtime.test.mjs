@@ -17,8 +17,13 @@ test("imported Express runtime emits resolvable directory imports and skips list
 
   const output = runtimeDeploymentFiles({
     "package.json": JSON.stringify({ dependencies: { express: "^4.21.2" } }),
+    "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@shared/*": ["./shared/*"] } } }),
     "server/index.ts": originalServer,
-    "server/routes.ts": "export const registerRoutes = () => undefined",
+    "server/routes.ts": [
+      'import * as schema from "@shared/schema"',
+      "export const registerRoutes = () => schema",
+    ].join("\n"),
+    "shared/schema.ts": "export const restaurants = true",
     "server/replit_integrations/image/index.ts": "export const registerImageRoutes = () => undefined",
   })
 
@@ -28,5 +33,7 @@ test("imported Express runtime emits resolvable directory imports and skips list
   assert.match(output["server/index.ts"], /OPENAI_API_KEY \|\| "786-chat-disabled"/)
   assert.match(output["server/index.ts"], /path\.resolve\(process\.cwd\(\), "dist", "public"\)/)
   assert.doesNotMatch(output["server/index.ts"], /\b__dirname\b/)
+  assert.match(output["server/routes.ts"], /from "\.\.\/shared\/schema\.js"/)
+  assert.doesNotMatch(output["server/routes.ts"], /@shared\/schema/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
 })
