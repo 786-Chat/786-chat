@@ -1,0 +1,26 @@
+{
+  "name": "Link24-Menu",
+  "short_name": "Link24-Menu",
+  "description": "Browse restaurant menus and order food online",
+  "start_url": "/menu",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722791143-6b1812d0-74a7-4d55-8037-c8c504ca6c96-icon-menu-192-WM5zvgbR54WGvwdBGv3xrS4rDNcQZQ.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722791959-5ffd876e-a9e0-47c7-8426-eb48390d6e95-icon-menu-512-Bu70bRWZLMpRC37V8TvWPrQjkKwaYE.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "shopping", "lifestyle"],
+  "prefer_related_applications": false
+}
