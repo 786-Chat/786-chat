@@ -1,0 +1,12 @@
+{
+  "projectId": "dd91a4bb-6bd0-4b67-9412-c452321a6452",
+  "buildId": "6dd13a00-23c3-41a4-8307-545760d188fa",
+  "title": "FoodSafety",
+  "sourceVersion": "406a38da0a57f41cb2b95372a283721c2c17b8df861dea47a93302b7a960dea2",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-09-07T10:40:55.637Z"
+}
