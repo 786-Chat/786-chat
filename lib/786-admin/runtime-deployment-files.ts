@@ -58,13 +58,13 @@ function patchImportedBuildScript(runtimeFiles: Record<string, string>) {
   if (!source.includes("runtimeJsAliasPlugin")) {
     source = source.replace(
       /async function buildAll\(\) \{/,
-      `const runtimeJsAliasPlugin = {\n  name: "786-runtime-js-alias",\n  setup(build: any) {\n    build.onResolve({ filter: /^\\.{1,2}\\/.*\\.js$/ }, (args: any) => {\n      const basePath = resolve(dirname(args.importer), args.path.slice(0, -3));\n      for (const ext of [".ts", ".tsx"]) {\n        const candidate = basePath + ext;\n        if (existsSync(candidate)) return { path: candidate };\n      }\n      return null;\n    });\n  },\n};\n\nasync function buildAll() {`,
+      `const runtimeJsAliasPlugin = {\n  name: "786-runtime-js-alias",\n  setup(build: any) {\n    build.onResolve({ filter: /^\\.{1,2}\\/.*\\.js$/ }, (args: any) => {\n      const basePath = resolve(dirname(args.importer), args.path.slice(0, -3));\n      for (const candidate of [basePath + ".ts", basePath + ".tsx", resolve(basePath, "index.ts"), resolve(basePath, "index.tsx")]) {\n        if (existsSync(candidate)) return { path: candidate };\n      }\n      return null;\n    });\n  },\n};\n\nasync function buildAll() {`,
     )
   }
 
   if (!source.includes("plugins: [runtimeJsAliasPlugin]")) {
     source = source.replace(
-      /bundle:\s*true,/, 
+      /bundle:\s*true,/,
       `bundle: true,\n    plugins: [runtimeJsAliasPlugin],`,
     )
   }
@@ -100,7 +100,8 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
 
   // The runtime copy uses explicit .js specifiers so Node ESM can resolve emitted
   // server files. The imported app's own esbuild step still sees TypeScript sources,
-  // so teach that build to map those .js specifiers back to matching .ts/.tsx files.
+  // so teach that build to map those .js specifiers back to matching .ts/.tsx files,
+  // including directory imports that resolve to index.ts/index.tsx.
   patchImportedBuildScript(runtimeFiles)
 
   const routesPath = "server/routes.ts"
