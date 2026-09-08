@@ -10,6 +10,45 @@ const bridge = express()
 const publicDir = path.resolve(process.cwd(), "dist", "public")
 const indexPath = path.join(publicDir, "index.html")
 
+const RESTAURANT_SECRET_FIELDS = new Set([
+  "loginPassword",
+  "kitchenLoginPassword",
+  "eposLoginPassword",
+  "waiterLoginPassword",
+  "suppliersLoginPassword",
+  "financesLoginPassword",
+  "stripeSecretKey",
+  "sumupApiKey",
+  "squareAccessToken",
+  "zettleApiKey",
+])
+
+function redactRestaurantSecrets(value: any): any {
+  if (Array.isArray(value)) return value.map(redactRestaurantSecrets)
+  if (!value || typeof value !== "object") return value
+
+  const clean: Record<string, any> = {}
+  for (const [key, nested] of Object.entries(value)) {
+    if (RESTAURANT_SECRET_FIELDS.has(key)) continue
+    clean[key] = redactRestaurantSecrets(nested)
+  }
+  return clean
+}
+
+// Never expose branch login credentials or private payment-provider keys through the
+// unauthenticated restaurant read APIs. This only redacts response fields; stored data
+// and all login/update flows remain unchanged.
+bridge.use((req, res, next) => {
+  if (req.method !== "GET" || !req.path.startsWith("/api/restaurants")) return next()
+
+  const originalJson = res.json.bind(res)
+  res.json = function patchedJson(body: any) {
+    return originalJson(redactRestaurantSecrets(body))
+  } as any
+
+  next()
+})
+
 // Vercel can receive a request while the imported Express app is still finishing its
 // asynchronous startup. The imported app intentionally returns a tiny "Loading..."
 // document until appReady is true, but on a serverless cold start that response can
