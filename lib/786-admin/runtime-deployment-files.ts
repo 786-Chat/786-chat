@@ -174,6 +174,16 @@ function makeImportedEsmRuntimeSafe(source: string) {
     )
 }
 
+function exposeImportedRuntimeReadiness(source: string) {
+  if (!/\blet\s+appReady\s*=\s*false\s*;?/.test(source)) return source
+  const appReadyIndex = source.search(/\blet\s+appReady\s*=\s*false\s*;?/)
+  const startupSource = source.slice(appReadyIndex)
+  const startupMatch = startupSource.match(/\(\s*async\s*\(\s*\)\s*=>\s*\{/)
+  if (!startupMatch || startupMatch.index === undefined) return source
+  const startupIndex = appReadyIndex + startupMatch.index
+  return `${source.slice(0, startupIndex)}export const runtimeReady = ${source.slice(startupIndex)}`
+}
+
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   const packageSource = runtimeFiles["package.json"]
   const serverPath = "server/index.ts"
@@ -284,6 +294,12 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     "$1$2if (!process.env.VERCEL) $3",
   )
 
+  // Replit-style servers often register routes asynchronously and temporarily
+  // return a Loading page until appReady becomes true. A Vercel Function may
+  // freeze after sending that first response, so expose the startup IIFE as a
+  // promise and let the bridge wait for route/static registration to complete.
+  nextServerSource = exposeImportedRuntimeReadiness(nextServerSource)
+
   runtimeFiles[serverPath] = nextServerSource
   runtimeFiles["index.ts"] = [
     "// 786.Chat runtime-only Vercel Express bridge. Saved imported source is unchanged.",
@@ -292,7 +308,12 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     '// Load the build artifact so Vercel traces the generated server and its sibling Vite assets.',
     'import runtime from "./dist/index.cjs"',
     "void express",
-    "export default runtime.app",
+    "export default async function handler(req, res) {",
+    '  if (runtime.runtimeReady && typeof runtime.runtimeReady.then === "function") {',
+    "    await runtime.runtimeReady",
+    "  }",
+    "  return runtime.app(req, res)",
+    "}",
     "",
   ].join("\n")
 }
