@@ -13,8 +13,8 @@ test("revision history lists lightweight metadata instead of full project snapsh
   assert.match(route, /listProjectRevisionSummaries/)
   assert.match(revisions, /export type AdminProjectRevisionSummary/)
   const summaryFunction = revisions.match(/export async function listProjectRevisionSummaries[\s\S]*?\n}\n/)?.[0] || ""
-  assert.match(summaryFunction, /SELECT id, project_id, owner_email, label, source, created_at/)
-  assert.doesNotMatch(summaryFunction, /\bfiles\b|preview_state|metadata/)
+  assert.match(summaryFunction, /SELECT id, label, source, created_at/)
+  assert.doesNotMatch(summaryFunction, /\bfiles\b|preview_state|metadata|owner_email|project_id/)
 })
 
 test("checkpoint creation returns metadata only after storing the full snapshot", async () => {
@@ -23,7 +23,7 @@ test("checkpoint creation returns metadata only after storing the full snapshot"
 
   assert.match(createFunction, /Promise<AdminProjectRevisionSummary>/)
   assert.match(createFunction, /files, preview_state, metadata/)
-  assert.match(createFunction, /RETURNING id, project_id, owner_email, label, source, created_at/)
+  assert.match(createFunction, /RETURNING id, label, source, created_at/)
   assert.doesNotMatch(createFunction, /RETURNING \*/)
 })
 
