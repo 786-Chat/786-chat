@@ -1,0 +1,22 @@
+name: FoodSafety Seed Menus Once
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Restore imported FoodSafety branch menus
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --silent --show-error --retry 2 --retry-delay 3 --max-time 300 \
+            -X POST -H 'Content-Type: application/json' -d '{}' \
+            'https://786-generated-dd91a4bb6bd0-od4thxgle-mujeebpro.vercel.app/api/production-seed')
+          printf '%s\n' "$response"
+          echo "$response" | grep -q '"success":true'
