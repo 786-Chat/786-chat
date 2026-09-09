@@ -3,6 +3,7 @@ import {
   completeRunnerBuild,
   getReusableRunnerPublish,
   getRunnerBuildBundle,
+  getRunnerPublishProgress,
   recordRunnerPublishProgress,
 } from "@/lib/786-admin/build-runner-store"
 import { hardenFoodSafetyRuntime } from "@/lib/786-admin/foodsafety-runtime-hardening"
@@ -13,11 +14,9 @@ import { repairFailedBuild } from "@/lib/786-chat/build-repair"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 export const runtime = "nodejs"
-// Publishing a verified build includes GitHub branch/PR creation, generated database
-// preparation, Vercel project/env setup and up to 75s waiting for the preview to be
-// READY. The callback also checkpoints GitHub publish metadata before waiting on Vercel,
-// allowing normal status polling to reconcile a READY preview if this request is cut off.
 export const maxDuration = 300
+
+const PREVIEW_CALLBACK_DEPLOY_WAIT_MS = 180_000
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
@@ -73,13 +72,19 @@ export async function POST(request: Request) {
       )
       const hasRuntimeCompatibilityRewrite = runtimeFilesDiffer(bundle.files, deploymentFiles)
 
-      const reusablePublish = hasRuntimeCompatibilityRewrite
-        ? null
-        : await getReusableRunnerPublish({
-            projectId: bundle.projectId,
-            sourceVersion: bundle.sourceVersion,
-            excludeBuildId: bundle.buildId,
-          })
+      // A callback retry for the same build must reuse its already checkpointed branch,
+      // even when runtime-only compatibility/security rewrites make the deployment files
+      // differ from the saved project source. This prevents duplicate PRs on slow callbacks.
+      const currentPublish = await getRunnerPublishProgress(body.buildId)
+      const reusablePublish = currentPublish ?? (
+        hasRuntimeCompatibilityRewrite
+          ? null
+          : await getReusableRunnerPublish({
+              projectId: bundle.projectId,
+              sourceVersion: bundle.sourceVersion,
+              excludeBuildId: bundle.buildId,
+            })
+      )
 
       const published = reusablePublish ?? await publishGeneratedProjectToGitHub({
         buildId: bundle.buildId,
@@ -102,7 +107,11 @@ export async function POST(request: Request) {
       })
       if (!checkpointed) throw new Error("Build publish metadata could not be checkpointed")
 
-      if (reusablePublish) {
+      if (currentPublish) {
+        lifecycleLogs.push(
+          `[publisher] Reused this build's checkpointed publish ${published.pullRequestUrl}; skipped duplicate GitHub upload.`,
+        )
+      } else if (reusablePublish) {
         lifecycleLogs.push(
           `[publisher] Reused previously published source ${published.pullRequestUrl}; skipped duplicate GitHub upload.`,
         )
@@ -110,12 +119,43 @@ export async function POST(request: Request) {
         lifecycleLogs.push("[publisher] Published runtime compatibility files for imported project deployment.")
       }
 
-      const deployment = await deployGeneratedProjectToVercel({
-        projectId: bundle.projectId,
-        branch: published.branch,
-        commitSha: published.commitSha,
-        files: deploymentFiles,
-      })
+      // Vercel can spend several minutes tracing a large imported Express/Vite bundle
+      // after the application build has already passed. Do not make the runner wait for
+      // the deployer's full READY timeout. The project build GET route already reconciles
+      // READY and terminal Vercel states by the checkpointed commit SHA.
+      const deployment = await Promise.race([
+        deployGeneratedProjectToVercel({
+          projectId: bundle.projectId,
+          branch: published.branch,
+          commitSha: published.commitSha,
+          files: deploymentFiles,
+        }),
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), PREVIEW_CALLBACK_DEPLOY_WAIT_MS)
+        }),
+      ])
+
+      if (!deployment) {
+        lifecycleLogs.push(
+          "[vercel] Preview is still publishing; normal build polling will reconcile the deployment when it reaches READY or a terminal state.",
+        )
+        return NextResponse.json(
+          {
+            success: true,
+            status: "running",
+            github: {
+              branch: githubBranch,
+              commitSha: githubCommitSha,
+              pullRequestUrl: githubPrUrl,
+            },
+            deployment: null,
+            repair: null,
+            error: null,
+          },
+          { status: 202 },
+        )
+      }
+
       deploymentUrl = deployment.url
       lifecycleLogs.push(
         "[runtime] Generated database namespace prepared and migration applied when required.",
