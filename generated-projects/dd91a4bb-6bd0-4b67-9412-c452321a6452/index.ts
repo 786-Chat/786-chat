@@ -2,13 +2,13 @@
 // @ts-nocheck
 import express from "express"
 import fs from "fs"
-import path from "path"
+import { fileURLToPath } from "url"
 // Load the build artifact so Vercel traces the generated server and its sibling Vite assets.
 import runtime from "./dist/index.cjs"
 
 const bridge = express()
-const publicDir = path.resolve(process.cwd(), "dist", "public")
-const indexPath = path.join(publicDir, "index.html")
+const publicDir = fileURLToPath(new URL("./dist/public/", import.meta.url))
+const indexPath = fileURLToPath(new URL("./dist/public/index.html", import.meta.url))
 
 const RESTAURANT_SECRET_FIELDS = new Set([
   "loginPassword",
