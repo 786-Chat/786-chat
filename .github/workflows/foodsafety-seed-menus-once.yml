@@ -1,6 +1,10 @@
 name: FoodSafety Seed Menus Once
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/foodsafety-seed-menus-once.yml'
   workflow_dispatch:
 
 permissions:
