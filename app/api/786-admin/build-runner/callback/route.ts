@@ -5,6 +5,7 @@ import {
   getRunnerBuildBundle,
   recordRunnerPublishProgress,
 } from "@/lib/786-admin/build-runner-store"
+import { hardenFoodSafetyRuntime } from "@/lib/786-admin/foodsafety-runtime-hardening"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { runtimeDeploymentFiles } from "@/lib/786-admin/runtime-deployment-files"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
@@ -66,7 +67,10 @@ export async function POST(request: Request) {
       const bundle = await getRunnerBuildBundle(body.buildId)
       if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
-      const deploymentFiles = runtimeDeploymentFiles(bundle.files)
+      const deploymentFiles = hardenFoodSafetyRuntime(
+        bundle.projectId,
+        runtimeDeploymentFiles(bundle.files),
+      )
       const hasRuntimeCompatibilityRewrite = runtimeFilesDiffer(bundle.files, deploymentFiles)
 
       const reusablePublish = hasRuntimeCompatibilityRewrite
