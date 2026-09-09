@@ -33,17 +33,20 @@ function fixture() {
   }
 }
 
-test("FoodSafety Vercel runtime skips optional e-commerce seed and redacts public restaurant responses", () => {
+test("FoodSafety Vercel runtime skips optional e-commerce seed and recursively redacts public restaurant secrets", () => {
   const files = hardenFoodSafetyRuntime(FOODSAFETY_PROJECT_ID, fixture())
 
   assert.match(files["server/index.ts"], /if \(!process\.env\.VERCEL\)/)
   assert.match(files["server/index.ts"], /await seedEcommerceData\(\);/)
-  assert.match(files["server/routes.ts"], /function toPublicRestaurant/)
+  assert.match(files["server/routes.ts"], /function redactPublicRestaurantValue/)
+  assert.match(files["server/routes.ts"], /Array\.isArray\(value\)/)
+  assert.match(files["server/routes.ts"], /redactPublicRestaurantValue\(nestedValue\)/)
   assert.match(files["server/routes.ts"], /restaurants\.map\(toPublicRestaurant\)/)
   assert.match(files["server/routes.ts"], /toPublicRestaurant\(restaurant\)/)
   assert.match(files["server/routes.ts"], /loginUsername/)
   assert.match(files["server/routes.ts"], /accountNumber/)
   assert.match(files["server/routes.ts"], /stripePublishableKey/)
+  assert.match(files["server/routes.ts"], /token/)
 })
 
 test("FoodSafety hardening leaves other generated projects untouched", () => {
