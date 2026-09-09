@@ -1,0 +1,26 @@
+{
+  "name": "App Finances",
+  "short_name": "App Finances",
+  "description": "Financial dashboard for restaurant management",
+  "start_url": "/finances-login",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722786915-13057cf0-6f76-437f-86c0-691d5561d36b-icon-finances-192-GjtxgGPX2t0kW6e81sJ9a3caCC9Rrn.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722787968-6da9f811-4d19-4f3e-b363-962df2733b71-icon-finances-512-ouKOeed6kx6sPuOrRpRKZ7wdHTr2pb.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "productivity"],
+  "prefer_related_applications": false
+}
