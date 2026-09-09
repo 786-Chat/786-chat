@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --deepgreen: #0b3d2e;
+  --cream: #fdf6e3;
+  --gold: #d4af37;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--deepgreen);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
