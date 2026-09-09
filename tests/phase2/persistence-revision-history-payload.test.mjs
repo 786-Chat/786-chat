@@ -16,3 +16,22 @@ test("revision history lists lightweight metadata instead of full project snapsh
   assert.match(summaryFunction, /SELECT id, project_id, owner_email, label, source, created_at/)
   assert.doesNotMatch(summaryFunction, /\bfiles\b|preview_state|metadata/)
 })
+
+test("checkpoint creation returns metadata only after storing the full snapshot", async () => {
+  const revisions = await read("lib/786-admin/project-revisions.ts")
+  const createFunction = revisions.match(/export async function createProjectRevision[\s\S]*?\n}\n/)?.[0] || ""
+
+  assert.match(createFunction, /Promise<AdminProjectRevisionSummary>/)
+  assert.match(createFunction, /files, preview_state, metadata/)
+  assert.match(createFunction, /RETURNING id, project_id, owner_email, label, source, created_at/)
+  assert.doesNotMatch(createFunction, /RETURNING \*/)
+})
+
+test("undo finds a lightweight revision first and restores only the selected snapshot", async () => {
+  const undoRoute = await read("app/api/786-chat/projects/[id]/revisions/undo/route.ts")
+
+  assert.match(undoRoute, /listProjectRevisionSummaries/)
+  assert.doesNotMatch(undoRoute, /listProjectRevisions/)
+  assert.match(undoRoute, /restoreProjectRevision/)
+  assert.match(undoRoute, /restoredRevision:\s*\{/)
+})
