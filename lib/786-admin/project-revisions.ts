@@ -16,7 +16,7 @@ export type AdminProjectRevision = {
 
 export type AdminProjectRevisionSummary = Pick<
   AdminProjectRevision,
-  "id" | "project_id" | "owner_email" | "label" | "source" | "created_at"
+  "id" | "label" | "source" | "created_at"
 >
 
 function normalizeEmail(email: string) {
@@ -83,7 +83,7 @@ export async function createProjectRevision(input: {
       ${JSON.stringify(project.preview_state || {})}::jsonb,
       ${JSON.stringify(project.metadata || {})}::jsonb
     )
-    RETURNING id, project_id, owner_email, label, source, created_at
+    RETURNING id, label, source, created_at
   `) as unknown as AdminProjectRevisionSummary[]
 
   return rows[0]
@@ -97,7 +97,7 @@ export async function listProjectRevisionSummaries(
   await ensureProjectRevisionSchema()
   const safeLimit = Math.min(Math.max(limit, 1), 100)
   return (await sql`
-    SELECT id, project_id, owner_email, label, source, created_at
+    SELECT id, label, source, created_at
     FROM admin_project_revisions
     WHERE project_id = ${projectId}
       AND owner_email = ${normalizeEmail(ownerEmail)}
