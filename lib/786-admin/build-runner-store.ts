@@ -22,6 +22,19 @@ function sanitizePostgresText(value: string | null | undefined): string | null {
   return value.replace(/\u0000/g, "")
 }
 
+function reusablePublishFromRow(row: {
+  github_branch: string
+  github_commit_sha: string
+  github_pr_url: string
+} | undefined): ReusableRunnerPublish | null {
+  if (!row) return null
+  return {
+    branch: row.github_branch,
+    commitSha: row.github_commit_sha,
+    pullRequestUrl: row.github_pr_url,
+  }
+}
+
 export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuildBundle | null> {
   const builds = (await sql`
     SELECT b.id, b.project_id, b.commands, b.package_manager, b.source_version, p.title
@@ -77,6 +90,28 @@ export async function getRunnerBuildBundle(buildId: string): Promise<RunnerBuild
   }
 }
 
+export async function getRunnerPublishProgress(buildId: string): Promise<ReusableRunnerPublish | null> {
+  const rows = (await sql`
+    SELECT github_branch, github_commit_sha, github_pr_url
+    FROM admin_project_builds
+    WHERE id = ${buildId}
+      AND status IN ('queued','running')
+      AND github_branch IS NOT NULL
+      AND github_branch <> ''
+      AND github_commit_sha IS NOT NULL
+      AND github_commit_sha <> ''
+      AND github_pr_url IS NOT NULL
+      AND github_pr_url <> ''
+    LIMIT 1
+  `) as unknown as Array<{
+    github_branch: string
+    github_commit_sha: string
+    github_pr_url: string
+  }>
+
+  return reusablePublishFromRow(rows[0])
+}
+
 export async function getReusableRunnerPublish(input: {
   projectId: string
   sourceVersion: string
@@ -102,13 +137,7 @@ export async function getReusableRunnerPublish(input: {
     github_pr_url: string
   }>
 
-  const row = rows[0]
-  if (!row) return null
-  return {
-    branch: row.github_branch,
-    commitSha: row.github_commit_sha,
-    pullRequestUrl: row.github_pr_url,
-  }
+  return reusablePublishFromRow(rows[0])
 }
 
 export async function recordRunnerPublishProgress(input: {
