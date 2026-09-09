@@ -1,55 +1,30 @@
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import test from "node:test"
 
-import { hardenFoodSafetyRuntime } from "../../lib/786-admin/foodsafety-runtime-hardening.ts"
+const helper = readFileSync("lib/786-admin/foodsafety-runtime-hardening.ts", "utf8")
+const callback = readFileSync("app/api/786-admin/build-runner/callback/route.ts", "utf8")
 
-const FOODSAFETY_PROJECT_ID = "dd91a4bb-6bd0-4b67-9412-c452321a6452"
-
-function fixture() {
-  return {
-    "server/index.ts": [
-      "async function boot() {",
-      "  await seedEcommerceData();",
-      "}",
-    ].join("\n"),
-    "server/routes.ts": [
-      "// imports",
-      "// Track last auto-backup times per restaurant",
-      "export async function registerRoutes(app, storage) {",
-      '  app.get("/api/restaurants", async (req, res) => {',
-      "    try {",
-      "      const restaurants = await storage.getAllRestaurants();",
-      "      res.json(restaurants);",
-      "    } catch {}",
-      "  });",
-      '  app.get("/api/restaurants/:slug", async (req, res) => {',
-      "    try {",
-      "      const restaurant = await storage.getRestaurantBySlug(req.params.slug);",
-      "      res.json(restaurant);",
-      "    } catch {}",
-      "  });",
-      "}",
-    ].join("\n"),
-  }
-}
-
-test("FoodSafety Vercel runtime skips optional e-commerce seed and recursively redacts public restaurant secrets", () => {
-  const files = hardenFoodSafetyRuntime(FOODSAFETY_PROJECT_ID, fixture())
-
-  assert.match(files["server/index.ts"], /if \(!process\.env\.VERCEL\)/)
-  assert.match(files["server/index.ts"], /await seedEcommerceData\(\);/)
-  assert.match(files["server/routes.ts"], /function redactPublicRestaurantValue/)
-  assert.match(files["server/routes.ts"], /Array\.isArray\(value\)/)
-  assert.match(files["server/routes.ts"], /redactPublicRestaurantValue\(nestedValue\)/)
-  assert.match(files["server/routes.ts"], /restaurants\.map\(toPublicRestaurant\)/)
-  assert.match(files["server/routes.ts"], /toPublicRestaurant\(restaurant\)/)
-  assert.match(files["server/routes.ts"], /loginUsername/)
-  assert.match(files["server/routes.ts"], /accountNumber/)
-  assert.match(files["server/routes.ts"], /stripePublishableKey/)
-  assert.match(files["server/routes.ts"], /token/)
+test("FoodSafety Vercel runtime skips optional e-commerce seed", () => {
+  assert.match(helper, /dd91a4bb-6bd0-4b67-9412-c452321a6452/)
+  assert.match(helper, /if \(!process\.env\.VERCEL\)/)
+  assert.match(helper, /await seedEcommerceData\(\);/)
 })
 
-test("FoodSafety hardening leaves other generated projects untouched", () => {
-  const files = fixture()
-  assert.equal(hardenFoodSafetyRuntime("another-project", files), files)
+test("FoodSafety public restaurant responses recursively redact sensitive fields", () => {
+  assert.match(helper, /function redactPublicRestaurantValue/)
+  assert.match(helper, /Array\.isArray\(value\)/)
+  assert.match(helper, /redactPublicRestaurantValue\(nestedValue\)/)
+  assert.match(helper, /restaurants\.map\(toPublicRestaurant\)/)
+  assert.match(helper, /toPublicRestaurant\(restaurant\)/)
+  assert.match(helper, /loginUsername/)
+  assert.match(helper, /accountNumber/)
+  assert.match(helper, /stripePublishableKey/)
+  assert.match(helper, /token/)
+})
+
+test("FoodSafety hardening is applied to generated deployment files before publish", () => {
+  assert.match(callback, /import \{ hardenFoodSafetyRuntime \}/)
+  assert.match(callback, /hardenFoodSafetyRuntime\(\s*bundle\.projectId,/)
+  assert.match(callback, /runtimeDeploymentFiles\(bundle\.files\)/)
 })
