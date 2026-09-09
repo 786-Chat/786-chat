@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import {
   createProjectRevision,
-  listProjectRevisions,
+  listProjectRevisionSummaries,
   restoreProjectRevision,
 } from "@/lib/786-admin/project-revisions"
 import { getProjectWithData } from "@/lib/786-admin/projects"
@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: Context) {
 
   const { id } = await params
   try {
-    const revisions = await listProjectRevisions(id, owner, 100)
+    const revisions = await listProjectRevisionSummaries(id, owner, 100)
     const target = revisions.find((revision) => UNDOABLE_SOURCES.has(revision.source))
     if (!target) {
       return NextResponse.json({ error: "There is no earlier user change to undo." }, { status: 409 })
@@ -51,7 +51,12 @@ export async function POST(request: Request, { params }: Context) {
 
     return NextResponse.json({
       project,
-      restoredRevision,
+      restoredRevision: {
+        id: restoredRevision.id,
+        label: restoredRevision.label,
+        source: restoredRevision.source,
+        created_at: restoredRevision.created_at,
+      },
       build: buildPayload?.build || null,
       rebuildQueued: Boolean(buildPayload?.queued),
     })

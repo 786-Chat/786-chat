@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
 import {
   createProjectRevision,
-  listProjectRevisions,
+  listProjectRevisionSummaries,
 } from "@/lib/786-admin/project-revisions"
 import {
   getLastSuccessfulPublishedBuild,
@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: Ctx) {
   const requested = Number(new URL(request.url).searchParams.get("limit") || 50)
   const safeLimit = Number.isFinite(requested) ? requested : 50
   const [revisions, recoveryBuild] = await Promise.all([
-    listProjectRevisions(id, email, safeLimit),
+    listProjectRevisionSummaries(id, email, safeLimit),
     getLastSuccessfulPublishedBuild(id, email),
   ])
   const recoveryRevision = recoveryBuild ? lastSuccessfulPublishedRevision(recoveryBuild) : null
