@@ -64,7 +64,7 @@ export async function createProjectRevision(input: {
   ownerEmail: string
   label?: string
   source?: string
-}): Promise<AdminProjectRevision> {
+}): Promise<AdminProjectRevisionSummary> {
   await ensureProjectRevisionSchema()
   const owner = normalizeEmail(input.ownerEmail)
   const project = await getProjectWithData(input.projectId, owner)
@@ -83,8 +83,8 @@ export async function createProjectRevision(input: {
       ${JSON.stringify(project.preview_state || {})}::jsonb,
       ${JSON.stringify(project.metadata || {})}::jsonb
     )
-    RETURNING *
-  `) as unknown as AdminProjectRevision[]
+    RETURNING id, project_id, owner_email, label, source, created_at
+  `) as unknown as AdminProjectRevisionSummary[]
 
   return rows[0]
 }
@@ -124,6 +124,23 @@ export async function listProjectRevisions(
   `) as unknown as AdminProjectRevision[]
 }
 
+async function getProjectRevisionSnapshot(input: {
+  revisionId: string
+  projectId: string
+  ownerEmail: string
+}): Promise<AdminProjectRevision | null> {
+  const rows = (await sql`
+    SELECT id, project_id, owner_email, label, source, files,
+           preview_state, metadata, created_at
+    FROM admin_project_revisions
+    WHERE id = ${input.revisionId}
+      AND project_id = ${input.projectId}
+      AND owner_email = ${normalizeEmail(input.ownerEmail)}
+    LIMIT 1
+  `) as unknown as AdminProjectRevision[]
+  return rows[0] || null
+}
+
 export async function restoreProjectRevision(input: {
   revisionId: string
   projectId: string
@@ -131,16 +148,7 @@ export async function restoreProjectRevision(input: {
 }): Promise<AdminProjectRevision> {
   await ensureProjectRevisionSchema()
   const owner = normalizeEmail(input.ownerEmail)
-  const rows = (await sql`
-    SELECT id, project_id, owner_email, label, source, files,
-           preview_state, metadata, created_at
-    FROM admin_project_revisions
-    WHERE id = ${input.revisionId}
-      AND project_id = ${input.projectId}
-      AND owner_email = ${owner}
-    LIMIT 1
-  `) as unknown as AdminProjectRevision[]
-  const revision = rows[0]
+  const revision = await getProjectRevisionSnapshot(input)
   if (!revision) throw new Error("Revision not found")
 
   const files = revision.files || {}
@@ -180,11 +188,20 @@ export async function undoLatestProjectChange(input: {
     preview_state: project.preview_state || {},
     metadata: project.metadata || {},
   })
-  const revisions = await listProjectRevisions(input.projectId, owner, 100)
-  const target = revisions.find((revision) =>
-    !["undo-safety", "restore-safety"].includes(revision.source) &&
-    revisionFingerprint(revision) !== currentFingerprint
-  )
+  const summaries = await listProjectRevisionSummaries(input.projectId, owner, 100)
+  let target: AdminProjectRevision | null = null
+  for (const summary of summaries) {
+    if (["undo-safety", "restore-safety"].includes(summary.source)) continue
+    const candidate = await getProjectRevisionSnapshot({
+      revisionId: summary.id,
+      projectId: input.projectId,
+      ownerEmail: owner,
+    })
+    if (candidate && revisionFingerprint(candidate) !== currentFingerprint) {
+      target = candidate
+      break
+    }
+  }
   if (!target) return null
 
   const currentFiles = project.files || {}
