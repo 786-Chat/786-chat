@@ -11,7 +11,7 @@ test("chat edits target text, colour, animation and design without broad replace
   ])
 
   for (const kind of ["header-colour", "colour", "animation", "design"]) {
-    assert.match(intent, new RegExp(`kind: \\"${kind}\\"`))
+    assert.match(intent, new RegExp(`kind: "${kind}"`))
   }
   assert.match(intent, /Targeted colour edit/)
   assert.match(intent, /Targeted animation edit/)
