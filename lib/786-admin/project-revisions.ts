@@ -14,6 +14,11 @@ export type AdminProjectRevision = {
   created_at: string
 }
 
+export type AdminProjectRevisionSummary = Pick<
+  AdminProjectRevision,
+  "id" | "project_id" | "owner_email" | "label" | "source" | "created_at"
+>
+
 function normalizeEmail(email: string) {
   return email.toLowerCase().trim()
 }
@@ -82,6 +87,23 @@ export async function createProjectRevision(input: {
   `) as unknown as AdminProjectRevision[]
 
   return rows[0]
+}
+
+export async function listProjectRevisionSummaries(
+  projectId: string,
+  ownerEmail: string,
+  limit = 50,
+): Promise<AdminProjectRevisionSummary[]> {
+  await ensureProjectRevisionSchema()
+  const safeLimit = Math.min(Math.max(limit, 1), 100)
+  return (await sql`
+    SELECT id, project_id, owner_email, label, source, created_at
+    FROM admin_project_revisions
+    WHERE project_id = ${projectId}
+      AND owner_email = ${normalizeEmail(ownerEmail)}
+    ORDER BY created_at DESC
+    LIMIT ${safeLimit}
+  `) as unknown as AdminProjectRevisionSummary[]
 }
 
 export async function listProjectRevisions(
