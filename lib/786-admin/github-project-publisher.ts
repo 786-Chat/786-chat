@@ -3,6 +3,7 @@ const DEFAULT_BASE_BRANCH = "main"
 const GITHUB_REQUEST_ATTEMPTS = 4
 const GITHUB_RETRY_BASE_MS = 2_000
 const GITHUB_RETRY_MAX_MS = 30_000
+const GITHUB_BLOB_CONCURRENCY = 6
 
 type GitHubRef = { object: { sha: string } }
 type GitHubCommit = { tree: { sha: string } }
@@ -35,6 +36,30 @@ function cleanSegment(value: string): string {
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  task: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!values.length) return []
+  const results = new Array<R>(values.length)
+  let nextIndex = 0
+
+  const worker = async () => {
+    while (true) {
+      const index = nextIndex
+      nextIndex += 1
+      if (index >= values.length) return
+      results[index] = await task(values[index], index)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, concurrency), values.length) }, () => worker()),
+  )
+  return results
 }
 
 function isRetryableGitHubLimit(status: number, detail: string): boolean {
@@ -122,25 +147,23 @@ export async function publishGeneratedProjectToGitHub(input: {
     `/git/commits/${baseRef.object.sha}`,
   )
 
-  const treeEntries: Array<{
-    path: string
-    mode: "100644"
-    type: "blob"
-    sha: string
-  }> = []
-
-  for (const [relativePath, content] of Object.entries(input.files)) {
-    const blob = await githubRequest<GitHubBlob>(repository, "/git/blobs", {
-      method: "POST",
-      body: JSON.stringify({ content, encoding: "utf-8" }),
-    })
-    treeEntries.push({
-      path: `${directory}/${relativePath}`,
-      mode: "100644",
-      type: "blob",
-      sha: blob.sha,
-    })
-  }
+  const fileEntries = Object.entries(input.files)
+  const treeEntries = await mapWithConcurrency(
+    fileEntries,
+    GITHUB_BLOB_CONCURRENCY,
+    async ([relativePath, content]) => {
+      const blob = await githubRequest<GitHubBlob>(repository, "/git/blobs", {
+        method: "POST",
+        body: JSON.stringify({ content, encoding: "utf-8" }),
+      })
+      return {
+        path: `${directory}/${relativePath}`,
+        mode: "100644" as const,
+        type: "blob" as const,
+        sha: blob.sha,
+      }
+    },
+  )
 
   const manifest = JSON.stringify(
     {
