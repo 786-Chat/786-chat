@@ -77,11 +77,18 @@ export function hardenFoodSafetyRuntime(
     }
     const helper = [
       helperMarker,
-      "function toPublicRestaurant(restaurant: any) {",
-      "  const sensitiveField = /(?:password|secret|apiKey|accessToken|accountNumber|accountName|sortCode|iban|merchantCode|merchantId|loginUsername|staffName|stripeAccountId|stripePublishableKey|squareLocationId)/i;",
+      "const publicRestaurantSensitiveField = /(?:password|secret|apiKey|token|accountNumber|accountName|sortCode|iban|merchantCode|merchantId|loginUsername|staffName|stripeAccountId|stripePublishableKey|squareLocationId)/i;",
+      "function redactPublicRestaurantValue(value: any): any {",
+      "  if (Array.isArray(value)) return value.map(redactPublicRestaurantValue);",
+      "  if (!value || typeof value !== \"object\") return value;",
       "  return Object.fromEntries(",
-      "    Object.entries(restaurant).filter(([key]) => !sensitiveField.test(key)),",
+      "    Object.entries(value)",
+      "      .filter(([key]) => !publicRestaurantSensitiveField.test(key))",
+      "      .map(([key, nestedValue]) => [key, redactPublicRestaurantValue(nestedValue)]),",
       "  );",
+      "}",
+      "function toPublicRestaurant(restaurant: any) {",
+      "  return redactPublicRestaurantValue(restaurant);",
       "}",
       "",
     ].join("\n")
