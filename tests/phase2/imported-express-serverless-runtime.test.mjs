@@ -57,7 +57,8 @@ test("imported Express runtime emits resolvable directory imports and skips list
     "dist/**",
   )
   assert.match(output["index.ts"], /from "\.\/dist\/index\.cjs"/)
-  assert.match(output["index.ts"], /export default runtime\.app/)
+  assert.match(output["index.ts"], /export default async function handler\(req, res\)/)
+  assert.match(output["index.ts"], /return runtime\.app\(req, res\)/)
   assert.match(output["script/build.ts"], /["']p-retry["']/)
   assert.match(output["script/build.ts"], /["']@google\/genai["']/)
   assert.equal(originalServer.includes("process.env.VERCEL"), false)
