@@ -7,6 +7,7 @@ const buildRoute = readFileSync("app/api/786-admin/projects/[id]/build/route.ts"
 const store = readFileSync("lib/786-admin/build-runner-store.ts", "utf8")
 const publisher = readFileSync("lib/786-admin/github-project-publisher.ts", "utf8")
 const reconciliation = readFileSync("lib/786-admin/preview-reconciliation.ts", "utf8")
+const workflow = readFileSync(".github/workflows/generated-project-build.yml", "utf8")
 
 test("publisher checkpoints commit metadata before waiting for Vercel", () => {
   assert.match(callback, /recordRunnerPublishProgress/)
@@ -16,21 +17,40 @@ test("publisher checkpoints commit metadata before waiting for Vercel", () => {
   assert.ok(checkpointIndex >= 0 && deployIndex >= 0 && checkpointIndex < deployIndex)
 })
 
-test("identical source retries reuse prior GitHub publish metadata", () => {
+test("same build callback retries reuse checkpointed publish metadata", () => {
+  assert.match(store, /export async function getRunnerPublishProgress/)
+  assert.match(store, /WHERE id = \$\{buildId\}/)
+  assert.match(callback, /getRunnerPublishProgress\(body\.buildId\)/)
+  assert.match(callback, /const reusablePublish = currentPublish \?\? \(/)
+  assert.match(callback, /skipped duplicate GitHub upload/)
+})
+
+test("identical source retries can reuse prior GitHub publish metadata", () => {
   assert.match(store, /getReusableRunnerPublish/)
   assert.match(store, /source_version = \$\{input\.sourceVersion\}/)
   assert.match(store, /id <> \$\{input\.excludeBuildId\}/)
   assert.match(callback, /getReusableRunnerPublish/)
   assert.match(callback, /reusablePublish \?\? await publishGeneratedProjectToGitHub/)
-  assert.match(callback, /skipped duplicate GitHub upload/)
 })
 
-test("GitHub publisher backs off on secondary rate limits", () => {
+test("GitHub publisher backs off and uploads large generated sources with bounded concurrency", () => {
   assert.match(publisher, /GITHUB_REQUEST_ATTEMPTS = 4/)
   assert.match(publisher, /isRetryableGitHubLimit/)
   assert.match(publisher, /secondary rate limit/)
   assert.match(publisher, /retry-after/)
   assert.match(publisher, /x-ratelimit-reset/)
+  assert.match(publisher, /GITHUB_BLOB_CONCURRENCY = 6/)
+  assert.match(publisher, /mapWithConcurrency/)
+})
+
+test("slow Vercel readiness is handed off before the runner transport timeout", () => {
+  assert.match(callback, /PREVIEW_CALLBACK_DEPLOY_WAIT_MS = 180_000/)
+  assert.match(callback, /Promise\.race/)
+  assert.match(callback, /status: "running"/)
+  assert.match(callback, /\{ status: 202 \}/)
+  assert.match(callback, /normal build polling will reconcile the deployment/)
+  assert.match(workflow, /--max-time 240/)
+  assert.match(workflow, /--retry 1/)
 })
 
 test("build polling reconciles a READY Vercel preview", () => {
