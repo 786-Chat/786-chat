@@ -213,10 +213,14 @@ jobs:
             errorMessage,
           }))
           NODE
+          # The callback checkpoints GitHub publish metadata before Vercel readiness and
+          # hands slow previews back to normal polling after 180s. Give that handoff a
+          # larger transport window than the old 115s timeout, without retrying four
+          # long POSTs that could duplicate publishing work.
           curl --fail --silent --show-error \
-            --retry 3 \
+            --retry 1 \
             --connect-timeout 15 \
-            --max-time 115 \
+            --max-time 240 \
             -X POST \
             -H "Authorization: Bearer $RUNNER_SECRET" \
             -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
