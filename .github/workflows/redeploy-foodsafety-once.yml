@@ -29,6 +29,6 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/json" \
-            --data '{"ref":"main","inputs":{"build_id":"2e370781-f342-4008-b8d8-4888c41ae654","project_id":"dd91a4bb-6bd0-4b67-9412-c452321a6452","base_url":"https://786.chat"}}' \
+            --data '{"ref":"main","inputs":{"build_id":"be78d54d-7d37-4c66-a6c5-0405bae0a1b9","project_id":"dd91a4bb-6bd0-4b67-9412-c452321a6452","base_url":"https://786.chat"}}' \
             https://api.github.com/repos/786-Chat/786-chat/actions/workflows/generated-project-build.yml/dispatches
           echo "FoodSafety generated-project build dispatched."
