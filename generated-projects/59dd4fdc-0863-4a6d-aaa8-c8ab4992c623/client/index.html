@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" style="background: #1a1a2e;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Link24">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/link24-icon.png?v=3">
+    <link rel="apple-touch-icon" sizes="180x180" href="/link24-icon.png?v=3">
+    <link rel="apple-touch-icon" sizes="192x192" href="/link24-icon.png?v=3">
+    <link rel="apple-touch-icon" sizes="512x512" href="/link24-icon.png?v=3">
+
+    <script>
+      if(!Object.hasOwn){Object.hasOwn=function(o,k){return Object.prototype.hasOwnProperty.call(o,k)}}
+      if(!Array.prototype.at){Array.prototype.at=function(n){n=Math.trunc(n)||0;if(n<0)n+=this.length;if(n<0||n>=this.length)return undefined;return this[n]}}
+      if(!String.prototype.replaceAll){String.prototype.replaceAll=function(s,r){return this.split(s).join(r)}}
+      if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){regs.forEach(function(r){r.update()})})}
+      if('caches' in window){caches.keys().then(function(names){names.forEach(function(n){if(n!=='fs-dashboard-v15'){caches.delete(n)}})})}
+    </script>
+    <title>Link24 Phone — link24.cloud</title>
+    <meta name="description" content="Link24 Phone — UK cloud phone service. Buy a number, make and receive calls anywhere. Powered by link24.cloud." />
+    <meta property="og:title" content="Link24 Phone" />
+    <meta property="og:description" content="UK cloud phone service. Buy a number, make and receive calls anywhere. Powered by link24.cloud." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://link24.cloud" />
+    <meta property="og:image" content="/link24-icon.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@link24" />
+    <meta name="twitter:title" content="Link24 Phone" />
+    <meta name="twitter:description" content="UK cloud phone service — link24.cloud" />
+    <meta name="twitter:image" content="/link24-icon.png" />
+
+    <link rel="icon" type="image/png" href="/link24-icon.png?v=3" />
+    <link rel="shortcut icon" type="image/png" href="/link24-icon.png?v=3" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      @font-face {
+        font-family: 'Jameel Noori Nastaleeq';
+        src: url('/fonts/JameelNooriNastaleeq.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }
+    </style>
+    
+    <style>
+      html, body { 
+        background: #1a1a2e !important;
+        min-height: 100vh;
+      }
+      
+      /* Old HTML language selector - hidden, replaced by React component */
+      #custom-language-selector {
+        display: none !important;
+      }
+      
+      /* Hide Google's default elements */
+      #google_translate_element { display: none !important; }
+      .goog-te-banner-frame { display: none !important; }
+      body { top: 0 !important; }
+      .goog-te-balloon-frame { display: none !important; }
+      #goog-gt-tt { display: none !important; }
+      .goog-tooltip { display: none !important; }
+      .goog-text-highlight { background: none !important; box-shadow: none !important; }
+      
+      /* Exclude UI elements from translation - they should keep original text */
+      button, [role="button"], input, select, textarea, label,
+      nav, header, footer, .sidebar, .navigation,
+      [data-testid*="button"], [data-testid*="input"],
+      .notranslate {
+        font: inherit !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Main App -->
+    <div id="root">
+      <!-- Instant Loading Screen - Shows before React loads -->
+      <div id="initial-loader" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #0f0f17 0%, #1a1a2e 50%, #0f0f17 100%);">
+        <div style="text-align: center;">
+          <div style="position: relative; width: 64px; height: 64px; margin: 0 auto;">
+            <div style="position: absolute; width: 64px; height: 64px; border: 4px solid rgba(168, 85, 247, 0.3); border-radius: 50%; animation: pulse 2s infinite;"></div>
+            <div style="position: absolute; width: 64px; height: 64px; border: 4px solid transparent; border-top-color: #f59e0b; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+          </div>
+          <p style="color: rgba(255,255,255,0.7); margin-top: 24px; font-size: 18px; font-family: Arial, sans-serif;">Loading...</p>
+        </div>
+      </div>
+      <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+      </style>
+    </div>
+    
+    <!-- Custom Language Selector -->
+    <div id="custom-language-selector">
+      <select id="language-select" onchange="translatePage(this.value)">
+        <option value="">🌐 Select Language</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="ur">🇵🇰 اردو (Urdu)</option>
+        <option value="ar">🇸🇦 العربية (Arabic)</option>
+        <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
+        <option value="fr">🇫🇷 Français (French)</option>
+        <option value="zh-CN">🇨🇳 中文 (Chinese)</option>
+        <option value="el">🇬🇷 Ελληνικά (Greek)</option>
+        <option value="hu">🇭🇺 Magyar (Hungarian)</option>
+        <option value="it">🇮🇹 Italiano (Italian)</option>
+        <option value="ja">🇯🇵 日本語 (Japanese)</option>
+        <option value="fa">🇮🇷 فارسی (Persian)</option>
+        <option value="pl">🇵🇱 Polski (Polish)</option>
+        <option value="es">🇪🇸 Español (Spanish)</option>
+        <option value="tr">🇹🇷 Türkçe (Turkish)</option>
+        <option value="bn">🇧🇩 বাংলা (Bengali)</option>
+        <option value="pt">🇵🇹 Português (Portuguese)</option>
+        <option value="ru">🇷🇺 Русский (Russian)</option>
+        <option value="de">🇩🇪 Deutsch (German)</option>
+        <option value="ko">🇰🇷 한국어 (Korean)</option>
+      </select>
+    </div>
+    
+    <!-- Hidden Google Translate Element -->
+    <div id="google_translate_element"></div>
+    
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(reg) {
+              reg.update();
+            });
+          });
+          navigator.serviceWorker.register('/sw.js?v=12').then(function(reg) {
+            console.log('Service Worker registered:', reg.scope);
+            reg.update();
+          }).catch(function(err) {
+            console.log('Service Worker registration failed:', err);
+          });
+        });
+      }
+    </script>
+    
+    <script type="text/javascript">
+      function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+          pageLanguage: 'en',
+          includedLanguages: 'en,ur,ar,hi,fr,zh-CN,el,hu,it,ja,fa,pl,es,tr,bn,pt,ru,de,ko',
+          autoDisplay: false
+        }, 'google_translate_element');
+        
+        // Restore saved language after Google Translate loads
+        setTimeout(function() {
+          var savedLang = localStorage.getItem('selectedLanguage');
+          if (savedLang && savedLang !== 'en') {
+            translatePage(savedLang);
+            var selectEl = document.getElementById('language-select');
+            if (selectEl) selectEl.value = savedLang;
+          }
+        }, 1000);
+      }
+      
+      function translatePage(langCode) {
+        if (!langCode) return;
+        
+        // Save language preference
+        localStorage.setItem('selectedLanguage', langCode);
+        
+        // Update the custom selector to match
+        var selectEl = document.getElementById('language-select');
+        if (selectEl && selectEl.value !== langCode) {
+          selectEl.value = langCode;
+        }
+        
+        // Always get a fresh reference to the combo
+        function doTranslate() {
+          var selects = document.querySelectorAll('.goog-te-combo');
+          for (var i = 0; i < selects.length; i++) {
+            var select = selects[i];
+            if (select && select.options && select.options.length > 0) {
+              select.value = langCode;
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              
+              // Also trigger via fireEvent for older browsers
+              if (typeof select.fireEvent !== 'undefined') {
+                select.fireEvent('onchange');
+              }
+              return true;
+            }
+          }
+          return false;
+        }
+        
+        // Try immediately
+        if (!doTranslate()) {
+          // If failed, retry with interval
+          var attempts = 0;
+          var interval = setInterval(function() {
+            attempts++;
+            if (doTranslate() || attempts > 30) {
+              clearInterval(interval);
+            }
+          }, 100);
+        }
+      }
+      
+      // Expose to React components
+      window.changeLanguage = translatePage;
+      
+      // Re-apply translation when page content changes (for SPA navigation)
+      var observer = new MutationObserver(function(mutations) {
+        var savedLang = localStorage.getItem('selectedLanguage');
+        if (savedLang && savedLang !== 'en') {
+          // Debounce the re-translation
+          clearTimeout(window.translateDebounce);
+          window.translateDebounce = setTimeout(function() {
+            var select = document.querySelector('.goog-te-combo');
+            if (select && select.value !== savedLang) {
+              translatePage(savedLang);
+            }
+          }, 500);
+        }
+      });
+      
+      // Start observing after page loads
+      window.addEventListener('load', function() {
+        observer.observe(document.body, { childList: true, subtree: true });
+      });
+    </script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+  </body>
+</html>
