@@ -15,7 +15,6 @@ export async function POST() {
   )
 
   const expiredCookie = {
-    value: "",
     httpOnly: true,
     secure: true,
     sameSite: "none" as const,
@@ -25,10 +24,8 @@ export async function POST() {
   }
 
   for (const name of COOKIE_NAMES) {
-    // Current host-only cookies.
-    response.cookies.set(name, expiredCookie)
+    response.cookies.set(name, "", expiredCookie)
 
-    // Remove older cookies that may have been issued for the apex domain.
     response.headers.append(
       "Set-Cookie",
       `${name}=; Path=/; Domain=786.chat; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=None`
