@@ -1,4 +1,4 @@
-name: FoodSafety Publish Branch Isolation Once
+name: FoodSafety Republish Branch Isolation After Runtime Hardening
 
 on:
   push:
