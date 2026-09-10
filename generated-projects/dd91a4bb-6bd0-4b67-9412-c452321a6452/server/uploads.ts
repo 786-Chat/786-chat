@@ -45,6 +45,19 @@ const MAX_SIZE = 10 * 1024 * 1024; // 10MB for images
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB for videos
 
 async function uploadToCloudStorage(buffer: Buffer, filename: string, contentType: string): Promise<string> {
+  // 786.Chat Vercel Blob upload-router compatibility: bypass Replit sidecar storage on Vercel.
+  if (process.env.VERCEL) {
+    const { put } = await import("@vercel/blob");
+    const objectId = randomUUID();
+    const ext = filename.split(".").pop() || "bin";
+    const pathname = `uploads/${objectId}.${ext}`;
+    await put(pathname, buffer, {
+      access: "private",
+      contentType,
+      addRandomSuffix: false,
+    });
+    return `/objects/vercel/${encodeURIComponent(pathname)}`;
+  }
   const publicPath = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(",")[0];
   if (!publicPath) {
     throw new Error("PUBLIC_OBJECT_SEARCH_PATHS not configured");
