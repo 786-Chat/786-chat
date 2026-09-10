@@ -1,0 +1,26 @@
+{
+  "name": "Link24-Customer",
+  "short_name": "Link24-Customer",
+  "description": "Order food online - fast and easy restaurant ordering",
+  "start_url": "/menu",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722780864-bf148012-7a95-4036-a76f-b7f5d14aa83b-icon-customer-192-KlFXq3Lmso5kku76PCt9u2gZDhhChN.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1788722781792-4dcf5a16-02e9-4fef-8d25-7090f7b723e3-icon-customer-512-y9rO6Bxem33yRMpq2xQbVtWrsOt37F.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "shopping", "lifestyle"],
+  "prefer_related_applications": false
+}
