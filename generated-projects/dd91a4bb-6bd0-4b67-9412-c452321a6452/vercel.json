@@ -5,6 +5,13 @@
   "functions": {
     "index.ts": {
       "includeFiles": "dist/**"
+    },
+    "api/blob-object.ts": {}
+  },
+  "rewrites": [
+    {
+      "source": "/objects/vercel/:path*",
+      "destination": "/api/blob-object?path=:path*"
     }
-  }
+  ]
 }
