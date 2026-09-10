@@ -19,7 +19,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          BUILD_ID: 949e548d-37e8-4cf9-8c71-6003f383f217
+          BUILD_ID: a821ef85-7751-4dc9-acd0-4c48223cee28
           PROJECT_ID: dd91a4bb-6bd0-4b67-9412-c452321a6452
           BASE_URL: https://786.chat
         shell: bash
