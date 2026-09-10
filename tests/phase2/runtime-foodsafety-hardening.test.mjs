@@ -11,6 +11,15 @@ test("FoodSafety Vercel runtime skips optional e-commerce seed", () => {
   assert.match(helper, /await seedEcommerceData\(\);/)
 })
 
+test("FoodSafety admin menu stays scoped to the selected branch on every rebuild", () => {
+  assert.match(helper, /admin branch menu isolation/)
+  assert.match(helper, /getMenuItems\(selectedRestaurantMenu\)/)
+  assert.match(helper, /restaurants\.map\(\(restaurant: Restaurant\) => getMenuItems\(restaurant\.id\)\)/)
+  assert.match(helper, /queryKey: \[\\"\/api\/menu\\", selectedRestaurantMenu/)
+  assert.match(helper, /restaurantId=\$\{encodeURIComponent\(selectedRestaurantMenu\)\}/)
+  assert.doesNotMatch(helper, /queryFn: \(\) => getMenuItems\(\),/)
+})
+
 test("FoodSafety public restaurant responses recursively redact sensitive fields", () => {
   assert.match(helper, /function redactPublicRestaurantValue/)
   assert.match(helper, /Array\.isArray\(value\)/)
