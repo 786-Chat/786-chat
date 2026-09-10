@@ -25,12 +25,11 @@ jobs:
           python3 scripts/patch-foodsafety-upload-runtime.py
           node --test tests/phase2/imported-replit-object-storage-runtime.test.mjs
 
-      - name: Commit final patch
+      - name: Commit runtime code and regression test
         run: |
           set -euo pipefail
           git config user.name "786.Chat"
           git config user.email "link24.7days@gmail.com"
-          git rm .github/workflows/patch-foodsafety-upload-runtime-once.yml scripts/patch-foodsafety-upload-runtime.py
-          git add lib/786-admin/runtime-deployment-files.ts tests/phase2/imported-replit-object-storage-runtime.test.mjs .github/workflows/foodsafety-image-upload-smoke-once.yml
+          git add lib/786-admin/runtime-deployment-files.ts tests/phase2/imported-replit-object-storage-runtime.test.mjs
           git commit -m "fix(import): route Replit uploads through Vercel Blob"
           git push origin HEAD
