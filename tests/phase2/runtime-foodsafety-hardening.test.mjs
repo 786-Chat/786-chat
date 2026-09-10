@@ -17,7 +17,7 @@ test("FoodSafety admin menu stays scoped to the selected branch on every rebuild
   assert.match(helper, /restaurants\.map\(\(restaurant: Restaurant\) => getMenuItems\(restaurant\.id\)\)/)
   assert.match(helper, /queryKey: \[\\"\/api\/menu\\", selectedRestaurantMenu/)
   assert.match(helper, /restaurantId=\$\{encodeURIComponent\(selectedRestaurantMenu\)\}/)
-  assert.doesNotMatch(helper, /queryFn: \(\) => getMenuItems\(\),/)
+  assert.match(helper, /replaceRequired\([\s\S]*adminSource,[\s\S]*legacyMenuQueries,[\s\S]*branchAwareMenuQueries,[\s\S]*admin branch menu isolation/)
 })
 
 test("FoodSafety public restaurant responses recursively redact sensitive fields", () => {
