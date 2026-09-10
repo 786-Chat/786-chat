@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
 
           PNG_B64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
-          payload=$(jq -n --arg image "data:image/png;base64,$PNG_B64" --arg filename "smoke.png" '{image:$image,filename:$filename}')
+          payload=$(jq -n --arg image "data:image/png;base64,$PNG_B64" '{image:$image}')
 
           response=$(curl --fail-with-body --silent --show-error \
             --retry 3 --retry-delay 2 \
