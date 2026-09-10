@@ -1,0 +1,48 @@
+name: FoodSafety Image Upload Smoke Once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/foodsafety-image-upload-smoke-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-image-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Upload and retrieve a tiny PNG on live FoodSafety alias
+        shell: bash
+        env:
+          BASE_URL: https://786-generated-dd91a4bb6bd0-mujeebpro.vercel.app
+        run: |
+          set -euo pipefail
+
+          PNG_B64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+          payload=$(jq -n --arg image "data:image/png;base64,$PNG_B64" '{image:$image}')
+
+          response=$(curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 2 \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "$BASE_URL/api/upload-image")
+
+          object_url=$(printf '%s' "$response" | jq -er '.url')
+          case "$object_url" in
+            /objects/vercel/*) ;;
+            *) echo "Unexpected upload URL: $object_url" >&2; exit 1 ;;
+          esac
+
+          printf '%s' "$PNG_B64" | base64 --decode > expected.png
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 2 \
+            "$BASE_URL$object_url" \
+            -o downloaded.png
+
+          test -s downloaded.png
+          cmp expected.png downloaded.png
+          echo "FoodSafety image upload and object retrieval passed."
