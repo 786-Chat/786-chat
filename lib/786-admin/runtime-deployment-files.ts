@@ -417,6 +417,8 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     '    req.path.startsWith("/uploads/") ||',
     '    req.path === "/attached_assets" ||',
     '    req.path.startsWith("/attached_assets/") ||',
+    '    req.path === "/objects" ||',
+    '    req.path.startsWith("/objects/") ||',
     '    req.path === "/driver-downloads" ||',
     '    req.path.startsWith("/driver-downloads/");',
     "",
