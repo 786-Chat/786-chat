@@ -74,10 +74,27 @@ export async function duplicateRestaurant(
 
 // Menu API
 export async function getMenuItems(restaurantId?: string): Promise<MenuItem[]> {
-  const url = restaurantId ? `${API_BASE}/menu?restaurantId=${restaurantId}` : `${API_BASE}/menu`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch menu items");
-  return res.json();
+  if (restaurantId) {
+    const res = await fetch(`${API_BASE}/menu?restaurantId=${encodeURIComponent(restaurantId)}`);
+    if (!res.ok) throw new Error("Failed to fetch menu items");
+    return res.json();
+  }
+
+  // Super-admin screens must only consume menus owned by current restaurant rows.
+  // Fetching each current branch explicitly prevents stale/orphan duplicate branch IDs
+  // from leaking into another branch's menu view after a branch is duplicated/renamed.
+  const restaurants = await getRestaurants();
+  const branchMenus = await Promise.all(
+    restaurants.map(async (restaurant) => {
+      const res = await fetch(`${API_BASE}/menu?restaurantId=${encodeURIComponent(restaurant.id)}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch menu items for branch ${restaurant.id}`);
+      }
+      return (await res.json()) as MenuItem[];
+    }),
+  );
+
+  return branchMenus.flat();
 }
 
 export async function createMenuItem(item: InsertMenuItem): Promise<MenuItem> {
