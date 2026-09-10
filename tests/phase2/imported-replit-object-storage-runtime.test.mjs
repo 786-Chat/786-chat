@@ -15,3 +15,12 @@ test("imported Replit object storage is adapted to Vercel Blob at deployment tim
   assert.match(helper, /get\(vercelBlobPath, \{ access: "private" \}\)/)
   assert.match(helper, /Readable\.fromWeb\(result\.stream as any\)\.pipe\(res\)/)
 })
+
+
+test("imported Replit uploads router is adapted to Vercel Blob at deployment time", () => {
+  assert.match(helper, /patchImportedReplitUploadRouter/)
+  assert.match(helper, /server\/uploads\.ts/)
+  assert.match(helper, /async function uploadToCloudStorage/)
+  assert.match(helper, /Vercel Blob upload-router compatibility/)
+  assert.match(helper, /objects\/vercel/)
+})

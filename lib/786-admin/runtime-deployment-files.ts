@@ -223,6 +223,44 @@ function patchImportedReplitObjectStorage(runtimeFiles: Record<string, string>) 
   runtimeFiles[storagePath] = source
 }
 
+
+function patchImportedReplitUploadRouter(runtimeFiles: Record<string, string>) {
+  const uploadsPath = "server/uploads.ts"
+  let source = runtimeFiles[uploadsPath]
+  if (
+    !source?.includes("REPLIT_SIDECAR_ENDPOINT") ||
+    !source.includes("PUBLIC_OBJECT_SEARCH_PATHS") ||
+    !source.includes("async function uploadToCloudStorage") ||
+    !source.includes("randomUUID")
+  ) {
+    return
+  }
+
+  try {
+    const pkg = JSON.parse(runtimeFiles["package.json"] || "{}") as {
+      dependencies?: Record<string, string>
+    }
+    pkg.dependencies = {
+      ...(pkg.dependencies || {}),
+      "@vercel/blob": pkg.dependencies?.["@vercel/blob"] || "^2.4.0",
+    }
+    runtimeFiles["package.json"] = `${JSON.stringify(pkg, null, 2)}\n`
+  } catch {
+    return
+  }
+
+  const uploadSignature =
+    "async function uploadToCloudStorage(buffer: Buffer, filename: string, contentType: string): Promise<string> {\n"
+  if (!source.includes(uploadSignature)) return
+
+  source = source.replace(
+    uploadSignature,
+    `${uploadSignature}  // 786.Chat Vercel Blob upload-router compatibility: bypass Replit sidecar storage on Vercel.\n  if (process.env.VERCEL) {\n    const { put } = await import("@vercel/blob");\n    const objectId = randomUUID();\n    const ext = filename.split(".").pop() || "bin";\n    const pathname = \`uploads/\${objectId}.\${ext}\`;\n    await put(pathname, buffer, {\n      access: "private",\n      contentType,\n      addRandomSuffix: false,\n    });\n    return \`/objects/vercel/\${encodeURIComponent(pathname)}\`;\n  }\n`,
+  )
+
+  runtimeFiles[uploadsPath] = source
+}
+
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   const packageSource = runtimeFiles["package.json"]
   const serverPath = "server/index.ts"
@@ -249,6 +287,7 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   if (!usesExpress) return
 
   patchImportedReplitObjectStorage(runtimeFiles)
+  patchImportedReplitUploadRouter(runtimeFiles)
 
   // Vite writes the imported frontend during the custom build, after Vercel's
   // source scan. Explicitly include that generated directory in the root
