@@ -1,4 +1,4 @@
-name: FoodSafety Republish Branch Isolation After Runtime Hardening
+name: FoodSafety Republish Image Upload Runtime After Blob Hardening
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          BUILD_ID: a821ef85-7751-4dc9-acd0-4c48223cee28
+          BUILD_ID: ef71d366-d35f-4605-878a-177a81cc57b3
           PROJECT_ID: dd91a4bb-6bd0-4b67-9412-c452321a6452
           BASE_URL: https://786.chat
         shell: bash
