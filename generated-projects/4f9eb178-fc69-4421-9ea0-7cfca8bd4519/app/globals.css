@@ -1,0 +1,168 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --deepgreen: #0f3d2e;
+  --cream: #fdf6e3;
+  --gold: #c9a227;
+  --lightblue: #e0f2fe;
+  --teal: #ccfbf1;
+}
+
+body {
+  background: linear-gradient(135deg, #fdf6e3 0%, #fef9e7 50%, #fdf2e9 100%);
+  color: #1a202c;
+  min-height: 100vh;
+}
+
+/* Animated multi-colour background */
+.animated-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(120deg, #fdf6e3, #e0f2fe, #ccfbf1, #fef9e7, #fdf6e3);
+  background-size: 400% 400%;
+  animation: gradientShift 20s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Page entrance */
+.page-enter {
+  animation: pageEnter 0.4s ease-out both;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Section fade/slide */
+.section-enter {
+  animation: sectionEnter 0.5s ease-out both;
+}
+
+@keyframes sectionEnter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Customer card entrance */
+.customer-card {
+  animation: cardEnter 0.4s ease-out both;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .customer-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Buttons */
+.btn-primary, .btn-secondary {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.btn-primary:hover, .btn-secondary:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* VIP badge pulse */
+.vip-badge {
+  animation: vipPulse 2s ease-in-out infinite;
+}
+
+@keyframes vipPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4); }
+  50% { box-shadow: 0 0 8px 2px rgba(201, 162, 39, 0.3); }
+}
+
+/* Search input focus */
+.input {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input:focus {
+  border-color: var(--deepgreen);
+  box-shadow: 0 0 0 3px rgba(15, 61, 46, 0.1);
+}
+
+/* Nav links */
+.nav-link {
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--gold);
+  transform: translateY(-1px);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animated-bg,
+  .page-enter,
+  .section-enter,
+  .customer-card,
+  .vip-badge,
+  .btn-primary,
+  .btn-secondary,
+  .input,
+  .nav-link {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl shadow-lg p-6;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  }
+  .card-blue {
+    @apply rounded-xl shadow-lg p-6;
+    background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+  }
+  .card-gold {
+    @apply rounded-xl shadow-lg p-6;
+    background: linear-gradient(135deg, #fef9e7 0%, #ffffff 100%);
+  }
+  .card-teal {
+    @apply rounded-xl shadow-lg p-6;
+    background: linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%);
+  }
+  .input {
+    @apply w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-deepgreen bg-white;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .btn-primary {
+    @apply bg-deepgreen text-white font-semibold py-2 px-4 rounded-md hover:bg-opacity-90 transition shadow-md;
+  }
+  .btn-secondary {
+    @apply bg-gold text-white font-semibold py-2 px-4 rounded-md hover:bg-opacity-90 transition shadow-md;
+  }
+}
+
+.text-deepgreen {
+  color: var(--deepgreen);
+}
+.bg-deepgreen {
+  background-color: var(--deepgreen);
+}
+.bg-gold {
+  background-color: var(--gold);
+}
