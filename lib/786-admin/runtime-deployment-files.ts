@@ -174,6 +174,55 @@ function makeImportedEsmRuntimeSafe(source: string) {
     )
 }
 
+function patchImportedReplitObjectStorage(runtimeFiles: Record<string, string>) {
+  const storagePath = "server/objectStorage.ts"
+  let source = runtimeFiles[storagePath]
+  if (
+    !source?.includes("REPLIT_SIDECAR_ENDPOINT") ||
+    !source.includes("PUBLIC_OBJECT_SEARCH_PATHS") ||
+    !source.includes("async uploadFromBuffer")
+  ) {
+    return
+  }
+
+  try {
+    const pkg = JSON.parse(runtimeFiles["package.json"] || "{}") as {
+      dependencies?: Record<string, string>
+    }
+    pkg.dependencies = {
+      ...(pkg.dependencies || {}),
+      "@vercel/blob": pkg.dependencies?.["@vercel/blob"] || "^2.4.0",
+    }
+    runtimeFiles["package.json"] = `${JSON.stringify(pkg, null, 2)}\n`
+  } catch {
+    return
+  }
+
+  if (source.includes("786.Chat Vercel Blob compatibility")) return
+
+  const downloadSignature =
+    "  async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {\n    try {"
+  source = source.replace(
+    downloadSignature,
+    `  async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {\n    const vercelBlobPath = (file as unknown as { __vercelBlobPath?: string }).__vercelBlobPath;\n    if (process.env.VERCEL && vercelBlobPath) {\n      try {\n        const { get } = await import("@vercel/blob");\n        const result = await get(vercelBlobPath, { access: "private" });\n        if (!result || result.statusCode !== 200) {\n          res.sendStatus(404);\n          return;\n        }\n        res.set({\n          "Content-Type": result.blob.contentType || "application/octet-stream",\n          "Cache-Control": \`private, max-age=\${cacheTtlSec}\`,\n        });\n        const { Readable } = await import("node:stream");\n        Readable.fromWeb(result.stream as any).pipe(res);\n        return;\n      } catch (error) {\n        console.error("Error serving Vercel Blob:", error);\n        if (!res.headersSent) res.status(500).json({ error: "Error streaming file" });\n        return;\n      }\n    }\n    try {`,
+  )
+
+  const entitySignature = "  async getObjectEntityFile(objectPath: string): Promise<File> {\n"
+  source = source.replace(
+    entitySignature,
+    `${entitySignature}    if (process.env.VERCEL && objectPath.startsWith("/objects/vercel/")) {\n      const pathname = decodeURIComponent(objectPath.slice("/objects/vercel/".length));\n      return { __vercelBlobPath: pathname } as unknown as File;\n    }\n`,
+  )
+
+  const uploadSignature =
+    "  async uploadFromBuffer(buffer: Buffer, filename: string, contentType: string): Promise<string> {\n"
+  source = source.replace(
+    uploadSignature,
+    `${uploadSignature}    // 786.Chat Vercel Blob compatibility: Replit's sidecar is unavailable on Vercel.\n    if (process.env.VERCEL) {\n      const { put } = await import("@vercel/blob");\n      const objectId = randomUUID();\n      const ext = filename.split(".").pop() || "bin";\n      const pathname = \`uploads/\${objectId}.\${ext}\`;\n      await put(pathname, buffer, {\n        access: "private",\n        contentType,\n        addRandomSuffix: false,\n      });\n      return \`/objects/vercel/\${encodeURIComponent(pathname)}\`;\n    }\n`,
+  )
+
+  runtimeFiles[storagePath] = source
+}
+
 function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
   const packageSource = runtimeFiles["package.json"]
   const serverPath = "server/index.ts"
@@ -198,6 +247,8 @@ function prepareImportedExpressRuntime(runtimeFiles: Record<string, string>) {
     return
   }
   if (!usesExpress) return
+
+  patchImportedReplitObjectStorage(runtimeFiles)
 
   // Vite writes the imported frontend during the custom build, after Vercel's
   // source scan. Explicitly include that generated directory in the root
