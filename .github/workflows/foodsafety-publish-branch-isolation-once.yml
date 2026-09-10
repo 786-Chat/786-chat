@@ -1,4 +1,4 @@
-name: FoodSafety Republish Fresh Legacy Public Object Runtime
+name: FoodSafety Republish Permanent Legacy Public Object Runtime
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          BUILD_ID: 24f03953-a92d-45f8-ad69-493460f568e2
+          BUILD_ID: 753b2af7-8a7e-47e3-9920-64922244d737
           PROJECT_ID: dd91a4bb-6bd0-4b67-9412-c452321a6452
           BASE_URL: https://786.chat
         shell: bash
