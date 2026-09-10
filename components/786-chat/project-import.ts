@@ -234,19 +234,20 @@ function repairMissingReplitAssetImports(
   sourcePaths: Set<string>,
   assetMap: Record<string, string>,
 ) {
-  const managedImages = Object.entries(assetMap)
-    .filter(([path]) => /\.(?:gif|jpe?g|png|svg|webp)$/i.test(path))
-    .map(([, url]) => url)
-  if (!managedImages.length) return content
-  let fallbackIndex = 0
   return content.replace(
     /import\s+([A-Za-z_$][\w$]*)\s+from\s+["']@assets\/([^"']+)["'];?/g,
     (statement, variable: string, relative: string) => {
       const expected = normalizePath(`attached_assets/${relative}`)
-      if (sourcePaths.has(expected)) return statement
-      const url = managedImages[fallbackIndex % managedImages.length]
-      fallbackIndex += 1
-      return `const ${variable} = ${JSON.stringify(url)} // 786.Chat: Replit export omitted ${expected}`
+      const exactUrl = assetMap[expected]
+      if (exactUrl) {
+        return `const ${variable} = ${JSON.stringify(exactUrl)} // 786.Chat: exact imported asset ${expected}`
+      }
+
+      // Never substitute a different archive image. If Replit omitted this exact
+      // asset, preserve the unresolved import so validation/build reports the
+      // real missing file instead of silently changing the customer's project.
+      if (!sourcePaths.has(expected)) return statement
+      return statement
     },
   )
 }
@@ -422,7 +423,7 @@ export async function importExistingProjectZip(
     "Secret files such as .env are intentionally not imported. Recreate required values in 786.Chat Secrets before production use.",
     "Embedded provider-style credential literals are replaced with non-secret placeholders during import.",
     "For Vite/Express projects, 786.Chat may add small runtime bridge files for Vercel entrypoint and isolated Neon migration provisioning.",
-    "Missing Replit-only image assets are replaced only when the archive omitted the referenced file, using another image that was actually present in the imported archive.",
+    "Replit @assets imports are rewritten only to the exact matching asset from the archive. Missing assets are never substituted with unrelated files; unresolved imports remain visible for repair.",
   ].join("\n")
 
   const batches = batchFiles(rewrittenFiles)
