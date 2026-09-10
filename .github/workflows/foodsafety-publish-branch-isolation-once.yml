@@ -1,4 +1,4 @@
-name: FoodSafety Republish Blob Retrieval Runtime
+name: FoodSafety Republish Legacy Public Object Runtime
 
 on:
   push:
