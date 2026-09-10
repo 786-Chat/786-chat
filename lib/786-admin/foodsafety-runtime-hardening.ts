@@ -62,6 +62,61 @@ export function hardenFoodSafetyRuntime(
     "e-commerce seed guard",
   )
 
+  const adminPath = "client/src/pages/admin.tsx"
+  const adminSource = runtimeFiles[adminPath]
+  if (!adminSource) {
+    throw new Error("FoodSafety runtime hardening failed: client/src/pages/admin.tsx missing")
+  }
+
+  const legacyMenuQueries = [
+    "  const { data: menuItems = [], isLoading: loadingMenu } = useQuery({",
+    "    queryKey: [\"/api/menu\"],",
+    "    queryFn: () => getMenuItems(),",
+    "  });",
+    "",
+    "  const { data: dbCategories = [] } = useQuery({",
+    "    queryKey: [\"/api/menu-categories\"],",
+    "    queryFn: async () => {",
+    "      const response = await fetch(\"/api/menu-categories\");",
+    "      return response.json();",
+    "    },",
+    "  });",
+  ].join("\n")
+
+  const branchAwareMenuQueries = [
+    "  const { data: menuItems = [], isLoading: loadingMenu } = useQuery({",
+    "    queryKey: [\"/api/menu\", selectedRestaurantMenu, restaurants.map((restaurant: Restaurant) => restaurant.id).join(\",\")],",
+    "    queryFn: async () => {",
+    "      if (selectedRestaurantMenu !== \"all\") {",
+    "        return getMenuItems(selectedRestaurantMenu);",
+    "      }",
+    "      const branchMenus = await Promise.all(",
+    "        restaurants.map((restaurant: Restaurant) => getMenuItems(restaurant.id))",
+    "      );",
+    "      return branchMenus.flat();",
+    "    },",
+    "    enabled: selectedRestaurantMenu !== \"all\" || restaurants.length > 0,",
+    "  });",
+    "",
+    "  const { data: dbCategories = [] } = useQuery({",
+    "    queryKey: [\"/api/menu-categories\", selectedRestaurantMenu],",
+    "    queryFn: async () => {",
+    "      const query = selectedRestaurantMenu === \"all\"",
+    "        ? \"\"",
+    "        : `?restaurantId=${encodeURIComponent(selectedRestaurantMenu)}`;",
+    "      const response = await fetch(`/api/menu-categories${query}`);",
+    "      return response.json();",
+    "    },",
+    "  });",
+  ].join("\n")
+
+  runtimeFiles[adminPath] = replaceRequired(
+    adminSource,
+    legacyMenuQueries,
+    branchAwareMenuQueries,
+    "admin branch menu isolation",
+  )
+
   const routesPath = "server/routes.ts"
   let routes = runtimeFiles[routesPath]
   if (!routes) {
