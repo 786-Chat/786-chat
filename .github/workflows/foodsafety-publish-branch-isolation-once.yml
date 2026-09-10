@@ -1,4 +1,4 @@
-name: FoodSafety Republish Current Import Build
+name: FoodSafety Queue Fresh Import Build
 
 on:
   push:
@@ -8,35 +8,27 @@ on:
       - .github/workflows/foodsafety-publish-branch-isolation-once.yml
 
 permissions:
-  actions: write
   contents: read
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch existing generated project build
+      - name: Queue fresh FoodSafety build from latest saved source
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          BUILD_ID: 24f03953-a92d-45f8-ad69-493460f568e2
+          RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
           PROJECT_ID: dd91a4bb-6bd0-4b67-9412-c452321a6452
           BASE_URL: https://786.chat
         shell: bash
         run: |
           set -euo pipefail
-          payload=$(jq -n \
-            --arg ref "main" \
-            --arg build_id "$BUILD_ID" \
-            --arg project_id "$PROJECT_ID" \
-            --arg base_url "$BASE_URL" \
-            '{ref:$ref,inputs:{build_id:$build_id,project_id:$project_id,base_url:$base_url}}')
+          test -n "$RUNNER_SECRET" || { echo "BUILD_RUNNER_SECRET is missing"; exit 1; }
+          payload=$(jq -n --arg projectId "$PROJECT_ID" '{projectId:$projectId}')
           curl --fail --silent --show-error \
             -X POST \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer $RUNNER_SECRET" \
+            -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            "https://api.github.com/repos/$REPOSITORY/actions/workflows/generated-project-build.yml/dispatches"
-          echo "Dispatched generated-project-build.yml for FoodSafety build $BUILD_ID"
+            "$BASE_URL/api/786-admin/build-runner/retry-project"
+          echo "Queued a fresh FoodSafety build from the latest saved project source."
