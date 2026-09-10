@@ -1,4 +1,4 @@
-name: FoodSafety Republish Image Upload Runtime After Blob Hardening
+name: FoodSafety Republish Blob Retrieval Runtime
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          BUILD_ID: c57e4388-36e4-4f99-a64b-cede1c060644
+          BUILD_ID: 9a687b56-1f3d-401d-aeaf-8ad5daef634c
           PROJECT_ID: dd91a4bb-6bd0-4b67-9412-c452321a6452
           BASE_URL: https://786.chat
         shell: bash
