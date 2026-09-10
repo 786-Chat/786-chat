@@ -1,0 +1,1 @@
+Smoke target: GET /objects/public/844176a1-1070-4bf1-b24f-d5ca62b06982.jpg must not fail because PRIVATE_OBJECT_DIR is absent on Vercel.
