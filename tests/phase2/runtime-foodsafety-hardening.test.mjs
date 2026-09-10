@@ -32,6 +32,47 @@ test("FoodSafety public restaurant responses recursively redact sensitive fields
   assert.match(helper, /token/)
 })
 
+test("FoodSafety branch edits preserve redacted payment credentials when fields are blank", () => {
+  assert.match(helper, /preserveWhenBlank/)
+  assert.match(helper, /stripeSecretKey/)
+  assert.match(helper, /sumupApiKey/)
+  assert.match(helper, /squareAccessToken/)
+  assert.match(helper, /zettleApiKey/)
+  assert.match(helper, /bankAccountNumber/)
+  assert.match(helper, /paymentStripeSecret \|\| undefined/)
+  assert.match(helper, /btAccountNumber\.trim\(\) \|\| undefined/)
+})
+
+test("FoodSafety branch addresses get a Google Maps fallback and duplicate branches do not keep stale map URLs", () => {
+  assert.match(helper, /google\.com\/maps\/search\/\?api=1&query=/)
+  assert.match(helper, /encodeURIComponent\(overrides\.address\)/)
+  assert.match(helper, /sourceRestaurant\.googleMapsUrl/)
+})
+
+test("FoodSafety duplicate branches reset merchant and bank credentials", () => {
+  assert.match(helper, /stripePublishableKey: null/)
+  assert.match(helper, /stripeSecretKey: null/)
+  assert.match(helper, /cardEnabled: false/)
+  assert.match(helper, /bankTransferEnabled: false/)
+  assert.match(helper, /sumupApiKey: null/)
+  assert.match(helper, /squareAccessToken: null/)
+  assert.match(helper, /zettleApiKey: null/)
+  assert.match(helper, /easypaisaAccountNumber/)
+})
+
+test("FoodSafety branch domains are 786.Chat-ready while legacy Link24 hostnames remain recognised", () => {
+  assert.match(helper, /Use a 786\.Chat Subdomain/)
+  assert.match(helper, /\.786\.chat/)
+  assert.match(helper, /isLegacyLink24Subdomain/)
+  assert.match(helper, /x-forwarded-host/)
+  assert.match(helper, /is786Subdomain/)
+})
+
+test("FoodSafety restaurant create responses are redacted before API logging", () => {
+  assert.match(helper, /restaurant create response/)
+  assert.match(helper, /res\.status\(201\)\.json\(toPublicRestaurant\(restaurant\)\)/)
+})
+
 test("FoodSafety hardening is applied to generated deployment files before publish", () => {
   assert.match(callback, /import \{ hardenFoodSafetyRuntime \}/)
   assert.match(callback, /hardenFoodSafetyRuntime\(\s*bundle\.projectId,/)
