@@ -86,6 +86,28 @@ export class ObjectStorageService {
   }
 
   async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {
+    const vercelBlobPath = (file as unknown as { __vercelBlobPath?: string }).__vercelBlobPath;
+    if (process.env.VERCEL && vercelBlobPath) {
+      try {
+        const { get } = await import("@vercel/blob");
+        const result = await get(vercelBlobPath, { access: "private" });
+        if (!result || result.statusCode !== 200) {
+          res.sendStatus(404);
+          return;
+        }
+        res.set({
+          "Content-Type": result.blob.contentType || "application/octet-stream",
+          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+        });
+        const { Readable } = await import("node:stream");
+        Readable.fromWeb(result.stream as any).pipe(res);
+        return;
+      } catch (error) {
+        console.error("Error serving Vercel Blob:", error);
+        if (!res.headersSent) res.status(500).json({ error: "Error streaming file" });
+        return;
+      }
+    }
     try {
       const [metadata] = await file.getMetadata();
       const aclPolicy = await getObjectAclPolicy(file);
@@ -131,6 +153,10 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {
+    if (process.env.VERCEL && objectPath.startsWith("/objects/vercel/")) {
+      const pathname = decodeURIComponent(objectPath.slice("/objects/vercel/".length));
+      return { __vercelBlobPath: pathname } as unknown as File;
+    }
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
@@ -219,6 +245,19 @@ export class ObjectStorageService {
   }
 
   async uploadFromBuffer(buffer: Buffer, filename: string, contentType: string): Promise<string> {
+    // 786.Chat Vercel Blob compatibility: Replit's sidecar is unavailable on Vercel.
+    if (process.env.VERCEL) {
+      const { put } = await import("@vercel/blob");
+      const objectId = randomUUID();
+      const ext = filename.split(".").pop() || "bin";
+      const pathname = `uploads/${objectId}.${ext}`;
+      await put(pathname, buffer, {
+        access: "private",
+        contentType,
+        addRandomSuffix: false,
+      });
+      return `/objects/vercel/${encodeURIComponent(pathname)}`;
+    }
     // Use public search path for uploads so they're accessible
     const publicPaths = this.getPublicObjectSearchPaths();
     if (publicPaths.length === 0) {
