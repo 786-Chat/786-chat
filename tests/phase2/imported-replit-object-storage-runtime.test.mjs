@@ -24,3 +24,8 @@ test("imported Replit uploads router is adapted to Vercel Blob at deployment tim
   assert.match(helper, /Vercel Blob upload-router compatibility/)
   assert.match(helper, /objects\/vercel/)
 })
+
+test("imported Vercel Blob object URLs bypass preview SPA fallback", () => {
+  assert.match(helper, /req\.path === \"\/objects\"/)
+  assert.match(helper, /req\.path\.startsWith\(\"\/objects\/\"\)/)
+})
