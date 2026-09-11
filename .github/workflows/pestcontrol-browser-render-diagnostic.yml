@@ -25,9 +25,9 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium
-      - name: Render exact Pest Control preview and capture browser errors
+      - name: Render repaired Pest Control preview and assert React mounts
         env:
-          PREVIEW_URL: https://786-generated-22c299f8bf65-2wn1cc8dp-mujeebpro.vercel.app/
+          PREVIEW_URL: https://786-generated-22c299f8bf65-qlugm75g4-mujeebpro.vercel.app/
         run: |
           cd /tmp/pestcontrol-pw
           cat > render.mjs <<'NODE'
@@ -35,10 +35,15 @@ jobs:
           const url = process.env.PREVIEW_URL;
           const browser = await chromium.launch({ headless: true });
           const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-          const errors = [];
-          page.on('console', (msg) => console.log(`BROWSER_CONSOLE ${msg.type()}: ${msg.text()}`));
+          const failures = [];
+          let pngScriptResponses = 0;
+          page.on('console', (msg) => {
+            const text = msg.text();
+            console.log(`BROWSER_CONSOLE ${msg.type()}: ${text}`);
+            if (text.includes('Failed to load module script') && text.includes('image/png')) failures.push(text);
+          });
           page.on('pageerror', (err) => {
-            errors.push(err.stack || err.message);
+            failures.push(err.stack || err.message);
             console.log(`BROWSER_PAGEERROR: ${err.stack || err.message}`);
           });
           page.on('requestfailed', (req) => console.log(`REQUEST_FAILED: ${req.resourceType()} ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
@@ -48,25 +53,38 @@ jobs:
             if (req.resourceType() === 'script' || ct.includes('image/png') || ct.includes('javascript')) {
               console.log(`RESPONSE: type=${req.resourceType()} status=${res.status()} content-type=${ct} url=${res.url()}`);
             }
+            if (req.resourceType() === 'script' && ct.includes('image/png')) pngScriptResponses += 1;
           });
           const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
           await page.waitForTimeout(5000);
+          const root = page.locator('#root');
+          const rootCount = await root.count();
+          const rootHtml = rootCount ? await root.innerHTML() : '';
+          const bodyText = await page.locator('body').innerText();
           console.log(`HTTP_STATUS: ${response?.status()}`);
           console.log(`PAGE_URL: ${page.url()}`);
           console.log(`TITLE: ${await page.title()}`);
-          console.log(`ROOT_COUNT: ${await page.locator('#root').count()}`);
-          console.log(`ROOT_HTML: ${(await page.locator('#root').innerHTML()).slice(0, 8000)}`);
-          console.log(`BODY_TEXT: ${(await page.locator('body').innerText()).slice(0, 8000)}`);
-          console.log(`BODY_BG: ${await page.locator('body').evaluate((el) => getComputedStyle(el).backgroundColor)}`);
+          console.log(`ROOT_COUNT: ${rootCount}`);
+          console.log(`ROOT_HTML_LENGTH: ${rootHtml.length}`);
+          console.log(`BODY_TEXT: ${bodyText.slice(0, 8000)}`);
+          console.log(`PNG_SCRIPT_RESPONSES: ${pngScriptResponses}`);
           await page.screenshot({ path: '/tmp/pestcontrol-preview.png', fullPage: true });
+          if (response?.status() !== 200) failures.push(`Expected HTTP 200, got ${response?.status()}`);
+          if (rootCount !== 1) failures.push(`Expected one #root, got ${rootCount}`);
+          if (!rootHtml.trim()) failures.push('React root is empty');
+          if (!bodyText.trim()) failures.push('Rendered body text is empty');
+          if (pngScriptResponses) failures.push(`Found ${pngScriptResponses} image/png responses requested as scripts`);
           await browser.close();
-          if (errors.length) process.exitCode = 2;
+          if (failures.length) {
+            console.error(`ASSERTION_FAILURES: ${failures.join(' | ')}`);
+            process.exitCode = 2;
+          }
           NODE
           node render.mjs
       - name: Upload screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pestcontrol-browser-render
+          name: pestcontrol-browser-render-repaired
           path: /tmp/pestcontrol-preview.png
           if-no-files-found: ignore
