@@ -53,9 +53,28 @@ function alignImportedRuntimeEntry(files: Record<string, string>): Record<string
       runtimeEntry = "./dist/index.js"
     }
 
-    if (runtimeEntry && runtimeEntry !== "./dist/index.cjs") {
-      files["index.ts"] = bridge.replace("./dist/index.cjs", runtimeEntry)
-    }
+    let nextBridge = runtimeEntry
+      ? bridge.replace("./dist/index.cjs", runtimeEntry)
+      : bridge
+
+    // Imported Express builds can be CJS, ESM, or expose the app through a
+    // nested default export depending on Replit/esbuild settings. Namespace
+    // loading works across those shapes and avoids cold-start crashes when
+    // an ESM build has no default export.
+    nextBridge = nextBridge
+      .replace('import runtime from "', 'import * as runtime from "')
+      .replace(
+        "app.use(runtime.app);",
+        [
+          "const runtimeApp = runtime.app ?? runtime.default?.app ?? runtime.default;",
+          "if (!runtimeApp) {",
+          '  throw new Error("Imported Express runtime did not export an app");',
+          "}",
+          "app.use(runtimeApp);",
+        ].join("\n"),
+      )
+
+    files["index.ts"] = nextBridge
   } catch {
     // Invalid package metadata is handled by the normal deployment validator.
   }
