@@ -1,0 +1,34 @@
+name: PestControl Queue Fresh Import Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pestcontrol-retry-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Queue fresh Pest Control build from latest saved source
+        env:
+          RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
+          PROJECT_ID: 22c299f8-bf65-410f-9643-92a9776dbfca
+          BASE_URL: https://786.chat
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_SECRET" || { echo "BUILD_RUNNER_SECRET is missing"; exit 1; }
+          payload=$(jq -n --arg projectId "$PROJECT_ID" '{projectId:$projectId}')
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $RUNNER_SECRET" \
+            -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "$BASE_URL/api/786-admin/build-runner/retry-project"
+          echo "Queued a fresh Pest Control build from the repaired saved project source."
