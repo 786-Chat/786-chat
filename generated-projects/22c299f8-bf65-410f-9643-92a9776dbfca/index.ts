@@ -3,7 +3,7 @@
 import express from "express";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import runtime from "./dist/index.js";
+import * as runtime from "./dist/index.js";
 
 const app = express();
 const publicDir = fileURLToPath(new URL("./dist/public/", import.meta.url));
