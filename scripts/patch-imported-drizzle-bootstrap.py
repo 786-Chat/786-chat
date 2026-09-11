@@ -1,0 +1,105 @@
+from pathlib import Path
+
+finalizer_path = Path("lib/786-admin/imported-runtime-finalizer.ts")
+text = finalizer_path.read_text()
+
+if "function ensureImportedDrizzleSchemaBootstrap" not in text:
+    needle = "function hardenImportedReplitAuth(files: Record<string, string>) {"
+    addition = r'''function ensureImportedDrizzleSchemaBootstrap(files: Record<string, string>) {
+  const packageSource = files["package.json"]
+  const drizzleConfig =
+    files["drizzle.config.ts"] ||
+    files["drizzle.config.js"] ||
+    files["drizzle.config.mjs"]
+  const schemaSource = files["shared/schema.ts"] || files["shared/schema.js"]
+  if (!packageSource?.trim() || !drizzleConfig?.trim() || !schemaSource?.trim()) return
+
+  let packageJson: {
+    scripts?: Record<string, string>
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  try {
+    packageJson = JSON.parse(packageSource) as typeof packageJson
+  } catch {
+    return
+  }
+
+  const dependencies = {
+    ...(packageJson.dependencies || {}),
+    ...(packageJson.devDependencies || {}),
+  }
+  if (!dependencies["drizzle-kit"] || !dependencies["@neondatabase/serverless"]) return
+
+  const buildCommand = packageJson.scripts?.build?.trim()
+  if (!buildCommand || buildCommand.includes("786-drizzle-bootstrap.mjs")) return
+
+  // Vercel receives DATABASE_URL before its build starts. For imported Replit apps
+  // that ship a Drizzle schema but no SQL migration, initialize only a completely
+  // empty per-project database from that authoritative schema. Existing databases
+  // are never pushed or modified by this compatibility path.
+  files["scripts/786-drizzle-bootstrap.mjs"] = [
+    '// 786.Chat: initialize an imported Drizzle schema only when its isolated DB is empty.',
+    'import { spawnSync } from "node:child_process";',
+    'import { neon } from "@neondatabase/serverless";',
+    '',
+    'const databaseUrl = process.env.DATABASE_URL?.trim();',
+    'if (!databaseUrl) process.exit(0);',
+    'const sql = neon(databaseUrl);',
+    'const rows = await sql`SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = \'public\' AND table_type = \'BASE TABLE\'`;',
+    'const count = Number(rows?.[0]?.count || 0);',
+    'if (count > 0) {',
+    '  console.log(`[786.Chat] Imported database already initialized (${count} tables); skipping Drizzle bootstrap.`);',
+    '  process.exit(0);',
+    '}',
+    'console.log("[786.Chat] Empty imported database detected; applying authoritative Drizzle schema.");',
+    'const runner = process.platform === "win32" ? "npx.cmd" : "npx";',
+    'const result = spawnSync(runner, ["drizzle-kit", "push", "--force"], {',
+    '  stdio: "inherit",',
+    '  env: process.env,',
+    '});',
+    'if (result.error) throw result.error;',
+    'if (result.status !== 0) process.exit(result.status ?? 1);',
+    '',
+  ].join("\n")
+
+  packageJson.scripts = {
+    ...(packageJson.scripts || {}),
+    build: `node scripts/786-drizzle-bootstrap.mjs && ${buildCommand}`,
+  }
+  files["package.json"] = `${JSON.stringify(packageJson, null, 2)}\n`
+}
+
+'''
+    if needle not in text:
+        raise SystemExit("finalizer insertion point not found")
+    text = text.replace(needle, addition + needle, 1)
+
+call_needle = "  ensureImportedDatabaseRuntime(runtimeFiles)\n  hardenImportedReplitAuth(runtimeFiles)"
+if "ensureImportedDrizzleSchemaBootstrap(runtimeFiles)" not in text:
+    if call_needle not in text:
+        raise SystemExit("finalizer call insertion point not found")
+    text = text.replace(
+        call_needle,
+        "  ensureImportedDatabaseRuntime(runtimeFiles)\n  ensureImportedDrizzleSchemaBootstrap(runtimeFiles)\n  hardenImportedReplitAuth(runtimeFiles)",
+        1,
+    )
+finalizer_path.write_text(text)
+
+test_path = Path("tests/phase2/imported-runtime-database-auth.test.mjs")
+test = test_path.read_text()
+marker = "  assert.match(finalizer, /SELECT 1;/)\n"
+if "786-drizzle-bootstrap" not in test:
+    if marker not in test:
+        raise SystemExit("test insertion point not found")
+    test = test.replace(
+        marker,
+        marker
+        + "  assert.match(finalizer, /ensureImportedDrizzleSchemaBootstrap/)\n"
+        + "  assert.match(finalizer, /scripts\\/786-drizzle-bootstrap\\.mjs/)\n"
+        + "  assert.match(finalizer, /information_schema\\.tables/)\n"
+        + "  assert.match(finalizer, /drizzle-kit/)\n"
+        + "  assert.match(finalizer, /count > 0/)\n",
+        1,
+    )
+test_path.write_text(test)
