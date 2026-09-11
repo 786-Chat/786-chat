@@ -4,7 +4,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import DemoLogin from "@/pages/DemoLogin";
 import AdminLogin from "@/pages/AdminLogin";
@@ -23,8 +22,35 @@ import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 import InstallGuide from "@/pages/InstallGuide";
 
+function AdminLoginRedirect() {
+  useEffect(() => {
+    window.location.replace("/admin-login");
+  }, []);
+  return null;
+}
+
+function BranchLoginRedirect() {
+  useEffect(() => {
+    window.location.replace("/branch-login");
+  }, []);
+  return null;
+}
+
+function AdminDashboardRedirect() {
+  useEffect(() => {
+    window.location.replace("/admin-dashboard");
+  }, []);
+  return null;
+}
+
+function BranchDashboardRedirect() {
+  useEffect(() => {
+    window.location.replace("/branch-dashboard");
+  }, []);
+  return null;
+}
+
 function Router() {
-  const { isAuthenticated, isLoading, user } = useAuth();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
@@ -75,14 +101,6 @@ function Router() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
     <>
       {/* PWA Install Prompt */}
@@ -112,25 +130,31 @@ function Router() {
       )}
       
       <Switch>
-      {/* Public Routes */}
-      <Route path="/admin" component={AdminLogin} />
+      {/* Canonical login routes */}
       <Route path="/admin-login" component={AdminLogin} />
-      <Route path="/branch" component={BranchLogin} />
       <Route path="/branch-login" component={BranchLogin} />
+
+      {/* Legacy login aliases always resolve to the canonical routes */}
+      <Route path="/admin" component={AdminLoginRedirect} />
+      <Route path="/branch" component={BranchLoginRedirect} />
+
+      {/* Branch routes */}
       <Route path="/branch-dashboard" component={BranchDashboard} />
       <Route path="/branch-charts" component={BranchChartPage} />
       <Route path="/chart" component={BranchChartPage} />
       <Route path="/install" component={InstallGuide} />
       
-      {/* Main Routes */}
+      {/* Main route */}
       <Route path="/" component={BranchLogin} />
       
-      {/* Admin Routes */}
+      {/* Admin routes */}
       <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/pdf-builder" component={PDFBuilder} />
       <Route path="/file-manager" component={FileManager} />
-      <Route path="/old-admin" component={AdminDashboardNew} />
-      <Route path="/old-branch" component={BranchDashboard} />
+
+      {/* Legacy dashboard aliases */}
+      <Route path="/old-admin" component={AdminDashboardRedirect} />
+      <Route path="/old-branch" component={BranchDashboardRedirect} />
       <Route path="/demo" component={DemoLogin} />
       
       {/* Demo Routes */}
