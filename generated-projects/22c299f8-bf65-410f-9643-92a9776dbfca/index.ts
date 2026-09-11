@@ -69,6 +69,7 @@ async function loadImportedRuntime() {
   if (!importedRuntimePromise) {
     importedRuntimePromise = (async () => {
       const runtimeRoot = process.env.TMPDIR || "/tmp";
+      if (process.env.VERCEL) process.env.NODE_ENV = "production";
       process.chdir(runtimeRoot);
       await Promise.all(Object.entries(importedRuntimeAssets).map(async ([relativePath, url]) => {
         const destination = path.join(runtimeRoot, relativePath);
