@@ -91,7 +91,8 @@ export async function POST(request: Request) {
       console.warn("[786.Chat] Subscription lookup failed during login")
     }
 
-    const role = user.email.toLowerCase().trim() === ADMIN_EMAIL ? "admin" : user.role
+    const isOwnerAdmin = user.email.toLowerCase().trim() === ADMIN_EMAIL
+    const role = isOwnerAdmin ? "admin" : user.role
     const token = await createToken({
       id: user.id,
       email: user.email,
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
       role,
       sessionVersion: Number(user.session_version),
     })
-    await setAuthCookie(token)
+    await setAuthCookie(token, { persistentAdmin: isOwnerAdmin })
 
     return NextResponse.json({
       message: "Login successful",
