@@ -31,4 +31,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a fresh Pest Control build from the repaired saved project source."
+          echo "Queued a fresh Pest Control build from the repaired saved project source after preview reconciliation repair."
