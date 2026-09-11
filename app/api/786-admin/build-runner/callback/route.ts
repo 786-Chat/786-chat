@@ -8,6 +8,7 @@ import {
 } from "@/lib/786-admin/build-runner-store"
 import { hardenFoodSafetyRuntime } from "@/lib/786-admin/foodsafety-runtime-hardening"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
+import { finalizeImportedRuntimeFiles } from "@/lib/786-admin/imported-runtime-finalizer"
 import { runtimeDeploymentFiles } from "@/lib/786-admin/runtime-deployment-files"
 import { deployGeneratedProjectToVercel } from "@/lib/786-admin/vercel-project-deployer"
 import { repairFailedBuild } from "@/lib/786-chat/build-repair"
@@ -57,10 +58,6 @@ function alignImportedRuntimeEntry(files: Record<string, string>): Record<string
       ? bridge.replace("./dist/index.cjs", runtimeEntry)
       : bridge
 
-    // Imported Express builds can be CJS, ESM, or expose the app through a
-    // nested default export depending on Replit/esbuild settings. Namespace
-    // loading works across those shapes and avoids cold-start crashes when
-    // an ESM build has no default export.
     nextBridge = nextBridge
       .replace('import runtime from "', 'import * as runtime from "')
       .replace(
@@ -118,13 +115,12 @@ export async function POST(request: Request) {
 
       const deploymentFiles = hardenFoodSafetyRuntime(
         bundle.projectId,
-        alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+        finalizeImportedRuntimeFiles(
+          alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+        ),
       )
       const hasRuntimeCompatibilityRewrite = runtimeFilesDiffer(bundle.files, deploymentFiles)
 
-      // A callback retry for the same build must reuse its already checkpointed branch,
-      // even when runtime-only compatibility/security rewrites make the deployment files
-      // differ from the saved project source. This prevents duplicate PRs on slow callbacks.
       const currentPublish = await getRunnerPublishProgress(body.buildId)
       const reusablePublish = currentPublish ?? (
         hasRuntimeCompatibilityRewrite
@@ -169,10 +165,6 @@ export async function POST(request: Request) {
         lifecycleLogs.push("[publisher] Published runtime compatibility files for imported project deployment.")
       }
 
-      // Vercel can spend several minutes tracing a large imported Express/Vite bundle
-      // after the application build has already passed. Do not make the runner wait for
-      // the deployer's full READY timeout. The project build GET route already reconciles
-      // READY and terminal Vercel states by the checkpointed commit SHA.
       const deployment = await Promise.race([
         deployGeneratedProjectToVercel({
           projectId: bundle.projectId,
