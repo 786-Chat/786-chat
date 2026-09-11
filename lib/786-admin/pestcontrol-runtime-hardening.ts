@@ -107,6 +107,29 @@ function patchPestControlBranchRoutes(source: string): string {
     "update branch contract default",
   )
 
+  next = patchRouteBlock(
+    next,
+    "  app.get('/api/branches/:id/logo', async (req, res) => {",
+    "      // If logo is stored in Object Storage, redirect to Object Storage URL",
+    [
+      "      // 786.Chat: logos persisted as data URLs on Vercel must also be served",
+      "      // by the existing branch-logo endpoint after a refresh.",
+      "      if (branch.logoUrl && branch.logoUrl.startsWith('data:image/')) {",
+      "        const match = branch.logoUrl.match(/^data:([^;]+);base64,(.+)$/);",
+      "        if (match) {",
+      "          res.setHeader('Content-Type', match[1]);",
+      "          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');",
+      "          res.setHeader('Pragma', 'no-cache');",
+      "          res.setHeader('Expires', '0');",
+      "          return res.send(Buffer.from(match[2], 'base64'));",
+      "        }",
+      "      }",
+      "",
+      "      // If logo is stored in Object Storage, redirect to Object Storage URL",
+    ].join("\n"),
+    "Vercel data URL logo serving",
+  )
+
   return next
 }
 
