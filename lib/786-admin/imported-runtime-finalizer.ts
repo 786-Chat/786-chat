@@ -71,6 +71,82 @@ function forceProductionBootstrapOnVercel(files: Record<string, string>) {
   }
 }
 
+function ensureImportedDatabaseRuntime(files: Record<string, string>) {
+  const source = files["server/db.ts"] || files["server/db.js"]
+  if (!source?.trim()) return
+  if (!/DATABASE_URL|@neondatabase\/serverless|drizzle-orm/i.test(source)) return
+
+  // The generated-runtime deployer detects database-backed apps through these
+  // runtime-only markers. Imported Replit apps commonly keep their real DB client
+  // at server/db.ts and ship Drizzle schema definitions without SQL migrations.
+  // Preserve that source unchanged while still provisioning an isolated Neon DB
+  // and injecting DATABASE_URL/AUTH_SECRET into the Vercel project.
+  if (!files["lib/server/db.ts"]?.trim()) {
+    files["lib/server/db.ts"] = [
+      "// 786.Chat runtime-only database marker for an imported application.",
+      "// The imported application continues to use server/db.ts unchanged.",
+      "",
+    ].join("\n")
+  }
+
+  if (!files["sql/schema.sql"]?.trim() && !files["sql/migrations/001_initial.sql"]?.trim()) {
+    files["sql/migrations/001_initial.sql"] = [
+      "-- 786.Chat runtime-only bootstrap for an imported database-backed app.",
+      "-- Source schemas remain authoritative; this creates the isolated database",
+      "-- so the imported runtime receives DATABASE_URL before cold start.",
+      "SELECT 1;",
+      "",
+    ].join("\n")
+  }
+}
+
+function hardenImportedReplitAuth(files: Record<string, string>) {
+  for (const authPath of ["server/replitAuth.ts", "server/replitAuth.js"]) {
+    let source = files[authPath]
+    if (!source?.includes("REPLIT_DOMAINS")) continue
+
+    // Replit's OIDC variables do not exist on a Vercel preview. Keep branch/custom
+    // session auth available there, but do not crash the whole imported server just
+    // because the optional Replit identity provider is absent.
+    source = source.replace(
+      /if\s*\(\s*!process\.env\.REPLIT_DOMAINS\s*\)\s*\{/g,
+      "if (!process.env.REPLIT_DOMAINS && !process.env.VERCEL) {",
+    )
+
+    // Imported Replit apps often expect a pre-existing sessions table and a Replit
+    // SESSION_SECRET. Vercel gets an isolated Neon DB plus 786.Chat AUTH_SECRET, so
+    // let connect-pg-simple create only its session table and reuse that secret.
+    source = source.replace(
+      /createTableIfMissing\s*:\s*false/g,
+      "createTableIfMissing: Boolean(process.env.VERCEL)",
+    )
+    source = source.replace(
+      /secret\s*:\s*process\.env\.SESSION_SECRET!/g,
+      "secret: (process.env.SESSION_SECRET || process.env.AUTH_SECRET)!",
+    )
+
+    const configLine = "  const config = await getOidcConfig();"
+    if (source.includes(configLine) && !source.includes("786.Chat: Replit OIDC is optional on Vercel")) {
+      source = source.replace(
+        configLine,
+        [
+          "  // 786.Chat: Replit OIDC is optional on Vercel. Custom admin/branch",
+          "  // sessions still work through the PostgreSQL session middleware above.",
+          "  if (process.env.VERCEL && (!process.env.REPLIT_DOMAINS || !process.env.REPL_ID)) {",
+          "    passport.serializeUser((user: Express.User, cb) => cb(null, user));",
+          "    passport.deserializeUser((user: Express.User, cb) => cb(null, user));",
+          "    return;",
+          "  }",
+          "",
+          configLine,
+        ].join("\n"),
+      )
+    }
+
+    files[authPath] = source
+  }
+}
+
 function importedServerAssets(files: Record<string, string>): Record<string, string> {
   const source = files["migration/asset-map.json"]
   if (!source?.trim()) return {}
@@ -166,6 +242,8 @@ export function finalizeImportedRuntimeFiles(files: Record<string, string>): Rec
     runtimeFiles[filePath] = rewriteServerlessWritablePaths(source)
   }
 
+  ensureImportedDatabaseRuntime(runtimeFiles)
+  hardenImportedReplitAuth(runtimeFiles)
   lazyLoadViteInProductionRuntime(runtimeFiles)
   forceProductionBootstrapOnVercel(runtimeFiles)
   hydrateImportedAssetsBeforeRuntime(runtimeFiles)
