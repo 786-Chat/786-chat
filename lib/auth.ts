@@ -5,6 +5,9 @@ import bcrypt from "bcryptjs"
 import { getAccountSessionState } from "@/lib/account-security"
 import { ADMIN_EMAIL } from "@/lib/admin-config"
 
+const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24
+const ADMIN_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 365
+
 function jwtSecret() {
   const value = process.env.JWT_SECRET?.trim()
   if (!value || value.length < 32) {
@@ -24,6 +27,10 @@ export interface UserPayload {
   sessionVersion?: number
 }
 
+function isOwnerAdmin(payload: UserPayload) {
+  return payload.role === "admin" && payload.email.toLowerCase().trim() === ADMIN_EMAIL
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12)
 }
@@ -33,11 +40,15 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export async function createToken(payload: UserPayload): Promise<string> {
+  const maxAgeSeconds = isOwnerAdmin(payload)
+    ? ADMIN_SESSION_MAX_AGE_SECONDS
+    : DEFAULT_SESSION_MAX_AGE_SECONDS
+
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setJti(crypto.randomUUID())
-    .setExpirationTime("24h")
+    .setExpirationTime(Math.floor(Date.now() / 1000) + maxAgeSeconds)
     .sign(jwtSecret())
 }
 
@@ -86,13 +97,18 @@ export async function getSession(): Promise<UserPayload | null> {
   }
 }
 
-export async function setAuthCookie(token: string): Promise<void> {
+export async function setAuthCookie(
+  token: string,
+  options: { persistentAdmin?: boolean } = {}
+): Promise<void> {
   const cookieStore = await cookies()
   cookieStore.set("auth_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24,
+    maxAge: options.persistentAdmin
+      ? ADMIN_SESSION_MAX_AGE_SECONDS
+      : DEFAULT_SESSION_MAX_AGE_SECONDS,
     path: "/",
   })
   cookieStore.delete("auth-token")
