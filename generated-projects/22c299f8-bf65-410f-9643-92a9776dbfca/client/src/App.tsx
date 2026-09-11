@@ -9,7 +9,6 @@ import DemoLogin from "@/pages/DemoLogin";
 import AdminLogin from "@/pages/AdminLogin";
 import BranchLogin from "@/pages/BranchLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
-import AdminDashboardNew from "@/pages/AdminDashboardNew";
 import BranchDashboard from "@/pages/BranchDashboard";
 import FileManager from "@/pages/FileManager";
 import AdminDemo from "@/pages/AdminDemo";
@@ -22,10 +21,35 @@ import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 import InstallGuide from "@/pages/InstallGuide";
 
-function AdminLoginRedirect() {
+function AdminRouteResolver() {
   useEffect(() => {
-    window.location.replace("/admin-login");
+    let cancelled = false;
+
+    const resolveAdminRoute = async () => {
+      try {
+        const response = await fetch("/api/admin/auth-check", {
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        });
+        const data = response.ok ? await response.json() : null;
+        if (!cancelled) {
+          window.location.replace(data?.authenticated ? "/admin-dashboard" : "/admin-login");
+        }
+      } catch {
+        if (!cancelled) window.location.replace("/admin-login");
+      }
+    };
+
+    void resolveAdminRoute();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
   return null;
 }
 
@@ -66,7 +90,7 @@ function Router() {
     const updateFavicon = () => {
       const path = window.location.pathname;
       const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      
+
       if (path.includes('/admin')) {
         if (link) link.href = 'https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087864601-135a0bf6-8eca-46a5-9ccf-7315e717be73-admin-icon-7v1NVQASIAgMWcqtZAQFKPpmr28voZ.svg';
         document.title = 'Admin Portal - Food Safety Rating';
@@ -91,10 +115,10 @@ function Router() {
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
-    
+
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
+
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
       setShowInstallPrompt(false);
@@ -128,25 +152,23 @@ function Router() {
           </div>
         </div>
       )}
-      
+
       <Switch>
       {/* Canonical login routes */}
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/branch-login" component={BranchLogin} />
 
-      {/* Legacy login aliases always resolve to the canonical routes */}
-      <Route path="/admin" component={AdminLoginRedirect} />
+      {/* Legacy aliases resolve to the correct canonical destination */}
+      <Route path="/admin" component={AdminRouteResolver} />
       <Route path="/branch" component={BranchLoginRedirect} />
+      <Route path="/" component={BranchLoginRedirect} />
 
       {/* Branch routes */}
       <Route path="/branch-dashboard" component={BranchDashboard} />
       <Route path="/branch-charts" component={BranchChartPage} />
       <Route path="/chart" component={BranchChartPage} />
       <Route path="/install" component={InstallGuide} />
-      
-      {/* Main route */}
-      <Route path="/" component={BranchLogin} />
-      
+
       {/* Admin routes */}
       <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/pdf-builder" component={PDFBuilder} />
@@ -156,15 +178,15 @@ function Router() {
       <Route path="/old-admin" component={AdminDashboardRedirect} />
       <Route path="/old-branch" component={BranchDashboardRedirect} />
       <Route path="/demo" component={DemoLogin} />
-      
+
       {/* Demo Routes */}
       <Route path="/admin-demo" component={AdminDemo} />
       <Route path="/branch-demo" component={BranchDemo} />
       <Route path="/logo-test" component={LogoTest} />
-      
+
       <Route component={NotFound} />
     </Switch>
-    
+
     {/* Install Prompt for PWA */}
     <InstallPrompt />
     </>
