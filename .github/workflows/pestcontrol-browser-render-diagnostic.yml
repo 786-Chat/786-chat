@@ -1,0 +1,65 @@
+name: PestControl browser render diagnostic
+
+on:
+  push:
+    branches:
+      - diag/pestcontrol-browser-render-20260911
+    paths:
+      - .github/workflows/pestcontrol-browser-render-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  browser-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright Chromium
+        run: |
+          mkdir -p /tmp/pestcontrol-pw
+          cd /tmp/pestcontrol-pw
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium
+      - name: Render exact Pest Control preview and capture browser errors
+        env:
+          PREVIEW_URL: https://786-generated-22c299f8bf65-2wn1cc8dp-mujeebpro.vercel.app/
+        run: |
+          cd /tmp/pestcontrol-pw
+          cat > render.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const url = process.env.PREVIEW_URL;
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+          const errors = [];
+          page.on('console', (msg) => console.log(`BROWSER_CONSOLE ${msg.type()}: ${msg.text()}`));
+          page.on('pageerror', (err) => {
+            errors.push(err.stack || err.message);
+            console.log(`BROWSER_PAGEERROR: ${err.stack || err.message}`);
+          });
+          page.on('requestfailed', (req) => console.log(`REQUEST_FAILED: ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+          const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
+          await page.waitForTimeout(5000);
+          console.log(`HTTP_STATUS: ${response?.status()}`);
+          console.log(`PAGE_URL: ${page.url()}`);
+          console.log(`TITLE: ${await page.title()}`);
+          console.log(`ROOT_COUNT: ${await page.locator('#root').count()}`);
+          console.log(`ROOT_HTML: ${(await page.locator('#root').innerHTML()).slice(0, 8000)}`);
+          console.log(`BODY_TEXT: ${(await page.locator('body').innerText()).slice(0, 8000)}`);
+          console.log(`BODY_BG: ${await page.locator('body').evaluate((el) => getComputedStyle(el).backgroundColor)}`);
+          await page.screenshot({ path: '/tmp/pestcontrol-preview.png', fullPage: true });
+          await browser.close();
+          if (errors.length) process.exitCode = 2;
+          NODE
+          node render.mjs
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pestcontrol-browser-render
+          path: /tmp/pestcontrol-preview.png
+          if-no-files-found: ignore
