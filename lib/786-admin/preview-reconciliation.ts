@@ -24,6 +24,29 @@ function generatedProjectName(projectId: string): string {
   return `${DEFAULT_PROJECT_PREFIX}${projectSuffix(projectId)}`
 }
 
+async function readyRuntimeState(url: string): Promise<"healthy" | "failed" | "unknown"> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: { Accept: "text/html,application/json;q=0.9,*/*;q=0.8" },
+    })
+    // READY only means Vercel finished packaging the Function. A cold-start
+    // FUNCTION_INVOCATION_FAILED response must not be published into Live Preview.
+    return response.status >= 500 ? "failed" : "healthy"
+  } catch {
+    // Network/transient probe failures should be retried by normal builder polling,
+    // rather than incorrectly marking the build passed or permanently failed.
+    return "unknown"
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function findGeneratedPreviewState(input: {
   projectId: string
   commitSha: string
@@ -59,13 +82,19 @@ export async function findGeneratedPreviewState(input: {
     : typeof candidate.id === "string"
       ? candidate.id
       : ""
-  const state = String(candidate.readyState || candidate.state || "").toUpperCase()
+  let state = String(candidate.readyState || candidate.state || "").toUpperCase()
   if (!id || !state) return null
 
   let url: string | null = null
   if (typeof candidate.url === "string") {
     const normalized = candidate.url.startsWith("https://") ? candidate.url : `https://${candidate.url}`
     if (normalized.endsWith(".vercel.app")) url = normalized
+  }
+
+  if (state === "READY" && url) {
+    const runtime = await readyRuntimeState(url)
+    if (runtime === "failed") state = "ERROR"
+    else if (runtime === "unknown") state = "BUILDING"
   }
 
   return { id, url, state }
