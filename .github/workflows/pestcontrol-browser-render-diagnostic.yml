@@ -41,7 +41,14 @@ jobs:
             errors.push(err.stack || err.message);
             console.log(`BROWSER_PAGEERROR: ${err.stack || err.message}`);
           });
-          page.on('requestfailed', (req) => console.log(`REQUEST_FAILED: ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+          page.on('requestfailed', (req) => console.log(`REQUEST_FAILED: ${req.resourceType()} ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`));
+          page.on('response', (res) => {
+            const req = res.request();
+            const ct = res.headers()['content-type'] || '';
+            if (req.resourceType() === 'script' || ct.includes('image/png') || ct.includes('javascript')) {
+              console.log(`RESPONSE: type=${req.resourceType()} status=${res.status()} content-type=${ct} url=${res.url()}`);
+            }
+          });
           const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 120000 });
           await page.waitForTimeout(5000);
           console.log(`HTTP_STATUS: ${response?.status()}`);
