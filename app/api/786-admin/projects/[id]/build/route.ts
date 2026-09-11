@@ -15,7 +15,10 @@ import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
 
-const PREVIEW_PUBLISH_TIMEOUT_MS = 5 * 60 * 1000
+// The deployer itself allows 7 minutes for large imported Vite/Express bundles.
+// Give polling extra room beyond that so a valid deployment is not marked failed
+// while Vercel is still tracing or warming the serverless Function.
+const PREVIEW_PUBLISH_TIMEOUT_MS = 10 * 60 * 1000
 const TERMINAL_PREVIEW_FAILURE_STATES = new Set(["ERROR", "CANCELED", "CANCELLED"])
 
 async function requireOwnerEmail(): Promise<string | null> {
@@ -122,13 +125,13 @@ export async function GET(_request: Request, { params }: Ctx) {
       const reconciled = await completeRunnerBuild({
         buildId: build.id,
         status: "passed",
-        logs: `\n[reconcile] Vercel preview ${preview.id} is READY.\n[vercel] Preview ${preview.url}.\n`,
+        logs: `\n[reconcile] Vercel preview ${preview.id} is READY and its runtime probe passed.\n[vercel] Preview ${preview.url}.\n`,
         deploymentUrl: preview.url,
         errorMessage: null,
       })
       if (reconciled) build = await getLatestBuildJob(id, email)
     } else if (preview && TERMINAL_PREVIEW_FAILURE_STATES.has(preview.state)) {
-      const message = `Vercel preview deployment finished with state ${preview.state}`
+      const message = `Vercel preview deployment/runtime finished with state ${preview.state}`
       const reconciled = await completeRunnerBuild({
         buildId: build.id,
         status: "failed",
@@ -139,7 +142,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     } else {
       const updatedAt = Date.parse(build.updated_at)
       if (Number.isFinite(updatedAt) && Date.now() - updatedAt >= PREVIEW_PUBLISH_TIMEOUT_MS) {
-        const message = "Preview publishing timed out before Vercel reached a terminal state"
+        const message = "Preview publishing timed out before Vercel reached a healthy terminal state"
         const reconciled = await completeRunnerBuild({
           buildId: build.id,
           status: "failed",
