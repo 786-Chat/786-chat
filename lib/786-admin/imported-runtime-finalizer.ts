@@ -17,6 +17,22 @@ function rewriteServerlessWritablePaths(source: string): string {
   return next
 }
 
+const REMOTE_BINARY_ASSET_IMPORT =
+  /import\s+([A-Za-z_$][\w$]*)\s+from\s+(["'])(https?:\/\/[^"'\s]+\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp|mp3|ogg|wav|mp4|webm|pdf|woff2?|ttf|otf)(?:[?#][^"']*)?)\2\s*;?/gi
+
+function rewriteRemoteBinaryAssetModuleImports(files: Record<string, string>) {
+  for (const [filePath, source] of Object.entries(files)) {
+    if (!/\.(?:c?js|mjs|jsx|ts|tsx)$/i.test(filePath)) continue
+    if (!source.includes("http://") && !source.includes("https://")) continue
+
+    files[filePath] = source.replace(
+      REMOTE_BINARY_ASSET_IMPORT,
+      (_statement, variable: string, _quote: string, url: string) =>
+        `const ${variable} = ${JSON.stringify(url)}; // 786.Chat: imported binary asset URL`,
+    )
+  }
+}
+
 function lazyLoadViteInProductionRuntime(files: Record<string, string>) {
   const vitePath = "server/vite.ts"
   let source = files[vitePath]
@@ -236,6 +252,11 @@ function hydrateImportedAssetsBeforeRuntime(files: Record<string, string>) {
 
 export function finalizeImportedRuntimeFiles(files: Record<string, string>): Record<string, string> {
   const runtimeFiles = { ...files }
+
+  // Browser ESM cannot import a remote PNG/JPG/etc URL as a JavaScript module.
+  // Imported ZIP asset rewriting can leave those URLs in default import statements;
+  // turn them into ordinary string constants before Vite bundles the client.
+  rewriteRemoteBinaryAssetModuleImports(runtimeFiles)
 
   for (const [filePath, source] of Object.entries(runtimeFiles)) {
     if (!/^(?:server|shared)\/.*\.(?:ts|tsx|js|jsx)$/i.test(filePath)) continue
