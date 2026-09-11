@@ -48,6 +48,26 @@ function lazyLoadViteInProductionRuntime(files: Record<string, string>) {
   files[vitePath] = source
 }
 
+function forceProductionBootstrapOnVercel(files: Record<string, string>) {
+  for (const entryPath of ["server/index.ts", "server/index.js"]) {
+    let source = files[entryPath]
+    if (!source) continue
+
+    // Some imported Express apps default to development when NODE_ENV is absent.
+    // Never enter their Vite/Rollup dev server path inside a Vercel function.
+    source = source.replace(
+      /if\s*\(\s*app\.get\(\s*["']env["']\s*\)\s*===\s*["']development["']\s*\)\s*\{/g,
+      'if (!process.env.VERCEL && app.get("env") === "development") {',
+    )
+    source = source.replace(
+      /if\s*\(\s*process\.env\.NODE_ENV\s*===\s*["']development["']\s*\)\s*\{/g,
+      'if (!process.env.VERCEL && process.env.NODE_ENV === "development") {',
+    )
+
+    files[entryPath] = source
+  }
+}
+
 function importedServerAssets(files: Record<string, string>): Record<string, string> {
   const source = files["migration/asset-map.json"]
   if (!source?.trim()) return {}
@@ -88,6 +108,7 @@ function hydrateImportedAssetsBeforeRuntime(files: Record<string, string>) {
       "  if (!importedRuntimePromise) {",
       "    importedRuntimePromise = (async () => {",
       '      const runtimeRoot = process.env.TMPDIR || "/tmp";',
+      '      if (process.env.VERCEL) process.env.NODE_ENV = "production";',
       "      process.chdir(runtimeRoot);",
       "      await Promise.all(Object.entries(importedRuntimeAssets).map(async ([relativePath, url]) => {",
       "        const destination = path.join(runtimeRoot, relativePath);",
@@ -130,6 +151,7 @@ export function finalizeImportedRuntimeFiles(files: Record<string, string>): Rec
   }
 
   lazyLoadViteInProductionRuntime(runtimeFiles)
+  forceProductionBootstrapOnVercel(runtimeFiles)
   hydrateImportedAssetsBeforeRuntime(runtimeFiles)
   return runtimeFiles
 }
