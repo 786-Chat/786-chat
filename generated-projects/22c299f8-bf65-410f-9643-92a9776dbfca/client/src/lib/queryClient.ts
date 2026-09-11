@@ -1,45 +1,57 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Global 401 error handler - redirects to appropriate login page
+// Redirect an expired authenticated screen to its canonical login route.
 function handle401Error(url: string) {
   console.log('🔒 Authentication expired, redirecting to login...', { url });
-  
-  // Check if user is already on a login page - don't redirect if so
+
   const currentPath = window.location.pathname;
-  const isAlreadyOnLoginPage = currentPath === '/' || 
-                              currentPath === '/admin' || 
+  const isAlreadyOnLoginPage = currentPath === '/' ||
+                              currentPath === '/admin' ||
                               currentPath === '/branch' ||
                               currentPath === '/admin-login' ||
                               currentPath === '/branch-login';
-  
+
   if (isAlreadyOnLoginPage) {
-    console.log('User already on login page, not redirecting');
-    return; // Don't redirect if already on a login page
+    return;
   }
-  
-  // Check if this is a branch dashboard context by looking at current path
-  const isBranchContext = currentPath.startsWith('/branch') || 
-                         currentPath.includes('dashboard') ||
-                         window.location.search.includes('branch');
-  
-  // Clear any existing session data and redirect to appropriate login
+
+  // Admin context must be checked before branch context. The old logic used
+  // `includes("dashboard")`, which incorrectly treated /admin-dashboard as a
+  // branch page and sent an expired admin session to the branch login.
+  const isAdminContext = currentPath === '/admin-dashboard' ||
+                         currentPath.startsWith('/admin-') ||
+                         currentPath === '/pdf-builder' ||
+                         currentPath === '/file-manager' ||
+                         url.startsWith('/api/admin/');
+
+  const isBranchContext = currentPath === '/branch-dashboard' ||
+                          currentPath.startsWith('/branch-') ||
+                          currentPath === '/branch-charts' ||
+                          currentPath === '/chart' ||
+                          url.startsWith('/api/branch/');
+
+  if (isAdminContext) {
+    window.location.replace('/admin-login');
+    return;
+  }
+
   if (isBranchContext) {
-    // For branch users, redirect to branch login
-    window.location.href = '/';
-  } else {
-    // For admin users, redirect to admin login page (not backend endpoint)
-    window.location.href = '/admin';
+    window.location.replace('/branch-login');
+    return;
   }
+
+  // For protected screens without a more specific context, keep admin and
+  // branch authentication separated rather than falling back to /admin or /.
+  window.location.replace('/admin-login');
 }
 
 async function throwIfResNotOk(res: Response, url?: string) {
   if (!res.ok) {
-    // Handle 401 errors globally to prevent cards from disappearing
     if (res.status === 401) {
       handle401Error(url || '');
-      return; // Don't throw, just redirect
+      return;
     }
-    
+
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
@@ -77,9 +89,8 @@ export const getQueryFn: <T>(options: {
         return null;
       } else if (unauthorizedBehavior === "redirect") {
         handle401Error(url);
-        return null; // Return null while redirect happens
+        return null;
       }
-      // If "throw", continue to throwIfResNotOk which will handle the redirect
     }
 
     await throwIfResNotOk(res, url);
@@ -89,7 +100,6 @@ export const getQueryFn: <T>(options: {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Default to redirect behavior to prevent cards from disappearing
       queryFn: getQueryFn({ on401: "redirect" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
