@@ -1,4 +1,5 @@
 const DEFAULT_PROJECT_PREFIX = "786-generated-"
+const IMPORTED_RUNTIME_HEALTH_PATH = "/__786-runtime-health"
 
 export type GeneratedPreviewState = {
   id: string
@@ -24,19 +25,31 @@ function generatedProjectName(projectId: string): string {
   return `${DEFAULT_PROJECT_PREFIX}${projectSuffix(projectId)}`
 }
 
+async function probeUrl(url: string, controller: AbortController): Promise<Response> {
+  return fetch(url, {
+    method: "GET",
+    redirect: "manual",
+    cache: "no-store",
+    signal: controller.signal,
+    headers: { Accept: "text/html,application/json;q=0.9,*/*;q=0.8" },
+  })
+}
+
 async function readyRuntimeState(url: string): Promise<"healthy" | "failed" | "unknown"> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "manual",
-      cache: "no-store",
-      signal: controller.signal,
-      headers: { Accept: "text/html,application/json;q=0.9,*/*;q=0.8" },
-    })
-    // READY only means Vercel finished packaging the Function. A cold-start
-    // FUNCTION_INVOCATION_FAILED response must not be published into Live Preview.
+    const base = url.endsWith("/") ? url.slice(0, -1) : url
+    const runtimeResponse = await probeUrl(`${base}${IMPORTED_RUNTIME_HEALTH_PATH}`, controller)
+
+    // Imported Express/Vite bridges expose a dedicated 204 probe that forces the
+    // backend cold start. A 5xx here must never be published as Live Preview READY.
+    if (runtimeResponse.status === 204) return "healthy"
+    if (runtimeResponse.status >= 500) return "failed"
+
+    // Normal generated Next.js projects do not expose the imported-runtime probe.
+    // Fall back to the root page for those projects.
+    const response = await probeUrl(url, controller)
     return response.status >= 500 ? "failed" : "healthy"
   } catch {
     // Network/transient probe failures should be retried by normal builder polling,

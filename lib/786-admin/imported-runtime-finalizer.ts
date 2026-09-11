@@ -35,10 +35,13 @@ function lazyLoadViteInProductionRuntime(files: Record<string, string>) {
     setupSignature,
     [
       "export async function setupVite(app: Express, server: Server) {",
-      "  // Vite/Rollup are development-only. Keep them out of Vercel cold start.",
+      "  // Vite/Rollup are development-only. Keep them out of Vercel cold start and",
+      "  // keep the local vite.config module outside esbuild's production server graph.",
+      '  const viteModuleName = "vite";',
+      '  const viteConfigModuleName = "../vite.config.js";',
       "  const [{ createServer: createViteServer, createLogger }, viteConfigModule] = await Promise.all([",
-      '    import("vite"),',
-      '    import("../vite.config.js"),',
+      "    import(viteModuleName),",
+      "    import(viteConfigModuleName),",
       "  ]);",
       "  const viteConfig = viteConfigModule.default;",
       "  const viteLogger = createLogger();",
@@ -99,6 +102,10 @@ function hydrateImportedAssetsBeforeRuntime(files: Record<string, string>) {
 
   bridge = bridge.replace(runtimeImport[0], 'import path from "path";')
   bridge = bridge.replace(
+    'const runtimeOwned =\n    req.path === "/api" ||',
+    'const runtimeOwned =\n    req.path === "/__786-runtime-health" ||\n    req.path === "/api" ||',
+  )
+  bridge = bridge.replace(
     /const runtimeApp = runtime\.app \?\? runtime\.default\?\.app \?\? runtime\.default;\s*if \(!runtimeApp\) \{\s*throw new Error\("Imported Express runtime did not export an app"\);\s*\}\s*app\.use\(runtimeApp\);/m,
     [
       `const importedRuntimeAssets = ${JSON.stringify(assets, null, 2)};`,
@@ -127,6 +134,15 @@ function hydrateImportedAssetsBeforeRuntime(files: Record<string, string>) {
       "  }",
       "  return importedRuntimePromise;",
       "}",
+      "",
+      'app.get("/__786-runtime-health", async (_req, res, next) => {',
+      "  try {",
+      "    await loadImportedRuntime();",
+      "    return res.status(204).end();",
+      "  } catch (error) {",
+      "    return next(error);",
+      "  }",
+      "});",
       "",
       "app.use(async (req, res, next) => {",
       "  try {",

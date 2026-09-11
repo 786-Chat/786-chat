@@ -7,6 +7,7 @@ const buildRoute = readFileSync("app/api/786-admin/projects/[id]/build/route.ts"
 const store = readFileSync("lib/786-admin/build-runner-store.ts", "utf8")
 const publisher = readFileSync("lib/786-admin/github-project-publisher.ts", "utf8")
 const reconciliation = readFileSync("lib/786-admin/preview-reconciliation.ts", "utf8")
+const finalizer = readFileSync("lib/786-admin/imported-runtime-finalizer.ts", "utf8")
 const workflow = readFileSync(".github/workflows/generated-project-build.yml", "utf8")
 
 test("publisher checkpoints commit metadata before waiting for Vercel", () => {
@@ -53,25 +54,30 @@ test("slow Vercel readiness is handed off before the runner transport timeout", 
   assert.match(workflow, /--retry 1/)
 })
 
-test("build polling reconciles a READY Vercel preview", () => {
+test("build polling reconciles only a healthy READY Vercel preview", () => {
   assert.match(buildRoute, /findGeneratedPreviewState/)
   assert.match(buildRoute, /preview\?\.state === "READY"/)
   assert.match(buildRoute, /status: "passed"/)
   assert.match(buildRoute, /deploymentUrl: preview\.url/)
   assert.match(reconciliation, /readyState \|\| item\.state/)
   assert.match(reconciliation, /\.vercel\.app/)
+  assert.match(reconciliation, /IMPORTED_RUNTIME_HEALTH_PATH = "\/__786-runtime-health"/)
+  assert.match(reconciliation, /runtimeResponse\.status === 204/)
+  assert.match(reconciliation, /runtimeResponse\.status >= 500/)
+  assert.match(finalizer, /app\.get\("\/__786-runtime-health"/)
+  assert.match(finalizer, /await loadImportedRuntime\(\)/)
 })
 
 test("build polling converts terminal Vercel preview states into a failed build", () => {
   assert.match(buildRoute, /TERMINAL_PREVIEW_FAILURE_STATES/)
   assert.match(buildRoute, /"ERROR", "CANCELED", "CANCELLED"/)
   assert.match(buildRoute, /status: "failed"/)
-  assert.match(buildRoute, /Vercel preview deployment finished with state/)
+  assert.match(buildRoute, /Vercel preview deployment\/runtime finished with state/)
   assert.match(reconciliation, /state: string/)
 })
 
 test("preview publishing cannot remain running forever", () => {
-  assert.match(buildRoute, /PREVIEW_PUBLISH_TIMEOUT_MS = 5 \* 60 \* 1000/)
-  assert.match(buildRoute, /Preview publishing timed out before Vercel reached a terminal state/)
+  assert.match(buildRoute, /PREVIEW_PUBLISH_TIMEOUT_MS = 10 \* 60 \* 1000/)
+  assert.match(buildRoute, /Preview publishing timed out before Vercel reached a healthy terminal state/)
   assert.match(buildRoute, /Date\.parse\(build\.updated_at\)/)
 })
