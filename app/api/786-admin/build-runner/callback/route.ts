@@ -32,6 +32,37 @@ function runtimeFilesDiffer(saved: Record<string, string>, runtimeFiles: Record<
   return false
 }
 
+function alignImportedRuntimeEntry(files: Record<string, string>): Record<string, string> {
+  const bridge = files["index.ts"]
+  const packageSource = files["package.json"]
+  if (!bridge?.includes('./dist/index.cjs') || !packageSource?.trim()) return files
+
+  try {
+    const pkg = JSON.parse(packageSource) as {
+      type?: string
+      scripts?: Record<string, string>
+    }
+    const start = pkg.scripts?.start || ""
+    const build = pkg.scripts?.build || ""
+    let runtimeEntry: string | null = null
+
+    if (/\bdist\/index\.mjs\b/.test(start)) runtimeEntry = "./dist/index.mjs"
+    else if (/\bdist\/index\.js\b/.test(start)) runtimeEntry = "./dist/index.js"
+    else if (/\bdist\/index\.cjs\b/.test(start)) runtimeEntry = "./dist/index.cjs"
+    else if (pkg.type === "module" && /--format=esm\b/.test(build) && /--outdir=dist\b/.test(build)) {
+      runtimeEntry = "./dist/index.js"
+    }
+
+    if (runtimeEntry && runtimeEntry !== "./dist/index.cjs") {
+      files["index.ts"] = bridge.replace("./dist/index.cjs", runtimeEntry)
+    }
+  } catch {
+    // Invalid package metadata is handled by the normal deployment validator.
+  }
+
+  return files
+}
+
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -68,7 +99,7 @@ export async function POST(request: Request) {
 
       const deploymentFiles = hardenFoodSafetyRuntime(
         bundle.projectId,
-        runtimeDeploymentFiles(bundle.files),
+        alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
       )
       const hasRuntimeCompatibilityRewrite = runtimeFilesDiffer(bundle.files, deploymentFiles)
 
