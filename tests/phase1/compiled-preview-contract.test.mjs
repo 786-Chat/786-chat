@@ -54,3 +54,11 @@ test("generated Vercel deployment uses a valid target and must become ready", as
   assert.match(deployer, /readyDeploymentForCommit/)
   assert.match(deployer, /Vercel deployment did not become ready/)
 })
+
+test("imported Express runtime bridge tolerates CJS and ESM export shapes", async () => {
+  const callback = await read("app/api/786-admin/build-runner/callback/route.ts")
+
+  assert.match(callback, /replace\('import runtime from "', 'import \* as runtime from "'\)/)
+  assert.match(callback, /runtime\.app \?\? runtime\.default\?\.app \?\? runtime\.default/)
+  assert.match(callback, /Imported Express runtime did not export an app/)
+})
