@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     const token = await createToken(owner)
-    await setAuthCookie(token)
+    await setAuthCookie(token, { persistentAdmin: true })
 
     return NextResponse.json({ success: true, user: owner })
   } catch (error) {
