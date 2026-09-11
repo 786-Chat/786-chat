@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth"
 const allowedContentTypes = [
   "image/gif",
   "image/x-icon",
+  "image/vnd.microsoft.icon",
   "image/jpeg",
   "image/png",
   "image/svg+xml",
