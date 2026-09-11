@@ -52,6 +52,10 @@ app.use((req, res, next) => {
     .sendFile(indexFile);
 });
 
-app.use(runtime.app);
+const runtimeApp = runtime.app ?? runtime.default?.app ?? runtime.default;
+if (!runtimeApp) {
+  throw new Error("Pest Control runtime did not export an Express app");
+}
+app.use(runtimeApp);
 
 export default app;
