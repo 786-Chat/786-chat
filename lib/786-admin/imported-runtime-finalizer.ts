@@ -116,6 +116,71 @@ function ensureImportedDatabaseRuntime(files: Record<string, string>) {
   }
 }
 
+function ensureImportedDrizzleSchemaBootstrap(files: Record<string, string>) {
+  const packageSource = files["package.json"]
+  const drizzleConfig =
+    files["drizzle.config.ts"] ||
+    files["drizzle.config.js"] ||
+    files["drizzle.config.mjs"]
+  const schemaSource = files["shared/schema.ts"] || files["shared/schema.js"]
+  if (!packageSource?.trim() || !drizzleConfig?.trim() || !schemaSource?.trim()) return
+
+  let packageJson: {
+    scripts?: Record<string, string>
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  try {
+    packageJson = JSON.parse(packageSource) as typeof packageJson
+  } catch {
+    return
+  }
+
+  const dependencies = {
+    ...(packageJson.dependencies || {}),
+    ...(packageJson.devDependencies || {}),
+  }
+  if (!dependencies["drizzle-kit"] || !dependencies["@neondatabase/serverless"]) return
+
+  const buildCommand = packageJson.scripts?.build?.trim()
+  if (!buildCommand || buildCommand.includes("786-drizzle-bootstrap.mjs")) return
+
+  // Vercel receives DATABASE_URL before its build starts. For imported Replit apps
+  // that ship a Drizzle schema but no SQL migration, initialize only a completely
+  // empty per-project database from that authoritative schema. Existing databases
+  // are never pushed or modified by this compatibility path.
+  files["scripts/786-drizzle-bootstrap.mjs"] = [
+    '// 786.Chat: initialize an imported Drizzle schema only when its isolated DB is empty.',
+    'import { spawnSync } from "node:child_process";',
+    'import { neon } from "@neondatabase/serverless";',
+    '',
+    'const databaseUrl = process.env.DATABASE_URL?.trim();',
+    'if (!databaseUrl) process.exit(0);',
+    'const sql = neon(databaseUrl);',
+    'const rows = await sql`SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = \'public\' AND table_type = \'BASE TABLE\'`;',
+    'const count = Number(rows?.[0]?.count || 0);',
+    'if (count > 0) {',
+    '  console.log(`[786.Chat] Imported database already initialized (${count} tables); skipping Drizzle bootstrap.`);',
+    '  process.exit(0);',
+    '}',
+    'console.log("[786.Chat] Empty imported database detected; applying authoritative Drizzle schema.");',
+    'const runner = process.platform === "win32" ? "npx.cmd" : "npx";',
+    'const result = spawnSync(runner, ["drizzle-kit", "push", "--force"], {',
+    '  stdio: "inherit",',
+    '  env: process.env,',
+    '});',
+    'if (result.error) throw result.error;',
+    'if (result.status !== 0) process.exit(result.status ?? 1);',
+    '',
+  ].join("\n")
+
+  packageJson.scripts = {
+    ...(packageJson.scripts || {}),
+    build: `node scripts/786-drizzle-bootstrap.mjs && ${buildCommand}`,
+  }
+  files["package.json"] = `${JSON.stringify(packageJson, null, 2)}\n`
+}
+
 function hardenImportedReplitAuth(files: Record<string, string>) {
   for (const authPath of ["server/replitAuth.ts", "server/replitAuth.js"]) {
     let source = files[authPath]
@@ -264,6 +329,7 @@ export function finalizeImportedRuntimeFiles(files: Record<string, string>): Rec
   }
 
   ensureImportedDatabaseRuntime(runtimeFiles)
+  ensureImportedDrizzleSchemaBootstrap(runtimeFiles)
   hardenImportedReplitAuth(runtimeFiles)
   lazyLoadViteInProductionRuntime(runtimeFiles)
   forceProductionBootstrapOnVercel(runtimeFiles)
