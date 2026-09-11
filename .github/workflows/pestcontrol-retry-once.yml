@@ -1,4 +1,4 @@
-name: PestControl Queue Fresh Import Build After Runtime Asset Repair
+name: PestControl Queue Fresh Import Build After Production Bootstrap Repair
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Queue fresh Pest Control build from latest saved source after runtime asset repair
+      - name: Queue fresh Pest Control build from latest saved source after production bootstrap repair
         env:
           RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
           PROJECT_ID: 22c299f8-bf65-410f-9643-92a9776dbfca
@@ -31,4 +31,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a fresh Pest Control build from the repaired saved project source after runtime asset repair."
+          echo "Queued a fresh Pest Control build from the repaired saved project source after production bootstrap repair."
