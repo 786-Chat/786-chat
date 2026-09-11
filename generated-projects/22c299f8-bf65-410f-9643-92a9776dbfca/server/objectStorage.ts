@@ -4,6 +4,7 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
+import { readFile } from "fs/promises";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -65,6 +66,16 @@ export class ObjectStorageService {
     category: string;
     filename: string;
   }): Promise<string> {
+    // Imported Replit projects do not have the Replit Object Storage sidecar on Vercel.
+    // For branch logos, persist the image itself in the existing logoUrl database field
+    // as a data URL. This keeps logo updates durable across Vercel cold starts/redeploys
+    // without requiring PRIVATE_OBJECT_DIR or a Replit runtime dependency.
+    if (!process.env.PRIVATE_OBJECT_DIR && category === "logos") {
+      const mimeType = lookup(filename) || "application/octet-stream";
+      const fileBuffer = await readFile(localPath);
+      return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+    }
+
     const privateDir = this.getPrivateObjectDir();
     const objectId = randomUUID();
     const extension = filename.split('.').pop() || '';
