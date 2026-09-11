@@ -139,6 +139,69 @@ jobs:
           for (const file of sourceFiles) normalizeFile(file)
           NODE
 
+      - name: Repair deterministic Replit asset aliases
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const root = path.resolve(process.env.RUNNER_TEMP, 'generated-project')
+          const assetMapPath = path.join(root, 'migration', 'asset-map.json')
+          if (!fs.existsSync(assetMapPath)) process.exit(0)
+
+          const assetMap = JSON.parse(fs.readFileSync(assetMapPath, 'utf8'))
+          const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.jsx'])
+          const sourceFiles = []
+
+          function collect(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (['node_modules', '.git', '.next', 'dist'].includes(entry.name)) continue
+              const full = path.join(dir, entry.name)
+              if (entry.isDirectory()) collect(full)
+              else if (sourceExtensions.has(path.extname(entry.name))) sourceFiles.push(full)
+            }
+          }
+
+          function stripReplitTimestamp(fileName) {
+            const ext = path.extname(fileName)
+            const stem = fileName.slice(0, -ext.length).replace(/_[0-9]{10,}$/i, '')
+            return `${stem}${ext}`
+          }
+
+          const byBaseName = new Map()
+          for (const [assetPath, url] of Object.entries(assetMap)) {
+            const base = path.posix.basename(assetPath)
+            const list = byBaseName.get(base) || []
+            list.push({ assetPath, url })
+            byBaseName.set(base, list)
+          }
+
+          collect(root)
+          for (const file of sourceFiles) {
+            let source = fs.readFileSync(file, 'utf8')
+            let changed = false
+            source = source.replace(
+              /import\s+([A-Za-z_$][\w$]*)\s+from\s+["']@assets\/([^"']+)["'];?/g,
+              (statement, variable, relative) => {
+                const expected = `attached_assets/${relative}`.replaceAll('\\', '/')
+                if (Object.prototype.hasOwnProperty.call(assetMap, expected)) return statement
+
+                const requestedBase = path.posix.basename(relative)
+                const normalizedBase = stripReplitTimestamp(requestedBase)
+                const candidates = byBaseName.get(normalizedBase) || []
+                const preferred = candidates.filter((item) => item.assetPath.startsWith('public/') || item.assetPath.startsWith('client/public/'))
+                const pool = preferred.length ? preferred : candidates
+                if (pool.length !== 1) return statement
+
+                changed = true
+                console.log(`[compat] Repaired missing Replit asset ${relative} -> ${pool[0].assetPath} in ${path.relative(root, file)}`)
+                return `const ${variable} = ${JSON.stringify(pool[0].url)} // 786.Chat: deterministic Replit asset alias for ${relative}`
+              },
+            )
+            if (changed) fs.writeFileSync(file, source, 'utf8')
+          }
+          NODE
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
