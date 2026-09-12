@@ -3574,7 +3574,7 @@ export default function AdminDashboard() {
   )}
 
 
-  /* Pest Control Documents Section - Mobile Responsive */}
+  {/* Pest Control Documents Section - Mobile Responsive */}
             {activeTab === "pest-control-docs" && (
               <div className="space-y-6 w-full max-w-full overflow-hidden">
                 <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0 w-full max-w-full">
@@ -7060,7 +7060,7 @@ export default function AdminDashboard() {
 
       {/* Monthly Report Upload Dialog */}
       <Dialog open={showMonthlyReportDialog} onOpenChange={setShowMonthlyReportDialog}>
-        <DialogContent className="bg-slate-800 text-white border-slate-700 max-w-2xl !top-2 !translate-y-0 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain">
+        <DialogContent className="bg-slate-800 text-white border-slate-700 w-[calc(100vw-1rem)] sm:max-w-2xl !top-2 !translate-y-0 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle className="text-purple-400 text-xl font-bold flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
