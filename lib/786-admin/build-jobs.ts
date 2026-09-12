@@ -1,6 +1,9 @@
 import { sql } from "./db"
 
-const QUEUED_BUILD_TIMEOUT_MS = 5 * 60 * 1000
+// GitHub-hosted runners can legitimately spend several minutes queued before a
+// job is assigned. Keep this longer than the old five-minute window so a valid
+// workflow_dispatch is not falsely marked failed while still waiting to start.
+const QUEUED_BUILD_TIMEOUT_MS = 20 * 60 * 1000
 
 export type AdminProjectBuildStatus =
   | "queued"
