@@ -9,10 +9,30 @@ body,
 /* Keep the main admin content vertically scrollable on desktop, laptop, tablet and mobile. */
 .scroll-ios {
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   scrollbar-gutter: stable;
+}
+
+/* Do not let nested admin sections clip report/document cards. */
+.scroll-ios .overflow-hidden {
+  overflow: visible !important;
+  min-height: 0 !important;
+}
+
+/* Monthly Reports must grow/scroll exactly like Pest Control Docs. */
+.scroll-ios [class*="grid"],
+.scroll-ios [class*="space-y-"] {
+  min-height: 0;
+}
+
+/* Ensure the report-card area can extend below the filters and remain reachable. */
+.scroll-ios > div,
+.scroll-ios main,
+.scroll-ios section {
+  min-height: 0;
 }
 
 /* Radix dialogs must fit inside the 786.Chat live-preview iframe. */
@@ -28,21 +48,14 @@ body,
   scrollbar-gutter: stable !important;
 }
 
-/* The Monthly Report upload form is taller than the preview on laptops.
-   Let the whole dialog scroll so title, selected PDF and action buttons are all reachable. */
+/* Keep all Monthly Report upload fields and action buttons reachable. */
 [role="dialog"] > div,
 [role="dialog"] form {
   min-height: 0 !important;
 }
 
-/* Prevent nested content from swallowing the wheel/trackpad scroll. */
 [role="dialog"] .overflow-hidden {
   overflow: visible !important;
-}
-
-/* Make report/document grids scroll naturally instead of being clipped by nested containers. */
-.scroll-ios .overflow-hidden {
-  min-height: 0;
 }
 
 /* Visible scrollbar for report lists and upload dialogs. */
