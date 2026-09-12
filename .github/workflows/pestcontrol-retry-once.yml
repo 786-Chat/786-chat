@@ -1,6 +1,7 @@
 name: PestControl Retry Stuck Preview
 
 # Retrigger a clean Pest Control isolated build after the saved TypeScript/Vercel Blob source repair.
+# 2026-09-12: publish corrected Monthly Reports layout and scrolling.
 on:
   push:
     branches:
