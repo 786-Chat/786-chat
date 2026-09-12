@@ -9,6 +9,11 @@ function replaceRequired(source: string, needle: string, replacement: string, la
   return source.replace(needle, replacement)
 }
 
+function replaceOptional(source: string, needle: string, replacement: string): string {
+  if (source.includes(replacement)) return source
+  return source.includes(needle) ? source.replace(needle, replacement) : source
+}
+
 function patchRouteBlock(
   source: string,
   routeMarker: string,
@@ -25,6 +30,39 @@ function patchRouteBlock(
   if (!block.includes(needle)) {
     throw new Error(`Pest Control runtime hardening failed: ${label} signature not found`)
   }
+  return source.slice(0, start) + block.replace(needle, replacement) + source.slice(end)
+}
+
+function patchContractDefault(
+  source: string,
+  routeMarkers: string[],
+  variableName: "branchData" | "updateData",
+): string {
+  const routeMarker = routeMarkers.find((marker) => source.includes(marker))
+  if (!routeMarker) return source
+
+  const start = source.indexOf(routeMarker)
+  const nextRoute = source.indexOf("\n  app.", start + routeMarker.length)
+  const end = nextRoute < 0 ? source.length : nextRoute
+  const block = source.slice(start, end)
+
+  if (block.includes(DEFAULT_CONTRACT_NUMBER) && block.includes("contractNumber")) return source
+
+  const candidates = [
+    `      const ${variableName} = req.body;`,
+    `      let ${variableName} = req.body;`,
+    `      const ${variableName} = { ...req.body };`,
+    `      let ${variableName} = { ...req.body };`,
+  ]
+
+  const needle = candidates.find((candidate) => block.includes(candidate))
+  if (!needle) return source
+
+  const replacement = [
+    needle,
+    `      if (!String(${variableName}.contractNumber || "").trim()) ${variableName}.contractNumber = "${DEFAULT_CONTRACT_NUMBER}";`,
+  ].join("\n")
+
   return source.slice(0, start) + block.replace(needle, replacement) + source.slice(end)
 }
 
@@ -67,17 +105,15 @@ function patchPestControlObjectStorage(source: string): string {
 
 function patchPestControlBranchEditor(source: string): string {
   let next = source
-  next = replaceRequired(
+  next = replaceOptional(
     next,
     '      contractNumber: "",',
     `      contractNumber: "${DEFAULT_CONTRACT_NUMBER}",`,
-    "new branch contract default",
   )
-  next = replaceRequired(
+  next = replaceOptional(
     next,
     '      contractNumber: branch.contractNumber || "",',
     `      contractNumber: branch.contractNumber || "${DEFAULT_CONTRACT_NUMBER}",`,
-    "edit branch contract fallback",
   )
   return next
 }
@@ -85,26 +121,22 @@ function patchPestControlBranchEditor(source: string): string {
 function patchPestControlBranchRoutes(source: string): string {
   let next = source
 
-  next = patchRouteBlock(
+  next = patchContractDefault(
     next,
-    "  app.post('/api/branches', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
-    '      const branchData = req.body;',
     [
-      '      const branchData = req.body;',
-      `      if (!String(branchData.contractNumber || "").trim()) branchData.contractNumber = "${DEFAULT_CONTRACT_NUMBER}";`,
-    ].join("\n"),
-    "create branch contract default",
+      "  app.post('/api/branches', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
+      '  app.post("/api/branches", isAdminAuthenticated, uploadLogoSafe, async (req, res) => {',
+    ],
+    "branchData",
   )
 
-  next = patchRouteBlock(
+  next = patchContractDefault(
     next,
-    "  app.patch('/api/branches/:id', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
-    '      const updateData = req.body;',
     [
-      '      const updateData = req.body;',
-      `      if (!String(updateData.contractNumber || "").trim()) updateData.contractNumber = "${DEFAULT_CONTRACT_NUMBER}";`,
-    ].join("\n"),
-    "update branch contract default",
+      "  app.patch('/api/branches/:id', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
+      '  app.patch("/api/branches/:id", isAdminAuthenticated, uploadLogoSafe, async (req, res) => {',
+    ],
+    "updateData",
   )
 
   const originalUpdateLogoBlock = [
@@ -162,36 +194,40 @@ function patchPestControlBranchRoutes(source: string): string {
     '      }',
   ].join("\n")
 
-  next = patchRouteBlock(
-    next,
-    "  app.patch('/api/branches/:id', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
-    originalUpdateLogoBlock,
-    resilientUpdateLogoBlock,
-    "non-blocking update branch logo persistence",
-  )
+  if (!next.includes('const uploadedLogo = req.file;')) {
+    next = patchRouteBlock(
+      next,
+      "  app.patch('/api/branches/:id', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {",
+      originalUpdateLogoBlock,
+      resilientUpdateLogoBlock,
+      "non-blocking update branch logo persistence",
+    )
+  }
 
-  next = patchRouteBlock(
-    next,
-    "  app.get('/api/branches/:id/logo', async (req, res) => {",
-    "      // If logo is stored in Object Storage, redirect to Object Storage URL",
-    [
-      "      // 786.Chat: logos persisted as data URLs on Vercel must also be served",
-      "      // by the existing branch-logo endpoint after a refresh.",
-      "      if (branch.logoUrl && branch.logoUrl.startsWith('data:image/')) {",
-      "        const match = branch.logoUrl.match(/^data:([^;]+);base64,(.+)$/);",
-      "        if (match) {",
-      "          res.setHeader('Content-Type', match[1]);",
-      "          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');",
-      "          res.setHeader('Pragma', 'no-cache');",
-      "          res.setHeader('Expires', '0');",
-      "          return res.send(Buffer.from(match[2], 'base64'));",
-      "        }",
-      "      }",
-      "",
+  if (!next.includes("branch.logoUrl.startsWith('data:image/')")) {
+    next = patchRouteBlock(
+      next,
+      "  app.get('/api/branches/:id/logo', async (req, res) => {",
       "      // If logo is stored in Object Storage, redirect to Object Storage URL",
-    ].join("\n"),
-    "Vercel data URL logo serving",
-  )
+      [
+        "      // 786.Chat: logos persisted as data URLs on Vercel must also be served",
+        "      // by the existing branch-logo endpoint after a refresh.",
+        "      if (branch.logoUrl && branch.logoUrl.startsWith('data:image/')) {",
+        "        const match = branch.logoUrl.match(/^data:([^;]+);base64,(.+)$/);",
+        "        if (match) {",
+        "          res.setHeader('Content-Type', match[1]);",
+        "          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');",
+        "          res.setHeader('Pragma', 'no-cache');",
+        "          res.setHeader('Expires', '0');",
+        "          return res.send(Buffer.from(match[2], 'base64'));",
+        "        }",
+        "      }",
+        "",
+        "      // If logo is stored in Object Storage, redirect to Object Storage URL",
+      ].join("\n"),
+      "Vercel data URL logo serving",
+    )
+  }
 
   return next
 }
