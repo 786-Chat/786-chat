@@ -1352,15 +1352,15 @@ export default function AdminDashboard() {
       name,
       slug,
       address: formData.get("address") as string,
-      status: "closed",
+      status: ((formData.get("status") as "open" | "closed") || "closed"),
       rating: "5.0",
       ordersToday: 0,
       revenueToday: "0.00",
       lastOrderTime: "Never",
-      googleMapsUrl: formData.get("googleMapsUrl") as string || "",
-      stripeAccountId: (formData.get("stripeAccountId") as string)?.trim() || null,
-      stripePublishableKey: (formData.get("stripePublishableKey") as string)?.trim() || null,
-      stripeSecretKey: (formData.get("stripeSecretKey") as string)?.trim() || null,
+      googleMapsUrl: (formData.get("googleMapsUrl") as string)?.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((formData.get("address") as string) || "").trim())}`,
+      stripeAccountId: (formData.get("stripeAccountId") as string)?.trim() || undefined,
+      stripePublishableKey: (formData.get("stripePublishableKey") as string)?.trim() || undefined,
+      stripeSecretKey: (formData.get("stripeSecretKey") as string)?.trim() || undefined,
       loginUsername: formData.get("loginUsername") as string || undefined,
       loginPassword: formData.get("loginPassword") as string || undefined,
       logoUrl: newBranchLogoUrl || null,
@@ -1368,30 +1368,30 @@ export default function AdminDashboard() {
       themeKey: newBranchTheme || "",
       customDomain: (() => {
         if (newBranchDomainOption === "link24" && newBranchSubdomain.trim()) {
-          return `${newBranchSubdomain.trim()}.link24.online`;
+          return `${newBranchSubdomain.trim()}.786.chat`;
         }
         if (newBranchDomainOption === "custom" && newBranchCustomDomain.trim()) {
           return newBranchCustomDomain.trim();
         }
         return null;
       })(),
-      bankTransferEnabled: !!(formData.get("bankAccountName") as string)?.trim(),
-      bankName: (formData.get("bankName") as string)?.trim() || null,
-      bankAccountName: (formData.get("bankAccountName") as string)?.trim() || null,
-      bankSortCode: (formData.get("bankSortCode") as string)?.trim() || null,
-      bankAccountNumber: (formData.get("bankAccountNumber") as string)?.trim() || null,
-      bankIban: (formData.get("bankIban") as string)?.trim() || null,
-      bankTransferVideoUrl: (formData.get("bankTransferVideoUrl") as string)?.trim() || null,
-      easypaisaAccountNumber: (formData.get("easypaisaAccountNumber") as string)?.trim() || null,
-      easypaisaAccountName: (formData.get("easypaisaAccountName") as string)?.trim() || null,
-      jazzcashAccountNumber: (formData.get("jazzcashAccountNumber") as string)?.trim() || null,
-      jazzcashAccountName: (formData.get("jazzcashAccountName") as string)?.trim() || null,
-      hblAccountNumber: (formData.get("hblAccountNumber") as string)?.trim() || null,
-      hblAccountName: (formData.get("hblAccountName") as string)?.trim() || null,
-      hblIban: (formData.get("hblIban") as string)?.trim() || null,
-      ublAccountNumber: (formData.get("ublAccountNumber") as string)?.trim() || null,
-      ublAccountName: (formData.get("ublAccountName") as string)?.trim() || null,
-      ublIban: (formData.get("ublIban") as string)?.trim() || null,
+      bankTransferEnabled: (formData.get("bankAccountName") as string)?.trim() ? true : undefined,
+      bankName: (formData.get("bankName") as string)?.trim() || undefined,
+      bankAccountName: (formData.get("bankAccountName") as string)?.trim() || undefined,
+      bankSortCode: (formData.get("bankSortCode") as string)?.trim() || undefined,
+      bankAccountNumber: (formData.get("bankAccountNumber") as string)?.trim() || undefined,
+      bankIban: (formData.get("bankIban") as string)?.trim() || undefined,
+      bankTransferVideoUrl: (formData.get("bankTransferVideoUrl") as string)?.trim() || undefined,
+      easypaisaAccountNumber: (formData.get("easypaisaAccountNumber") as string)?.trim() || undefined,
+      easypaisaAccountName: (formData.get("easypaisaAccountName") as string)?.trim() || undefined,
+      jazzcashAccountNumber: (formData.get("jazzcashAccountNumber") as string)?.trim() || undefined,
+      jazzcashAccountName: (formData.get("jazzcashAccountName") as string)?.trim() || undefined,
+      hblAccountNumber: (formData.get("hblAccountNumber") as string)?.trim() || undefined,
+      hblAccountName: (formData.get("hblAccountName") as string)?.trim() || undefined,
+      hblIban: (formData.get("hblIban") as string)?.trim() || undefined,
+      ublAccountNumber: (formData.get("ublAccountNumber") as string)?.trim() || undefined,
+      ublAccountName: (formData.get("ublAccountName") as string)?.trim() || undefined,
+      ublIban: (formData.get("ublIban") as string)?.trim() || undefined,
     });
     // Reset state after submission
     setNewBranchDomainOption("default");
@@ -1406,9 +1406,9 @@ export default function AdminDashboard() {
     const form = e.target as HTMLFormElement;
     const formData = new FormData(form);
 
-    const stripeAccountId = (formData.get("stripeAccountId") as string)?.trim() || null;
-    const stripePublishableKey = (formData.get("stripePublishableKey") as string)?.trim() || null;
-    const stripeSecretKey = (formData.get("stripeSecretKey") as string)?.trim() || null;
+    const stripeAccountId = (formData.get("stripeAccountId") as string)?.trim() || undefined;
+    const stripePublishableKey = (formData.get("stripePublishableKey") as string)?.trim() || undefined;
+    const stripeSecretKey = (formData.get("stripeSecretKey") as string)?.trim() || undefined;
     
     const newName = formData.get("name") as string;
     const newSlug = newName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -1419,7 +1419,7 @@ export default function AdminDashboard() {
         name: newName,
         slug: newSlug,
         address: formData.get("address") as string,
-        googleMapsUrl: formData.get("googleMapsUrl") as string,
+        googleMapsUrl: (formData.get("googleMapsUrl") as string)?.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((formData.get("address") as string) || "").trim())}`,
         stripeAccountId,
         stripePublishableKey,
         stripeSecretKey,
@@ -1431,36 +1431,36 @@ export default function AdminDashboard() {
         currency: editBranchCurrency || editingRestaurant.currency || "GBP",
         customDomain: (() => {
           if (editDomainOption === "link24" && editSubdomain.trim()) {
-            return `${editSubdomain.trim()}.link24.online`;
+            return `${editSubdomain.trim()}.786.chat`;
           }
           if (editDomainOption === "custom" && editCustomDomain.trim()) {
             return editCustomDomain.trim();
           }
           return null;
         })(),
-        bankTransferEnabled: !!(formData.get("bankAccountName") as string)?.trim(),
-        bankName: (formData.get("bankName") as string)?.trim() || null,
-        bankAccountName: (formData.get("bankAccountName") as string)?.trim() || null,
-        bankSortCode: (formData.get("bankSortCode") as string)?.trim() || null,
-        bankAccountNumber: (formData.get("bankAccountNumber") as string)?.trim() || null,
-        bankIban: (formData.get("bankIban") as string)?.trim() || null,
-        bankTransferVideoUrl: (formData.get("bankTransferVideoUrl") as string)?.trim() || null,
-        easypaisaAccountNumber: (formData.get("easypaisaAccountNumber") as string)?.trim() || null,
-        easypaisaAccountName: (formData.get("easypaisaAccountName") as string)?.trim() || null,
-        jazzcashAccountNumber: (formData.get("jazzcashAccountNumber") as string)?.trim() || null,
-        jazzcashAccountName: (formData.get("jazzcashAccountName") as string)?.trim() || null,
-        hblAccountNumber: (formData.get("hblAccountNumber") as string)?.trim() || null,
-        hblAccountName: (formData.get("hblAccountName") as string)?.trim() || null,
-        hblIban: (formData.get("hblIban") as string)?.trim() || null,
-        ublAccountNumber: (formData.get("ublAccountNumber") as string)?.trim() || null,
-        ublAccountName: (formData.get("ublAccountName") as string)?.trim() || null,
-        ublIban: (formData.get("ublIban") as string)?.trim() || null,
-        sumupApiKey: (formData.get("sumupApiKey") as string)?.trim() || null,
-        sumupMerchantCode: (formData.get("sumupMerchantCode") as string)?.trim() || null,
-        squareAccessToken: (formData.get("squareAccessToken") as string)?.trim() || null,
-        squareLocationId: (formData.get("squareLocationId") as string)?.trim() || null,
-        zettleApiKey: (formData.get("zettleApiKey") as string)?.trim() || null,
-        zettleMerchantId: (formData.get("zettleMerchantId") as string)?.trim() || null,
+        bankTransferEnabled: (formData.get("bankAccountName") as string)?.trim() ? true : undefined,
+        bankName: (formData.get("bankName") as string)?.trim() || undefined,
+        bankAccountName: (formData.get("bankAccountName") as string)?.trim() || undefined,
+        bankSortCode: (formData.get("bankSortCode") as string)?.trim() || undefined,
+        bankAccountNumber: (formData.get("bankAccountNumber") as string)?.trim() || undefined,
+        bankIban: (formData.get("bankIban") as string)?.trim() || undefined,
+        bankTransferVideoUrl: (formData.get("bankTransferVideoUrl") as string)?.trim() || undefined,
+        easypaisaAccountNumber: (formData.get("easypaisaAccountNumber") as string)?.trim() || undefined,
+        easypaisaAccountName: (formData.get("easypaisaAccountName") as string)?.trim() || undefined,
+        jazzcashAccountNumber: (formData.get("jazzcashAccountNumber") as string)?.trim() || undefined,
+        jazzcashAccountName: (formData.get("jazzcashAccountName") as string)?.trim() || undefined,
+        hblAccountNumber: (formData.get("hblAccountNumber") as string)?.trim() || undefined,
+        hblAccountName: (formData.get("hblAccountName") as string)?.trim() || undefined,
+        hblIban: (formData.get("hblIban") as string)?.trim() || undefined,
+        ublAccountNumber: (formData.get("ublAccountNumber") as string)?.trim() || undefined,
+        ublAccountName: (formData.get("ublAccountName") as string)?.trim() || undefined,
+        ublIban: (formData.get("ublIban") as string)?.trim() || undefined,
+        sumupApiKey: (formData.get("sumupApiKey") as string)?.trim() || undefined,
+        sumupMerchantCode: (formData.get("sumupMerchantCode") as string)?.trim() || undefined,
+        squareAccessToken: (formData.get("squareAccessToken") as string)?.trim() || undefined,
+        squareLocationId: (formData.get("squareLocationId") as string)?.trim() || undefined,
+        zettleApiKey: (formData.get("zettleApiKey") as string)?.trim() || undefined,
+        zettleMerchantId: (formData.get("zettleMerchantId") as string)?.trim() || undefined,
       },
     });
   };
@@ -1691,7 +1691,7 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     <Label>Stripe Secret Key</Label>
                     <Input name="stripeSecretKey" type="password" placeholder="sk_live_..." data-testid="input-restaurant-stripe-sk" />
-                    <p className="text-xs text-muted-foreground">Enter API keys from your customer's Stripe dashboard.</p>
+                    <p className="text-xs text-muted-foreground">Enter new Stripe credentials only when changing them. Blank fields keep the branch's saved credentials.</p>
                   </div>
                 </div>
               )}
@@ -1859,7 +1859,7 @@ export default function AdminDashboard() {
                       <div className="flex-1">
                         <Label className="text-sm font-medium cursor-pointer">Use Default App URL</Label>
                         <p className="text-xs text-muted-foreground">Customer accesses via your main app URL with branch name</p>
-                        <p className="text-xs font-mono text-green-600 dark:text-green-400 mt-1">yourapp.replit.app/menu/branch-name</p>
+                        <p className="text-xs font-mono text-green-600 dark:text-green-400 mt-1">Current deployment /menu/branch-name</p>
                       </div>
                     </div>
                   </div>
@@ -1873,8 +1873,8 @@ export default function AdminDashboard() {
                         {newBranchDomainOption === "link24" && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                       </div>
                       <div className="flex-1">
-                        <Label className="text-sm font-medium cursor-pointer">Use Your link24.online Subdomain</Label>
-                        <p className="text-xs text-muted-foreground">Give them a professional subdomain - no setup needed by customer!</p>
+                        <Label className="text-sm font-medium cursor-pointer">Use a 786.Chat Subdomain</Label>
+                        <p className="text-xs text-muted-foreground">Use a professional 786.Chat address. It becomes active after this project is published through 786.Chat.</p>
                       </div>
                     </div>
                     {newBranchDomainOption === "link24" && (
@@ -1886,7 +1886,7 @@ export default function AdminDashboard() {
                           className="border-0 p-0 h-auto focus-visible:ring-0 flex-1"
                           data-testid="input-subdomain-prefix"
                         />
-                        <span className="text-muted-foreground font-mono text-sm">.link24.online</span>
+                        <span className="text-muted-foreground font-mono text-sm">.786.chat</span>
                       </div>
                     )}
                   </div>
@@ -2243,9 +2243,11 @@ export default function AdminDashboard() {
                     setEditVoiceAlertPitch(parseFloat((restaurant as any).voiceAlertPitch) || 1.0);
                     setEditAlarmSound((restaurant as any).alarmSound || "alarm1");
                     const customDomain = (restaurant as any).customDomain || "";
-                    if (customDomain.endsWith('.link24.online')) {
+                    const is786Subdomain = customDomain.endsWith('.786.chat');
+                    const isLegacyLink24Subdomain = customDomain.endsWith('.link24.online');
+                    if (is786Subdomain || isLegacyLink24Subdomain) {
                       setEditDomainOption("link24");
-                      setEditSubdomain(customDomain.replace('.link24.online', ''));
+                      setEditSubdomain(customDomain.replace(/\.(?:786\.chat|link24\.online)$/, ''));
                       setEditCustomDomain("");
                     } else if (customDomain) {
                       setEditDomainOption("custom");
@@ -3105,7 +3107,7 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     <Label>Stripe Secret Key</Label>
                     <Input name="stripeSecretKey" type="password" defaultValue={editingRestaurant.stripeSecretKey || ""} placeholder="sk_live_..." data-testid="input-edit-restaurant-stripe-sk" />
-                    <p className="text-xs text-muted-foreground">Enter API keys from your customer's Stripe dashboard.</p>
+                    <p className="text-xs text-muted-foreground">Enter new Stripe credentials only when changing them. Blank fields keep the branch's saved credentials.</p>
                   </div>
                   <div className="flex items-center justify-between p-3 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 mt-3">
                     <div>
@@ -3354,7 +3356,7 @@ export default function AdminDashboard() {
                       <div className="flex-1">
                         <Label className="text-sm font-medium cursor-pointer">Use Default App URL</Label>
                         <p className="text-xs text-muted-foreground">Customer accesses via your main app URL with branch name</p>
-                        <p className="text-xs font-mono text-green-600 dark:text-green-400 mt-1">yourapp.replit.app/menu/{editingRestaurant.slug}</p>
+                        <p className="text-xs font-mono text-green-600 dark:text-green-400 mt-1">Current deployment /menu/{editingRestaurant.slug}</p>
                       </div>
                     </div>
                   </div>
@@ -3368,8 +3370,8 @@ export default function AdminDashboard() {
                         {editDomainOption === "link24" && <div className="w-2 h-2 rounded-full bg-blue-500" />}
                       </div>
                       <div className="flex-1">
-                        <Label className="text-sm font-medium cursor-pointer">Use Your link24.online Subdomain</Label>
-                        <p className="text-xs text-muted-foreground">Give them a professional subdomain - no setup needed by customer!</p>
+                        <Label className="text-sm font-medium cursor-pointer">Use a 786.Chat Subdomain</Label>
+                        <p className="text-xs text-muted-foreground">Use a professional 786.Chat address. It becomes active after this project is published through 786.Chat.</p>
                       </div>
                     </div>
                     {editDomainOption === "link24" && (
@@ -3381,7 +3383,7 @@ export default function AdminDashboard() {
                           className="border-0 p-0 h-auto focus-visible:ring-0 flex-1"
                           data-testid="input-edit-subdomain-prefix"
                         />
-                        <span className="text-muted-foreground font-mono text-sm">.link24.online</span>
+                        <span className="text-muted-foreground font-mono text-sm">.786.chat</span>
                       </div>
                     )}
                   </div>
@@ -3542,7 +3544,7 @@ export default function AdminDashboard() {
                 {duplicateName && (
                   <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded border border-emerald-200 dark:border-emerald-800">
                     <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                      Menu URL: <span className="font-mono">link24.online/{duplicateName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}</span>
+                      Menu URL: <span className="font-mono">Current deployment /menu/{duplicateName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}</span>
                     </p>
                   </div>
                 )}
@@ -11924,9 +11926,9 @@ Lemon & herb sauce
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            stripePublishableKey: paymentStripePublishable || null,
-            stripeSecretKey: paymentStripeSecret || null,
-            stripeAccountId: paymentStripeAccountId || null,
+            stripePublishableKey: paymentStripePublishable || undefined,
+            stripeSecretKey: paymentStripeSecret || undefined,
+            stripeAccountId: paymentStripeAccountId || undefined,
           }),
         });
         if (!response.ok) {
@@ -12443,13 +12445,13 @@ Lemon & herb sauce
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              bankTransferEnabled: !!btAccountName.trim(),
-                              bankName: btBankName.trim() || null,
-                              bankAccountName: btAccountName.trim() || null,
-                              bankSortCode: btSortCode.trim() || null,
-                              bankAccountNumber: btAccountNumber.trim() || null,
-                              bankIban: btIban.trim() || null,
-                              bankTransferVideoUrl: btVideoUrl.trim() || null,
+                              bankTransferEnabled: btAccountName.trim() ? true : undefined,
+                              bankName: btBankName.trim() || undefined,
+                              bankAccountName: btAccountName.trim() || undefined,
+                              bankSortCode: btSortCode.trim() || undefined,
+                              bankAccountNumber: btAccountNumber.trim() || undefined,
+                              bankIban: btIban.trim() || undefined,
+                              bankTransferVideoUrl: btVideoUrl.trim() || undefined,
                             }),
                           });
                           if (!res.ok) throw new Error("Failed to save");

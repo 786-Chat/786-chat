@@ -157,6 +157,26 @@ export class ObjectStorageService {
       const pathname = decodeURIComponent(objectPath.slice("/objects/vercel/".length));
       return { __vercelBlobPath: pathname } as unknown as File;
     }
+    // 786.Chat FoodSafety compatibility: legacy Replit public-object URLs must never require PRIVATE_OBJECT_DIR on Vercel.
+    if (process.env.VERCEL && objectPath.startsWith("/objects/public/")) {
+      const filename = decodeURIComponent(objectPath.slice("/objects/public/".length));
+      if (!filename || filename.includes("..")) {
+        throw new ObjectNotFoundError();
+      }
+      const { get } = await import("@vercel/blob");
+      const candidates = [`uploads/${filename}`, `public/${filename}`, filename];
+      for (const pathname of candidates) {
+        try {
+          const result = await get(pathname, { access: "private" });
+          if (result?.statusCode === 200) {
+            return { __vercelBlobPath: pathname } as unknown as File;
+          }
+        } catch {
+          // Continue through compatibility candidates.
+        }
+      }
+      throw new ObjectNotFoundError();
+    }
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
