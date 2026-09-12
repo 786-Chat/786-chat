@@ -1,0 +1,683 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { Trash2, PackagePlus, Pencil, PackageMinus, Info } from 'lucide-react';
+
+type Product = {
+  id: number;
+  product_name: string;
+  sku: string;
+  category: string;
+  cost_price: number;
+  selling_price: number;
+  vat_percent: number;
+  stock_quantity: number;
+  minimum_stock: number;
+  unit: string;
+  supplier: string;
+  active: boolean;
+  last_stock_in_date?: string | null;
+  last_stock_out_date?: string | null;
+  used_date?: string | null;
+  best_before_date?: string | null;
+  use_by_date?: string | null;
+  expiry_date?: string | null;
+};
+
+const tenantHeaders = { 'x-company-id': 'saffron' };
+const units = ['Each', 'Kg', 'Gram', 'Litre', 'Box', 'Pack'];
+
+const formatGBP = (value: number) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(value);
+
+const vatAmount = (price: number, vatPercent: number) => (price * vatPercent) / 100;
+const totalIncVat = (price: number, vatPercent: number) => price + vatAmount(price, vatPercent);
+
+function formatDate(value?: string | null) {
+  if (!value) return '—';
+  const raw = String(value).slice(0, 10);
+  const [year, month, day] = raw.split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function getStockStatus(product: Product) {
+  const stock = product.stock_quantity;
+  const min = product.minimum_stock;
+  if (stock === 0) return { label: 'OUT OF STOCK', type: 'out' as const };
+  if (stock <= min) return { label: 'LOW STOCK', type: 'low' as const };
+  return { label: 'NORMAL', type: 'normal' as const };
+}
+
+function getDateWarnings(product: Product) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const warnings: { label: string; type: 'red' | 'amber' }[] = [];
+  if (product.expiry_date) {
+    const expiry = new Date(product.expiry_date + 'T00:00:00');
+    if (expiry < today) warnings.push({ label: 'EXPIRED', type: 'red' });
+  }
+  if (product.use_by_date) {
+    const useBy = new Date(product.use_by_date + 'T00:00:00');
+    if (useBy < today) warnings.push({ label: 'USE BY DATE PASSED', type: 'red' });
+  }
+  if (product.best_before_date) {
+    const bestBefore = new Date(product.best_before_date + 'T00:00:00');
+    const in7Days = new Date(today);
+    in7Days.setDate(in7Days.getDate() + 7);
+    if (bestBefore >= today && bestBefore <= in7Days) warnings.push({ label: 'BEST BEFORE SOON', type: 'amber' });
+  }
+  return warnings;
+}
+
+export default function InventoryPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productName, setProductName] = useState('');
+  const [sku, setSku] = useState('');
+  const [category, setCategory] = useState('');
+  const [costPrice, setCostPrice] = useState('');
+  const [sellingPrice, setSellingPrice] = useState('');
+  const [vatPercent, setVatPercent] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [minimumStock, setMinimumStock] = useState('');
+  const [unit, setUnit] = useState('Each');
+  const [supplier, setSupplier] = useState('');
+  const [active, setActive] = useState(true);
+  const [search, setSearch] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const [stockInTarget, setStockInTarget] = useState<Product | null>(null);
+  const [stockInQty, setStockInQty] = useState('');
+  const [stockInNote, setStockInNote] = useState('');
+  const [stockInSubmitting, setStockInSubmitting] = useState(false);
+
+  const [stockOutTarget, setStockOutTarget] = useState<Product | null>(null);
+  const [stockOutQty, setStockOutQty] = useState('');
+  const [stockOutNote, setStockOutNote] = useState('');
+  const [stockOutSubmitting, setStockOutSubmitting] = useState(false);
+
+  const [detailsTarget, setDetailsTarget] = useState<Product | null>(null);
+  const [detailsForm, setDetailsForm] = useState({
+    used_date: '',
+    best_before_date: '',
+    use_by_date: '',
+    expiry_date: '',
+  });
+  const [detailsSaving, setDetailsSaving] = useState(false);
+
+  const loadProducts = async () => {
+    const res = await fetch('/api/products', { headers: tenantHeaders });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load products');
+    setProducts(data.rows || []);
+  };
+
+  useEffect(() => {
+    loadProducts().catch((err) => setError(err.message));
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter((p) =>
+      p.product_name.toLowerCase().includes(term) ||
+      p.sku.toLowerCase().includes(term) ||
+      p.category.toLowerCase().includes(term) ||
+      p.supplier.toLowerCase().includes(term)
+    );
+  }, [products, search]);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setProductName('');
+    setSku('');
+    setCategory('');
+    setCostPrice('');
+    setSellingPrice('');
+    setVatPercent('');
+    setStockQuantity('');
+    setMinimumStock('');
+    setUnit('Each');
+    setSupplier('');
+    setActive(true);
+  };
+
+  const startEdit = (product: Product) => {
+    setMessage('');
+    setError('');
+    setEditingId(product.id);
+    setProductName(product.product_name);
+    setSku(product.sku);
+    setCategory(product.category);
+    setCostPrice(String(product.cost_price));
+    setSellingPrice(String(product.selling_price));
+    setVatPercent(String(product.vat_percent));
+    setStockQuantity(String(product.stock_quantity));
+    setMinimumStock(String(product.minimum_stock));
+    setUnit(product.unit);
+    setSupplier(product.supplier || '');
+    setActive(product.active);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+    try {
+      const payload = {
+        product_name: productName,
+        sku,
+        category,
+        cost_price: Number(costPrice),
+        selling_price: Number(sellingPrice),
+        vat_percent: Number(vatPercent),
+        stock_quantity: Number(stockQuantity),
+        minimum_stock: Number(minimumStock),
+        unit,
+        supplier,
+        active,
+      };
+      const isEditing = editingId !== null;
+      const res = await fetch(isEditing ? `/api/products/${editingId}` : '/api/products', {
+        method: isEditing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json', ...tenantHeaders },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || (isEditing ? 'Failed to update product' : 'Failed to add product'));
+      await loadProducts();
+      resetForm();
+      setMessage(isEditing ? 'Product updated successfully' : 'Product added successfully');
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setMessage('');
+    setError('');
+    try {
+      const res = await fetch(`/api/products/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: tenantHeaders,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete product');
+      setDeleteTarget(null);
+      await loadProducts();
+      setMessage('Product deleted successfully');
+    } catch (err: any) {
+      setError(`Delete failed: ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openStockIn = (product: Product) => {
+    setMessage('');
+    setError('');
+    setStockInTarget(product);
+    setStockInQty('');
+    setStockInNote('');
+  };
+
+  const closeStockIn = () => {
+    setStockInTarget(null);
+    setStockInQty('');
+    setStockInNote('');
+  };
+
+  const submitStockIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockInTarget) return;
+    const qty = Number(stockInQty);
+    if (!qty || qty <= 0) {
+      setError('Quantity must be greater than 0');
+      return;
+    }
+    setStockInSubmitting(true);
+    setMessage('');
+    setError('');
+    try {
+      const newStock = stockInTarget.stock_quantity + qty;
+      const res = await fetch(`/api/products/${stockInTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...tenantHeaders },
+        body: JSON.stringify({ stock_quantity: newStock, last_stock_in_date: new Date().toISOString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update stock');
+      await loadProducts();
+      closeStockIn();
+      setMessage('Stock added successfully');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setStockInSubmitting(false);
+    }
+  };
+
+  const openStockOut = (product: Product) => {
+    setMessage('');
+    setError('');
+    setStockOutTarget(product);
+    setStockOutQty('');
+    setStockOutNote('');
+  };
+
+  const closeStockOut = () => {
+    setStockOutTarget(null);
+    setStockOutQty('');
+    setStockOutNote('');
+  };
+
+  const submitStockOut = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockOutTarget) return;
+    const qty = Number(stockOutQty);
+    if (!qty || qty <= 0) {
+      setError('Quantity must be greater than 0');
+      return;
+    }
+    if (qty > stockOutTarget.stock_quantity) {
+      setError('Not enough stock available');
+      return;
+    }
+    setStockOutSubmitting(true);
+    setMessage('');
+    setError('');
+    try {
+      const newStock = stockOutTarget.stock_quantity - qty;
+      const res = await fetch(`/api/products/${stockOutTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...tenantHeaders },
+        body: JSON.stringify({ stock_quantity: newStock, last_stock_out_date: new Date().toISOString() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update stock');
+      await loadProducts();
+      closeStockOut();
+      setMessage('Stock removed successfully');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setStockOutSubmitting(false);
+    }
+  };
+
+  const openDetails = (product: Product) => {
+    setMessage('');
+    setError('');
+    setDetailsTarget(product);
+    setDetailsForm({
+      used_date: product.used_date ? String(product.used_date).slice(0, 10) : '',
+      best_before_date: product.best_before_date ? String(product.best_before_date).slice(0, 10) : '',
+      use_by_date: product.use_by_date ? String(product.use_by_date).slice(0, 10) : '',
+      expiry_date: product.expiry_date ? String(product.expiry_date).slice(0, 10) : '',
+    });
+  };
+
+  const closeDetails = () => {
+    setDetailsTarget(null);
+    setDetailsForm({ used_date: '', best_before_date: '', use_by_date: '', expiry_date: '' });
+  };
+
+  const submitDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detailsTarget) return;
+    setDetailsSaving(true);
+    setMessage('');
+    setError('');
+    try {
+      const payload = {
+        used_date: detailsForm.used_date || null,
+        best_before_date: detailsForm.best_before_date || null,
+        use_by_date: detailsForm.use_by_date || null,
+        expiry_date: detailsForm.expiry_date || null,
+      };
+      const res = await fetch(`/api/products/${detailsTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...tenantHeaders },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update stock details');
+      await loadProducts();
+      closeDetails();
+      setMessage('Stock details saved successfully');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDetailsSaving(false);
+    }
+  };
+
+  const renderStockStatus = (product: Product) => {
+    const status = getStockStatus(product);
+    const warnings = getDateWarnings(product);
+    const badgeClass =
+      status.type === 'out' ? 'bg-red-600 text-white' :
+      status.type === 'low' ? 'bg-amber-500 text-white' :
+      'bg-green-600 text-white';
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${badgeClass}`}>{status.label}</span>
+        {warnings.map((w) => (
+          <span key={w.label} className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${w.type === 'red' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>{w.label}</span>
+        ))}
+      </div>
+    );
+  };
+
+  const cardBorderClass = (product: Product) => {
+    const status = getStockStatus(product);
+    const warnings = getDateWarnings(product);
+    if (status.type === 'out' || warnings.some((w) => w.type === 'red')) return 'border-red-300';
+    if (status.type === 'low' || warnings.some((w) => w.type === 'amber')) return 'border-amber-300';
+    return 'border-gray-200';
+  };
+
+  return (
+    <div className="min-w-0 space-y-8 overflow-x-hidden">
+      <h1 className="text-3xl font-bold text-deepgreen">Inventory</h1>
+      <div className="card-gold min-w-0">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">{editingId ? 'Edit Product' : 'Add Product'}</h2>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-white/70"
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
+        <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div><label className="label">Product Name</label><input className="input w-full min-w-0" value={productName} onChange={(e) => setProductName(e.target.value)} required /></div>
+            <div><label className="label">SKU</label><input className="input w-full min-w-0" value={sku} onChange={(e) => setSku(e.target.value)} required /></div>
+            <div><label className="label">Category</label><input className="input w-full min-w-0" value={category} onChange={(e) => setCategory(e.target.value)} required /></div>
+            <div><label className="label">Supplier</label><input className="input w-full min-w-0" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div>
+            <div><label className="label">Cost Price (£)</label><input type="number" step="0.01" min="0" className="input w-full min-w-0" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} required /></div>
+            <div><label className="label">Selling Price ex VAT (£)</label><input type="number" step="0.01" min="0" className="input w-full min-w-0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} required /></div>
+            <div><label className="label">VAT %</label><input type="number" step="0.01" min="0" className="input w-full min-w-0" value={vatPercent} onChange={(e) => setVatPercent(e.target.value)} required /></div>
+            <div><label className="label">Stock Quantity</label><input type="number" min="0" className="input w-full min-w-0" value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value)} required /></div>
+            <div><label className="label">Minimum Stock</label><input type="number" min="0" className="input w-full min-w-0" value={minimumStock} onChange={(e) => setMinimumStock(e.target.value)} required /></div>
+            <div><label className="label">Unit</label><select className="input w-full min-w-0" value={unit} onChange={(e) => setUnit(e.target.value)}>{units.map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
+          </div>
+          <div className="flex items-center gap-2"><input type="checkbox" id="active" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4" /><label htmlFor="active" className="text-sm font-medium text-gray-700">Active</label></div>
+          {message && <p className="break-words text-green-600">{message}</p>}
+          {error && <p className="break-words text-red-600">{error}</p>}
+          <button type="submit" className="btn-primary">{editingId ? 'Save Changes' : 'Add Product'}</button>
+        </form>
+      </div>
+
+      <div className="card-gold min-w-0 overflow-hidden">
+        <h2 className="mb-4 text-xl font-semibold">Product List</h2>
+        <div className="relative mb-4 min-w-0">
+          <input className="input w-full min-w-0 pr-10" placeholder="Search products by name, SKU, category, or supplier..." value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search products" />
+          {search && <button type="button" onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-900" aria-label="Clear product search">×</button>}
+        </div>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 sm:hidden">
+          {filteredProducts.map((p) => {
+            const sellingPrice = Number(p.selling_price);
+            const vatPercent = Number(p.vat_percent);
+            const vat = vatAmount(sellingPrice, vatPercent);
+            const total = totalIncVat(sellingPrice, vatPercent);
+            return (
+              <article key={p.id} className={`min-w-0 rounded-xl border bg-white/85 p-4 shadow-sm ${cardBorderClass(p)}`}>
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 className="min-w-0 break-words font-semibold text-gray-900">{p.product_name}</h3>
+                  {!p.active && <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">Inactive</span>}
+                </div>
+                <div className="mt-2">{renderStockStatus(p)}</div>
+                <p className="mt-1 break-all text-sm text-gray-500">{p.sku} · {p.category}</p>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div><dt className="text-gray-500">Cost</dt><dd className="font-medium text-gray-900">{formatGBP(p.cost_price)}</dd></div>
+                  <div><dt className="text-gray-500">Price ex VAT</dt><dd className="font-medium text-gray-900">{formatGBP(sellingPrice)}</dd></div>
+                  <div><dt className="text-gray-500">VAT %</dt><dd className="font-medium text-gray-900">{vatPercent}%</dd></div>
+                  <div><dt className="text-gray-500">VAT Amount</dt><dd className="font-medium text-gray-900">{formatGBP(vat)}</dd></div>
+                  <div><dt className="text-gray-500">Total inc VAT</dt><dd className="font-medium text-gray-900">{formatGBP(total)}</dd></div>
+                  <div><dt className="text-gray-500">Stock</dt><dd className="font-medium text-gray-900">{p.stock_quantity} {p.unit}</dd></div>
+                </dl>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => startEdit(p)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-deepgreen bg-white text-sm font-medium text-deepgreen">
+                    <Pencil className="h-4 w-4" />Edit
+                  </button>
+                  <button type="button" onClick={() => openStockIn(p)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-deepgreen bg-deepgreen text-sm font-medium text-white">
+                    <PackagePlus className="h-4 w-4" />Stock In
+                  </button>
+                  <button type="button" onClick={() => openStockOut(p)} disabled={p.stock_quantity === 0} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500 bg-amber-50 text-sm font-medium text-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    <PackageMinus className="h-4 w-4" />Stock Out
+                  </button>
+                  <button type="button" onClick={() => openDetails(p)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-500 bg-blue-50 text-sm font-medium text-blue-700">
+                    <Info className="h-4 w-4" />Stock Details
+                  </button>
+                  <button type="button" onClick={() => setDeleteTarget(p)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 text-sm font-medium text-red-600">
+                    <Trash2 className="h-4 w-4" />Delete
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+          {filteredProducts.length === 0 && <p className="py-6 text-center text-gray-500">No products found</p>}
+        </div>
+
+        {/* Desktop product cards */}
+        <div className="hidden sm:block">
+          <div className="space-y-4">
+            {filteredProducts.map((p) => {
+              const sellingPrice = Number(p.selling_price);
+              const vatPercent = Number(p.vat_percent);
+              const vat = vatAmount(sellingPrice, vatPercent);
+              const total = totalIncVat(sellingPrice, vatPercent);
+              return (
+                <article key={p.id} className={`flex items-stretch gap-6 rounded-xl border bg-white/85 p-6 shadow-sm ${cardBorderClass(p)}`}>
+                  {/* Column 1: Product (28%) */}
+                  <div className="flex min-w-0 w-[28%] flex-col justify-center border-r border-gray-200 pr-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="min-w-0 break-words text-lg font-semibold text-gray-900">{p.product_name}</h3>
+                      {!p.active && <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">Inactive</span>}
+                    </div>
+                    <div className="mt-2">{renderStockStatus(p)}</div>
+                    <p className="mt-1 break-all text-sm text-gray-500">{p.sku}</p>
+                    <p className="mt-1 break-words text-sm text-gray-500">{p.category}</p>
+                  </div>
+
+                  {/* Column 2: Values (32%) */}
+                  <div className="flex min-w-0 w-[32%] flex-col justify-center border-r border-gray-200 pr-6">
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                      <dt className="whitespace-nowrap text-gray-500">Cost</dt>
+                      <dd className="whitespace-nowrap text-right font-medium text-gray-900">{formatGBP(p.cost_price)}</dd>
+                      <dt className="whitespace-nowrap text-gray-500">Price ex VAT</dt>
+                      <dd className="whitespace-nowrap text-right font-medium text-gray-900">{formatGBP(sellingPrice)}</dd>
+                      <dt className="whitespace-nowrap text-gray-500">VAT %</dt>
+                      <dd className="whitespace-nowrap text-right font-medium text-gray-900">{vatPercent}%</dd>
+                      <dt className="whitespace-nowrap text-gray-500">VAT Amount</dt>
+                      <dd className="whitespace-nowrap text-right font-medium text-gray-900">{formatGBP(vat)}</dd>
+                      <dt className="whitespace-nowrap text-gray-500">Total inc VAT</dt>
+                      <dd className="whitespace-nowrap text-right font-semibold text-gray-900">{formatGBP(total)}</dd>
+                    </dl>
+                  </div>
+
+                  {/* Column 3: Stock (16%) */}
+                  <div className="flex min-w-0 w-[16%] flex-col justify-center border-r border-gray-200 pr-6">
+                    <p className="text-sm text-gray-500">Stock</p>
+                    <p className="mt-1 text-2xl font-semibold text-gray-900">{p.stock_quantity} <span className="text-base font-normal text-gray-600">{p.unit}</span></p>
+                  </div>
+
+                  {/* Column 4: Actions (24%) */}
+                  <div className="flex min-w-0 w-[24%] flex-col items-start justify-center gap-2">
+                    <button type="button" onClick={() => startEdit(p)} className="inline-flex h-10 w-[110px] items-center justify-center gap-2 rounded-lg border border-deepgreen bg-white text-sm font-medium text-deepgreen transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-deepgreen">
+                      <Pencil className="h-4 w-4" />Edit
+                    </button>
+                    <button type="button" onClick={() => openStockIn(p)} className="inline-flex h-10 w-[110px] items-center justify-center gap-2 rounded-lg border border-deepgreen bg-deepgreen text-sm font-medium text-white transition hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-deepgreen">
+                      <PackagePlus className="h-4 w-4" />Stock In
+                    </button>
+                    <button type="button" onClick={() => openStockOut(p)} disabled={p.stock_quantity === 0} className="inline-flex h-10 w-[110px] items-center justify-center gap-2 rounded-lg border border-amber-500 bg-amber-50 text-sm font-medium text-amber-700 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50">
+                      <PackageMinus className="h-4 w-4" />Stock Out
+                    </button>
+                    <button type="button" onClick={() => openDetails(p)} className="inline-flex h-10 w-[110px] items-center justify-center gap-2 rounded-lg border border-blue-500 bg-blue-50 text-sm font-medium text-blue-700 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <Info className="h-4 w-4" />Stock Details
+                    </button>
+                    <button type="button" onClick={() => setDeleteTarget(p)} title="Delete product" aria-label="Delete product" className="inline-flex h-10 w-[110px] items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 text-sm font-medium text-red-600 transition hover:bg-red-100 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500">
+                      <Trash2 className="h-4 w-4" />Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            {filteredProducts.length === 0 && <p className="py-6 text-center text-gray-500">No products found</p>}
+          </div>
+        </div>
+      </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Delete product?</h3>
+            <p className="mt-2 text-sm text-gray-600">This product will be permanently deleted.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setDeleteTarget(null)} disabled={deleting} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Keep product</button>
+              <button type="button" onClick={confirmDelete} disabled={deleting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">{deleting ? 'Deleting...' : 'Delete permanently'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stockInTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Stock In</h3>
+            <p className="mt-2 text-sm text-gray-600">{stockInTarget.product_name}</p>
+            <p className="mt-1 text-sm text-gray-600">Current stock: {stockInTarget.stock_quantity} {stockInTarget.unit}</p>
+            <form onSubmit={submitStockIn} className="mt-4 space-y-4">
+              <div>
+                <label className="label">Quantity to add</label>
+                <input type="number" min="1" step="1" className="input w-full" value={stockInQty} onChange={(e) => setStockInQty(e.target.value)} required />
+              </div>
+              <div>
+                <label className="label">Note / Reference (optional)</label>
+                <input className="input w-full" value={stockInNote} onChange={(e) => setStockInNote(e.target.value)} />
+              </div>
+              {error && <p className="break-words text-red-600">{error}</p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={closeStockIn} disabled={stockInSubmitting} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={stockInSubmitting} className="rounded-lg bg-deepgreen px-4 py-2 text-sm font-semibold text-white hover:bg-opacity-90 disabled:opacity-50">{stockInSubmitting ? 'Adding...' : 'Add Stock'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {stockOutTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Stock Out</h3>
+            <p className="mt-2 text-sm text-gray-600">{stockOutTarget.product_name}</p>
+            <p className="mt-1 text-sm text-gray-600">Current stock: {stockOutTarget.stock_quantity} {stockOutTarget.unit}</p>
+            <form onSubmit={submitStockOut} className="mt-4 space-y-4">
+              <div>
+                <label className="label">Quantity to remove</label>
+                <input type="number" min="1" step="1" className="input w-full" value={stockOutQty} onChange={(e) => setStockOutQty(e.target.value)} required />
+              </div>
+              <div>
+                <label className="label">Note / Reference (optional)</label>
+                <input className="input w-full" value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} />
+              </div>
+              {error && <p className="break-words text-red-600">{error}</p>}
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={closeStockOut} disabled={stockOutSubmitting} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" disabled={stockOutSubmitting} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">{stockOutSubmitting ? 'Removing...' : 'Remove Stock'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {detailsTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white p-6 shadow-xl">
+            <div className="overflow-y-auto pr-1">
+              <h3 className="text-lg font-semibold text-gray-900">Stock Details</h3>
+              <p className="mt-2 text-sm text-gray-600">{detailsTarget.product_name}</p>
+              <div className="mt-4 space-y-3">
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Last Stock In Date</span><span className="font-medium text-gray-900">{formatDateTime(detailsTarget.last_stock_in_date)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Last Stock Out Date</span><span className="font-medium text-gray-900">{formatDateTime(detailsTarget.last_stock_out_date)}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Current Stock</span><span className="font-medium text-gray-900">{detailsTarget.stock_quantity} {detailsTarget.unit}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-gray-500">Minimum Stock</span><span className="font-medium text-gray-900">{detailsTarget.minimum_stock} {detailsTarget.unit}</span></div>
+                <div className="flex justify-between items-center text-sm"><span className="text-gray-500">Stock Status</span>{renderStockStatus(detailsTarget)}</div>
+              </div>
+              <form onSubmit={submitDetails} className="mt-6 space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Used Date</label>
+                    <div className="relative">
+                      <input type="date" className="input w-full pr-10" value={detailsForm.used_date} onChange={(e) => setDetailsForm({ ...detailsForm, used_date: e.target.value })} />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">📅</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Best Before Date</label>
+                    <div className="relative">
+                      <input type="date" className="input w-full pr-10" value={detailsForm.best_before_date} onChange={(e) => setDetailsForm({ ...detailsForm, best_before_date: e.target.value })} />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">📅</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Use By Date</label>
+                    <div className="relative">
+                      <input type="date" className="input w-full pr-10" value={detailsForm.use_by_date} onChange={(e) => setDetailsForm({ ...detailsForm, use_by_date: e.target.value })} />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">📅</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Expiry Date</label>
+                    <div className="relative">
+                      <input type="date" className="input w-full pr-10" value={detailsForm.expiry_date} onChange={(e) => setDetailsForm({ ...detailsForm, expiry_date: e.target.value })} />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">📅</span>
+                    </div>
+                  </div>
+                </div>
+                {error && <p className="break-words text-red-600">{error}</p>}
+                <div className="flex justify-end gap-3 pb-1">
+                  <button type="button" onClick={closeDetails} disabled={detailsSaving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                  <button type="submit" disabled={detailsSaving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{detailsSaving ? 'Saving...' : 'Save Details'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
