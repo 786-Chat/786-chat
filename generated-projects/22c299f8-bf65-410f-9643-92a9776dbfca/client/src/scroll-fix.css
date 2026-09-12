@@ -15,14 +15,29 @@ body,
   scrollbar-gutter: stable;
 }
 
-/* Every modal/dialog must remain usable even when its content is taller than the preview. */
+/* Radix dialogs must fit inside the 786.Chat live-preview iframe. */
 [role="dialog"] {
-  max-height: min(90vh, 900px) !important;
+  top: 50% !important;
+  max-height: calc(100dvh - 24px) !important;
+  height: auto !important;
   overflow-y: auto !important;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  scrollbar-gutter: stable;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-gutter: stable !important;
+}
+
+/* The Monthly Report upload form is taller than the preview on laptops.
+   Let the whole dialog scroll so title, selected PDF and action buttons are all reachable. */
+[role="dialog"] > div,
+[role="dialog"] form {
+  min-height: 0 !important;
+}
+
+/* Prevent nested content from swallowing the wheel/trackpad scroll. */
+[role="dialog"] .overflow-hidden {
+  overflow: visible !important;
 }
 
 /* Make report/document grids scroll naturally instead of being clipped by nested containers. */
@@ -30,19 +45,26 @@ body,
   min-height: 0;
 }
 
-/* Visible, compact scrollbar for report lists and upload dialogs. */
+/* Visible scrollbar for report lists and upload dialogs. */
 .scroll-ios::-webkit-scrollbar,
 [role="dialog"]::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 
 .scroll-ios::-webkit-scrollbar-thumb,
 [role="dialog"]::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(148, 163, 184, 0.65);
   border-radius: 9999px;
+  border: 2px solid rgba(30, 41, 59, 0.85);
 }
 
 .scroll-ios::-webkit-scrollbar-track,
 [role="dialog"]::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+@media (max-height: 760px) {
+  [role="dialog"] {
+    max-height: calc(100dvh - 12px) !important;
+  }
 }
