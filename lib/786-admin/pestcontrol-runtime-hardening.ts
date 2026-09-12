@@ -38,13 +38,6 @@ function patchRoute(
 function patchPestControlObjectStorage(source: string): string {
   let next = source
 
-  const alreadyPatched =
-    next.includes("Replit object storage is not available in Vercel Functions") ||
-    (next.includes("PRIVATE_OBJECT_DIR") && next.includes("category === \"logos\"")) ||
-    (next.includes("PRIVATE_OBJECT_DIR") && next.includes("category === 'logos'"))
-
-  if (alreadyPatched) return next
-
   if (!next.includes('from "fs/promises"') && !next.includes("from 'fs/promises'")) {
     if (next.includes('import { randomUUID } from "crypto";')) {
       next = next.replace(
@@ -70,28 +63,54 @@ function patchPestControlObjectStorage(source: string): string {
       break
     }
   }
+  if (uploadStart < 0) return next
 
   const privateDirNeedle = "    const privateDir = this.getPrivateObjectDir();"
-  const privateDirIndex = next.indexOf(privateDirNeedle, Math.max(0, uploadStart))
+  const privateDirIndex = next.indexOf(privateDirNeedle, uploadStart)
+  if (privateDirIndex < 0) return next
 
-  if (privateDirIndex >= 0) {
-    const fallback = [
-      '    // 786.Chat: Replit object storage is not available in Vercel Functions.',
-      '    // Persist branch logos in the existing database field so edits survive deploys.',
-      '    if (!process.env.PRIVATE_OBJECT_DIR && category === "logos") {',
-      '      const mimeType = lookup(filename) || "application/octet-stream";',
-      '      const fileBuffer = await readFile(localPath);',
-      '      return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;',
-      '    }',
-      '',
-    ].join("\n")
+  const vercelMarker = "    // 786.Chat: use Vercel Blob for persistent non-logo files on Vercel."
+  const logoMarker = "    // 786.Chat: Replit object storage is not available in Vercel Functions."
+  const vercelMarkerIndex = next.indexOf(vercelMarker, uploadStart)
+  const logoMarkerIndex = next.indexOf(logoMarker, uploadStart)
 
-    next =
-      next.slice(0, privateDirIndex) +
-      fallback +
-      next.slice(privateDirIndex)
+  let replaceStart = privateDirIndex
+  if (vercelMarkerIndex >= 0 && vercelMarkerIndex < privateDirIndex) {
+    replaceStart = vercelMarkerIndex
+  } else if (logoMarkerIndex >= 0 && logoMarkerIndex < privateDirIndex) {
+    replaceStart = logoMarkerIndex
   }
 
+  const persistentStorageBlock = [
+    '    // 786.Chat: use Vercel Blob for persistent non-logo files on Vercel.',
+    '    if (process.env.VERCEL && category !== "logos") {',
+    '      const { put } = await import("@vercel/blob");',
+    '      const fileBuffer = await readFile(localPath);',
+    '      const mimeType = lookup(filename) || "application/octet-stream";',
+    '      const objectId = randomUUID();',
+    '      const extension = filename.split(".").pop() || "bin";',
+    '      const safeBranchId = String(branchId || "admin").replace(/[^a-zA-Z0-9_-]/g, "_");',
+    '      const safeCategory = String(category || "documents").replace(/[^a-zA-Z0-9_-]/g, "_");',
+    '      const pathname = `pest-control/${safeBranchId}/${safeCategory}/${objectId}.${extension}`;',
+    '      await put(pathname, fileBuffer, {',
+    '        access: "private",',
+    '        contentType: mimeType,',
+    '        addRandomSuffix: false,',
+    '      });',
+    '      return `/objects/vercel/${encodeURIComponent(pathname)}`;',
+    '    }',
+    '',
+    '    // 786.Chat: Replit object storage is not available in Vercel Functions.',
+    '    // Persist branch logos in the existing database field so edits survive deploys.',
+    '    if (!process.env.PRIVATE_OBJECT_DIR && category === "logos") {',
+    '      const mimeType = lookup(filename) || "application/octet-stream";',
+    '      const fileBuffer = await readFile(localPath);',
+    '      return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;',
+    '    }',
+    '',
+  ].join("\n")
+
+  next = next.slice(0, replaceStart) + persistentStorageBlock + next.slice(privateDirIndex)
   return next
 }
 
@@ -293,9 +312,6 @@ function patchBranchLogoServing(source: string): string {
 function patchPestControlBranchRoutes(source: string): string {
   let next = source
   next = patchCreateBranchContractDefault(next)
-  // Patch the logo block before inserting the edit-route contract fallback.
-  // The logo rewrite replaces the block up to confirmPassword cleanup, so doing
-  // the contract fallback first could accidentally remove it again.
   next = patchNonBlockingBranchLogoUpdate(next)
   next = patchUpdateBranchContractDefault(next)
   next = patchBranchLogoServing(next)
@@ -325,7 +341,5 @@ export function hardenPestControlRuntime(
     runtimeFiles[routesPath] = patchPestControlBranchRoutes(runtimeFiles[routesPath])
   }
 
-  // Runtime hardening must never make the whole generated build fail simply
-  // because an imported source file changed formatting or a route was refactored.
   return runtimeFiles
 }
