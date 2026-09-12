@@ -1,6 +1,6 @@
-name: PestControl Queue Fresh Build After Runtime Hardener Fix
+name: PestControl Queue Fresh Build After PDF Storage Fix
 
-# Retriggered after the matching 786.Chat production deployment is READY.
+# Retriggered after the Pest Control saved source was repaired for Vercel Blob-backed file storage.
 on:
   push:
     branches:
@@ -16,7 +16,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Queue fresh Pest Control build after runtime hardener fix
+      - name: Queue fresh Pest Control build after PDF storage fix
         env:
           RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
           PROJECT_ID: 22c299f8-bf65-410f-9643-92a9776dbfca
@@ -33,4 +33,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a fresh Pest Control build after the tolerant runtime hardener fix."
+          echo "Queued a fresh Pest Control build containing the Vercel Blob PDF/document upload repair."
