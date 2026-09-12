@@ -24,12 +24,24 @@ body,
   min-height: 0 !important;
 }
 
-.scroll-ios > div,
-.scroll-ios main,
-.scroll-ios section,
+/* IMPORTANT: Monthly Reports/A5 PDF Management is an immediate space-y-6 + overflow-hidden tab wrapper.
+   Make the active tab grow to the full height of its report-card grid, exactly like Pest Control Docs. */
+.scroll-ios > .space-y-6,
+.scroll-ios > .space-y-8,
+.scroll-ios > div[class*="space-y-"] {
+  overflow: visible !important;
+  min-height: max-content !important;
+  height: auto !important;
+  padding-bottom: 4rem !important;
+}
+
+/* Report/card grids must contribute their full height to the parent scroll area. */
 .scroll-ios [class*="grid"],
-.scroll-ios [class*="space-y-"] {
-  min-height: 0 !important;
+.scroll-ios section,
+.scroll-ios main {
+  min-height: max-content !important;
+  height: auto !important;
+  overflow: visible !important;
 }
 
 /* All Radix upload/edit dialogs must fit inside the 786.Chat live-preview iframe and scroll. */
