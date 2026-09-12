@@ -1,0 +1,48 @@
+/* 786.Chat Pest Control scrolling repair */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+}
+
+/* Keep the main admin content vertically scrollable on desktop, laptop, tablet and mobile. */
+.scroll-ios {
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+}
+
+/* Every modal/dialog must remain usable even when its content is taller than the preview. */
+[role="dialog"] {
+  max-height: min(90vh, 900px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+}
+
+/* Make report/document grids scroll naturally instead of being clipped by nested containers. */
+.scroll-ios .overflow-hidden {
+  min-height: 0;
+}
+
+/* Visible, compact scrollbar for report lists and upload dialogs. */
+.scroll-ios::-webkit-scrollbar,
+[role="dialog"]::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scroll-ios::-webkit-scrollbar-thumb,
+[role="dialog"]::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 9999px;
+}
+
+.scroll-ios::-webkit-scrollbar-track,
+[role="dialog"]::-webkit-scrollbar-track {
+  background: transparent;
+}
