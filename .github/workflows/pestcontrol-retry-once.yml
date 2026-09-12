@@ -1,6 +1,6 @@
 name: PestControl Retry Stuck Preview
 
-# Retrigger a clean Pest Control isolated build through the official 786.Chat build runner after runner/publish repairs.
+# Retrigger a clean Pest Control isolated build after the saved TypeScript/Vercel Blob source repair.
 on:
   push:
     branches:
@@ -33,4 +33,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a clean Pest Control rebuild through the official 786.Chat isolated runner."
+          echo "Queued a clean Pest Control rebuild from the corrected saved source."
