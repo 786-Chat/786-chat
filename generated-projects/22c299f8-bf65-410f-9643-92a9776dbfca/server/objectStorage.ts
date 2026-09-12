@@ -66,10 +66,8 @@ export class ObjectStorageService {
     category: string;
     filename: string;
   }): Promise<string> {
-    // Imported Replit projects do not have the Replit Object Storage sidecar on Vercel.
-    // For branch logos, persist the image itself in the existing logoUrl database field
-    // as a data URL. This keeps logo updates durable across Vercel cold starts/redeploys
-    // without requiring PRIVATE_OBJECT_DIR or a Replit runtime dependency.
+    // 786.Chat/Vercel: GIF, PNG, JPG and other image logos are persisted directly
+    // when the imported Replit PRIVATE_OBJECT_DIR runtime is unavailable.
     if (!process.env.PRIVATE_OBJECT_DIR && category === "logos") {
       const mimeType = lookup(filename) || "application/octet-stream";
       const fileBuffer = await readFile(localPath);
