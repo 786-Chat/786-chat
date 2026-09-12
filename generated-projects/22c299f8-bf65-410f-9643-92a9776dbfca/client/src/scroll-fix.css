@@ -24,8 +24,7 @@ body,
   min-height: 0 !important;
 }
 
-/* IMPORTANT: Monthly Reports/A5 PDF Management is an immediate space-y-6 + overflow-hidden tab wrapper.
-   Make the active tab grow to the full height of its report-card grid, exactly like Pest Control Docs. */
+/* Monthly Reports/A5 PDF Management must grow like Pest Control Docs. */
 .scroll-ios > .space-y-6,
 .scroll-ios > .space-y-8,
 .scroll-ios > div[class*="space-y-"] {
@@ -35,7 +34,6 @@ body,
   padding-bottom: 4rem !important;
 }
 
-/* Report/card grids must contribute their full height to the parent scroll area. */
 .scroll-ios [class*="grid"],
 .scroll-ios section,
 .scroll-ios main {
@@ -44,11 +42,15 @@ body,
   overflow: visible !important;
 }
 
-/* All Radix upload/edit dialogs must fit inside the 786.Chat live-preview iframe and scroll. */
+/* Anchor dialogs inside the live-preview iframe instead of centering an oversized box. */
 [role="dialog"] {
-  max-height: calc(100dvh - 16px) !important;
+  top: 8px !important;
+  bottom: 8px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  max-height: none !important;
   height: auto !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overflow-x: hidden !important;
   overscroll-behavior-y: contain !important;
   -webkit-overflow-scrolling: touch !important;
@@ -56,24 +58,20 @@ body,
   scrollbar-gutter: stable !important;
 }
 
-/* Let long upload forms shrink inside the dialog instead of pushing action buttons below the preview. */
 [role="dialog"] > div,
 [role="dialog"] form {
   min-height: 0 !important;
   max-width: 100% !important;
 }
 
-/* Nested wrappers must not swallow wheel/trackpad/touch scrolling. */
 [role="dialog"] .overflow-hidden {
   overflow: visible !important;
 }
 
-/* Keep action rows reachable in every upload popup, including Photo and Monthly Report. */
 [role="dialog"] button {
   flex-shrink: 0;
 }
 
-/* Visible scrollbar for admin sections and every popup. */
 .scroll-ios::-webkit-scrollbar,
 [role="dialog"]::-webkit-scrollbar {
   width: 10px;
@@ -91,15 +89,10 @@ body,
   background: rgba(15, 23, 42, 0.35);
 }
 
-@media (max-height: 760px) {
-  [role="dialog"] {
-    max-height: calc(100dvh - 8px) !important;
-  }
-}
-
 @media (max-width: 768px) {
   [role="dialog"] {
-    max-width: calc(100vw - 12px) !important;
-    max-height: calc(100dvh - 8px) !important;
+    top: 4px !important;
+    bottom: 4px !important;
+    max-width: calc(100vw - 8px) !important;
   }
 }
