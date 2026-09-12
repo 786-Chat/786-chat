@@ -1,6 +1,6 @@
-name: PestControl Queue Fresh Build After Upload Modal Layout Fix
+name: PestControl Retry Stuck Preview
 
-# Retriggered after fixing the Pest Control PDF upload modal so buttons and controls remain visible inside 786.Chat preview.
+# Retriggered after the generated Pest Control Vercel preview stalled in BUILDING after the app build itself completed successfully.
 on:
   push:
     branches:
@@ -16,7 +16,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Queue fresh Pest Control build after upload modal layout fix
+      - name: Queue fresh Pest Control build after stuck preview
         env:
           RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
           PROJECT_ID: 22c299f8-bf65-410f-9643-92a9776dbfca
@@ -33,4 +33,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a fresh Pest Control build containing the PDF upload modal visibility repair."
+          echo "Queued a clean Pest Control rebuild after the previous generated preview stalled in Vercel BUILDING."
