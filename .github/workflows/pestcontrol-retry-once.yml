@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - .github/workflows/pestcontrol-retry-once.yml
+      - lib/786-admin/pestcontrol-runtime-hardening.ts
 
 permissions:
   contents: read

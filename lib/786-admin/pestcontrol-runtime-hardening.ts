@@ -139,7 +139,11 @@ function patchCreateBranchContractDefault(source: string): string {
       const declarationNeedles = [
         "      const branchData = req.body;",
         "      const branchData = { ...req.body };",
+        "      const branchData: any = req.body;",
+        "      const branchData: any = { ...req.body };",
         "      let branchData = req.body;",
+        "      let branchData: any = req.body;",
+        "      let branchData: any = { ...req.body };",
       ]
 
       for (const needle of declarationNeedles) {
@@ -166,7 +170,11 @@ function patchUpdateBranchContractDefault(source: string): string {
       const declarationNeedles = [
         "      const updateData = req.body;",
         "      const updateData = { ...req.body };",
+        "      const updateData: any = req.body;",
+        "      const updateData: any = { ...req.body };",
         "      let updateData = req.body;",
+        "      let updateData: any = req.body;",
+        "      let updateData: any = { ...req.body };",
       ]
 
       if (block.includes(removeFieldsMarker)) {
