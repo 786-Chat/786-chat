@@ -1,6 +1,6 @@
 name: PestControl Retry Stuck Preview
 
-# Retriggered after the generated Pest Control Vercel preview stalled in BUILDING after the app build itself completed successfully.
+# Retrigger a clean Pest Control isolated build through the official 786.Chat build runner after runner/publish repairs.
 on:
   push:
     branches:
@@ -33,4 +33,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$payload" \
             "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued a clean Pest Control rebuild after the previous generated preview stalled in Vercel BUILDING."
+          echo "Queued a clean Pest Control rebuild through the official 786.Chat isolated runner."
