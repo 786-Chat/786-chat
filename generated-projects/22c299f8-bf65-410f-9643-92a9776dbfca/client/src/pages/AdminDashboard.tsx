@@ -3464,606 +3464,117 @@ export default function AdminDashboard() {
 
 
             {activeTab === "monthly-reports" && (
-              <div className="space-y-6 w-full max-w-full overflow-hidden">
-                <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0 w-full max-w-full">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-2 lg:p-3 rounded-lg flex-shrink-0">
-                      <FileText className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-xl lg:text-2xl font-bold text-white text-center lg:text-left">Monthly Reports</h2>
-                      <h3 className="text-base lg:text-xl font-semibold text-purple-400 text-center lg:text-left">A5 PDF Management</h3>
-                    </div>
-                  </div>
-                  <div className="flex justify-center lg:justify-end mt-2 lg:mt-0 lg:ml-6 gap-2 flex-wrap">
-                    <Button 
-                      onClick={() => {
-                        setShowGenerateReportDialog(true);
-                        setGenPreviewUrl(null);
-                      }}
-                      className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white px-4 lg:px-6 py-2 text-sm lg:text-base"
-                    >
-                      <FileText className="mr-2 h-3 w-3 lg:h-4 lg:w-4" />
-                      Generate Report
-                    </Button>
-                    <Button 
-                      onClick={() => setShowMonthlyReportDialog(true)}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 lg:px-6 py-2 text-sm lg:text-base"
-                    >
-                      <Upload className="mr-2 h-3 w-3 lg:h-4 lg:w-4" />
-                      Upload Report
-                    </Button>
+    <div className="h-full min-h-0 w-full max-w-full overflow-y-auto overscroll-contain pr-1 pb-24 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 w-full">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-2 lg:p-3 rounded-lg flex-shrink-0">
+            <FileText className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-xl lg:text-2xl font-bold text-white">Monthly Reports</h2>
+            <h3 className="text-sm lg:text-lg font-semibold text-purple-400">A5 PDF Management</h3>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end sm:ml-auto">
+          <Button
+            onClick={() => { setShowGenerateReportDialog(true); setGenPreviewUrl(null); }}
+            className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white px-4 py-2 text-sm"
+          >
+            <FileText className="mr-2 h-4 w-4" />Generate Report
+          </Button>
+          <Button
+            onClick={() => setShowMonthlyReportDialog(true)}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-4 py-2 text-sm"
+          >
+            <Upload className="mr-2 h-4 w-4" />Upload Report
+          </Button>
+        </div>
+      </div>
+
+      <Card className="bg-slate-800/50 backdrop-blur border-slate-700 w-full overflow-visible">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-purple-400" />
+              <span className="text-sm text-slate-300">All uploaded reports</span>
+            </div>
+            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
+              {monthlyReports.filter(report => !report.isDeleted).length} reports
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {reportsLoading ? (
+        <div className="text-center py-10 text-slate-400">Loading reports...</div>
+      ) : monthlyReports.filter(report => !report.isDeleted).length === 0 ? (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="py-12 text-center">
+            <FileText className="h-14 w-14 text-slate-500 mx-auto mb-3" />
+            <h3 className="text-white font-semibold mb-1">No monthly reports uploaded</h3>
+            <p className="text-slate-400 text-sm">Upload your first PDF report to get started.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 w-full pb-6">
+          {monthlyReports.filter(report => !report.isDeleted).map((report) => (
+            <Card key={report.id} className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 border border-purple-500/30 overflow-hidden">
+              <CardContent className="p-4 flex flex-col min-h-[270px]">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <Badge className={`${report.branchId ? 'bg-green-500/20 text-green-300 border-green-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30'}`}>
+                    {report.branchId ? 'Sent' : 'Uploaded'}
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 hover:bg-red-500/20"
+                    onClick={() => deleteReportMutation.mutate(report.id)}
+                    disabled={deleteReportMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-400" />
+                  </Button>
+                </div>
+
+                <div className="flex-1 flex flex-col items-center justify-center rounded-xl border border-purple-500/20 bg-purple-500/10 py-5 mb-3">
+                  <FileText className="h-14 w-14 text-purple-400 mb-2" />
+                  <div className="text-sm font-semibold text-purple-200">{report.viewSize || 'A4'} PDF</div>
+                  <div className="text-xs text-slate-400 mt-1">
+                    {report.fileSize ? `${(report.fileSize / 1024 / 1024).toFixed(2)} MB` : ''}
                   </div>
                 </div>
 
-                {/* Filter Controls */}
-                <Card className="bg-slate-800/50 backdrop-blur border-slate-700">
-                  <CardContent className="p-4">
-                    <div className="flex flex-wrap gap-4 items-center">
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-purple-400" />
-                        <select className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm">
-                          <option value="">All Months</option>
-                          {(() => {
-                            const months = [];
-                            const currentDate = new Date();
-                            // Current month and previous 11 months
-                            for (let i = 0; i < 12; i++) {
-                              const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-                              const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                              const label = date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-                              months.push(<option key={value} value={value}>{label}</option>);
-                            }
-                            return months;
-                          })()}
-                        </select>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Filter className="h-4 w-4 text-green-400" />
-                        <select 
-                          className="bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
-                          value={reportType}
-                          onChange={(e) => setReportType(e.target.value)}
-                        >
-                          <option value="coshh-risk-assessment">COSHH/Risk Assessment</option>
-                          <option value="inspection-report">Inspection Report</option>
-                        </select>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <h4 className="text-white font-semibold text-sm text-center line-clamp-2 mb-1">{report.title}</h4>
+                <p className="text-xs text-slate-400 text-center mb-3">
+                  {new Date(report.createdAt).toLocaleDateString('en-GB')}
+                  {report.branchId ? ` • ${branches.find((b: Branch) => b.id === report.branchId)?.name || 'Branch'}` : ''}
+                </p>
 
-                {/* Branch & Time Filters - Mobile Responsive */}
-                <div className="flex flex-col lg:flex-row gap-4 mb-6 p-4 bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 w-full max-w-full overflow-hidden">
-                  <div className="flex flex-col sm:flex-row gap-3 lg:gap-4 w-full">
-                    <Select value={selectedBranchFilter} onValueChange={setSelectedBranchFilter}>
-                      <SelectTrigger className="w-full sm:w-[200px] bg-white/10 border-white/20 text-white hover:bg-white/20 transition-all">
-                        <Building2 className="w-3 w-3 lg:w-4 lg:h-4 mr-2" />
-                        <SelectValue placeholder="All Branches" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-900 border-gray-700">
-                        <SelectItem value="all" className="text-white hover:bg-slate-700 focus:bg-slate-700">
-                          <span className="text-white">All Branches</span>
-                        </SelectItem>
-                        {branches.map((branch: Branch) => (
-                          <SelectItem key={branch.id} value={branch.id} className="text-white hover:bg-slate-700 focus:bg-slate-700">
-                            <span className="text-white">{branch.name}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select value={selectedTimeRange} onValueChange={setSelectedTimeRange}>
-                      <SelectTrigger className="w-full sm:w-[150px] bg-white/10 border-white/20 text-white hover:bg-white/20 transition-all">
-                        <Clock className="w-3 w-3 lg:w-4 lg:h-4 mr-2" />
-                        <SelectValue placeholder="Time Range" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-900 border-gray-700">
-                        <SelectItem value="12" className="text-white hover:bg-slate-700 focus:bg-slate-700">Last 12 months</SelectItem>
-                        <SelectItem value="24" className="text-white hover:bg-slate-700 focus:bg-slate-700">Last 24 months</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center justify-center lg:justify-end text-xs lg:text-sm text-white/60 mt-2 lg:mt-0">
-                    <Calendar className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-                    {(() => {
-                      const filtered = monthlyReports.filter(report => {
-                        const reportDate = new Date(report.createdAt);
-                        const monthsAgo = new Date();
-                        monthsAgo.setMonth(monthsAgo.getMonth() - parseInt(selectedTimeRange));
-                        const isWithinRange = reportDate >= monthsAgo;
-                        const notDeleted = !report.isDeleted;
-                        
-                        if (selectedBranchFilter === "all") {
-                          // Show all reports when "all" is selected
-                          return isWithinRange && notDeleted;
-                        } else {
-                          // Show only reports for specific branch
-                          const matchesBranch = report.branchId === selectedBranchFilter;
-                          return matchesBranch && isWithinRange && notDeleted;
-                        }
-                      });
-                      return filtered.length;
-                    })()} reports
-                  </div>
+                <div className="grid grid-cols-2 gap-2 mt-auto">
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    onClick={() => handleViewPDF({ ...report, type: 'monthly-reports' })}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />View
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    onClick={() => { setSelectedReport(report); setShowReportSendDialog(true); }}
+                  >
+                    <Send className="h-4 w-4 mr-1" />Send
+                  </Button>
                 </div>
-
-                {/* Reports Grid - Mobile Responsive */}
-                <Card className="bg-slate-800/50 backdrop-blur border-slate-700 w-full max-w-full overflow-hidden">
-                  <CardContent className="p-4 lg:p-6">
-                    {reportsLoading ? (
-                      <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-400 mx-auto"></div>
-                        <p className="mt-2 text-purple-200">Loading monthly reports...</p>
-                      </div>
-                    ) : selectedBranchFilter === "all" ? (
-                      // Show all reports including unassigned ones
-                      <div className="space-y-6">
-                        {/* Show unassigned reports first */}
-                        {(() => {
-                          const unassignedReports = monthlyReports.filter(report => {
-                            const reportDate = new Date(report.createdAt);
-                            const monthsAgo = new Date();
-                            monthsAgo.setMonth(monthsAgo.getMonth() - parseInt(selectedTimeRange));
-                            const isWithinRange = reportDate >= monthsAgo;
-                            const notDeleted = !report.isDeleted;
-                            const isUnassigned = !report.branchId; // No branch assigned
-                            return isUnassigned && isWithinRange && notDeleted;
-                          });
-
-                          return unassignedReports.length > 0 ? (
-                            <div className="space-y-4">
-                              <h3 className="text-lg font-medium text-white">Uploaded Reports (Not Assigned to Branches)</h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {unassignedReports.map((report) => (
-                                  <Card key={report.id} className="bg-slate-700/50 border-slate-600 hover:border-purple-500/50 transition-all duration-300">
-                                    <CardContent className="p-4">
-                                      <div className="flex items-center justify-between mb-3">
-                                        <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
-                                          <FileText className="h-5 w-5 text-white" />
-                                        </div>
-                                        <Badge className="bg-purple-600/20 text-purple-300 border-purple-500/30">
-                                          {report.reportType}
-                                        </Badge>
-                                      </div>
-                                      
-                                      <h4 className="text-white font-medium mb-2">{report.title}</h4>
-                                      <p className="text-slate-400 text-sm mb-3">
-                                        View Size: {report.viewSize} • {report.mimeType?.includes('pdf') ? 'PDF' : 'Image'}
-                                      </p>
-                                      
-                                      <p className="text-slate-500 text-xs mb-3">
-                                        Uploaded: {new Date(report.createdAt).toLocaleDateString('en-GB', {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                          year: 'numeric'
-                                        })} at {new Date(report.createdAt).toLocaleTimeString('en-GB', {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                          hour12: false
-                                        })}
-                                      </p>
-                                      
-                                      <div className="flex gap-2">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="flex-1 text-xs border-slate-600 text-slate-300 hover:bg-slate-700"
-                                          onClick={() => {
-                                            handleViewPDF({
-                                              ...report,
-                                              type: 'monthly-reports'
-                                            });
-                                          }}
-                                        >
-                                          <Eye className="h-3 w-3 mr-1" />
-                                          View
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="flex-1 text-xs border-slate-600 text-slate-300 hover:bg-slate-700"
-                                          onClick={() => {
-                                            setSelectedReport(report);
-                                            setShowReportSendDialog(true);
-                                          }}
-                                        >
-                                          <Send className="h-3 w-3 mr-1" />
-                                          Send
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="text-xs border-red-800/50 text-red-400 hover:bg-red-900/30"
-                                          onClick={() => deleteReportMutation.mutate(report.id)}
-                                          disabled={deleteReportMutation.isPending}
-                                        >
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null;
-                        })()}
-
-                        {/* Branch selection view for assigned reports */}
-                        <div className="space-y-4">
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-                            <h3 className="text-base lg:text-lg font-medium text-white text-center lg:text-left">Reports by Branch</h3>
-                            <div className="flex flex-col sm:flex-row items-center gap-4">
-                              <div className="relative w-full sm:w-64">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                                <Input
-                                  placeholder="Search branches by ID, name, email, address..."
-                                  value={monthlyReportsSearchTerm}
-                                  onChange={(e) => {
-                                    setMonthlyReportsSearchTerm(e.target.value);
-                                    setMonthlyReportsCurrentPage(1); // Reset to first page when searching
-                                  }}
-                                  className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-400 focus:border-purple-400 focus:ring-purple-400/30"
-                                  data-testid="search-monthly-reports-branches"
-                                />
-                              </div>
-                              {(() => {
-                                // Calculate pagination info for header display
-                                const filteredBranches = branches.filter((branch: Branch) => {
-                                  if (!monthlyReportsSearchTerm.trim()) return true;
-                                  
-                                  const searchTerm = monthlyReportsSearchTerm.toLowerCase();
-                                  const name = branch.name?.toLowerCase() || '';
-                                  const email = branch.email?.toLowerCase() || '';
-                                  const address = branch.address?.toLowerCase() || '';
-                                  const branchId = branch.id?.toLowerCase() || '';
-                                  
-                                  return name.includes(searchTerm) || 
-                                         email.includes(searchTerm) || 
-                                         address.includes(searchTerm) ||
-                                         branchId.includes(searchTerm);
-                                });
-                                
-                                const totalBranches = filteredBranches.length;
-                                const totalPages = Math.ceil(totalBranches / monthlyReportsBranchesPerPage);
-                                
-                                return totalBranches > 0 ? (
-                                  <div className="text-sm text-white/60 whitespace-nowrap">
-                                    Page {monthlyReportsCurrentPage} of {totalPages}
-                                  </div>
-                                ) : null;
-                              })()}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 lg:gap-4 w-full max-w-full">
-                            {(() => {
-                              // Filter branches by search term
-                              const filteredBranches = branches.filter((branch: Branch) => {
-                                if (!monthlyReportsSearchTerm.trim()) return true;
-                                
-                                const searchTerm = monthlyReportsSearchTerm.toLowerCase();
-                                const name = branch.name?.toLowerCase() || '';
-                                const email = branch.email?.toLowerCase() || '';
-                                const address = branch.address?.toLowerCase() || '';
-                                const branchId = branch.id?.toLowerCase() || '';
-                                
-                                return name.includes(searchTerm) || 
-                                       email.includes(searchTerm) || 
-                                       address.includes(searchTerm) ||
-                                       branchId.includes(searchTerm);
-                              });
-                              
-                              // Calculate pagination
-                              const totalBranches = filteredBranches.length;
-                              const totalPages = Math.ceil(totalBranches / monthlyReportsBranchesPerPage);
-                              const startIndex = (monthlyReportsCurrentPage - 1) * monthlyReportsBranchesPerPage;
-                              const endIndex = startIndex + monthlyReportsBranchesPerPage;
-                              const paginatedBranches = filteredBranches.slice(startIndex, endIndex);
-                              
-                              // Pagination info is now managed by React state instead of window object
-                              
-                              return paginatedBranches.map((branch: Branch) => {
-                                const branchReports = monthlyReports.filter(r => 
-                                  r.branchId === branch.id && !r.isDeleted
-                                );
-                                const reportDate = new Date();
-                                reportDate.setMonth(reportDate.getMonth() - parseInt(selectedTimeRange));
-                                const recentReports = branchReports.filter(r => new Date(r.createdAt) >= reportDate);
-                                
-                                return (
-                                  <Card 
-                                    key={branch.id} 
-                                    className="bg-white/5 backdrop-blur-sm border-white/10 hover:border-white/30 transition-all duration-300 cursor-pointer group hover:scale-105 w-full max-w-full overflow-hidden"
-                                    onClick={() => setSelectedBranchFilter(branch.id)}
-                                  >
-                                    <CardContent className="p-3 lg:p-4 text-center">
-                                      <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-2 lg:p-3 rounded-lg mx-auto mb-2 lg:mb-3 w-10 h-10 lg:w-12 lg:h-12 flex items-center justify-center">
-                                        <Building2 className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
-                                      </div>
-                                      <h4 className="font-medium text-white text-xs lg:text-sm mb-2 group-hover:text-purple-300 transition-colors truncate">
-                                        {branch.name}
-                                      </h4>
-                                      <div className="text-xs text-white/60">
-                                        <Badge variant="secondary" className="bg-purple-500/20 text-purple-300 text-xs px-2 py-1">
-                                          {recentReports.length} reports
-                                        </Badge>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                );
-                              });
-                            })()}
-                          </div>
-                          
-                          {/* Pagination Controls */}
-                          {(() => {
-                            // Calculate pagination info
-                            const filteredBranches = branches.filter((branch: Branch) => {
-                              if (!monthlyReportsSearchTerm.trim()) return true;
-                              
-                              const searchTerm = monthlyReportsSearchTerm.toLowerCase();
-                              const name = branch.name?.toLowerCase() || '';
-                              const email = branch.email?.toLowerCase() || '';
-                              const address = branch.address?.toLowerCase() || '';
-                              const branchId = branch.id?.toLowerCase() || '';
-                              
-                              return name.includes(searchTerm) || 
-                                     email.includes(searchTerm) || 
-                                     address.includes(searchTerm) ||
-                                     branchId.includes(searchTerm);
-                            });
-                            
-                            const totalBranches = filteredBranches.length;
-                            const totalPages = Math.ceil(totalBranches / monthlyReportsBranchesPerPage);
-                            
-                            if (totalPages <= 1) return null;
-                            
-                            return (
-                              <div className="flex items-center justify-between mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
-                                <div className="text-sm text-white/60">
-                                  Showing {((monthlyReportsCurrentPage - 1) * monthlyReportsBranchesPerPage) + 1} to {Math.min(monthlyReportsCurrentPage * monthlyReportsBranchesPerPage, totalBranches)} of {totalBranches} branches
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={monthlyReportsCurrentPage === 1}
-                                    onClick={() => setMonthlyReportsCurrentPage(1)}
-                                    className="border-white/20 text-white hover:bg-white/10"
-                                    data-testid="pagination-first"
-                                  >
-                                    First
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={monthlyReportsCurrentPage === 1}
-                                    onClick={() => setMonthlyReportsCurrentPage(prev => Math.max(1, prev - 1))}
-                                    className="border-white/20 text-white hover:bg-white/10"
-                                    data-testid="pagination-prev"
-                                  >
-                                    ← Previous
-                                  </Button>
-                                  <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/20 text-purple-300 rounded border border-purple-400/30">
-                                    <span className="text-sm font-medium">
-                                      Page {monthlyReportsCurrentPage} of {totalPages}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={monthlyReportsCurrentPage === totalPages}
-                                    onClick={() => setMonthlyReportsCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    className="border-white/20 text-white hover:bg-white/10"
-                                    data-testid="pagination-next"
-                                  >
-                                    Next →
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={monthlyReportsCurrentPage === totalPages}
-                                    onClick={() => setMonthlyReportsCurrentPage(totalPages)}
-                                    className="border-white/20 text-white hover:bg-white/10"
-                                    data-testid="pagination-last"
-                                  >
-                                    Last
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    ) : (() => {
-                      // Filter reports for selected branch and time range
-                      const filteredReports = monthlyReports.filter(report => {
-                        const matchesBranch = report.branchId === selectedBranchFilter;
-                        const reportDate = new Date(report.createdAt);
-                        const monthsAgo = new Date();
-                        monthsAgo.setMonth(monthsAgo.getMonth() - parseInt(selectedTimeRange));
-                        const isWithinRange = reportDate >= monthsAgo;
-                        const notDeleted = !report.isDeleted;
-                        return matchesBranch && isWithinRange && notDeleted;
-                      });
-
-                      return filteredReports.length === 0 ? (
-                        <div className="text-center py-12">
-                          <FileText className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-                          <p className="text-slate-400 text-lg mb-2">No reports found</p>
-                          <p className="text-slate-500 text-sm">
-                            No reports for {branches.find((b: Branch) => b.id === selectedBranchFilter)?.name} in the last {selectedTimeRange} months
-                          </p>
-                          <Button
-                            onClick={() => setSelectedBranchFilter("all")}
-                            className="mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                          >
-                            <ArrowLeft className="w-4 h-4 mr-2" />
-                            Back to Branches
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-6">
-                          {/* Branch Header */}
-                          <div className="flex items-center justify-between mb-6 p-4 bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg border border-purple-500/20">
-                            <div className="flex items-center gap-3">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedBranchFilter("all")}
-                                className="text-white/60 hover:text-white"
-                              >
-                                <ArrowLeft className="w-4 h-4 mr-2" />
-                                Back to Branches
-                              </Button>
-                              <div className="h-6 w-px bg-white/20"></div>
-                              <Building2 className="w-5 h-5 text-purple-300" />
-                              <h3 className="text-lg font-medium text-white">
-                                {branches.find((b: Branch) => b.id === selectedBranchFilter)?.name}
-                              </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="bg-purple-500/20 text-purple-300 border-purple-500/30">
-                                {filteredReports.length} reports
-                              </Badge>
-                              <Badge variant="secondary" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
-                                {selectedTimeRange} months
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Reports Grid */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {filteredReports.map((report) => (
-                              <div key={report.id} className="group relative">
-                                <div className="bg-gradient-to-br from-red-900/20 to-red-800/30 backdrop-blur-xl rounded-2xl p-1 shadow-2xl transform transition-all duration-300 hover:scale-105 hover:shadow-red-500/30 border-2 border-red-500/40 hover:border-red-400/60">
-                                  <div className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-xl p-5 relative overflow-hidden min-h-[320px] flex flex-col">
-                                    {/* Magical Glow Effect */}
-                                    <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-pink-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    
-                                    {/* Header */}
-                                    <div className="relative z-10 mb-4">
-                                      <div className="flex items-center justify-between mb-3">
-                                        <Badge className={`${
-                                          report.branchId ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-orange-500 to-orange-600'
-                                        } text-white text-xs px-3 py-1 rounded-full shadow-lg`}>
-                                          {report.branchId ? 'Sent' : 'Draft'}
-                                        </Badge>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="w-8 h-8 p-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 rounded-full border border-red-500/30 shadow-lg backdrop-blur-sm transition-all duration-300 hover:scale-110"
-                                          title="Delete Report"
-                                          onClick={() => deleteReportMutation.mutate(report.id)}
-                                          disabled={deleteReportMutation.isPending}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </div>
-
-                                    {/* PDF Icon - Centered and Larger */}
-                                    <div className="relative z-10 mb-4 flex-1 flex items-center justify-center">
-                                      <div className="w-full aspect-[3/4] max-w-[180px] bg-gradient-to-br from-red-600/30 to-red-700/40 rounded-xl border-2 border-red-500/50 flex flex-col items-center justify-center overflow-hidden shadow-inner relative group/pdf">
-                                        <div className="flex flex-col items-center justify-center h-full">
-                                          <FileText className="h-20 w-20 text-red-400 mb-3 group-hover/pdf:scale-110 transition-transform duration-300" />
-                                          <div className="text-sm text-red-300 font-semibold">{report.viewSize || 'A4'} PDF</div>
-                                          <div className="text-xs text-slate-400 mt-2 bg-slate-800/50 px-2 py-1 rounded-full">
-                                            {report.fileSize ? `${(report.fileSize / 1024 / 1024).toFixed(1)} MB` : 'N/A'}
-                                          </div>
-                                        </div>
-                                        
-                                        {/* PDF Overlay with better visual effect */}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-red-900/20 via-transparent to-red-800/10 opacity-0 group-hover/pdf:opacity-100 transition-opacity duration-300"></div>
-                                        
-                                        {/* Shine effect */}
-                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover/pdf:translate-x-full transition-transform duration-1000"></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Report Info - Better Positioned */}
-                                    <div className="relative z-10 space-y-3 mt-auto">
-                                      <div className="space-y-2">
-                                        <h4 className="font-semibold text-white text-sm line-clamp-2 leading-relaxed text-center">{report.title}</h4>
-                                        <p className="text-xs text-center">
-                                          {report.branchId ? (
-                                            <span className="text-green-400 bg-green-500/20 px-2 py-1 rounded-full">
-                                              {branches.find((b: Branch) => b.id === report.branchId)?.name || 'Unknown Branch'}
-                                            </span>
-                                          ) : (
-                                            <span className="text-orange-400 bg-orange-500/20 px-2 py-1 rounded-full">Not sent</span>
-                                          )}
-                                        </p>
-                                      </div>
-                                      
-                                      <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-700/50">
-                                        <span className="bg-red-500/20 text-red-300 px-2 py-1 rounded-full text-xs font-medium">
-                                          {report.reportType === 'coshh-risk-assessment' ? 'COSHH/Risk' : 'Inspection'}
-                                        </span>
-                                        <span className="text-slate-400 font-medium">
-                                          {new Date(report.createdAt).toLocaleDateString('en-GB', {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                            year: 'numeric'
-                                          })} at {new Date(report.createdAt).toLocaleTimeString('en-GB', {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            hour12: false
-                                          })}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    {/* Action Buttons - Enhanced */}
-                                    <div className="relative z-10 mt-4 pt-4 border-t border-red-500/20">
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <Button
-                                          size="sm"
-                                          className="bg-gradient-to-r from-purple-600/30 to-indigo-600/30 hover:from-purple-600/40 hover:to-indigo-600/40 text-purple-200 border border-purple-500/40 hover:border-purple-400/60 transition-all duration-300 shadow-lg hover:shadow-purple-500/30 backdrop-blur-sm font-medium"
-                                          onClick={() => {
-                                            handleViewPDF({
-                                              ...report,
-                                              type: 'monthly-reports'
-                                            });
-                                          }}
-                                        >
-                                          <Eye className="h-4 w-4 mr-1" />
-                                          View
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          className="bg-gradient-to-r from-orange-600/30 to-yellow-600/30 hover:from-orange-600/40 hover:to-yellow-600/40 text-orange-200 border border-orange-500/40 hover:border-orange-400/60 transition-all duration-300 shadow-lg hover:shadow-orange-500/30 backdrop-blur-sm font-medium"
-                                          onClick={() => {
-                                            setSelectedReport(report);
-                                            setShowReportSendDialog(true);
-                                          }}
-                                        >
-                                          <Send className="h-4 w-4 mr-1" />
-                                          Send
-                                        </Button>
-                                      </div>
-                                    </div>
-
-                                    {/* Enhanced Floating Decorative Elements */}
-                                    <div className="absolute top-4 right-4 w-2 h-2 bg-red-500/40 rounded-full animate-pulse"></div>
-                                    <div className="absolute bottom-20 left-4 w-1 h-1 bg-red-400/30 rounded-full animate-pulse delay-300"></div>
-                                    <div className="absolute top-1/2 left-2 w-1.5 h-1.5 bg-red-600/20 rounded-full animate-pulse delay-700"></div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
 
 
-            {/* Pest Control Documents Section - Mobile Responsive */}
+  /* Pest Control Documents Section - Mobile Responsive */}
             {activeTab === "pest-control-docs" && (
               <div className="space-y-6 w-full max-w-full overflow-hidden">
                 <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0 w-full max-w-full">
@@ -7549,7 +7060,7 @@ export default function AdminDashboard() {
 
       {/* Monthly Report Upload Dialog */}
       <Dialog open={showMonthlyReportDialog} onOpenChange={setShowMonthlyReportDialog}>
-        <DialogContent className="bg-slate-800 text-white border-slate-700 max-w-2xl">
+        <DialogContent className="bg-slate-800 text-white border-slate-700 max-w-2xl !top-2 !translate-y-0 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle className="text-purple-400 text-xl font-bold flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
