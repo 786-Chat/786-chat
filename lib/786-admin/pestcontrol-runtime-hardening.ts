@@ -293,8 +293,11 @@ function patchBranchLogoServing(source: string): string {
 function patchPestControlBranchRoutes(source: string): string {
   let next = source
   next = patchCreateBranchContractDefault(next)
-  next = patchUpdateBranchContractDefault(next)
+  // Patch the logo block before inserting the edit-route contract fallback.
+  // The logo rewrite replaces the block up to confirmPassword cleanup, so doing
+  // the contract fallback first could accidentally remove it again.
   next = patchNonBlockingBranchLogoUpdate(next)
+  next = patchUpdateBranchContractDefault(next)
   next = patchBranchLogoServing(next)
   return next
 }
