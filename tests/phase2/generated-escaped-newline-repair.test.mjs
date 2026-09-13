@@ -6,26 +6,42 @@ const compatibilitySource = fs.readFileSync(
   new URL("../../lib/786-chat/neon-compatibility.ts", import.meta.url),
   "utf8",
 )
+const buildRouteSource = fs.readFileSync(
+  new URL("../../app/api/786-admin/projects/[id]/build/route.ts", import.meta.url),
+  "utf8",
+)
 
-test("generated build compatibility repairs the persisted Pest routes escaped newline", () => {
-  assert.match(compatibilitySource, /function normalizeEscapedStatementNewlines/)
-  assert.match(compatibilitySource, /server\\\/routes/)
+test("generated build compatibility repairs both persisted Pest routes escaped newlines", () => {
+  assert.match(compatibilitySource, /export function normalizeKnownGeneratedSyntaxArtifacts/)
   assert.match(compatibilitySource, /Syntax error \\"n\\"/)
-  assert.match(compatibilitySource, /normalizedFiles = normalizeEscapedStatementNewlines\(files\)/)
   assert.ok(
     compatibilitySource.includes(
-      'const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\\\n      const deliveredLink ="',
+      'await storage.markUsefulLinkAsSent(newLink.id);\\\\n      const deliveredLink =',
     ),
   )
   assert.ok(
     compatibilitySource.includes(
-      'content.replaceAll(broken, fixed)',
+      'await storage.getUsefulLink(newLink.id);\\\\n      res.json({ success: true, data: deliveredLink || newLink, message: "Link sent to branch successfully" });',
     ),
   )
 })
 
-test("repair is deliberately scoped to server routes", () => {
+test("imported builds persist syntax repairs before validation and dispatch", () => {
+  assert.ok(buildRouteSource.includes("normalizeKnownGeneratedSyntaxArtifacts"))
   assert.ok(
-    compatibilitySource.includes('if (!/(?:^|\\/)server\\/routes\\.(?:ts|js)$/.test(path))'),
+    buildRouteSource.includes("normalizeImportedSyntaxArtifacts(id, project.files || {})"),
   )
+  assert.ok(
+    buildRouteSource.includes("Project not found after syntax artifact repair"),
+  )
+
+  const syntaxRepair = buildRouteSource.indexOf(
+    "normalizeImportedSyntaxArtifacts(id, project.files || {})",
+  )
+  const compatibilityGuard = buildRouteSource.indexOf(
+    "if (body.confirm === true && !buildOptions.imported)",
+    syntaxRepair,
+  )
+  assert.ok(syntaxRepair >= 0)
+  assert.ok(compatibilityGuard > syntaxRepair)
 })
