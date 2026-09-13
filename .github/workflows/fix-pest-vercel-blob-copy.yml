@@ -64,9 +64,39 @@ jobs:
           git config user.email "actions@786.chat"
           git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html
           git diff --cached --check
-          if git diff --cached --quiet; then
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(pest-control): remove leftover Replit banner"
+            git push origin "HEAD:${TARGET_BRANCH}"
+          else
             echo "No live source change required"
-            exit 0
           fi
-          git commit -m "fix(pest-control): remove leftover Replit banner"
-          git push origin "HEAD:${TARGET_BRANCH}"
+          echo "CLEAN_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Deploy cleaned Pest Control branch to generated Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM_ID: team_ramDdJPbDZUAmHzZhWYHvxEt
+          VERCEL_PROJECT_NAME: 786-generated-22c299f8bf65
+          VERCEL_REPOSITORY_ID: '1250394192'
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN GitHub secret is missing"; exit 1; }
+          payload=$(jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg ref "$TARGET_BRANCH" \
+            --arg sha "$CLEAN_COMMIT_SHA" \
+            --argjson repoId "$VERCEL_REPOSITORY_ID" \
+            '{name:$name,target:"staging",gitSource:{type:"github",repoId:$repoId,ref:$ref,sha:$sha}}')
+          response=$(curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID")
+          deployment_id=$(echo "$response" | jq -r '.id // empty')
+          deployment_url=$(echo "$response" | jq -r '.url // empty')
+          test -n "$deployment_id" || { echo "Vercel did not return a deployment id"; exit 1; }
+          echo "Triggered cleaned Pest Control deployment: $deployment_id"
+          echo "CLEAN_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "CLEAN_DEPLOYMENT_URL=$deployment_url" >> "$GITHUB_ENV"
