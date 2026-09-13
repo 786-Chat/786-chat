@@ -2,22 +2,18 @@ import { normalizeGeneratedResendUsage } from "./resend-compatibility"
 
 function normalizeEscapedStatementNewlines(files: Record<string, string>) {
   return Object.fromEntries(Object.entries(files).map(([path, content]) => {
-    if (!/\.(?:ts|tsx|js|jsx)$/.test(path) || !content.includes("\\n")) {
+    if (!/(?:^|\/)server\/routes\.(?:ts|js)$/.test(path)) {
       return [path, content]
     }
 
-    // Some imported/generated projects persist a source-code line break as the two
-    // literal characters `\\n` between statements. esbuild then parses the trailing
-    // `n` as JavaScript/TypeScript and fails with `Syntax error \"n\"`. Only repair
-    // statement-boundary artifacts where the escaped newline is immediately followed
-    // by a normal statement/declaration token; escaped newlines inside ordinary string
-    // values are left untouched.
-    const normalized = content.replace(
-      /;\\n([ \t]+)(?=(?:const|let|var|await|return|if|for|while|try|throw|res\.|storage\.)\b)/g,
-      ";\n$1",
-    )
+    // A migrated Pest Control route was persisted with the two literal characters
+    // `\\n` between these statements. esbuild parses the trailing `n` as source code
+    // and fails with `Syntax error \"n\"`. Keep this repair deliberately narrow so
+    // legitimate escaped newlines inside strings are never rewritten.
+    const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\n      const deliveredLink ="
+    const fixed = "await storage.markUsefulLinkAsSent(newLink.id);\n      const deliveredLink ="
 
-    return [path, normalized]
+    return [path, content.replaceAll(broken, fixed)]
   }))
 }
 
