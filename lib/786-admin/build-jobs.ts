@@ -38,6 +38,12 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim()
 }
 
+export function generatedPreviewUrl(projectId: string): string | null {
+  const compact = projectId.toLowerCase().replaceAll("-", "")
+  if (!/^[0-9a-f]{32}$/.test(compact)) return null
+  return `https://preview-${compact}.786.chat`
+}
+
 function normalizeTerminalPublishRepairState(build: AdminProjectBuild | null): AdminProjectBuild | null {
   if (
     build?.status === "failed" &&
@@ -47,6 +53,12 @@ function normalizeTerminalPublishRepairState(build: AdminProjectBuild | null): A
   ) {
     return { ...build, repair_status: "not_needed" }
   }
+
+  if (build?.status === "passed" && build.deployment_url) {
+    const previewUrl = generatedPreviewUrl(build.project_id)
+    if (previewUrl) return { ...build, deployment_url: previewUrl }
+  }
+
   return build
 }
 
