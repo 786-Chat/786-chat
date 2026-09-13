@@ -1,5 +1,26 @@
 import { normalizeGeneratedResendUsage } from "./resend-compatibility"
 
+function normalizeEscapedStatementNewlines(files: Record<string, string>) {
+  return Object.fromEntries(Object.entries(files).map(([path, content]) => {
+    if (!/\.(?:ts|tsx|js|jsx)$/.test(path) || !content.includes("\\n")) {
+      return [path, content]
+    }
+
+    // Some imported/generated projects persist a source-code line break as the two
+    // literal characters `\\n` between statements. esbuild then parses the trailing
+    // `n` as JavaScript/TypeScript and fails with `Syntax error \"n\"`. Only repair
+    // statement-boundary artifacts where the escaped newline is immediately followed
+    // by a normal statement/declaration token; escaped newlines inside ordinary string
+    // values are left untouched.
+    const normalized = content.replace(
+      /;\\n([ \t]+)(?=(?:const|let|var|await|return|if|for|while|try|throw|res\.|storage\.)\b)/g,
+      ";\n$1",
+    )
+
+    return [path, normalized]
+  }))
+}
+
 function normalizeDatabaseApiRouteRuntime(files: Record<string, string>) {
   return Object.fromEntries(Object.entries(files).map(([path, content]) => {
     if (!/^(?:src\/)?app\/api\/.+\/route\.(?:ts|tsx|js|jsx)$/.test(path)) {
@@ -42,12 +63,12 @@ export function normalizeGeneratedNeonServerlessUsage(files: Record<string, stri
       ? "src/lib/server/db.ts"
       : null
 
-  let normalizedFiles = files
+  let normalizedFiles = normalizeEscapedStatementNewlines(files)
 
   if (dbPath) {
-    const dbSource = files[dbPath]
+    const dbSource = normalizedFiles[dbPath]
     if (/@neondatabase\/serverless/.test(dbSource) && /\bneon\s*\(/.test(dbSource)) {
-      normalizedFiles = Object.fromEntries(Object.entries(files).map(([path, content]) => {
+      normalizedFiles = Object.fromEntries(Object.entries(normalizedFiles).map(([path, content]) => {
         if (!/\.(?:ts|tsx|js|jsx)$/.test(path) || (!/\.query\s*\(/.test(content) && !/\.rows\b/.test(content) && !/\.rowCount\b/.test(content))) {
           return [path, content]
         }
