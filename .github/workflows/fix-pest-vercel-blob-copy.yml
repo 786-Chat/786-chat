@@ -23,49 +23,67 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts')
           text = path.read_text()
 
-          old = '''          await new Promise((resolve, reject) => {
-            objectFile.createReadStream()
-              .pipe(writeStream)
-              .on('finish', resolve)
-              .on('error', reject);
-          });'''
+          sentinel = "const vercelBlobPath = (objectFile as any).__vercelBlobPath;"
+          marker = "const writeStream = fs.createWriteStream(tempPath);"
 
-          new = '''          const vercelBlobPath = (objectFile as any).__vercelBlobPath;
-          if (process.env.VERCEL && vercelBlobPath) {
-            const { get } = await import('@vercel/blob');
-            const blobResult = await get(vercelBlobPath, { access: 'private' });
-            if (!blobResult || blobResult.statusCode !== 200) {
-              throw new Error(`Unable to read Vercel Blob ${vercelBlobPath}`);
-            }
-            const { Readable } = await import('node:stream');
-            await new Promise((resolve, reject) => {
-              const source = Readable.fromWeb(blobResult.stream as any);
-              source.on('error', reject);
-              writeStream.on('finish', resolve);
-              writeStream.on('error', reject);
-              source.pipe(writeStream);
-            });
-          } else {
-            await new Promise((resolve, reject) => {
-              objectFile.createReadStream()
-                .pipe(writeStream)
-                .on('finish', resolve)
-                .on('error', reject);
-            });
-          }'''
-
-          if new in text:
+          if sentinel in text:
             print('Vercel Blob copy path already repaired')
-          elif old in text:
-            text = text.replace(old, new, 1)
+          else:
+            marker_pos = text.find(marker)
+            if marker_pos < 0:
+              raise SystemExit('Photo copy write-stream marker not found')
+
+            tail = text[marker_pos + len(marker):]
+            pattern = re.compile(
+              r"(?P<indent>^[ \t]*)await new Promise\(\(resolve, reject\) => \{\s*"
+              r"objectFile\.createReadStream\(\)\s*"
+              r"\.pipe\(writeStream\)\s*"
+              r"\.on\('finish', resolve\)\s*"
+              r"\.on\('error', reject\);\s*"
+              r"\}\);",
+              re.MULTILINE,
+            )
+            match = pattern.search(tail)
+            if not match:
+              raise SystemExit('Legacy Object Storage copy block not found after photo marker')
+
+            indent = match.group('indent')
+            unit = '  '
+            replacement_lines = [
+              "const vercelBlobPath = (objectFile as any).__vercelBlobPath;",
+              "if (process.env.VERCEL && vercelBlobPath) {",
+              "  const { get } = await import('@vercel/blob');",
+              "  const blobResult = await get(vercelBlobPath, { access: 'private' });",
+              "  if (!blobResult || blobResult.statusCode !== 200) {",
+              "    throw new Error(`Unable to read Vercel Blob ${vercelBlobPath}`);",
+              "  }",
+              "  const { Readable } = await import('node:stream');",
+              "  await new Promise((resolve, reject) => {",
+              "    const source = Readable.fromWeb(blobResult.stream as any);",
+              "    source.on('error', reject);",
+              "    writeStream.on('finish', resolve);",
+              "    writeStream.on('error', reject);",
+              "    source.pipe(writeStream);",
+              "  });",
+              "} else {",
+              "  await new Promise((resolve, reject) => {",
+              "    objectFile.createReadStream()",
+              "      .pipe(writeStream)",
+              "      .on('finish', resolve)",
+              "      .on('error', reject);",
+              "  });",
+              "}",
+            ]
+            replacement = '\n'.join(indent + line for line in replacement_lines)
+            repaired_tail = tail[:match.start()] + replacement + tail[match.end():]
+            text = text[:marker_pos + len(marker)] + repaired_tail
             path.write_text(text)
             print('Patched Vercel Blob copy path')
-          else:
-            raise SystemExit('Expected Object Storage copy block not found')
 
       - name: Commit generated project repair
         run: |
@@ -75,10 +93,10 @@ jobs:
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "No generated source change required"
-            exit 0
+          else
+            git commit -m "fix(pest-control): support Vercel Blob photo copy"
+            git push origin HEAD:generated/22c299f8-bf65-410f-9643-92a9776dbfca/d5dc98b4-9342-4315-9-mtykpap4-5cvg6
           fi
-          git commit -m "fix(pest-control): support Vercel Blob photo copy"
-          git push origin HEAD:generated/22c299f8-bf65-410f-9643-92a9776dbfca/d5dc98b4-9342-4315-9-mtykpap4-5cvg6
 
       - name: Queue clean Pest Control rebuild
         env:
