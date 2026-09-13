@@ -2537,12 +2537,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const tempPath = path.join(process.cwd(), 'data', `temp_${photoId}${fileExtension}`);
           const writeStream = fs.createWriteStream(tempPath);
           
-          await new Promise((resolve, reject) => {
-            objectFile.createReadStream()
-              .pipe(writeStream)
-              .on('finish', resolve)
-              .on('error', reject);
-          });
+          const vercelBlobPath = (objectFile as any).__vercelBlobPath;
+          if (process.env.VERCEL && vercelBlobPath) {
+            const { get } = await import('@vercel/blob');
+            const blobResult = await get(vercelBlobPath, { access: 'private' });
+            if (!blobResult || blobResult.statusCode !== 200) {
+              throw new Error(`Unable to read Vercel Blob ${vercelBlobPath}`);
+            }
+            const { Readable } = await import('node:stream');
+            await new Promise((resolve, reject) => {
+              const source = Readable.fromWeb(blobResult.stream as any);
+              source.on('error', reject);
+              writeStream.on('finish', resolve);
+              writeStream.on('error', reject);
+              source.pipe(writeStream);
+            });
+          } else {
+            await new Promise((resolve, reject) => {
+              objectFile.createReadStream()
+                .pipe(writeStream)
+                .on('finish', resolve)
+                .on('error', reject);
+            });
+          }
           
           // Use the temp file as originalFilePath for copying
           originalFilePath = tempPath;
