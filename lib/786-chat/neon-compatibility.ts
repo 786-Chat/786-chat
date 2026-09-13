@@ -1,19 +1,32 @@
 import { normalizeGeneratedResendUsage } from "./resend-compatibility"
 
-function normalizeEscapedStatementNewlines(files: Record<string, string>) {
+export function normalizeKnownGeneratedSyntaxArtifacts(files: Record<string, string>) {
   return Object.fromEntries(Object.entries(files).map(([path, content]) => {
     if (!/(?:^|\/)server\/routes\.(?:ts|js)$/.test(path)) {
       return [path, content]
     }
 
     // A migrated Pest Control route was persisted with the two literal characters
-    // `\\n` between these statements. esbuild parses the trailing `n` as source code
-    // and fails with `Syntax error \"n\"`. Keep this repair deliberately narrow so
+    // `\\n` between statements. esbuild parses the trailing `n` as source code and
+    // fails with `Syntax error \"n\"`. Keep these repairs deliberately exact so
     // legitimate escaped newlines inside strings are never rewritten.
-    const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\n      const deliveredLink ="
-    const fixed = "await storage.markUsefulLinkAsSent(newLink.id);\n      const deliveredLink ="
+    const replacements: Array<[string, string]> = [
+      [
+        "await storage.markUsefulLinkAsSent(newLink.id);\\n      const deliveredLink =",
+        "await storage.markUsefulLinkAsSent(newLink.id);\n      const deliveredLink =",
+      ],
+      [
+        'await storage.getUsefulLink(newLink.id);\\n      res.json({ success: true, data: deliveredLink || newLink, message: "Link sent to branch successfully" });',
+        'await storage.getUsefulLink(newLink.id);\n      res.json({ success: true, data: deliveredLink || newLink, message: "Link sent to branch successfully" });',
+      ],
+    ]
 
-    return [path, content.replaceAll(broken, fixed)]
+    let normalized = content
+    for (const [broken, fixed] of replacements) {
+      normalized = normalized.replaceAll(broken, fixed)
+    }
+
+    return [path, normalized]
   }))
 }
 
@@ -59,7 +72,7 @@ export function normalizeGeneratedNeonServerlessUsage(files: Record<string, stri
       ? "src/lib/server/db.ts"
       : null
 
-  let normalizedFiles = normalizeEscapedStatementNewlines(files)
+  let normalizedFiles = normalizeKnownGeneratedSyntaxArtifacts(files)
 
   if (dbPath) {
     const dbSource = normalizedFiles[dbPath]
