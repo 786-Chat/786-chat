@@ -10,6 +10,7 @@ import AdminLogin from "@/pages/AdminLogin";
 import BranchLogin from "@/pages/BranchLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import BranchDashboard from "@/pages/BranchDashboard";
+import BranchAlarmAcknowledge from "@/components/BranchAlarmAcknowledge";
 import FileManager from "@/pages/FileManager";
 import AdminDemo from "@/pages/AdminDemo";
 import BranchDemo from "@/pages/BranchDemo";
@@ -47,6 +48,15 @@ function BranchDashboardRedirect() {
     window.location.replace("/branch-dashboard");
   }, []);
   return null;
+}
+
+function BranchDashboardWithAlarmControls() {
+  return (
+    <>
+      <BranchDashboard />
+      <BranchAlarmAcknowledge />
+    </>
+  );
 }
 
 function Router() {
@@ -138,7 +148,7 @@ function Router() {
       <Route path="/branch" component={BranchLoginRedirect} />
 
       {/* Branch routes */}
-      <Route path="/branch-dashboard" component={BranchDashboard} />
+      <Route path="/branch-dashboard" component={BranchDashboardWithAlarmControls} />
       <Route path="/branch-charts" component={BranchChartPage} />
       <Route path="/chart" component={BranchChartPage} />
       <Route path="/install" component={InstallGuide} />
