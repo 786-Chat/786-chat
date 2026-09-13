@@ -6,6 +6,7 @@ name: PestControl Retry Stuck Preview
 # 2026-09-12: rebuild Monthly Report send-branch options from real branch names only.
 # 2026-09-13: rebuild after persisted escaped-newline compatibility repair.
 # 2026-09-13: rebuild after imported-project syntax repair path.
+# 2026-09-13: rerun after retry endpoint normalization reached production.
 on:
   push:
     branches:
