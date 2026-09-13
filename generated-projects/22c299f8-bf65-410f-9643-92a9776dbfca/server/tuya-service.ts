@@ -144,7 +144,7 @@ export async function testConnection(): Promise<{ success: boolean; message: str
     return { success: false, message: "API credentials not configured" };
   }
   try {
-    const token = await getToken();
+    await getToken();
     return { success: true, message: `Connected successfully. Token acquired.` };
   } catch (err: any) {
     return { success: false, message: err.message || "Connection failed" };
@@ -207,16 +207,22 @@ export function isConfigured(): boolean {
   return Boolean(ACCESS_ID && ACCESS_SECRET);
 }
 
-// Alarm DP codes for Smart Mouser / Smart Mouse Trap devices
+// Alarm DP codes used by rodent and insect smart traps/sensors.
 const ALARM_DP_CODES = [
-  "catch_mouse",   // mouse/rat caught in trap
-  "shake",         // device shook (animal inside)
-  "alarm",         // generic alarm
-  "pir_state",     // PIR motion triggered
-  "temper_alarm",  // tamper alarm
-  "knock_alarm",   // knock/vibration alarm
-  "vibration",     // vibration sensor triggered
-  "motion",        // motion detected
+  "catch_mouse",
+  "catch_rat",
+  "catch_cockroach",
+  "cockroach_alarm",
+  "roach_alarm",
+  "insect_alarm",
+  "pest_alarm",
+  "shake",
+  "alarm",
+  "pir_state",
+  "temper_alarm",
+  "knock_alarm",
+  "vibration",
+  "motion",
 ];
 
 export function checkAlarmActive(statusList: any[]): boolean {
@@ -234,6 +240,45 @@ export function getAlarmDp(statusList: any[]): string | null {
     return ALARM_DP_CODES.includes(code) && s.value === true;
   });
   return dp?.code || null;
+}
+
+type PestAlarmKind = "mouse" | "rat" | "cockroach" | "pest";
+
+function getPestAlarmKind(dev: any, alarmDp: string | null): PestAlarmKind {
+  const searchable = [
+    alarmDp,
+    dev?.pestType,
+    dev?.trapType,
+    dev?.deviceType,
+    dev?.deviceName,
+    dev?.name,
+    dev?.notes,
+    dev?.category,
+    dev?.productName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (searchable.includes("cockroach") || searchable.includes("roach") || searchable.includes("insect")) {
+    return "cockroach";
+  }
+  if (searchable.includes("rat")) return "rat";
+  if (searchable.includes("mouse") || searchable.includes("mouser")) return "mouse";
+  return "pest";
+}
+
+function getPestAlarmCopy(kind: PestAlarmKind) {
+  switch (kind) {
+    case "cockroach":
+      return { icon: "🪳", label: "Cockroach", purpose: "Smart Device Alarm — Cockroach Detected" };
+    case "rat":
+      return { icon: "🐀", label: "Rat", purpose: "Smart Device Alarm — Rat Detected" };
+    case "mouse":
+      return { icon: "🐭", label: "Mouse", purpose: "Smart Device Alarm — Mouse Detected" };
+    default:
+      return { icon: "⚠️", label: "Pest", purpose: "Smart Device Alarm — Pest Detected" };
+  }
 }
 
 // Background polling — called from server startup
@@ -278,18 +323,20 @@ export function startAlarmPolling(storageInstance: any): void {
           });
 
           if (shouldNotify) {
+            const kind = getPestAlarmKind(dev, alarmDp);
+            const alarmCopy = getPestAlarmCopy(kind);
             const now = new Date();
             const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
             const timeStr = now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
             await storageInstance.createNotification({
               branchId: dev.branchId,
-              message: `🐭 ALERT: Mouse/Rat detected by Smart Mouser device "${dev.deviceName}"${dev.notes ? ` (${dev.notes})` : ""}. Sensor: ${alarmDp || "alarm"}. Please check and reset the trap immediately.`,
+              message: `${alarmCopy.icon} ALERT: ${alarmCopy.label} detected by smart pest-control device "${dev.deviceName}"${dev.notes ? ` (${dev.notes})` : ""}. Sensor: ${alarmDp || "alarm"}. Please check and reset the trap immediately.`,
               visitDate: dateStr,
               visitTime: timeStr,
-              purposeOfVisit: "Smart Device Alarm — Mouse/Rat Detected",
-              visitTypes: ["smart-device-alarm"],
+              purposeOfVisit: alarmCopy.purpose,
+              visitTypes: ["smart-device-alarm", `${kind}-alarm`],
             });
-            console.log(`🐭 Alarm notification sent for branch ${dev.branchId}, device ${dev.deviceName}`);
+            console.log(`${alarmCopy.icon} ${alarmCopy.label} alarm notification sent for branch ${dev.branchId}, device ${dev.deviceName}`);
           }
         } catch (devErr: any) {
           // per-device errors are non-fatal
