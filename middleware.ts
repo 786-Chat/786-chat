@@ -38,6 +38,13 @@ function rewriteCustomerWorkspace(request: NextRequest) {
   return NextResponse.rewrite(target)
 }
 
+function previewProjectId(hostname: string): string | null {
+  const match = hostname.match(/^preview-([0-9a-f]{32})\.786\.chat$/i)
+  if (!match) return null
+  const hex = match[1].toLowerCase()
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
@@ -50,6 +57,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(canonical, 308)
   }
 
+  const previewId = previewProjectId(hostname)
+  if (previewId && !pathname.startsWith("/generated-preview-host/")) {
+    const target = request.nextUrl.clone()
+    target.pathname = `/generated-preview-host/${previewId}${pathname === "/" ? "" : pathname}`
+    return NextResponse.rewrite(target)
+  }
+
   const isPlatformHost =
     !hostname ||
     hostname === "786.chat" ||
@@ -60,7 +74,7 @@ export async function middleware(request: NextRequest) {
   // Customer domains and 786.Chat subdomains must proxy every path — including
   // /_next assets, API routes, images and nested application pages — so the
   // browser can keep the customer hostname while the generated runtime is served.
-  if (!isPlatformHost && !pathname.startsWith("/customer-hosts/")) {
+  if (!isPlatformHost && !pathname.startsWith("/customer-hosts/") && !pathname.startsWith("/generated-preview-host/")) {
     const target = request.nextUrl.clone()
     target.pathname = `/customer-hosts/${encodeURIComponent(hostname)}${pathname === "/" ? "" : pathname}`
     return NextResponse.rewrite(target)
