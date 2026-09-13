@@ -4,6 +4,7 @@ name: PestControl Retry Stuck Preview
 # 2026-09-12: publish corrected Monthly Reports layout and scrolling.
 # 2026-09-12: rebuild after saved Monthly Reports Replit-layout sync.
 # 2026-09-12: rebuild Monthly Report send-branch options from real branch names only.
+# 2026-09-13: rebuild after persisted escaped-newline compatibility repair.
 on:
   push:
     branches:
