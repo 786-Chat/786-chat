@@ -1,4 +1,4 @@
-name: Fix Pest Control Vercel Blob Copy
+name: Finalize Pest Control Vercel Migration
 
 on:
   push:
@@ -13,27 +13,37 @@ jobs:
   patch-generated-project:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Pest Control generated branch
+      - name: Checkout repository history
         uses: actions/checkout@v4
         with:
-          ref: generated/22c299f8-bf65-410f-9643-92a9776dbfca/d5dc98b4-9342-4315-9-mtykpap4-5cvg6
           fetch-depth: 0
 
-      - name: Repair Vercel Blob copy-to-branch path
+      - name: Select newest Pest Control generated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_ID='22c299f8-bf65-410f-9643-92a9776dbfca'
+          git fetch origin "+refs/heads/generated/${PROJECT_ID}/*:refs/remotes/origin/generated/${PROJECT_ID}/*"
+          TARGET_BRANCH=$(git for-each-ref --sort=-committerdate --format='%(refname:strip=3)' "refs/remotes/origin/generated/${PROJECT_ID}/" | head -n 1)
+          test -n "$TARGET_BRANCH" || { echo 'No Pest Control generated branch found'; exit 1; }
+          echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
+          git checkout --detach "origin/$TARGET_BRANCH"
+          echo "Patching newest generated branch: $TARGET_BRANCH"
+
+      - name: Repair Vercel Blob copy and remove Replit banner
         shell: python
         run: |
           from pathlib import Path
           import re
 
-          path = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts')
-          text = path.read_text()
+          root = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca')
+          routes = root / 'server/routes.ts'
+          text = routes.read_text()
 
           sentinel = "const vercelBlobPath = (objectFile as any).__vercelBlobPath;"
           marker = "const writeStream = fs.createWriteStream(tempPath);"
 
-          if sentinel in text:
-            print('Vercel Blob copy path already repaired')
-          else:
+          if sentinel not in text:
             marker_pos = text.find(marker)
             if marker_pos < 0:
               raise SystemExit('Photo copy write-stream marker not found')
@@ -53,7 +63,6 @@ jobs:
               raise SystemExit('Legacy Object Storage copy block not found after photo marker')
 
             indent = match.group('indent')
-            unit = '  '
             replacement_lines = [
               "const vercelBlobPath = (objectFile as any).__vercelBlobPath;",
               "if (process.env.VERCEL && vercelBlobPath) {",
@@ -82,37 +91,47 @@ jobs:
             replacement = '\n'.join(indent + line for line in replacement_lines)
             repaired_tail = tail[:match.start()] + replacement + tail[match.end():]
             text = text[:marker_pos + len(marker)] + repaired_tail
-            path.write_text(text)
-            print('Patched Vercel Blob copy path')
+            routes.write_text(text)
+            print('Patched Vercel Blob photo-copy path')
+          else:
+            print('Vercel Blob photo-copy path already repaired')
 
-      - name: Commit generated project repair
-        run: |
-          git config user.name "786.Chat Automation"
-          git config user.email "actions@786.chat"
-          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo "No generated source change required"
-          else
-            git commit -m "fix(pest-control): support Vercel Blob photo copy"
-            git push origin HEAD:generated/22c299f8-bf65-410f-9643-92a9776dbfca/d5dc98b4-9342-4315-9-mtykpap4-5cvg6
-          fi
+          index = root / 'client/index.html'
+          html = index.read_text()
+          cleaned = re.sub(
+            r'\s*<!--\s*This is a replit script.*?-->\s*<script[^>]+src=["\']https://replit\.com/public/js/replit-dev-banner\.js["\'][^>]*></script>\s*',
+            '\n',
+            html,
+            flags=re.DOTALL | re.IGNORECASE,
+          )
+          if cleaned == html and 'replit-dev-banner.js' in html:
+            cleaned = re.sub(
+              r'\s*<script[^>]+replit-dev-banner\.js[^>]*></script>\s*',
+              '\n',
+              html,
+              flags=re.IGNORECASE,
+            )
+          if 'replit-dev-banner.js' in cleaned:
+            raise SystemExit('Replit development banner still present after cleanup')
+          if cleaned != html:
+            index.write_text(cleaned)
+            print('Removed Replit development banner')
+          else:
+            print('Replit development banner already absent')
 
-      - name: Queue clean Pest Control rebuild
-        env:
-          RUNNER_SECRET: ${{ secrets.BUILD_RUNNER_SECRET }}
-          PROJECT_ID: 22c299f8-bf65-410f-9643-92a9776dbfca
-          BASE_URL: https://786.chat
+      - name: Commit and push Pest Control migration cleanup
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$RUNNER_SECRET" || { echo "BUILD_RUNNER_SECRET is missing"; exit 1; }
-          payload=$(jq -n --arg projectId "$PROJECT_ID" '{projectId:$projectId}')
-          curl --fail --silent --show-error \
-            -X POST \
-            -H "Authorization: Bearer $RUNNER_SECRET" \
-            -H "x-vercel-protection-bypass: ${RUNNER_SECRET:32:32}" \
-            -H "Content-Type: application/json" \
-            --data "$payload" \
-            "$BASE_URL/api/786-admin/build-runner/retry-project"
-          echo "Queued Pest Control rebuild with Vercel Blob repair."
+          git config user.name "786.Chat Automation"
+          git config user.email "actions@786.chat"
+          git add \
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts \
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No generated source change required"
+            exit 0
+          fi
+          git commit -m "fix(pest-control): finalize Vercel migration cleanup"
+          git push origin "HEAD:${TARGET_BRANCH}"
