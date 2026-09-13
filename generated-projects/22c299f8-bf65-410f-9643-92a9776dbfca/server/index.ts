@@ -1,6 +1,7 @@
 // @ts-nocheck
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
+import { registerIotBranchRoutes } from "./iot-branch-routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -136,8 +137,9 @@ app.use((req, res, next) => {
   console.log('📋 All files will persist permanently unless manually deleted by user');
   
   const server = await registerRoutes(app);
+  registerIotBranchRoutes(app);
 
-  // Start IoT alarm polling for Smart Mouser devices
+  // Start IoT alarm polling for Smart Mouser / smart pest-control devices
   try {
     const tuyaService = await import("./tuya-service.js");
     tuyaService.startAlarmPolling(storage);
