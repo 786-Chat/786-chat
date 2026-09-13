@@ -1,0 +1,56 @@
+name: Patch Pest Control admin auth race
+
+on:
+  push:
+    branches:
+      - generated/22c299f8-bf65-410f-9643-92a9776dbfca/a0569513-4467-49c4-9-mu07ksrh-da78c
+    paths:
+      - .github/workflows/patch-pest-admin-auth-race.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: generated/22c299f8-bf65-410f-9643-92a9776dbfca/a0569513-4467-49c4-9-mu07ksrh-da78c
+          fetch-depth: 0
+
+      - name: Gate branch queries until admin auth is confirmed
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/pages/AdminDashboard.tsx')
+          text = path.read_text()
+
+          replacements = [
+            ('''  const { toast } = useToast();\n  const queryClient = useQueryClient();\n  \n  // Authentication check useEffect''', '''  const { toast } = useToast();\n  const queryClient = useQueryClient();\n  const [adminAuthReady, setAdminAuthReady] = useState(false);\n  \n  // Authentication check useEffect'''),
+            ('''        const authData = await response.json();\n        if (!authData.authenticated) {\n          window.location.href = '/admin-login';\n          return;\n        }\n      } catch (error) {''', '''        const authData = await response.json();\n        if (!authData.authenticated) {\n          window.location.href = '/admin-login';\n          return;\n        }\n\n        // Start protected dashboard queries only after the server confirms\n        // the admin session cookie. This avoids a false branch-load error\n        // immediately after a successful login/redirect.\n        setAdminAuthReady(true);\n      } catch (error) {'''),
+            ('''      const response = await fetch(`/api/branches?${params}`);\n      if (!response.ok) throw new Error('Failed to fetch branches');\n      return response.json();\n    },\n    retry: 1,\n    staleTime: 30000,\n  });''', '''      const response = await fetch(`/api/branches?${params}`, {\n        credentials: 'include',\n      });\n      if (!response.ok) throw new Error('Failed to fetch branches');\n      return response.json();\n    },\n    enabled: adminAuthReady,\n    retry: 1,\n    staleTime: 30000,\n  });'''),
+            ('''  useEffect(() => {\n    if (branchesError) {\n      toast({\n        title: "Error fetching branches",''', '''  useEffect(() => {\n    if (adminAuthReady && branchesError) {\n      toast({\n        title: "Error fetching branches",'''),
+            ('''  }, [branchesError, toast]);''', '''  }, [adminAuthReady, branchesError, toast]);'''),
+            ('''      const response = await fetch("/api/branches?page=1&limit=5000");\n      if (!response.ok) throw new Error("Failed to fetch report branch options");\n      return response.json();\n    },\n    staleTime: 30000,\n  });''', '''      const response = await fetch("/api/branches?page=1&limit=5000", {\n        credentials: 'include',\n      });\n      if (!response.ok) throw new Error("Failed to fetch report branch options");\n      return response.json();\n    },\n    enabled: adminAuthReady,\n    staleTime: 30000,\n  });'''),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'patch anchor not found: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "786.Chat Automation"
+          git config user.email "actions@786.chat"
+          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/pages/AdminDashboard.tsx
+          git rm .github/workflows/patch-pest-admin-auth-race.yml
+          git commit -m "fix(pest-control): wait for admin auth before branch queries"
+          git push origin HEAD:generated/22c299f8-bf65-410f-9643-92a9776dbfca/a0569513-4467-49c4-9-mu07ksrh-da78c
