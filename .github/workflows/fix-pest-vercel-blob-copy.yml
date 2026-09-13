@@ -1,4 +1,4 @@
-name: Finalize Pest Control Vercel Migration
+name: Finalize Pest Control Live Migration
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  patch-generated-project:
+  patch-live-generated-project:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository history
@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select live Pest Control generated branch
+      - name: Checkout live Pest Control generated branch
         shell: bash
         run: |
           set -euo pipefail
@@ -26,75 +26,14 @@ jobs:
           git fetch origin "$TARGET_BRANCH:$TARGET_BRANCH"
           echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
           git checkout --detach "$TARGET_BRANCH"
-          echo "Patching live generated branch: $TARGET_BRANCH"
 
-      - name: Repair Vercel Blob copy and remove Replit banner
+      - name: Remove leftover Replit development banner
         shell: python
         run: |
           from pathlib import Path
           import re
 
-          root = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca')
-          routes = root / 'server/routes.ts'
-          text = routes.read_text()
-
-          sentinel = "const vercelBlobPath = (objectFile as any).__vercelBlobPath;"
-          marker = "const writeStream = fs.createWriteStream(tempPath);"
-
-          if sentinel not in text:
-            marker_pos = text.find(marker)
-            if marker_pos < 0:
-              raise SystemExit('Photo copy write-stream marker not found')
-
-            tail = text[marker_pos + len(marker):]
-            pattern = re.compile(
-              r"(?P<indent>^[ \t]*)await new Promise\(\(resolve, reject\) => \{\s*"
-              r"objectFile\.createReadStream\(\)\s*"
-              r"\.pipe\(writeStream\)\s*"
-              r"\.on\('finish', resolve\)\s*"
-              r"\.on\('error', reject\);\s*"
-              r"\}\);",
-              re.MULTILINE,
-            )
-            match = pattern.search(tail)
-            if not match:
-              raise SystemExit('Legacy Object Storage copy block not found after photo marker')
-
-            indent = match.group('indent')
-            replacement_lines = [
-              "const vercelBlobPath = (objectFile as any).__vercelBlobPath;",
-              "if (process.env.VERCEL && vercelBlobPath) {",
-              "  const { get } = await import('@vercel/blob');",
-              "  const blobResult = await get(vercelBlobPath, { access: 'private' });",
-              "  if (!blobResult || blobResult.statusCode !== 200) {",
-              "    throw new Error(`Unable to read Vercel Blob ${vercelBlobPath}`);",
-              "  }",
-              "  const { Readable } = await import('node:stream');",
-              "  await new Promise((resolve, reject) => {",
-              "    const source = Readable.fromWeb(blobResult.stream as any);",
-              "    source.on('error', reject);",
-              "    writeStream.on('finish', resolve);",
-              "    writeStream.on('error', reject);",
-              "    source.pipe(writeStream);",
-              "  });",
-              "} else {",
-              "  await new Promise((resolve, reject) => {",
-              "    objectFile.createReadStream()",
-              "      .pipe(writeStream)",
-              "      .on('finish', resolve)",
-              "      .on('error', reject);",
-              "  });",
-              "}",
-            ]
-            replacement = '\n'.join(indent + line for line in replacement_lines)
-            repaired_tail = tail[:match.start()] + replacement + tail[match.end():]
-            text = text[:marker_pos + len(marker)] + repaired_tail
-            routes.write_text(text)
-            print('Patched Vercel Blob photo-copy path')
-          else:
-            print('Vercel Blob photo-copy path already repaired')
-
-          index = root / 'client/index.html'
+          index = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html')
           html = index.read_text()
           cleaned = re.sub(
             r'\s*<!--\s*This is a replit script.*?-->\s*<script[^>]+src=["\']https://replit\.com/public/js/replit-dev-banner\.js["\'][^>]*></script>\s*',
@@ -113,23 +52,21 @@ jobs:
             raise SystemExit('Replit development banner still present after cleanup')
           if cleaned != html:
             index.write_text(cleaned)
-            print('Removed Replit development banner')
+            print('Removed Replit development banner from live Pest Control source')
           else:
             print('Replit development banner already absent')
 
-      - name: Commit and push Pest Control migration cleanup
+      - name: Commit and push live cleanup
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "786.Chat Automation"
           git config user.email "actions@786.chat"
-          git add \
-            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts \
-            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html
+          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo "No generated source change required"
+            echo "No live source change required"
             exit 0
           fi
-          git commit -m "fix(pest-control): finalize Vercel migration cleanup"
+          git commit -m "fix(pest-control): remove leftover Replit banner"
           git push origin "HEAD:${TARGET_BRANCH}"
