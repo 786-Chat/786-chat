@@ -13,6 +13,7 @@ type PreviewBuild = {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PLATFORM_COOKIE_NAMES = new Set(["auth_token", "auth-token"])
 
 function unavailable(status = 404) {
   return new Response(
@@ -64,12 +65,35 @@ function runtimeTarget(runtimeUrl: string, path: string[], requestUrl: string) {
   return target
 }
 
+function generatedAppCookieHeader(request: Request): string {
+  const cookieHeader = request.headers.get("cookie") || ""
+  if (!cookieHeader) return ""
+
+  return cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const separator = part.indexOf("=")
+      const name = (separator === -1 ? part : part.slice(0, separator)).trim()
+      return !PLATFORM_COOKIE_NAMES.has(name)
+    })
+    .join("; ")
+}
+
 function upstreamHeaders(request: Request) {
   const headers = new Headers(request.headers)
   headers.delete("host")
   headers.delete("content-length")
   headers.delete("connection")
-  headers.delete("cookie")
+
+  // Never leak the 786.Chat platform login cookie to a generated runtime, but
+  // preserve the generated application's own session cookies (for example
+  // Express' connect.sid) so admin/branch logins persist through the proxy.
+  const generatedCookies = generatedAppCookieHeader(request)
+  if (generatedCookies) headers.set("cookie", generatedCookies)
+  else headers.delete("cookie")
+
   headers.set("accept-encoding", "identity")
 
   const bypass = protectionBypassSecret()
