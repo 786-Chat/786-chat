@@ -10,7 +10,11 @@ import { findGeneratedPreviewState } from "@/lib/786-admin/preview-reconciliatio
 import { mergedGeneratedRepairDelta } from "@/lib/786-admin/generated-main-repair-sync"
 import { migrateUnsupportedNextConfig } from "@/lib/786-chat/project-compatibility"
 import { scaffoldAdditions } from "@/lib/786-chat/generated-scaffold"
-import { changedGeneratedFiles, normalizeGeneratedNeonServerlessUsage } from "@/lib/786-chat/neon-compatibility"
+import {
+  changedGeneratedFiles,
+  normalizeGeneratedNeonServerlessUsage,
+  normalizeKnownGeneratedSyntaxArtifacts,
+} from "@/lib/786-chat/neon-compatibility"
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring"
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -80,6 +84,17 @@ async function normalizeKnownGeneratedCompatibility(
   files: Record<string, string>,
 ): Promise<boolean> {
   const normalized = normalizeGeneratedNeonServerlessUsage(files)
+  const changed = changedGeneratedFiles(files, normalized)
+  if (!Object.keys(changed).length) return false
+  await upsertFiles(projectId, changed)
+  return true
+}
+
+async function normalizeImportedSyntaxArtifacts(
+  projectId: string,
+  files: Record<string, string>,
+): Promise<boolean> {
+  const normalized = normalizeKnownGeneratedSyntaxArtifacts(files)
   const changed = changedGeneratedFiles(files, normalized)
   if (!Object.keys(changed).length) return false
   await upsertFiles(projectId, changed)
@@ -225,6 +240,17 @@ export async function POST(request: Request, { params }: Ctx) {
     }
   }
 
+  let syntaxArtifactsRepaired = false
+  if (body.confirm === true) {
+    syntaxArtifactsRepaired = await normalizeImportedSyntaxArtifacts(id, project.files || {})
+    if (syntaxArtifactsRepaired) {
+      project = await getProjectWithData(id, email)
+      if (!project) {
+        return NextResponse.json({ success: false, error: "Project not found after syntax artifact repair" }, { status: 404 })
+      }
+    }
+  }
+
   let compatibilityRepaired = false
   if (body.confirm === true && !buildOptions.imported) {
     compatibilityRepaired = await normalizeKnownGeneratedCompatibility(id, project.files || {})
@@ -259,6 +285,7 @@ export async function POST(request: Request, { params }: Ctx) {
         validation,
         mergedRepairSync,
         scaffoldRepaired,
+        syntaxArtifactsRepaired,
         compatibilityRepaired,
       },
       { status: 422 },
@@ -274,6 +301,7 @@ export async function POST(request: Request, { params }: Ctx) {
       validation,
       mergedRepairSync,
       scaffoldRepaired,
+      syntaxArtifactsRepaired,
       compatibilityRepaired,
       message: buildOptions.imported
         ? "Imported-project compatibility validation passed. Send confirm=true to queue the build."
@@ -301,6 +329,7 @@ export async function POST(request: Request, { params }: Ctx) {
       validation,
       mergedRepairSync,
       scaffoldRepaired,
+      syntaxArtifactsRepaired,
       compatibilityRepaired,
       build: buildForClient(latest),
       message: repairIsActive(latest)
@@ -326,13 +355,16 @@ export async function POST(request: Request, { params }: Ctx) {
     const syncPrefix = mergedRepairSync.applied
       ? `[sync] Imported ${mergedRepairSync.updatedPaths.length} merged file update(s) and ${mergedRepairSync.deletedPaths.length} deletion(s). `
       : ""
+    const syntaxPrefix = syntaxArtifactsRepaired
+      ? "[syntax] Repaired persisted imported-source syntax artifacts. "
+      : ""
     await appendBuildLog({
       buildId: build.id,
       line: buildOptions.imported
-        ? `${syncPrefix}[dispatcher] Imported ${buildOptions.framework || "web"} project sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+        ? `${syncPrefix}${syntaxPrefix}[dispatcher] Imported ${buildOptions.framework || "web"} project sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
         : compatibilityRepaired
-          ? `${syncPrefix}[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
-          : `${syncPrefix}[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
+          ? `${syncPrefix}${syntaxPrefix}[dispatcher] Pre-build Neon compatibility normalization applied. Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`
+          : `${syncPrefix}${syntaxPrefix}[dispatcher] Sent to ${runner.repository}/${runner.workflow} on ${runner.ref}.`,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not dispatch isolated build"
@@ -363,6 +395,7 @@ export async function POST(request: Request, { params }: Ctx) {
         validation,
         mergedRepairSync,
         scaffoldRepaired,
+        syntaxArtifactsRepaired,
         compatibilityRepaired,
         build: { ...build, status: "failed", error_message: message },
       },
@@ -380,10 +413,13 @@ export async function POST(request: Request, { params }: Ctx) {
       validation,
       mergedRepairSync,
       scaffoldRepaired,
+      syntaxArtifactsRepaired,
       compatibilityRepaired,
       build,
       message: buildOptions.imported
-        ? "Imported project passed compatibility validation and the preview build was queued."
+        ? syntaxArtifactsRepaired
+          ? "Imported source syntax artifacts were repaired and the preview build was queued."
+          : "Imported project passed compatibility validation and the preview build was queued."
         : mergedRepairSync.applied
           ? "Merged generated-project repairs were synchronized and the build was queued."
           : compatibilityRepaired
