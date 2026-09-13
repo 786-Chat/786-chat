@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/786-admin/db"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
+import {
+  changedGeneratedFiles,
+  normalizeKnownGeneratedSyntaxArtifacts,
+} from "@/lib/786-chat/neon-compatibility"
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.BUILD_RUNNER_SECRET?.trim()
@@ -10,6 +15,44 @@ function isAuthorized(request: Request): boolean {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function sourceVersion(files: Record<string, string>): string {
+  const canonical = Object.entries(files)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([path, content]) => `${path}\0${content}`)
+    .join("\0")
+
+  return createHash("sha256").update(canonical).digest("hex")
+}
+
+async function normalizeRetrySource(projectId: string) {
+  const fileRows = (await sql`
+    SELECT path, content
+    FROM admin_project_files
+    WHERE project_id = ${projectId}
+  `) as unknown as Array<{ path: string; content: string }>
+
+  const sourceFiles = Object.fromEntries(
+    fileRows.map((file) => [file.path, file.content]),
+  )
+  const normalizedFiles = normalizeKnownGeneratedSyntaxArtifacts(sourceFiles)
+  const changed = changedGeneratedFiles(sourceFiles, normalizedFiles)
+
+  for (const [path, content] of Object.entries(changed)) {
+    await sql`
+      UPDATE admin_project_files
+      SET content = ${content},
+          updated_at = NOW()
+      WHERE project_id = ${projectId}
+        AND path = ${path}
+    `
+  }
+
+  return {
+    repaired: Object.keys(changed).length > 0,
+    sourceVersion: sourceVersion(normalizedFiles),
+  }
 }
 
 export async function POST(request: Request) {
@@ -42,6 +85,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Project build history not found" }, { status: 404 })
   }
 
+  const normalized = await normalizeRetrySource(projectId)
+  const retryLog = normalized.repaired
+    ? "[runner] Repaired persisted imported-source syntax artifacts before retry.\n"
+    : "[runner] Fresh authenticated project retry queued from latest saved source.\n"
+
   const inserted = (await sql`
     INSERT INTO admin_project_builds (
       project_id,
@@ -60,11 +108,11 @@ export async function POST(request: Request) {
       'queued',
       ${latest.package_manager},
       ${JSON.stringify(Array.isArray(latest.commands) ? latest.commands : [])}::jsonb,
-      ${latest.source_version},
+      ${normalized.sourceVersion},
       ${latest.id}::uuid,
       0,
       'not_needed',
-      ${"[runner] Fresh authenticated project retry queued from latest saved source.\n"},
+      ${retryLog},
       NOW(),
       NOW()
     )
@@ -96,5 +144,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 })
   }
 
-  return NextResponse.json({ success: true, buildId })
+  return NextResponse.json({
+    success: true,
+    buildId,
+    syntaxArtifactsRepaired: normalized.repaired,
+  })
 }
