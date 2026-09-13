@@ -29,3 +29,10 @@ test("generated preview proxy keeps Vercel bypass secret server-side", async () 
   assert.match(proxy, /b\.status = 'passed'/)
   assert.match(proxy, /X-786-Generated-Preview/)
 })
+
+test("frame policy allows only 786.Chat surfaces to embed generated previews", async () => {
+  const nextConfig = await source("next.config.mjs")
+
+  assert.doesNotMatch(nextConfig, /X-Frame-Options/)
+  assert.match(nextConfig, /frame-ancestors 'self' https:\/\/786\.chat https:\/\/\*\.786\.chat/)
+})
