@@ -1,5 +1,22 @@
 import { normalizeGeneratedResendUsage } from "./resend-compatibility"
 
+function normalizeEscapedStatementNewlines(files: Record<string, string>) {
+  return Object.fromEntries(Object.entries(files).map(([path, content]) => {
+    if (!/(?:^|\/)server\/routes\.(?:ts|js)$/.test(path)) {
+      return [path, content]
+    }
+
+    // A migrated Pest Control route was persisted with the two literal characters
+    // `\\n` between these statements. esbuild parses the trailing `n` as source code
+    // and fails with `Syntax error \"n\"`. Keep this repair deliberately narrow so
+    // legitimate escaped newlines inside strings are never rewritten.
+    const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\n      const deliveredLink ="
+    const fixed = "await storage.markUsefulLinkAsSent(newLink.id);\n      const deliveredLink ="
+
+    return [path, content.replaceAll(broken, fixed)]
+  }))
+}
+
 function normalizeDatabaseApiRouteRuntime(files: Record<string, string>) {
   return Object.fromEntries(Object.entries(files).map(([path, content]) => {
     if (!/^(?:src\/)?app\/api\/.+\/route\.(?:ts|tsx|js|jsx)$/.test(path)) {
@@ -42,12 +59,12 @@ export function normalizeGeneratedNeonServerlessUsage(files: Record<string, stri
       ? "src/lib/server/db.ts"
       : null
 
-  let normalizedFiles = files
+  let normalizedFiles = normalizeEscapedStatementNewlines(files)
 
   if (dbPath) {
-    const dbSource = files[dbPath]
+    const dbSource = normalizedFiles[dbPath]
     if (/@neondatabase\/serverless/.test(dbSource) && /\bneon\s*\(/.test(dbSource)) {
-      normalizedFiles = Object.fromEntries(Object.entries(files).map(([path, content]) => {
+      normalizedFiles = Object.fromEntries(Object.entries(normalizedFiles).map(([path, content]) => {
         if (!/\.(?:ts|tsx|js|jsx)$/.test(path) || (!/\.query\s*\(/.test(content) && !/\.rows\b/.test(content) && !/\.rowCount\b/.test(content))) {
           return [path, content]
         }
