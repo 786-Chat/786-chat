@@ -18,17 +18,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Select newest Pest Control generated branch
+      - name: Select live Pest Control generated branch
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT_ID='22c299f8-bf65-410f-9643-92a9776dbfca'
-          git fetch origin "+refs/heads/generated/${PROJECT_ID}/*:refs/remotes/origin/generated/${PROJECT_ID}/*"
-          TARGET_BRANCH=$(git for-each-ref --sort=-committerdate --format='%(refname:strip=3)' "refs/remotes/origin/generated/${PROJECT_ID}/" | head -n 1)
-          test -n "$TARGET_BRANCH" || { echo 'No Pest Control generated branch found'; exit 1; }
+          TARGET_BRANCH='generated/22c299f8-bf65-410f-9643-92a9776dbfca/0ae18329-440c-47e3-8-mtz3rq37-04992'
+          git fetch origin "$TARGET_BRANCH:$TARGET_BRANCH"
           echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
-          git checkout --detach "origin/$TARGET_BRANCH"
-          echo "Patching newest generated branch: $TARGET_BRANCH"
+          git checkout --detach "$TARGET_BRANCH"
+          echo "Patching live generated branch: $TARGET_BRANCH"
 
       - name: Repair Vercel Blob copy and remove Replit banner
         shell: python
