@@ -7,31 +7,25 @@ const compatibilitySource = fs.readFileSync(
   "utf8",
 )
 
-test("generated build compatibility repairs literal escaped newlines between statements", () => {
+test("generated build compatibility repairs the persisted Pest routes escaped newline", () => {
   assert.match(compatibilitySource, /function normalizeEscapedStatementNewlines/)
+  assert.match(compatibilitySource, /server\\\/routes/)
   assert.match(compatibilitySource, /Syntax error \\"n\\"/)
   assert.match(compatibilitySource, /normalizedFiles = normalizeEscapedStatementNewlines\(files\)/)
-
-  const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\n      const deliveredLink = await storage.getUsefulLink(newLink.id);"
-  const fixed = broken.replace(
-    /;\\n([ \t]+)(?=(?:const|let|var|await|return|if|for|while|try|throw|res\.|storage\.)\b)/g,
-    ";\n$1",
+  assert.ok(
+    compatibilitySource.includes(
+      'const broken = "await storage.markUsefulLinkAsSent(newLink.id);\\\\n      const deliveredLink ="',
+    ),
   )
-
-  assert.equal(
-    fixed,
-    "await storage.markUsefulLinkAsSent(newLink.id);\n      const deliveredLink = await storage.getUsefulLink(newLink.id);",
+  assert.ok(
+    compatibilitySource.includes(
+      'content.replaceAll(broken, fixed)',
+    ),
   )
 })
 
-test("escaped newlines inside ordinary string values are preserved", () => {
-  const legitimate = 'const message = "first;\\n  const second = text"'
-  const fixed = legitimate.replace(
-    /;\\n([ \t]+)(?=(?:const|let|var|await|return|if|for|while|try|throw|res\.|storage\.)\b)/g,
-    ";\n$1",
+test("repair is deliberately scoped to server routes", () => {
+  assert.ok(
+    compatibilitySource.includes('if (!/(?:^|\\/)server\\/routes\\.(?:ts|js)$/.test(path))'),
   )
-
-  // This guard documents why the production normalizer only runs on generated source;
-  // it must not globally decode arbitrary string escapes.
-  assert.ok(fixed.includes("const message"))
 })
