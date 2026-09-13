@@ -351,6 +351,7 @@ export default function AdminDashboard() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [adminAuthReady, setAdminAuthReady] = useState(false);
   
   // Authentication check useEffect
   useEffect(() => {
@@ -376,6 +377,11 @@ export default function AdminDashboard() {
           window.location.href = '/admin-login';
           return;
         }
+
+        // Start protected dashboard queries only after the server confirms
+        // the admin session cookie. This avoids a false branch-load error
+        // immediately after a successful login/redirect.
+        setAdminAuthReady(true);
       } catch (error) {
         console.error("Auth check failed:", error);
       }
@@ -717,23 +723,26 @@ export default function AdminDashboard() {
         limit: branchesPerPage.toString(),
         ...(branchSearchTerm && { search: branchSearchTerm })
       });
-      const response = await fetch(`/api/branches?${params}`);
+      const response = await fetch(`/api/branches?${params}`, {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch branches');
       return response.json();
     },
+    enabled: adminAuthReady,
     retry: 1,
     staleTime: 30000,
   });
 
   useEffect(() => {
-    if (branchesError) {
+    if (adminAuthReady && branchesError) {
       toast({
         title: "Error fetching branches",
         description: "There was a problem loading the branch list. Please try refreshing.",
         variant: "destructive",
       });
     }
-  }, [branchesError, toast]);
+  }, [adminAuthReady, branchesError, toast]);
 
   const branches = branchesResponse?.branches || [];
   const branchPagination = branchesResponse?.pagination;
@@ -742,10 +751,13 @@ export default function AdminDashboard() {
   const { data: reportBranchesResponse } = useQuery({
     queryKey: ["/api/branches", "monthly-report-send-options"],
     queryFn: async () => {
-      const response = await fetch("/api/branches?page=1&limit=5000");
+      const response = await fetch("/api/branches?page=1&limit=5000", {
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error("Failed to fetch report branch options");
       return response.json();
     },
+    enabled: adminAuthReady,
     staleTime: 30000,
   });
    const reportBranchOptions: Branch[] = (reportBranchesResponse?.branches || branches).filter((branch: Branch) => Boolean(branch?.name?.trim()) && !String(branch.name).trim().startsWith("Available Branch "));
