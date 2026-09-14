@@ -2,11 +2,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// Restore the original Replit-era branch-login 3D cube animation.
-// BranchLogin uses `cubeRotate`, while the migrated stylesheet only retained
-// the older `rotate` keyframes. Defining the missing animation here keeps the
-// existing desktop/tablet/mobile layout intact and prevents the cube from
-// freezing on an edge-on face.
+// Restore the original Replit-era branch-login 3D cube animation and geometry.
+// All six faces must share the exact same origin; otherwise absolutely positioned
+// faces can retain different static positions and appear separated in the preview.
 const branchLoginCubeFix = document.createElement("style");
 branchLoginCubeFix.dataset.branchLoginCubeFix = "true";
 branchLoginCubeFix.textContent = `
@@ -16,13 +14,20 @@ branchLoginCubeFix.textContent = `
   }
 
   .cube {
+    position: relative;
     transform-style: preserve-3d;
+    transform-origin: center center;
     will-change: transform;
   }
 
   .cube-face {
+    position: absolute;
+    inset: 0;
+    margin: 0;
     transform-style: preserve-3d;
+    transform-origin: center center;
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 `;
 document.head.appendChild(branchLoginCubeFix);
