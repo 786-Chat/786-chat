@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --steel: #334155;
+  --navy: #0f172a;
+  --process-blue: #0ea5e9;
+  --safety-amber: #f59e0b;
+  --quality-green: #10b981;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0b1120;
+  background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.08) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+/* Responsive safety for phone, tablet and laptop */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 0;
+}
+
+main,
+section,
+article,
+form,
+fieldset,
+.card,
+.grid > *,
+.flex > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+canvas,
+video,
+svg {
+  max-width: 100%;
+}
+
+img,
+canvas,
+video {
+  height: auto;
+}
+
+input,
+select,
+textarea,
+button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+th,
+td,
+p,
+dd,
+dt,
+label,
+span,
+a,
+button,
+code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+pre,
+code,
+.font-mono {
+  max-width: 100%;
+}
+
+pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+table {
+  max-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  h1 {
+    line-height: 1.2;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: clamp(1.5rem, 7vw, 2rem);
+  }
+
+  h2 {
+    font-size: clamp(1.125rem, 5.5vw, 1.5rem);
+  }
+}
+
+/* Hide scrollbars on mobile launcher and page containers while keeping scroll */
+html,
+body,
+#__next,
+main,
+.mobile-launcher,
+.fixed.inset-0 {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#__next::-webkit-scrollbar,
+main::-webkit-scrollbar,
+.mobile-launcher::-webkit-scrollbar,
+.fixed.inset-0::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+  width: 0;
+  height: 0;
+}
