@@ -3,12 +3,8 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, Lock, User, Sparkles, Star, Volume2, Mail, MessageCircle, HelpCircle, X } from "lucide-react";
+import { Eye, EyeOff, Lock, Sparkles, Star, Volume2, Mail, MessageCircle, HelpCircle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-const logo1 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087871673-1829269c-78e7-4c76-a6e2-0c1090fd8c2e-logo1-m5BHauMOSuVvkp1yxc1LjRvdzjOuL4.png"; // 786.Chat: imported binary asset URL
-const logo2 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087872596-7c3dec17-9044-4dd6-a870-6595396b61ca-logo2-4QPqPg5WqzqAdqmEY7rLQnJdrTTlf7.png"; // 786.Chat: imported binary asset URL
-const logo3 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087873423-05924ff1-ac2f-4d93-b68c-224bd139a7d8-logo3-CxaNcaWzudsiU7GosFusQ7OJlxlKx4.png"; // 786.Chat: imported binary asset URL
-const logo4 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087874448-db35fc63-5281-4768-abcc-5bec4afb1c06-logo4-OtkAHniroCMOYCjhvbIKDaY0dXtEEe.png"; // 786.Chat: imported binary asset URL
 
 interface MouseTrail {
   x: number;
@@ -26,11 +22,9 @@ export default function BranchLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [showSupportPopup, setShowSupportPopup] = useState(false);
   const { toast } = useToast();
   const trailIdRef = useRef(0);
-  const cubeRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize audio context
@@ -40,50 +34,40 @@ export default function BranchLogin() {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
     };
-    
+
     // Initialize on first user interaction
     const handleFirstInteraction = () => {
       initAudio();
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('keydown', handleFirstInteraction);
     };
-    
+
     document.addEventListener('click', handleFirstInteraction);
     document.addEventListener('keydown', handleFirstInteraction);
-    
+
     return () => {
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('keydown', handleFirstInteraction);
     };
   }, []);
 
-  // Handle window resize for responsive cube
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Magic sound generator
   const playMagicSound = (frequency: number = 800, duration: number = 200) => {
     if (!soundEnabled || !audioContextRef.current) return;
-    
+
     try {
       const oscillator = audioContextRef.current.createOscillator();
       const gainNode = audioContextRef.current.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(audioContextRef.current.destination);
-      
+
       oscillator.frequency.setValueAtTime(frequency, audioContextRef.current.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.5, audioContextRef.current.currentTime + duration / 1000);
-      
+
       gainNode.gain.setValueAtTime(0.1, audioContextRef.current.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + duration / 1000);
-      
+
       oscillator.start();
       oscillator.stop(audioContextRef.current.currentTime + duration / 1000);
     } catch (error) {
@@ -110,27 +94,25 @@ export default function BranchLogin() {
       color: colors[Math.floor(Math.random() * colors.length)],
       size: Math.random() * 30 + 20
     };
-    
+
     setMouseTrails(prev => [...prev.slice(-25), newTrail]);
-    
+
     // Play magic sound on mouse move
-    if (Math.random() > 0.96) { // Occasional sounds
+    if (Math.random() > 0.96) {
       playMagicSound(Math.random() * 400 + 400, 100);
     }
-    
+
     // Clean up old trails
     setTimeout(() => {
       setMouseTrails(prev => prev.filter(trail => trail.id !== newTrail.id));
     }, 1200);
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    playMixSound(); // Play mix sound on submit
-    
+    playMixSound();
+
     try {
       // Regular branch login
       const response = await fetch("/api/auth/branch-login", {
@@ -144,7 +126,7 @@ export default function BranchLogin() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        playMagicSound(1000, 400); // Success sound
+        playMagicSound(1000, 400);
         toast({
           title: "Login Successful ✨",
           description: `Welcome to ${data.branch?.name || "your branch"} dashboard`,
@@ -154,7 +136,7 @@ export default function BranchLogin() {
           setLocation("/branch-dashboard");
         }, 500);
       } else {
-        playMagicSound(200, 300); // Error sound
+        playMagicSound(200, 300);
         toast({
           title: "Login Failed",
           description: data.message || "Invalid email or password",
@@ -162,7 +144,7 @@ export default function BranchLogin() {
         });
       }
     } catch (error) {
-      playMagicSound(200, 300); // Error sound
+      playMagicSound(200, 300);
       console.error("Login error:", error);
       toast({
         title: "Connection Error",
@@ -174,10 +156,8 @@ export default function BranchLogin() {
     }
   };
 
-  const cubeImages = [logo1, logo2, logo3, logo4, logo1, logo2, logo3, logo4, logo1];
-
   return (
-    <div 
+    <div
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
       onMouseMove={handleMouseMove}
     >
@@ -241,67 +221,7 @@ export default function BranchLogin() {
       ))}
 
       {/* Main Content Container */}
-      <div className="relative z-20 flex flex-col lg:flex-row items-center justify-center gap-4 sm:gap-8 lg:gap-12 max-w-7xl mx-auto w-full min-w-0">
-        
-        {/* 3D Cube with Your Logos - Responsive Mobile/Desktop */}
-        <div className="relative">
-          <div 
-            ref={cubeRef}
-            className="cube-container transition-transform duration-300 ease-out"
-            style={{ 
-              perspective: windowWidth < 768 ? '800px' : '1200px',
-              perspectiveOrigin: 'center center',
-              transformStyle: 'preserve-3d',
-              width: 'fit-content',
-              height: 'fit-content',
-              margin: '0 auto'
-            }}
-          >
-            <div 
-              className="cube relative w-32 h-32 md:w-40 md:h-40 lg:w-48 lg:h-48" 
-              style={{ 
-                transformStyle: 'preserve-3d', 
-                animation: 'cubeRotate 8s linear infinite',
-                margin: windowWidth < 768 ? '60px auto' : '80px auto' // Responsive margin
-              }}
-            >
-              {/* Cube faces with your logos */}
-              <div className="cube-face front absolute w-full h-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[0]} alt="Food Safety Logo" className="w-20 h-16 md:w-24 md:h-20 lg:w-28 lg:h-22 object-contain filter drop-shadow-lg" />
-              </div>
-              <div className="cube-face back absolute w-full h-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[1]} alt="Food Safety Logo" className="w-18 h-18 md:w-22 md:h-22 lg:w-24 lg:h-24 object-contain filter drop-shadow-lg" />
-              </div>
-              <div className="cube-face right absolute w-full h-full bg-gradient-to-br from-pink-500/20 to-red-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[2]} alt="Food Safety Logo" className="w-20 h-16 md:w-24 md:h-20 lg:w-28 lg:h-22 object-contain filter drop-shadow-lg" />
-              </div>
-              <div className="cube-face left absolute w-full h-full bg-gradient-to-br from-green-500/20 to-blue-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[3]} alt="Food Safety Logo" className="w-18 h-18 md:w-22 md:h-22 lg:w-24 lg:h-24 object-contain filter drop-shadow-lg" />
-              </div>
-              <div className="cube-face top absolute w-full h-full bg-gradient-to-br from-yellow-500/20 to-orange-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[4]} alt="Food Safety Logo" className="w-20 h-16 md:w-24 md:h-20 lg:w-28 lg:h-22 object-contain filter drop-shadow-lg" />
-              </div>
-              <div className="cube-face bottom absolute w-full h-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 backdrop-blur-sm border border-white/20 rounded-lg p-2 flex items-center justify-center">
-                <img src={cubeImages[5]} alt="Food Safety Logo" className="w-18 h-18 md:w-22 md:h-22 lg:w-24 lg:h-24 object-contain filter drop-shadow-lg" />
-              </div>
-            </div>
-          </div>
-          
-          {/* Floating Elements Around Cube - Responsive */}
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-2 h-2 md:w-3 md:h-3 lg:w-4 lg:h-4 rounded-full bg-gradient-to-r from-purple-400 to-pink-400 animate-bounce opacity-60"
-              style={{
-                left: `${Math.cos(i * Math.PI / 4) * 50 + 60}px`,
-                top: `${Math.sin(i * Math.PI / 4) * 50 + 60}px`,
-                animationDelay: `${i * 0.2}s`,
-                animationDuration: `${2 + Math.random()}s`
-              }}
-            />
-          ))}
-        </div>
-
+      <div className="relative z-20 flex items-center justify-center max-w-7xl mx-auto w-full min-w-0">
         {/* Beautiful Login Form */}
         <Card className="w-full max-w-md bg-slate-800/50 backdrop-blur-xl border-purple-500/30 shadow-2xl">
           <CardHeader className="text-center space-y-4">
@@ -312,7 +232,7 @@ export default function BranchLogin() {
               </CardTitle>
               <Sparkles className="w-8 h-8 text-pink-400 animate-pulse" />
             </div>
-            
+
             {/* Sound Toggle */}
             <Button
               type="button"
@@ -328,7 +248,7 @@ export default function BranchLogin() {
               {soundEnabled ? 'Sound On' : 'Sound Off'}
             </Button>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -431,8 +351,6 @@ export default function BranchLogin() {
                 Learn how to use the system with step-by-step guides
               </div>
             </div>
-
-
           </CardContent>
         </Card>
       </div>
@@ -454,7 +372,7 @@ export default function BranchLogin() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowSupportPopup(false)}
           />
-          
+
           {/* Popup Card */}
           <Card className="relative z-50 w-full max-w-md bg-slate-800/95 backdrop-blur-xl border-blue-500/30 shadow-2xl animate-in fade-in zoom-in duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b border-blue-500/20">
@@ -469,7 +387,7 @@ export default function BranchLogin() {
                 <X className="w-5 h-5" />
               </button>
             </CardHeader>
-            
+
             <CardContent className="space-y-4 pt-4">
               {/* About App */}
               <div className="space-y-3">
