@@ -1,0 +1,12 @@
+{
+  "projectId": "138748ea-77bb-40d8-a7fc-16647dc61daf",
+  "buildId": "77055eec-b581-4755-a921-bb04b559a29b",
+  "title": "Raja Catering",
+  "sourceVersion": "d0bf9071075b85551e5dd7cb853307e57d871988de74c16c3abddb1fe03dc234",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-24T22:09:46.769Z"
+}
