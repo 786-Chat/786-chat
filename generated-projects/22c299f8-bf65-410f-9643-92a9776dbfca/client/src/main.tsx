@@ -7,8 +7,9 @@ function installBranchLoginVideoManager() {
     if (!window.location.pathname.startsWith('/admin')) return;
     if (document.querySelector('[data-branch-login-video-nav="true"]')) return;
 
-    const siteSettingsText = Array.from(document.querySelectorAll('span')).find((el) => el.textContent?.trim() === 'Site Settings');
-    const siteButton = siteSettingsText?.closest('button');
+    const siteButton = Array.from(document.querySelectorAll('button')).find((el) =>
+      (el.textContent || '').replace(/\s+/g, ' ').trim().includes('Site Settings')
+    ) as HTMLButtonElement | undefined;
     if (!siteButton?.parentElement) return;
 
     const button = document.createElement('button');
@@ -107,7 +108,7 @@ function installBranchLoginVideoManager() {
   const observer = new MutationObserver(run);
   observer.observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('popstate', run);
-  setInterval(run, 1500);
+  setInterval(run, 1000);
 }
 
 installBranchLoginVideoManager();
