@@ -209,6 +209,39 @@ function patchAdminVideoManager(source: string): string {
   return source.slice(0, start) + replacement + source.slice(end)
 }
 
+function patchBranchLoginPresentation(source: string): string {
+  let next = source
+    .replace("--cube-size: 148px;", "--cube-size: 128px;")
+    .replace("@media (min-width: 640px) { .branch-login-cube-stage { --cube-size: 180px; margin-bottom: 38px; } }", "@media (min-width: 640px) { .branch-login-cube-stage { --cube-size: 148px; margin-bottom: 32px; } }")
+    .replace("@media (min-width: 1024px) { .branch-login-cube-stage { --cube-size: 210px; margin-bottom: 44px; } }", "@media (min-width: 1024px) { .branch-login-cube-stage { --cube-size: 160px; margin-bottom: 34px; } }")
+
+  const startMarker = "        {/* Admin-managed Branch Login marketing video */}\n        {branchLoginVideoUrl && ("
+  const endMarker = "        {/* Beautiful Login Form */}"
+  const start = next.indexOf(startMarker)
+  const end = next.indexOf(endMarker, Math.max(0, start))
+  if (start >= 0 && end > start) {
+    const replacement = [
+      "        {/* Admin-managed Branch Login marketing video */}",
+      "        <div className=\"w-full max-w-xs sm:max-w-sm px-2\">",
+      "          <div className=\"rounded-xl overflow-hidden border border-purple-400/30 bg-slate-950/90 shadow-xl\">",
+      "            <div className=\"px-3 py-2 border-b border-white/10 bg-gradient-to-r from-purple-900/70 to-pink-900/40\">",
+      "              <div className=\"text-xs font-semibold text-white\">Smart Pest Protection</div>",
+      "              <div className=\"text-[10px] text-purple-300 mt-0.5\">Pest control demonstration</div>",
+      "            </div>",
+      "            {branchLoginVideoUrl ? (",
+      "              <video src={branchLoginVideoUrl} controls muted playsInline preload=\"metadata\" className=\"w-full aspect-video bg-black object-contain\" />",
+      "            ) : (",
+      "              <div className=\"w-full aspect-video bg-black/80 flex items-center justify-center text-slate-400 text-xs\">No video uploaded yet</div>",
+      "            )}",
+      "          </div>",
+      "        </div>",
+    ].join("\n")
+    next = next.slice(0, start) + replacement + "\n" + next.slice(end)
+  }
+
+  return next
+}
+
 export function hardenPestControlVideoUpload(
   projectId: string,
   files: Record<string, string>,
@@ -218,9 +251,11 @@ export function hardenPestControlVideoUpload(
   const next = { ...files }
   const routesPath = "server/routes.ts"
   const adminPath = "client/src/pages/AdminDashboard.tsx"
+  const branchLoginPath = "client/src/pages/BranchLogin.tsx"
 
   if (next[routesPath]) next[routesPath] = patchBranchLoginVideoRoutes(next[routesPath])
   if (next[adminPath]) next[adminPath] = patchAdminVideoManager(next[adminPath])
+  if (next[branchLoginPath]) next[branchLoginPath] = patchBranchLoginPresentation(next[branchLoginPath])
 
   return next
 }
