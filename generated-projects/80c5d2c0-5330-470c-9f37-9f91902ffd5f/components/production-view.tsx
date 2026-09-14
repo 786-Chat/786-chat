@@ -12,6 +12,8 @@ const packagingTypes = ["Box", "Tray", "Wrapper", "Jar", "Other"];
 const storageLocations = ["Freezer 1", "Freezer 2", "Freezer 3", "Freezer 4", "Chiller 1", "Chiller 2", "Dry Store"];
 const storageInstructions = ["Keep Frozen", "Keep Refrigerated", "Store in a Cool Dry Place"];
 
+type InputMode = "text" | "email" | "none" | "search" | "numeric" | "tel" | "url" | "decimal" | undefined;
+
 const fields = [
   { key: "date", label: "Production Date", type: "date" },
   { key: "batchNumber", label: "Batch Number", type: "text" },
@@ -19,15 +21,15 @@ const fields = [
   { key: "flavour", label: "Flavour", type: "text" },
   { key: "ingredients", label: "Ingredients", type: "textarea" },
   { key: "allergens", label: "Allergens", type: "textarea" },
-  { key: "quantityMade", label: "Quantity Made", type: "number" },
+  { key: "quantityMade", label: "Quantity Made", type: "number", inputMode: "decimal" as InputMode },
   { key: "unit", label: "Unit", type: "select", options: units },
   { key: "mixingStartTime", label: "Mixing Start Time", type: "time" },
-  { key: "heatTreatmentTemperature", label: "Heat Treatment Temperature (°C)", type: "number" },
+  { key: "heatTreatmentTemperature", label: "Heat Treatment Temperature (°C)", type: "number", inputMode: "decimal" as InputMode },
   { key: "heatTreatmentTime", label: "Heat Treatment Time", type: "time" },
   { key: "coolingStartTime", label: "Cooling Start Time", type: "time" },
-  { key: "coolingStartTemperature", label: "Cooling Start Temperature (°C)", type: "number" },
+  { key: "coolingStartTemperature", label: "Cooling Start Temperature (°C)", type: "number", inputMode: "decimal" as InputMode },
   { key: "coolingFinalTime", label: "Cooling Final Time", type: "time" },
-  { key: "coolingFinalTemperature", label: "Cooling Final Temperature (°C)", type: "number" },
+  { key: "coolingFinalTemperature", label: "Cooling Final Temperature (°C)", type: "number", inputMode: "decimal" as InputMode },
   { key: "packagingType", label: "Packaging Type", type: "select", options: packagingTypes },
   { key: "storageLocation", label: "Storage Location", type: "select", options: storageLocations },
   { key: "storageInDate", label: "Storage In Date", type: "date" },
@@ -653,11 +655,12 @@ export function ProductionView() {
               </span>
               Production Cooling & Freezer Status
             </h3>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            {/* Mobile: 2 columns, desktop: horizontal row */}
+            <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-row lg:items-center lg:gap-3">
               {steps.map((step, index) => (
-                <div key={step.label} className="flex flex-1 items-center gap-3">
+                <div key={step.label} className={`${index === steps.length - 1 ? "col-span-2" : ""} lg:flex lg:flex-1 lg:items-center lg:gap-3`}>
                   <div
-                    className={`flex flex-1 items-center gap-3 rounded-xl border-2 px-3 py-3 transition-all ${
+                    className={`flex items-center gap-2 rounded-xl border-2 px-2 py-2 transition-all lg:flex-1 lg:px-3 lg:py-3 ${
                       step.tone === "green"
                         ? "border-emerald-300 bg-emerald-50 shadow-sm"
                         : step.tone === "amber"
@@ -668,7 +671,7 @@ export function ProductionView() {
                     }`}
                   >
                     <step.icon
-                      className={`h-6 w-6 shrink-0 ${
+                      className={`h-5 w-5 shrink-0 lg:h-6 lg:w-6 ${
                         step.tone === "green"
                           ? "text-emerald-500"
                           : step.tone === "amber"
@@ -679,7 +682,7 @@ export function ProductionView() {
                       }`}
                     />
                     <span
-                      className={`text-sm font-semibold ${
+                      className={`text-xs font-semibold leading-tight lg:text-sm ${
                         step.tone === "green"
                           ? "text-emerald-800"
                           : step.tone === "amber"
@@ -692,7 +695,7 @@ export function ProductionView() {
                       {step.label}
                     </span>
                     {step.value && (
-                      <span className="ml-auto text-sm font-bold text-slate-700">{step.value}</span>
+                      <span className="ml-auto text-xs font-bold text-slate-700 lg:text-sm">{step.value}</span>
                     )}
                   </div>
                   {index < steps.length - 1 && (
@@ -745,6 +748,8 @@ export function ProductionView() {
                       <label className="mb-1 text-sm font-semibold">{field.label}</label>
                       <input
                         type="number"
+                        inputMode="decimal"
+                        step="any"
                         className="h-11 w-full cursor-text rounded border-2 border-slate-400 bg-white px-3 text-base focus:border-sky-500 focus:outline-none"
                         value={formData[field.key] || ""}
                         onChange={(e) => handleChange(field.key, e.target.value)}
@@ -760,6 +765,8 @@ export function ProductionView() {
                       <label className="mb-1 text-sm font-semibold">{field.label}</label>
                       <input
                         type="number"
+                        inputMode="decimal"
+                        step="any"
                         className="h-11 w-full cursor-text rounded border-2 border-slate-400 bg-white px-3 text-base focus:border-sky-500 focus:outline-none"
                         value={formData[field.key] || ""}
                         onChange={(e) => handleChange(field.key, e.target.value)}
@@ -787,6 +794,8 @@ export function ProductionView() {
                       <label className="mb-1 text-sm font-semibold">{field.label}</label>
                       <input
                         type="number"
+                        inputMode="decimal"
+                        step="any"
                         className="h-11 w-full cursor-text rounded border-2 border-slate-400 bg-white px-3 text-base focus:border-sky-500 focus:outline-none"
                         value={formData[field.key] || ""}
                         onChange={(e) => handleChange(field.key, e.target.value)}
@@ -857,6 +866,15 @@ export function ProductionView() {
                           Regenerate
                         </button>
                       </div>
+                    ) : field.type === "number" ? (
+                      <input
+                        type="number"
+                        inputMode={field.inputMode || "decimal"}
+                        step="any"
+                        className="h-11 w-full cursor-text rounded border-2 border-slate-400 bg-white px-3 text-base focus:border-sky-500 focus:outline-none"
+                        value={formData[field.key] || ""}
+                        onChange={(e) => handleChange(field.key, e.target.value)}
+                      />
                     ) : (
                       <input
                         type={field.type}
@@ -909,6 +927,23 @@ export function ProductionView() {
                     placeholder="e.g. -18"
                   />
                   <span className="text-base font-semibold">°C</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = formData.storageTemperature || "";
+                      if (current.startsWith("-")) {
+                        handleChange("storageTemperature", current.slice(1));
+                      } else {
+                        handleChange("storageTemperature", "-" + current);
+                      }
+                    }}
+                    className="h-8 shrink-0 cursor-pointer rounded border-2 border-slate-400 bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                  >
+                    Toggle −
+                  </button>
+                  <span className="text-xs text-slate-500">Tap to add/remove minus for freezer temps</span>
                 </div>
                 {formData.storageTemperature && (
                   <p className="mt-1 text-sm text-slate-500">
