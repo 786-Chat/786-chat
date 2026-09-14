@@ -309,12 +309,88 @@ function patchBranchLogoServing(source: string): string {
   )
 }
 
+function patchBranchLoginVideoRoutes(source: string): string {
+  let next = source
+
+  if (!next.includes('import { db } from "./db.js";')) {
+    next = next.replace(
+      'import { z } from "zod";',
+      'import { z } from "zod";\nimport { db } from "./db.js";\nimport { sql } from "drizzle-orm";',
+    )
+  } else if (!next.includes('import { sql } from "drizzle-orm";')) {
+    next = next.replace('import { db } from "./db.js";', 'import { db } from "./db.js";\nimport { sql } from "drizzle-orm";')
+  }
+
+  if (!next.includes("const branchLoginVideoUpload = multer")) {
+    const uploadMarker = "// ===== BRANCH DASHBOARD UPLOAD CONFIGURATIONS ====="
+    const uploadBlock = [
+      "// 786.Chat Branch Login marketing-video upload",
+      "const branchLoginVideoUpload = multer({",
+      "  storage: multer.memoryStorage(),",
+      "  fileFilter: (req, file, cb) => {",
+      "    const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime'];",
+      "    if (allowedTypes.includes(file.mimetype)) cb(null, true);",
+      "    else cb(new Error('Invalid video type. Upload MP4, WebM or MOV.'));",
+      "  },",
+      "  limits: { fileSize: 100 * 1024 * 1024 }",
+      "});",
+      "",
+    ].join("\n")
+    if (next.includes(uploadMarker)) next = next.replace(uploadMarker, `${uploadBlock}${uploadMarker}`)
+  }
+
+  if (!next.includes('/api/public/branch-login-media')) {
+    const routeMarker = "  // Admin logout endpoint"
+    const routeBlock = [
+      "  // Public Branch Login marketing media",
+      "  app.get('/api/public/branch-login-media', async (_req, res) => {",
+      "    try {",
+      "      await db.execute(sql`CREATE TABLE IF NOT EXISTS branch_login_media (id integer PRIMARY KEY, video_url text, updated_at timestamptz NOT NULL DEFAULT now())`);",
+      "      const result: any = await db.execute(sql`SELECT video_url FROM branch_login_media WHERE id = 1 LIMIT 1`);",
+      "      const rows = Array.isArray(result) ? result : (result?.rows || []);",
+      "      return res.json({ videoUrl: rows[0]?.video_url || '' });",
+      "    } catch (error) {",
+      "      console.error('Failed to load branch login video:', error);",
+      "      return res.json({ videoUrl: '' });",
+      "    }",
+      "  });",
+      "",
+      "  // Admin-only upload for Branch Login marketing video",
+      "  app.post('/api/admin/branch-login-video', branchLoginVideoUpload.single('video'), async (req, res) => {",
+      "    try {",
+      "      const adminToken = req.cookies?.admin_token;",
+      "      if (!adminToken || !adminTokens.has(adminToken)) return res.status(401).json({ message: 'Admin authentication required' });",
+      "      if (!req.file?.buffer) return res.status(400).json({ message: 'Please choose a video file' });",
+      "      const safeName = String(req.file.originalname || 'branch-login.mp4').replace(/[^a-zA-Z0-9._-]/g, '_');",
+      "      const { put } = await import('@vercel/blob');",
+      "      const blob = await put(`pest-control/branch-login/${Date.now()}-${safeName}`, req.file.buffer, {",
+      "        access: 'public',",
+      "        contentType: req.file.mimetype || 'video/mp4',",
+      "        addRandomSuffix: false,",
+      "      });",
+      "      await db.execute(sql`CREATE TABLE IF NOT EXISTS branch_login_media (id integer PRIMARY KEY, video_url text, updated_at timestamptz NOT NULL DEFAULT now())`);",
+      "      await db.execute(sql`INSERT INTO branch_login_media (id, video_url, updated_at) VALUES (1, ${blob.url}, now()) ON CONFLICT (id) DO UPDATE SET video_url = EXCLUDED.video_url, updated_at = now()`);",
+      "      return res.json({ success: true, videoUrl: blob.url });",
+      "    } catch (error: any) {",
+      "      console.error('Branch login video upload failed:', error);",
+      "      return res.status(500).json({ message: error?.message || 'Video upload failed' });",
+      "    }",
+      "  });",
+      "",
+    ].join("\n")
+    if (next.includes(routeMarker)) next = next.replace(routeMarker, `${routeBlock}${routeMarker}`)
+  }
+
+  return next
+}
+
 function patchPestControlBranchRoutes(source: string): string {
   let next = source
   next = patchCreateBranchContractDefault(next)
   next = patchNonBlockingBranchLogoUpdate(next)
   next = patchUpdateBranchContractDefault(next)
   next = patchBranchLogoServing(next)
+  next = patchBranchLoginVideoRoutes(next)
   return next
 }
 
@@ -339,6 +415,155 @@ function patchBranchDashboardMarketingVideo(source: string): string {
   return next
 }
 
+function patchAdminBranchLoginVideoManager(source: string): string {
+  let next = source
+
+  if (!next.includes("function BranchLoginVideoManager()")) {
+    const componentMarker = "export default function AdminDashboard() {"
+    const component = [
+      "function BranchLoginVideoManager() {",
+      "  const { toast } = useToast();",
+      "  const [videoUrl, setVideoUrl] = useState('');",
+      "  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);",
+      "  const [uploading, setUploading] = useState(false);",
+      "",
+      "  useEffect(() => {",
+      "    fetch('/api/public/branch-login-media', { credentials: 'include' })",
+      "      .then((res) => res.json())",
+      "      .then((data) => setVideoUrl(data?.videoUrl || ''))",
+      "      .catch(() => setVideoUrl(''));",
+      "  }, []);",
+      "",
+      "  const uploadVideo = async () => {",
+      "    if (!selectedVideo) {",
+      "      toast({ title: 'Choose a video', description: 'Select an MP4, WebM or MOV file first.', variant: 'destructive' });",
+      "      return;",
+      "    }",
+      "    setUploading(true);",
+      "    try {",
+      "      const formData = new FormData();",
+      "      formData.append('video', selectedVideo);",
+      "      const response = await fetch('/api/admin/branch-login-video', { method: 'POST', body: formData, credentials: 'include' });",
+      "      const data = await response.json();",
+      "      if (!response.ok) throw new Error(data?.message || 'Upload failed');",
+      "      setVideoUrl(data.videoUrl || '');",
+      "      setSelectedVideo(null);",
+      "      toast({ title: 'Video updated', description: 'The new video is now shown on the Branch Login page.' });",
+      "    } catch (error: any) {",
+      "      toast({ title: 'Upload failed', description: error?.message || 'Could not upload video', variant: 'destructive' });",
+      "    } finally {",
+      "      setUploading(false);",
+      "    }",
+      "  };",
+      "",
+      "  return (",
+      "    <div className=\"space-y-6 max-w-3xl mx-auto\">",
+      "      <div>",
+      "        <h1 className=\"text-2xl lg:text-3xl font-bold text-white\">Branch Login Video</h1>",
+      "        <p className=\"text-slate-400 mt-2\">Upload one marketing video. It will appear automatically on /branch-login for every branch.</p>",
+      "      </div>",
+      "      <Card className=\"bg-slate-900/80 border-purple-500/30\">",
+      "        <CardContent className=\"p-5 space-y-5\">",
+      "          {videoUrl ? (",
+      "            <div className=\"max-w-sm mx-auto rounded-xl overflow-hidden border border-purple-400/30 bg-black\">",
+      "              <video src={videoUrl} controls muted playsInline preload=\"metadata\" className=\"w-full aspect-video bg-black object-contain\" />",
+      "            </div>",
+      "          ) : (",
+      "            <div className=\"max-w-sm mx-auto aspect-video rounded-xl border border-dashed border-slate-600 flex items-center justify-center text-slate-400 text-sm\">No video uploaded yet</div>",
+      "          )}",
+      "          <div className=\"space-y-3\">",
+      "            <Input type=\"file\" accept=\"video/mp4,video/webm,video/quicktime\" onChange={(e) => setSelectedVideo(e.target.files?.[0] || null)} className=\"bg-slate-800 border-slate-600 text-white\" />",
+      "            <Button onClick={uploadVideo} disabled={!selectedVideo || uploading} className=\"w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white\">",
+      "              <Upload className=\"h-4 w-4 mr-2\" />",
+      "              {uploading ? 'Uploading…' : 'Upload & Publish to Branch Login'}",
+      "            </Button>",
+      "          </div>",
+      "        </CardContent>",
+      "      </Card>",
+      "    </div>",
+      "  );",
+      "}",
+      "",
+    ].join("\n")
+    if (next.includes(componentMarker)) next = next.replace(componentMarker, `${component}${componentMarker}`)
+  }
+
+  if (!next.includes('{ id: "branch-login-video", label: "Branch Login Video", icon: Upload }')) {
+    next = next.replace(
+      '{ id: "site-settings", label: "Site Settings", icon: Settings }',
+      '{ id: "site-settings", label: "Site Settings", icon: Settings },\n      { id: "branch-login-video", label: "Branch Login Video", icon: Upload }',
+    )
+  }
+
+  if (!next.includes('activeTab === "branch-login-video"')) {
+    const renderMarker = "            {/* Dashboard Section */}"
+    const renderBlock = [
+      '            {activeTab === "branch-login-video" && (',
+      '              <BranchLoginVideoManager />',
+      '            )}',
+      '',
+    ].join("\n")
+    if (next.includes(renderMarker)) next = next.replace(renderMarker, `${renderBlock}${renderMarker}`)
+  }
+
+  return next
+}
+
+function patchBranchLoginAdminVideo(source: string): string {
+  let next = source
+
+  next = next.replace(/\nconst branchVideos = \[[\s\S]*?\] as const;\n/, "\n")
+
+  if (!next.includes('const [branchLoginVideoUrl, setBranchLoginVideoUrl]')) {
+    next = next.replace(
+      '  const [soundEnabled, setSoundEnabled] = useState(true);',
+      '  const [soundEnabled, setSoundEnabled] = useState(true);\n  const [branchLoginVideoUrl, setBranchLoginVideoUrl] = useState(\"\");',
+    )
+  }
+
+  if (!next.includes("fetch('/api/public/branch-login-media'")) {
+    const effectMarker = "  // Magic sound generator"
+    const effectBlock = [
+      "  // Load the admin-managed Branch Login marketing video",
+      "  useEffect(() => {",
+      "    fetch('/api/public/branch-login-media')",
+      "      .then((res) => res.json())",
+      "      .then((data) => setBranchLoginVideoUrl(data?.videoUrl || ''))",
+      "      .catch(() => setBranchLoginVideoUrl(''));",
+      "  }, []);",
+      "",
+    ].join("\n")
+    if (next.includes(effectMarker)) next = next.replace(effectMarker, `${effectBlock}${effectMarker}`)
+  }
+
+  const startMarker = "        {/* Compact mouse-catch marketing video */}"
+  const endMarker = "        {/* Beautiful Login Form */}"
+  const start = next.indexOf(startMarker)
+  if (start >= 0) {
+    const end = next.indexOf(endMarker, start)
+    if (end >= 0) {
+      const replacement = [
+        "        {/* Admin-managed Branch Login marketing video */}",
+        "        {branchLoginVideoUrl && (",
+        "          <div className=\"w-full max-w-xs sm:max-w-sm px-2\">",
+        "            <div className=\"rounded-xl overflow-hidden border border-purple-400/30 bg-slate-950/90 shadow-xl\">",
+        "              <div className=\"px-3 py-2 border-b border-white/10 bg-gradient-to-r from-purple-900/70 to-pink-900/40\">",
+        "                <div className=\"text-xs font-semibold text-white\">Smart Pest Protection</div>",
+        "                <div className=\"text-[10px] text-purple-300 mt-0.5\">Pest control demonstration</div>",
+        "              </div>",
+        "              <video src={branchLoginVideoUrl} controls muted playsInline preload=\"metadata\" className=\"w-full aspect-video bg-black object-contain\" />",
+        "            </div>",
+        "          </div>",
+        "        )}",
+        "",
+      ].join("\n")
+      next = next.slice(0, start) + replacement + next.slice(end)
+    }
+  }
+
+  return next
+}
+
 export function hardenPestControlRuntime(
   projectId: string,
   files: Record<string, string>,
@@ -354,7 +579,14 @@ export function hardenPestControlRuntime(
 
   const adminDashboardPath = "client/src/pages/AdminDashboard.tsx"
   if (runtimeFiles[adminDashboardPath]) {
-    runtimeFiles[adminDashboardPath] = patchPestControlBranchEditor(runtimeFiles[adminDashboardPath])
+    let adminDashboard = patchPestControlBranchEditor(runtimeFiles[adminDashboardPath])
+    adminDashboard = patchAdminBranchLoginVideoManager(adminDashboard)
+    runtimeFiles[adminDashboardPath] = adminDashboard
+  }
+
+  const branchLoginPath = "client/src/pages/BranchLogin.tsx"
+  if (runtimeFiles[branchLoginPath]) {
+    runtimeFiles[branchLoginPath] = patchBranchLoginAdminVideo(runtimeFiles[branchLoginPath])
   }
 
   const branchDashboardPath = "client/src/pages/BranchDashboard.tsx"
