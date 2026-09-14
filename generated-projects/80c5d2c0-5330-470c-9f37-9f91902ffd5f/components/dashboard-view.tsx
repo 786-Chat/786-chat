@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Wheat, Snowflake, Boxes, Thermometer, SprayCan, ShieldCheck, FileText, Factory, AlertTriangle, Activity, ArrowLeft } from "lucide-react";
+import { Package, Wheat, Snowflake, Boxes, Thermometer, SprayCan, ShieldCheck, FileText, Factory, AlertTriangle, Activity, ArrowLeft, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ProductionRecord {
@@ -183,6 +183,15 @@ interface FreezerOption {
   value: string;
 }
 
+interface MyDocument {
+  id: string;
+  document_type: string;
+  title: string;
+  check_date: string;
+  day_name: string;
+  data: any;
+}
+
 export function DashboardView() {
   const router = useRouter();
   const [production, setProduction] = useState<ProductionRecord[]>([]);
@@ -197,6 +206,7 @@ export function DashboardView() {
   const [stockAdjustments, setStockAdjustments] = useState<StockAdjustment[]>([]);
   const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustment[]>([]);
   const [documentsProtected, setDocumentsProtected] = useState(false);
+  const [myDocuments, setMyDocuments] = useState<MyDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -206,7 +216,7 @@ export function DashboardView() {
 
   async function fetchAll() {
     try {
-      const [prodRes, prodRecRes, ingRes, freezersRes, tempRes, cleanRes, haccpRes, docsRes, invRes, stockAdjRes, invAdjRes] = await Promise.all([
+      const [prodRes, prodRecRes, ingRes, freezersRes, tempRes, cleanRes, haccpRes, docsRes, invRes, stockAdjRes, invAdjRes, myDocsRes] = await Promise.all([
         fetch("/api/products"),
         fetch("/api/production-records"),
         fetch("/api/ingredients"),
@@ -218,9 +228,10 @@ export function DashboardView() {
         fetch("/api/inventory"),
         fetch("/api/stock-adjustments"),
         fetch("/api/inventory/adjustments"),
+        fetch("/api/my-documents"),
       ]);
 
-      if (!prodRes.ok || !prodRecRes.ok || !ingRes.ok || !freezersRes.ok || !tempRes.ok || !cleanRes.ok || !haccpRes.ok || !invRes.ok || !stockAdjRes.ok || !invAdjRes.ok) {
+      if (!prodRes.ok || !prodRecRes.ok || !ingRes.ok || !freezersRes.ok || !tempRes.ok || !cleanRes.ok || !haccpRes.ok || !invRes.ok || !stockAdjRes.ok || !invAdjRes.ok || !myDocsRes.ok) {
         throw new Error("Failed to load dashboard data");
       }
 
@@ -229,7 +240,7 @@ export function DashboardView() {
       }
       setDocumentsProtected(docsRes.status === 401);
 
-      const [prodData, prodRecData, ingData, freezersData, tempData, cleanData, haccpData, docsData, invData, stockAdjData, invAdjData] = await Promise.all([
+      const [prodData, prodRecData, ingData, freezersData, tempData, cleanData, haccpData, docsData, invData, stockAdjData, invAdjData, myDocsData] = await Promise.all([
         prodRes.json(),
         prodRecRes.json(),
         ingRes.json(),
@@ -241,6 +252,7 @@ export function DashboardView() {
         invRes.json(),
         stockAdjRes.json(),
         invAdjRes.json(),
+        myDocsRes.json(),
       ]);
 
       setProducts(prodData);
@@ -254,6 +266,7 @@ export function DashboardView() {
       setInventory(invData);
       setStockAdjustments(stockAdjData);
       setInventoryAdjustments(invAdjData);
+      setMyDocuments(myDocsData);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -363,7 +376,7 @@ export function DashboardView() {
         <div className="w-10 lg:hidden" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 px-1 sm:px-0">
         <StatCard icon={Factory} label="Production Today" value={productionToday.length.toString()} />
         <StatCard icon={Boxes} label="Finished Inventory Available" value={inventoryAvailable.toString()} />
         <StatCard icon={Package} label="Products" value={products.length.toString()} />
@@ -373,13 +386,14 @@ export function DashboardView() {
         <StatCard icon={SprayCan} label="Cleaning Checks" value={cleaningChecks.length.toString()} />
         <StatCard icon={ShieldCheck} label="HACCP Checks" value={haccpChecks.length.toString()} />
         <StatCard icon={FileText} label="Documents" value={documentsProtected ? "Sign in" : documents.length.toString()} />
+        <StatCard icon={FolderOpen} label="My Documents" value={myDocuments.length.toString()} href="/my-documents" />
       </div>
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
-  return (
+function StatCard({ icon: Icon, label, value, href }: { icon: any; label: string; value: string; href?: string }) {
+  const content = (
     <div className="group relative overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-500/10 active:scale-95">
       <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <div className="relative flex flex-col items-start gap-2">
@@ -389,6 +403,11 @@ function StatCard({ icon: Icon, label, value }: { icon: any; label: string; valu
       </div>
     </div>
   );
+
+  if (href) {
+    return <a href={href} className="block">{content}</a>;
+  }
+  return content;
 }
 
 function daysUntil(dateStr: string): number {
