@@ -1,0 +1,98 @@
+/* 786.Chat Pest Control scrolling repair */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+}
+
+/* Every admin sidebar section uses the same vertical scrolling behaviour. */
+.scroll-ios {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-gutter: stable !important;
+}
+
+/* Never clip uploaded cards inside Photos, Pest Control Docs, Monthly Reports or other sections. */
+.scroll-ios .overflow-hidden {
+  overflow: visible !important;
+  min-height: 0 !important;
+}
+
+/* Monthly Reports/A5 PDF Management must grow like Pest Control Docs. */
+.scroll-ios > .space-y-6,
+.scroll-ios > .space-y-8,
+.scroll-ios > div[class*="space-y-"] {
+  overflow: visible !important;
+  min-height: max-content !important;
+  height: auto !important;
+  padding-bottom: 4rem !important;
+}
+
+.scroll-ios [class*="grid"],
+.scroll-ios section,
+.scroll-ios main {
+  min-height: max-content !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* Anchor dialogs inside the live-preview iframe instead of centering an oversized box. */
+[role="dialog"] {
+  top: 8px !important;
+  bottom: 8px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  scrollbar-gutter: stable !important;
+}
+
+[role="dialog"] > div,
+[role="dialog"] form {
+  min-height: 0 !important;
+  max-width: 100% !important;
+}
+
+[role="dialog"] .overflow-hidden {
+  overflow: visible !important;
+}
+
+[role="dialog"] button {
+  flex-shrink: 0;
+}
+
+.scroll-ios::-webkit-scrollbar,
+[role="dialog"]::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll-ios::-webkit-scrollbar-thumb,
+[role="dialog"]::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.7);
+  border-radius: 9999px;
+  border: 2px solid rgba(30, 41, 59, 0.9);
+}
+
+.scroll-ios::-webkit-scrollbar-track,
+[role="dialog"]::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+@media (max-width: 768px) {
+  [role="dialog"] {
+    top: 4px !important;
+    bottom: 4px !important;
+    max-width: calc(100vw - 8px) !important;
+  }
+}
