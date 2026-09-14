@@ -13,6 +13,7 @@ export type GeneratedSecurityResult = {
 const SECRET_PATH = /(?:^|\/)(?:\.env(?:\..+)?|\.npmrc|\.yarnrc|credentials\.json|service-account\.json|id_rsa|id_ed25519|.*\.(?:pem|p12|pfx|key))$/i
 const ENV_PATH = /(?:^|\/)\.env(?:\..+)?$/i
 const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
+const PUBLIC_STATIC_CODE = /^(?:public|static)\//i
 const DOCUMENTATION_PATH = /(?:^|\/)(?:docs\/.*\.md|README(?:\.md)?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
 const PUBLIC_AUTH_BOOTSTRAP_ROUTE = /^(?:src\/)?app\/api\/auth\/(?:register|login|logout|forgot-password|reset-password|verify-email)\/route\.(?:[cm]?[jt]s)$/i
@@ -93,7 +94,7 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
         }
       }
     }
-    if (!CODE_PATH.test(normalizedPath)) continue
+    if (!CODE_PATH.test(normalizedPath) || PUBLIC_STATIC_CODE.test(normalizedPath)) continue
     for (const [code, pattern, message] of DANGEROUS_CODE) {
       if (pattern.test(content)) errors.push({ code, path, message })
     }
