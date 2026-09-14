@@ -9,7 +9,7 @@ import DemoLogin from "@/pages/DemoLogin";
 import AdminLogin from "@/pages/AdminLogin";
 import BranchLogin from "@/pages/BranchLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
-import BranchDashboard from "@/pages/BranchDashboard";
+import BranchDashboard from "@/pages/BranchDashboardLayoutFix";
 import FileManager from "@/pages/FileManager";
 import AdminDemo from "@/pages/AdminDemo";
 import BranchDemo from "@/pages/BranchDemo";
