@@ -17,9 +17,8 @@ export async function GET() {
     const { payload } = await jwtVerify(token, JWT_SECRET)
     const siteId = payload.siteId as string
 
-    // Get site info
     const [siteInfo] = await sql`
-      SELECT 
+      SELECT
         cs.id, cs.site_name, cs.subdomain, cs.is_active, cs.is_locked,
         css.is_open, css.payment_status
       FROM customer_sites cs
@@ -27,15 +26,13 @@ export async function GET() {
       WHERE cs.id = ${siteId}
     `
 
-    // Get today's date range
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // Get today's stats
     const [todayStats] = await sql`
-      SELECT 
+      SELECT
         COUNT(*) as total_orders,
         COALESCE(SUM(total), 0) as total_revenue
       FROM orders
@@ -44,22 +41,20 @@ export async function GET() {
         AND created_at < ${tomorrow.toISOString()}
     `
 
-    // Get order counts by status
-    const statusCounts = await sql`
+    const statusCounts = (await sql`
       SELECT status, COUNT(*) as count
       FROM orders
       WHERE site_id = ${siteId}
         AND created_at >= ${today.toISOString()}
         AND created_at < ${tomorrow.toISOString()}
       GROUP BY status
-    `
+    `) as unknown as Array<{ status: string; count: number | string }>
 
     const statusMap: Record<string, number> = {}
-    statusCounts.forEach((row: { status: string; count: number }) => {
+    statusCounts.forEach((row) => {
       statusMap[row.status] = Number(row.count)
     })
 
-    // Get recent orders
     const recentOrders = await sql`
       SELECT id, order_number, display_order_number, customer_name, status, total, created_at
       FROM orders
@@ -77,9 +72,9 @@ export async function GET() {
         preparingOrders: statusMap["preparing"] || 0,
         readyOrders: statusMap["ready"] || 0,
         deliveredOrders: statusMap["delivered"] || 0,
-        cancelledOrders: statusMap["cancelled"] || 0
+        cancelledOrders: statusMap["cancelled"] || 0,
       },
-      recentOrders
+      recentOrders,
     })
   } catch (error) {
     console.error("Dashboard API error:", error)

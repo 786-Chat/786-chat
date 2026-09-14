@@ -24,6 +24,19 @@ export interface UserPayload {
   sessionVersion?: number
 }
 
+export type SessionPayload = UserPayload & {
+  userId: string
+  user: UserPayload
+}
+
+function withLegacySessionAliases(payload: UserPayload): SessionPayload {
+  return {
+    ...payload,
+    userId: payload.id,
+    user: { ...payload },
+  }
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12)
 }
@@ -50,7 +63,7 @@ export async function verifyToken(token: string): Promise<UserPayload | null> {
   }
 }
 
-export async function getSession(): Promise<UserPayload | null> {
+export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get("auth_token")?.value || cookieStore.get("auth-token")?.value
   if (!token) return null
@@ -63,9 +76,9 @@ export async function getSession(): Promise<UserPayload | null> {
     payload.role === "admin" &&
     payload.email.toLowerCase().trim() === ADMIN_EMAIL
   ) {
-    return payload
+    return withLegacySessionAliases(payload)
   }
-  if (payload.siteId) return payload
+  if (payload.siteId) return withLegacySessionAliases(payload)
 
   const account = await getAccountSessionState(payload.id)
   if (
@@ -77,13 +90,14 @@ export async function getSession(): Promise<UserPayload | null> {
     return null
   }
 
-  return {
+  const refreshed: UserPayload = {
     ...payload,
     email: account.email,
     name: account.name,
     plan: account.plan || payload.plan,
     role: account.role || payload.role,
   }
+  return withLegacySessionAliases(refreshed)
 }
 
 export async function setAuthCookie(token: string): Promise<void> {

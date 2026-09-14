@@ -1,6 +1,9 @@
 export type ApplicationEditKind =
   | "undo"
   | "header-colour"
+  | "colour"
+  | "animation"
+  | "design"
   | "booking-form"
   | "database-table"
   | "general"
@@ -62,6 +65,15 @@ export function classifyApplicationEdit(prompt: string): ApplicationEditIntent {
   if (hasExplicitDatabaseTableCreation(prompt)) {
     return { kind: "database-table", requestedTable: databaseTableName(prompt) }
   }
+  if (/\b(?:change|set|update|make|replace|adjust)\b[\s\S]{0,100}\b(?:colou?r|background(?:\s+colou?r)?|text\s+colou?r|palette|theme\s+colou?r)\b|\b(?:colou?r|palette)\b[\s\S]{0,60}\b(?:change|update|replace|adjust)\b/i.test(prompt)) {
+    return { kind: "colour", requestedTable: null }
+  }
+  if (/\b(?:change|set|update|make|replace|adjust|add|remove)\b[\s\S]{0,100}\b(?:animation|motion|transition|fade|slide|parallax)\b|\b(?:animation|motion|transition)\b[\s\S]{0,80}\b(?:change|update|replace|adjust|add|remove|faster|slower|smooth)\b/i.test(prompt)) {
+    return { kind: "animation", requestedTable: null }
+  }
+  if (/\b(?:redesign|restyle|change|update|improve|adjust|make)\b[\s\S]{0,120}\b(?:design|layout|spacing|typography|style|hero|card|section)\b|\b(?:design|layout)\b[\s\S]{0,80}\b(?:change|update|improve|adjust|redesign)\b/i.test(prompt)) {
+    return { kind: "design", requestedTable: null }
+  }
   return { kind: "general", requestedTable: null }
 }
 
@@ -79,6 +91,27 @@ export function applicationEditBrief(
     return [
       ...common,
       "Targeted header edit: change the real header/navigation colour requested by the user and do not recolour unrelated sections.",
+    ]
+  }
+  if (intent.kind === "colour") {
+    return [
+      ...common,
+      "Targeted colour edit: change only the requested colour, palette or visual scope. Preserve unrelated sections, content, spacing, layout and behavior.",
+      "Keep readable contrast, existing responsive behavior and the current design structure unless the user explicitly requests a broader redesign.",
+    ]
+  }
+  if (intent.kind === "animation") {
+    return [
+      ...common,
+      "Targeted animation edit: change only the requested motion, transition or animation behavior while preserving layout, content, routes and application logic.",
+      "Reuse the project's existing animation approach when possible, keep motion performant, and respect prefers-reduced-motion unless the user explicitly requests otherwise.",
+    ]
+  }
+  if (intent.kind === "design") {
+    return [
+      ...common,
+      "Targeted design edit: modify only the requested section, layout, spacing, typography or styling scope. Do not replace the whole application or remove working functionality.",
+      "Preserve routes, data, authentication, backend behavior and unrelated content unless the user explicitly asks to change them.",
     ]
   }
   if (intent.kind === "booking-form") {
