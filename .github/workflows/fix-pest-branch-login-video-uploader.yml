@@ -1,0 +1,187 @@
+name: Fix Pest Control Branch Login Video Uploader
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-pest-branch-login-video-uploader.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest Pest Control generated branch
+        uses: actions/checkout@v4
+        with:
+          ref: generated/22c299f8-bf65-410f-9643-92a9776dbfca/7519c499-132f-43b6-8-mu1j2bhy-lprso
+          fetch-depth: 0
+
+      - name: Add admin Branch Login Video uploader and connect login card
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          base = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca')
+          admin = base / 'client/src/pages/AdminDashboard.tsx'
+          login = base / 'client/src/pages/BranchLogin.tsx'
+          routes = base / 'server/routes.ts'
+
+          # --- Admin sidebar + uploader panel ---
+          text = admin.read_text()
+          if 'id: "branch-login-video"' not in text:
+              old = '{ section: "BRANCH MANAGEMENT", items: [\n      { id: "site-settings", label: "Site Settings", icon: Settings }\n    ]}'
+              new = '{ section: "BRANCH MANAGEMENT", items: [\n      { id: "site-settings", label: "Site Settings", icon: Settings },\n      { id: "branch-login-video", label: "Branch Login Video", icon: Settings }\n    ]}'
+              if old not in text:
+                  raise SystemExit('Admin sidebar marker not found')
+              text = text.replace(old, new, 1)
+
+          if 'data-testid="branch-login-video-uploader"' not in text:
+              marker = '            {/* Dashboard Section */}'
+              panel = r'''            {activeTab === "branch-login-video" && (
+              <div data-testid="branch-login-video-uploader" className="max-w-2xl mx-auto space-y-6">
+                <div className="bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-purple-500/30 rounded-2xl p-6 shadow-2xl">
+                  <h2 className="text-2xl font-bold text-white mb-2">Branch Login Video</h2>
+                  <p className="text-slate-300 mb-5">Upload one marketing video. It will appear only in the existing video card on the Branch Login page.</p>
+                  <form
+                    className="space-y-4"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const form = event.currentTarget;
+                      const input = form.elements.namedItem('video') as HTMLInputElement | null;
+                      const file = input?.files?.[0];
+                      if (!file) {
+                        toast({ title: 'Select a video', description: 'Choose an MP4, WebM or MOV file first.', variant: 'destructive' });
+                        return;
+                      }
+                      const data = new FormData();
+                      data.append('video', file);
+                      try {
+                        const response = await fetch('/api/admin/branch-login-video', { method: 'POST', body: data, credentials: 'include' });
+                        const result = await response.json().catch(() => ({}));
+                        if (!response.ok) throw new Error(result.message || 'Upload failed');
+                        toast({ title: 'Video published', description: 'The Branch Login video card now uses your uploaded video.' });
+                        form.reset();
+                      } catch (error: any) {
+                        toast({ title: 'Upload failed', description: error?.message || 'Could not upload video', variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    <input name="video" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov" className="block w-full rounded-lg border border-purple-400/30 bg-slate-950/70 p-3 text-slate-200" />
+                    <Button type="submit" className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500">
+                      Upload & Publish to Branch Login
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+'''
+              if marker not in text:
+                  raise SystemExit('Admin content marker not found')
+              text = text.replace(marker, panel + marker, 1)
+          admin.write_text(text)
+
+          # --- Public Branch Login card loads uploaded video when present ---
+          text = login.read_text()
+          if 'branchLoginVideoUrl' not in text:
+              state_marker = '  const [showSupportPopup, setShowSupportPopup] = useState(false);'
+              if state_marker not in text:
+                  raise SystemExit('BranchLogin state marker not found')
+              text = text.replace(state_marker, state_marker + '\n  const [branchLoginVideoUrl, setBranchLoginVideoUrl] = useState(branchVideos[0]);', 1)
+
+              effect_marker = '  // Initialize audio context'
+              video_effect = '''  useEffect(() => {\n    fetch("/api/branch-login-video")\n      .then((response) => response.ok ? response.json() : null)\n      .then((data) => { if (data?.url) setBranchLoginVideoUrl(data.url); })\n      .catch(() => {});\n  }, []);\n\n'''
+              text = text.replace(effect_marker, video_effect + effect_marker, 1)
+
+              text = text.replace('src={branchVideos[0]}', 'src={branchLoginVideoUrl}', 1)
+          login.write_text(text)
+
+          # --- Server upload/get endpoints using Vercel Blob ---
+          text = routes.read_text()
+          if 'branchLoginVideoUpload' not in text:
+              register_index = text.find('export async function registerRoutes')
+              if register_index < 0:
+                  register_index = text.find('async function registerRoutes')
+              if register_index < 0:
+                  raise SystemExit('registerRoutes marker not found')
+
+              middleware = r'''// 786.Chat: admin-managed Branch Login marketing video.
+const branchLoginVideoUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
+    cb(allowed.includes(file.mimetype) ? null : new Error('Only MP4, WebM and MOV videos are allowed.'), allowed.includes(file.mimetype));
+  },
+  limits: { fileSize: 80 * 1024 * 1024 }
+});
+
+'''
+              text = text[:register_index] + middleware + text[register_index:]
+
+          if '/api/admin/branch-login-video' not in text:
+              body_index = text.find('{', text.find('registerRoutes')) + 1
+              routes_block = r'''
+  // Public read endpoint used by /branch-login before authentication.
+  app.get('/api/branch-login-video', async (_req, res) => {
+    try {
+      const { list } = await import('@vercel/blob');
+      const result = await list({ prefix: 'pest-control/branch-login-video/' });
+      const latest = [...result.blobs].sort((a: any, b: any) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime())[0];
+      return res.json({ url: latest?.url || null });
+    } catch (error) {
+      console.warn('Branch login video lookup failed:', error);
+      return res.json({ url: null });
+    }
+  });
+
+  app.post('/api/admin/branch-login-video', branchLoginVideoUpload.single('video'), async (req: any, res) => {
+    try {
+      const token = req.cookies?.admin_token;
+      if (!token || !adminTokens.has(token)) {
+        return res.status(401).json({ message: 'Admin authentication required' });
+      }
+      if (!req.file?.buffer) {
+        return res.status(400).json({ message: 'Select a video file first' });
+      }
+
+      const { put, list, del } = await import('@vercel/blob');
+      const old = await list({ prefix: 'pest-control/branch-login-video/' });
+      if (old.blobs.length) {
+        await del(old.blobs.map((blob: any) => blob.url));
+      }
+
+      const ext = req.file.mimetype === 'video/webm' ? 'webm' : req.file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
+      const blob = await put(`pest-control/branch-login-video/current.${ext}`, req.file.buffer, {
+        access: 'public',
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: req.file.mimetype,
+      } as any);
+      return res.json({ success: true, url: blob.url });
+    } catch (error: any) {
+      console.error('Branch login video upload failed:', error);
+      return res.status(500).json({ message: error?.message || 'Video upload failed' });
+    }
+  });
+
+'''
+              text = text[:body_index] + routes_block + text[body_index:]
+          routes.write_text(text)
+          PY
+
+      - name: Commit generated project fix
+        shell: bash
+        run: |
+          git config user.name '786.Chat Automation'
+          git config user.email 'actions@786.chat'
+          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/pages/AdminDashboard.tsx \
+                  generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/pages/BranchLogin.tsx \
+                  generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/routes.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix(pest-control): add admin branch login video uploader'
+          git push origin HEAD:generated/22c299f8-bf65-410f-9643-92a9776dbfca/7519c499-132f-43b6-8-mu1j2bhy-lprso
