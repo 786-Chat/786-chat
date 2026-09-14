@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MobileOpeningChecks } from "@/components/mobile-opening-checks";
+import { MobileBackButton } from "@/components/mobile-back-button";
 
 export default function OpeningChecksPage() {
   const [isMobile, setIsMobile] = useState(false);
@@ -14,7 +15,12 @@ export default function OpeningChecksPage() {
   }, []);
 
   if (isMobile) {
-    return <MobileOpeningChecks />;
+    return (
+      <>
+        <MobileBackButton />
+        <MobileOpeningChecks />
+      </>
+    );
   }
 
   // Desktop/tablet unchanged
