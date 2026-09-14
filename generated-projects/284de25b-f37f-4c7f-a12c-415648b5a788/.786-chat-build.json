@@ -1,0 +1,12 @@
+{
+  "projectId": "284de25b-f37f-4c7f-a12c-415648b5a788",
+  "buildId": "86a9b824-89c7-483a-b45a-67ddd7ecf991",
+  "title": "NorthStar Logistics",
+  "sourceVersion": "060bc27acf957b4bba9a674d8f01aa7ef33400d8b916c31576af9e27a0ab3fee",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-22T15:41:15.582Z"
+}
