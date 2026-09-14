@@ -1,6 +1,7 @@
 // @ts-nocheck
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
+import { registerBranchLoginVideoRoutes } from "./branchLoginVideo.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -12,6 +13,7 @@ app.use(express.urlencoded({ extended: false }));
 
 // Add cookie parser for admin tokens
 app.use(cookieParser());
+registerBranchLoginVideoRoutes(app);
 
 // Serve static files from uploads directory with proper headers
 app.use('/uploads', express.static(path.join(process.env.TMPDIR || "/tmp", "uploads"), {
