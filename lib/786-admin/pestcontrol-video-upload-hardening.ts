@@ -112,7 +112,7 @@ function patchAdminVideoManager(source: string): string {
     "      const blob = await upload(`pest-control/branch-login/${Date.now()}-${safeName}`, selectedVideo, {",
     "        access: 'public',",
     "        handleUploadUrl: '/api/admin/branch-login-video',",
-    "        multipart: true,",
+    "        contentType: selectedVideo.type || 'video/mp4',",
     "        onUploadProgress: ({ percentage }) => setUploadProgress(Math.round(percentage)),",
     "      });",
     "",
