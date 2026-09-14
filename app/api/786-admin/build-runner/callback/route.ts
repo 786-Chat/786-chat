@@ -8,6 +8,7 @@ import {
 } from "@/lib/786-admin/build-runner-store"
 import { hardenFoodSafetyRuntime } from "@/lib/786-admin/foodsafety-runtime-hardening"
 import { hardenPestControlRuntime } from "@/lib/786-admin/pestcontrol-runtime-hardening"
+import { hardenPestControlVideoUpload } from "@/lib/786-admin/pestcontrol-video-upload-hardening"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { finalizeImportedRuntimeFiles } from "@/lib/786-admin/imported-runtime-finalizer"
 import { runtimeDeploymentFiles } from "@/lib/786-admin/runtime-deployment-files"
@@ -114,12 +115,15 @@ export async function POST(request: Request) {
       const bundle = await getRunnerBuildBundle(body.buildId)
       if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
-      const deploymentFiles = hardenPestControlRuntime(
+      const deploymentFiles = hardenPestControlVideoUpload(
         bundle.projectId,
-        hardenFoodSafetyRuntime(
+        hardenPestControlRuntime(
           bundle.projectId,
-          finalizeImportedRuntimeFiles(
-            alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+          hardenFoodSafetyRuntime(
+            bundle.projectId,
+            finalizeImportedRuntimeFiles(
+              alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+            ),
           ),
         ),
       )
