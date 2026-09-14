@@ -1,0 +1,12 @@
+{
+  "projectId": "016b8cc8-a435-4c01-83a4-2bd76f628207",
+  "buildId": "8994eb42-b50f-45b4-a52e-5314110f55e3",
+  "title": "New AI Project",
+  "sourceVersion": "0df059941bc17658c09b8059edeaa89231922d18260f5b3420d7453d899656da",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-28T21:10:28.677Z"
+}
