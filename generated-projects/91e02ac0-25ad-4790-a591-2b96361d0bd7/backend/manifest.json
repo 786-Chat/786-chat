@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "manufacturing-ops-auth",
+  "description": "Secure email/password authentication with Neon/Postgres for manufacturing operations.",
+  "capabilities": ["database", "authentication", "email", "api"],
+  "providers": {
+    "database": {
+      "type": "neon",
+      "driver": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"],
+      "migration": "sql/migrations/001_initial.sql"
+    },
+    "authentication": {
+      "type": "custom",
+      "env": ["AUTH_SECRET"],
+      "session": "jose",
+      "passwordHash": "bcryptjs"
+    },
+    "email": {
+      "type": "resend",
+      "env": ["RESEND_API_KEY", "EMAIL_FROM"],
+      "idempotency": true
+    }
+  },
+  "apiRoutes": [
+    "app/api/auth/register/route.ts",
+    "app/api/auth/login/route.ts",
+    "app/api/auth/logout/route.ts",
+    "app/api/auth/session/route.ts",
+    "app/api/auth/forgot-password/route.ts",
+    "app/api/auth/reset-password/route.ts",
+    "app/api/auth/verify-email/route.ts",
+    "app/api/email/route.ts"
+  ],
+  "tables": ["users", "sessions", "email_verification_tokens", "password_reset_tokens"]
+}
