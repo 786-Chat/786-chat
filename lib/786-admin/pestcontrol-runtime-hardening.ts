@@ -318,6 +318,27 @@ function patchPestControlBranchRoutes(source: string): string {
   return next
 }
 
+function patchBranchDashboardMarketingVideo(source: string): string {
+  let next = source
+
+  next = next.replace(
+    /\nconst branchDashboardVideo = [^\n]+;\n/,
+    "\n",
+  )
+
+  const startMarker = "            {/* Compact branch marketing video */}"
+  const endMarker = "            {/* Stats Cards */}"
+  const start = next.indexOf(startMarker)
+  if (start >= 0) {
+    const end = next.indexOf(endMarker, start)
+    if (end >= 0) {
+      next = next.slice(0, start) + next.slice(end)
+    }
+  }
+
+  return next
+}
+
 export function hardenPestControlRuntime(
   projectId: string,
   files: Record<string, string>,
@@ -334,6 +355,11 @@ export function hardenPestControlRuntime(
   const adminDashboardPath = "client/src/pages/AdminDashboard.tsx"
   if (runtimeFiles[adminDashboardPath]) {
     runtimeFiles[adminDashboardPath] = patchPestControlBranchEditor(runtimeFiles[adminDashboardPath])
+  }
+
+  const branchDashboardPath = "client/src/pages/BranchDashboard.tsx"
+  if (runtimeFiles[branchDashboardPath]) {
+    runtimeFiles[branchDashboardPath] = patchBranchDashboardMarketingVideo(runtimeFiles[branchDashboardPath])
   }
 
   const routesPath = "server/routes.ts"
