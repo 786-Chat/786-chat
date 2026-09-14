@@ -1,0 +1,3 @@
+{
+  "capabilities": ["api", "auth", "email", "database", "audit"]
+}
