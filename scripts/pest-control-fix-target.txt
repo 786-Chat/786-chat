@@ -1,0 +1,1 @@
+Target error: client/src/pages/AdminDashboard.tsx:2605:12 ERROR Unexpected ")" caused by empty branch-login-video conditional.
