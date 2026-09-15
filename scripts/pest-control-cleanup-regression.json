@@ -1,0 +1,6 @@
+{
+  "projectId": "22c299f8-bf65-410f-9643-92a9776dbfca",
+  "target": "client/src/pages/AdminDashboard.tsx",
+  "failure": "Unexpected ) from empty branch-login-video JSX conditional",
+  "verification": "node scripts/verify-pest-control-empty-video-cleanup.cjs"
+}
