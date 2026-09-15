@@ -1,0 +1,1 @@
+Verification gate: PR Vercel check must be successful, merge to main must reach Production READY, then a fresh Pest Control generated deployment must reach READY before declaring complete.
