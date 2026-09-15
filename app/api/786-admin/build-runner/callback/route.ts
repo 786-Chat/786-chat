@@ -9,6 +9,7 @@ import {
 import { hardenFoodSafetyRuntime } from "@/lib/786-admin/foodsafety-runtime-hardening"
 import { hardenPestControlRuntime } from "@/lib/786-admin/pestcontrol-runtime-hardening"
 import { hardenPestControlVideoUpload } from "@/lib/786-admin/pestcontrol-video-upload-hardening"
+import { removePestControlEmptyBranchVideoJsx } from "@/lib/786-admin/pestcontrol-empty-video-cleanup"
 import { hardenPestControlMonthlyReports } from "@/lib/786-admin/pestcontrol-monthly-report-hardening"
 import { publishGeneratedProjectToGitHub } from "@/lib/786-admin/github-project-publisher"
 import { finalizeImportedRuntimeFiles } from "@/lib/786-admin/imported-runtime-finalizer"
@@ -116,16 +117,19 @@ export async function POST(request: Request) {
       const bundle = await getRunnerBuildBundle(body.buildId)
       if (!bundle) throw new Error("Validated source bundle is unavailable for publishing")
 
-      const deploymentFiles = hardenPestControlMonthlyReports(
+      const deploymentFiles = removePestControlEmptyBranchVideoJsx(
         bundle.projectId,
-        hardenPestControlVideoUpload(
+        hardenPestControlMonthlyReports(
           bundle.projectId,
-          hardenPestControlRuntime(
+          hardenPestControlVideoUpload(
             bundle.projectId,
-            hardenFoodSafetyRuntime(
+            hardenPestControlRuntime(
               bundle.projectId,
-              finalizeImportedRuntimeFiles(
-                alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+              hardenFoodSafetyRuntime(
+                bundle.projectId,
+                finalizeImportedRuntimeFiles(
+                  alignImportedRuntimeEntry(runtimeDeploymentFiles(bundle.files)),
+                ),
               ),
             ),
           ),
