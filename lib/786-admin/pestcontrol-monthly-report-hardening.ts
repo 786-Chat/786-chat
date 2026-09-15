@@ -23,34 +23,27 @@ function patchObjectStorage(source: string): string {
     '      return virtualFile as unknown as File;',
   ].join("\n")
 
-  if (next.includes(oldReturn) && !next.includes('download: async () => {')) {
-    next = next.replace(oldReturn, newReturn)
-  }
-
+  if (next.includes(oldReturn) && !next.includes('download: async () => {')) next = next.replace(oldReturn, newReturn)
   return next
 }
 
 function patchMonthlyReportRoutes(source: string): string {
   if (!source) return source
   let next = source
-
   const needles = [
     "        category: 'monthly-reports',\n        filename: req.file.originalname\n      });",
     '        category: "monthly-reports",\n        filename: req.file.originalname\n      });',
   ]
-
   for (const needle of needles) {
     if (!next.includes(needle)) continue
     const guard = `${needle}\n\n      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {\n        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');\n      }`
     next = next.replace(needle, guard)
   }
-
   return next
 }
 
 function patchMonthlyReportSend(source: string): string {
   if (!source) return source
-
   const startMarker = '  async sendMonthlyReportToBranch(reportId: string, branchId: string): Promise<MonthlyReport> {'
   const endMarker = '  // Yearly Docs operations'
   const start = source.indexOf(startMarker)
@@ -61,7 +54,6 @@ function patchMonthlyReportSend(source: string): string {
     '  async sendMonthlyReportToBranch(reportId: string, branchId: string): Promise<MonthlyReport> {',
     '    const original = await this.getMonthlyReport(reportId);',
     '    if (!original) throw new Error(\'Report not found\');',
-    '',
     '    const branch = await this.getBranch(branchId);',
     '    if (!branch) throw new Error(\'Branch not found\');',
     '',
@@ -69,16 +61,18 @@ function patchMonthlyReportSend(source: string): string {
     '    const nextDueDate = new Date(now);',
     '    nextDueDate.setDate(nextDueDate.getDate() + 30);',
     '',
-    '    // One report = one database record. Sending assigns the existing card',
-    '    // to the selected branch instead of creating a duplicate copy.',
+    '    // Remove legacy duplicate rows created by the old copy-on-send implementation.',
+    '    // The original uploaded report remains the single canonical card.',
+    '    await db.delete(monthlyReports).where(',
+    '      and(',
+    '        eq(monthlyReports.filepath, original.filepath),',
+    '        ne(monthlyReports.id, reportId)',
+    '      )',
+    '    );',
+    '',
     '    const [updatedReport] = await db',
     '      .update(monthlyReports)',
-    '      .set({',
-    '        branchId,',
-    '        sentAt: now,',
-    '        receivedAt: now,',
-    '        updatedAt: now,',
-    '      })',
+    '      .set({ branchId, sentAt: now, receivedAt: now, updatedAt: now })',
     '      .where(eq(monthlyReports.id, reportId))',
     '      .returning();',
     '',
@@ -87,29 +81,22 @@ function patchMonthlyReportSend(source: string): string {
     '      .set({ lastInspection: now, nextDue: nextDueDate, updatedAt: now })',
     '      .where(eq(branches.id, branchId));',
     '',
-    '    console.log(`Monthly report "${updatedReport.title}" assigned to branch ${branchId} without creating a duplicate`);',
+    '    console.log(`Monthly report "${updatedReport.title}" assigned to branch ${branchId}; duplicate cards removed`);',
     '    return updatedReport;',
     '  }',
     '',
   ].join('\n')
-
   return source.slice(0, start) + replacement + source.slice(end)
 }
 
-export function hardenPestControlMonthlyReports(
-  projectId: string,
-  files: Record<string, string>,
-): Record<string, string> {
+export function hardenPestControlMonthlyReports(projectId: string, files: Record<string, string>): Record<string, string> {
   if (projectId !== PEST_CONTROL_PROJECT_ID) return files
-
   const next = { ...files }
   const objectStoragePath = "server/objectStorage.ts"
   const routesPath = "server/routes.ts"
   const storagePath = "server/storage.ts"
-
   if (next[objectStoragePath]) next[objectStoragePath] = patchObjectStorage(next[objectStoragePath])
   if (next[routesPath]) next[routesPath] = patchMonthlyReportRoutes(next[routesPath])
   if (next[storagePath]) next[storagePath] = patchMonthlyReportSend(next[storagePath])
-
   return next
 }
