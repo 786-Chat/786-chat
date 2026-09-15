@@ -132,6 +132,27 @@ export async function testConnection(): Promise<{ success: boolean; message: str
   }
 }
 
+function extractTuyaList(result: any): any[] {
+  if (Array.isArray(result)) return result;
+  if (!result || typeof result !== "object") return [];
+
+  const candidates = [
+    result.devices,
+    result.list,
+    result.data,
+    result.records,
+    result.rows,
+    result.items,
+    result.users,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
+}
+
 export async function getAllTuyaDevices(): Promise<any[]> {
   const token = await getToken();
   const devices: any[] = [];
@@ -143,26 +164,41 @@ export async function getAllTuyaDevices(): Promise<any[]> {
     devices.push({ ...device, id, _source_uid: uid || device?._source_uid });
   };
 
-  try {
-    const usersResult = await request<any>("GET", "/v1.0/apps/users?page_no=1&page_size=100", null, token);
-    const users = usersResult?.list || usersResult?.data || [];
-    for (const user of users) {
-      const uid = user.uid || user.id;
-      if (!uid) continue;
-      try {
-        const result = await request<any>("GET", `/v1.0/users/${uid}/devices`, null, token);
-        const list = Array.isArray(result) ? result : result?.list || [];
-        list.forEach((device: any) => push(device, uid));
-      } catch (_) {}
-    }
-  } catch (_) {}
+  // Preferred path for devices linked to the Tuya/Smart Life app account.
+  // Tuya returns these under result.devices on current API responses.
+  const associatedDevicePaths = [
+    "/v1.0/iot-01/associated-users/devices?last_row_key=",
+    "/v1.0/iot-01/associated-users/devices",
+  ];
 
+  for (const path of associatedDevicePaths) {
+    if (devices.length > 0) break;
+    try {
+      const result = await request<any>("GET", path, null, token);
+      extractTuyaList(result).forEach((device: any) => push(device));
+    } catch (err: any) {
+      console.warn(`Tuya associated-device import failed for ${path}:`, err?.message || err);
+    }
+  }
+
+  // Compatibility path for projects where devices are exposed through app users.
   if (devices.length === 0) {
     try {
-      const result = await request<any>("GET", "/v1.0/iot-01/associated-users/devices?last_row_key=", null, token);
-      const list = Array.isArray(result) ? result : result?.list || [];
-      list.forEach((device: any) => push(device));
-    } catch (_) {}
+      const usersResult = await request<any>("GET", "/v1.0/apps/users?page_no=1&page_size=100", null, token);
+      const users = extractTuyaList(usersResult);
+      for (const user of users) {
+        const uid = user?.uid || user?.id;
+        if (!uid) continue;
+        try {
+          const result = await request<any>("GET", `/v1.0/users/${uid}/devices`, null, token);
+          extractTuyaList(result).forEach((device: any) => push(device, uid));
+        } catch (err: any) {
+          console.warn(`Tuya user-device import failed for ${uid}:`, err?.message || err);
+        }
+      }
+    } catch (err: any) {
+      console.warn("Tuya app-user import failed:", err?.message || err);
+    }
   }
 
   return devices;
