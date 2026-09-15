@@ -1,0 +1,9 @@
+/* Pest Control mobile admin overflow repair — generated project hotfix */
+@media (max-width: 640px) {
+  html, body, #root { max-width: 100%; overflow-x: hidden; }
+  #root *, #root *::before, #root *::after { box-sizing: border-box; }
+  #root .flex { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  #root .flex > *, #root .grid > * { min-width: 0; max-width: 100%; }
+  #root button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  #root input, #root select, #root textarea { min-width: 0; max-width: 100%; }
+}
