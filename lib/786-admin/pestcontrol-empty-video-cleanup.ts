@@ -5,6 +5,37 @@ const BRANCH_LOGIN_VIDEO_STATE = /\n\s*const\s*\[branchLoginVideoUrl,\s*setBranc
 const BRANCH_LOGIN_VIDEO_EFFECT = /\n\s*\/\/ Load the admin-managed Branch Login marketing video\s*\n\s*useEffect\(\(\)\s*=>\s*\{\s*fetch\(['"]\/api\/public\/branch-login-media['"]\)[\s\S]*?\.catch\(\(\)\s*=>\s*setBranchLoginVideoUrl\(['"]['"]\)\);\s*\},\s*\[\]\);/g
 const STATIC_LAST_AUDIT = /<span className="text-white font-semibold">20 Apr 2025<\/span>/g
 const CURRENT_LAST_AUDIT = '<span className="text-white font-semibold">20 Apr {new Date().getFullYear()}</span>'
+const MOBILE_SETTINGS_MARKER = "/* 786.Chat Pest Control mobile settings overflow guard */"
+const MOBILE_SETTINGS_CSS = `
+
+${MOBILE_SETTINGS_MARKER}
+@media (max-width: 640px) {
+  html, body, #root {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  #root *, #root *::before, #root *::after {
+    box-sizing: border-box;
+  }
+
+  #root .flex > *, #root .grid > * {
+    min-width: 0;
+  }
+
+  #root input, #root select, #root textarea, #root button {
+    max-width: 100%;
+  }
+
+  #root button, #root label, #root p, #root span:not(.ticker-track), #root h1, #root h2, #root h3, #root h4 {
+    overflow-wrap: anywhere;
+  }
+
+  #root img, #root video, #root svg {
+    max-width: 100%;
+  }
+}
+`
 
 export function removePestControlEmptyBranchVideoJsx(
   projectId: string,
@@ -45,6 +76,13 @@ export function removePestControlEmptyBranchVideoJsx(
       next[branchDashboardPath] = cleanedBranchDashboard
       changed = true
     }
+  }
+
+  const cssPath = "client/src/index.css"
+  const cssSource = next[cssPath]
+  if (cssSource && !cssSource.includes(MOBILE_SETTINGS_MARKER)) {
+    next[cssPath] = `${cssSource}${MOBILE_SETTINGS_CSS}`
+    changed = true
   }
 
   return changed ? next : files
