@@ -2022,7 +2022,7 @@ export default function BranchDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Last Audit</span>
-                      <span className="text-white font-semibold">20 Apr 2025</span>
+                      <span className="text-white font-semibold">20 Apr {new Date().getFullYear()}</span>
                     </div>
                   </div>
                 </CardContent>
