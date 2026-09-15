@@ -57,14 +57,6 @@ export default function BranchLogin() {
       document.removeEventListener('keydown', handleFirstInteraction);
     };
   }, []);
-
-  // Load the admin-managed Branch Login marketing video
-  useEffect(() => {
-    fetch('/api/public/branch-login-media')
-      .then((res) => res.json())
-      .then((data) => setBranchLoginVideoUrl(data?.videoUrl || ''))
-      .catch(() => setBranchLoginVideoUrl(''));
-  }, []);
   // Magic sound generator
   const playMagicSound = (frequency: number = 800, duration: number = 200) => {
     if (!soundEnabled || !audioContextRef.current) return;
