@@ -41,7 +41,7 @@ export default function IotAdminPanel() {
   const [cloudDevices, setCloudDevices] = useState<any[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [provider] = useState("tuya");
+  const [provider, setProvider] = useState("tuya");
   const [deviceId, setDeviceId] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -189,7 +189,12 @@ export default function IotAdminPanel() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Provider</label>
-            <select value="tuya" disabled className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white">
+            <select
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              aria-label="Device provider"
+              className="w-full cursor-pointer rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white focus:border-cyan-500 focus:outline-none"
+            >
               <option value="tuya">Tuya / Smart Life</option>
             </select>
           </div>
