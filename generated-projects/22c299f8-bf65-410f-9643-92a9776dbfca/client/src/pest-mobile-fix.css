@@ -1,0 +1,78 @@
+/* Pest Control mobile admin overflow repair — generated project hotfix */
+@media (max-width: 640px) {
+  /* Keep the complete admin page vertically reachable on phones. */
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    height: auto !important;
+    max-width: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root {
+    min-height: 100dvh;
+    height: auto !important;
+    max-width: 100%;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+  }
+
+  /* Some imported admin layouts lock the viewport with h-screen.
+     On mobile let the document grow so users can swipe all the way up/down. */
+  #root .h-screen {
+    height: auto !important;
+    min-height: 100dvh !important;
+  }
+
+  #root main,
+  #root [role="main"] {
+    min-height: 0;
+    max-height: none !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root *, #root *::before, #root *::after { box-sizing: border-box; }
+  #root .flex { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  #root .flex > *, #root .grid > * { min-width: 0; max-width: 100%; }
+  #root button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  #root input, #root select, #root textarea { min-width: 0; max-width: 100%; }
+
+  /* Branch Dashboard Controls: title first, actions underneath. */
+  #root .text-white.flex.items-center.justify-between {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  #root .text-white.flex.items-center.justify-between > .flex.items-center.space-x-2 {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  #root .text-white.flex.items-center.justify-between > .flex.items-center.space-x-2 > button {
+    width: 100% !important;
+    margin-left: 0 !important;
+    min-width: 0 !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    font-size: 11px !important;
+  }
+
+  /* Hygiene-rating action rows must never stay wider than the card. */
+  #root .border-yellow-600\/30 .flex.items-center.space-x-3,
+  #root .border-yellow-600\/30 .flex.items-center.space-x-2 {
+    width: 100% !important;
+    gap: 8px !important;
+    margin-left: 0 !important;
+  }
+  #root .border-yellow-600\/30 button {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+  }
+}
