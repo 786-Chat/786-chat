@@ -1,0 +1,1 @@
+No BranchLogin.tsx design, approved cat/device asset, database data, authentication settings, or unrelated generated projects are changed by this repair.

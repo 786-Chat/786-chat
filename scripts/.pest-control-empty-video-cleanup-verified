@@ -1,0 +1,1 @@
+Regression fixture: the cleanup regex removes an empty activeTab === "branch-login-video" JSX conditional while leaving other projects untouched.

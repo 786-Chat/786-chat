@@ -1,0 +1,10 @@
+INPUT:
+{activeTab === "branch-login-video" && (
+
+)}
+
+EXPECTED OUTPUT:
+(empty string)
+
+SCOPE:
+Only project 22c299f8-bf65-410f-9643-92a9776dbfca.

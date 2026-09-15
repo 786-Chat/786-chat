@@ -1,0 +1,1 @@
+Code repair prepared on branch fix/pest-control-empty-video-generator. Awaiting PR build verification before merge.

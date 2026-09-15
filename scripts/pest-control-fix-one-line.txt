@@ -1,0 +1,1 @@
+Remove invalid empty branch-login-video wrapper at final publish hardening stage.

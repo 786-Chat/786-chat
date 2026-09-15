@@ -1,0 +1,6 @@
+1. PR Vercel Ready
+2. Merge main
+3. Production Ready
+4. Fresh Pest Control build
+5. Generated Vercel Ready
+6. /admin-login preview loads

@@ -1,0 +1,1 @@
+Safety: helper returns the original files object for all other project IDs and for Pest Control when the invalid empty wrapper is absent.

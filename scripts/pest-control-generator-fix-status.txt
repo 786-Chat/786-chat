@@ -1,0 +1,1 @@
+Permanent publish-pipeline fix added without editing the large base64-bearing pestcontrol-video-upload-hardening.ts file.

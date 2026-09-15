@@ -1,0 +1,1 @@
+Permanent repair is isolated from the large base64-bearing hardening file and executes at the final deployment-file stage.
