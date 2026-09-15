@@ -1,0 +1,1 @@
+Pattern matches only an empty activeTab === "branch-login-video" conditional; it does not remove non-empty content.
