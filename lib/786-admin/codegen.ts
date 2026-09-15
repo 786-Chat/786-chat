@@ -4,6 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { z } from "zod"
 import { BUILDER_MODELS, maxOutputTokensForPlan, normalizeGenerationUsage, type BuilderGenerationUsage } from "@/lib/786-chat/ai-provider-config"
 import { fileUnitTargetFromPrompt, parseFileUnitOutput } from "@/lib/786-chat/file-unit-output"
+import { boundedExistingProjectContext } from "@/lib/786-chat/provider-context"
 
 export type CodegenMode = "auto" | "deepseek-flash" | "deepseek-pro" | "gemini-flash" | "gemini-pro"
 export type CodegenAttachment = { url: string; mediaType: string; name?: string }
@@ -63,7 +64,8 @@ function buildPrompt(input: CodegenInput) {
   const fileUnitTarget = fileUnitTargetFromPrompt(input.prompt)
   if (fileUnitTarget) return ["MODE: FILE UNIT", `EXACT TARGET PATH: ${fileUnitTarget}`, "USER REQUEST:", input.prompt.trim(), "Generate only the exact target file with complete content."].join("\n") + FILE_UNIT_JSON_FORMAT_PROMPT
   if (!input.existing) return [`MODE: NEW PROJECT`, `USER REQUEST:`, input.prompt.trim(), `Generate the complete requested project using shared components and compact route wrappers.`].join("\n") + JSON_FORMAT_PROMPT
-  return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "KEY FILE CONTENTS:", Object.entries(input.existing.keyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
+  const boundedKeyFiles = boundedExistingProjectContext(input.prompt, input.existing.keyFiles)
+  return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "RELEVANT EXISTING FILE CONTENTS (BOUNDED):", Object.entries(boundedKeyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
 }
 function compactRetryPrompt(prompt: string, existing: boolean) {
   if (/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nONE FILE RETRY — HARD OUTPUT BOUND: Output ONLY {"path":"exact requested path","content":"complete file content"} with no markdown, prose, metadata, files array, or extra keys, in at most 6,000 output tokens. Never return a prefix, continuation, patch, or partial file. If repeated data would exceed the bound, replace it with concise deterministic code that produces the same behavior.`
