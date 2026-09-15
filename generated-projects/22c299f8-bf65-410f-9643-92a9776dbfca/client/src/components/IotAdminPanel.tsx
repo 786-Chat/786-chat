@@ -15,6 +15,26 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function extractDeviceList(payload: any): any[] {
+  const candidates = [
+    payload,
+    payload?.devices,
+    payload?.list,
+    payload?.data,
+    payload?.data?.devices,
+    payload?.data?.list,
+    payload?.result,
+    payload?.result?.devices,
+    payload?.result?.list,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
+}
+
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -41,7 +61,7 @@ export default function IotAdminPanel() {
   const [cloudDevices, setCloudDevices] = useState<any[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [provider] = useState("tuya");
+  const [provider, setProvider] = useState("tuya");
   const [deviceId, setDeviceId] = useState("");
   const [deviceName, setDeviceName] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -70,20 +90,30 @@ export default function IotAdminPanel() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const discover = async () => {
+  const discover = async (silent = false) => {
+    if (discovering || provider !== "tuya") return;
     setDiscovering(true);
     try {
       const response = await fetch("/api/tuya/devices", { credentials: "include", cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.message || "Could not load Tuya devices");
-      setCloudDevices(Array.isArray(data) ? data : []);
-      toast({ title: "Tuya devices loaded", description: `${Array.isArray(data) ? data.length : 0} cloud device(s) found.` });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || data?.msg || "Could not load Tuya devices");
+      const devices = extractDeviceList(data);
+      setCloudDevices(devices);
+      if (!silent) {
+        toast({ title: "Tuya devices loaded", description: `${devices.length} cloud device(s) found.` });
+      }
     } catch (error: any) {
       toast({ title: "Device discovery failed", description: error?.message || "Could not load Tuya devices", variant: "destructive" });
     } finally {
       setDiscovering(false);
     }
   };
+
+  useEffect(() => {
+    if (status?.configured && provider === "tuya" && cloudDevices.length === 0 && !discovering) {
+      void discover(true);
+    }
+  }, [status?.configured, provider]);
 
   const testConnection = async () => {
     setTesting(true);
@@ -132,6 +162,8 @@ export default function IotAdminPanel() {
     await loadBase();
   };
 
+  const canAssign = Boolean(deviceId && deviceName.trim() && branchId);
+
   return (
     <div className="space-y-6 w-full max-w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -144,9 +176,9 @@ export default function IotAdminPanel() {
             <p className="text-sm text-slate-400">Tuya / Smart Life cloud devices assigned to customer branches</p>
           </div>
         </div>
-        <Button onClick={discover} disabled={discovering} className="bg-cyan-600 hover:bg-cyan-500 text-white">
+        <Button onClick={() => discover(false)} disabled={discovering} className="bg-cyan-600 hover:bg-cyan-500 text-white">
           {discovering ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-          Find / Import Devices
+          {discovering ? "Loading Devices..." : "Find / Import Devices"}
         </Button>
       </div>
 
@@ -189,7 +221,15 @@ export default function IotAdminPanel() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Provider</label>
-            <select value="tuya" disabled className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white">
+            <select
+              value={provider}
+              onChange={(event) => {
+                setProvider(event.target.value);
+                setDeviceId("");
+                setCloudDevices([]);
+              }}
+              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
+            >
               <option value="tuya">Tuya / Smart Life</option>
             </select>
           </div>
@@ -197,6 +237,12 @@ export default function IotAdminPanel() {
             <label className="mb-1 block text-xs font-medium text-slate-400">Find / Import Device</label>
             <select
               value={deviceId}
+              onFocus={() => {
+                if (!cloudDevices.length && !discovering) void discover(false);
+              }}
+              onClick={() => {
+                if (!cloudDevices.length && !discovering) void discover(false);
+              }}
               onChange={(event) => {
                 const id = event.target.value;
                 setDeviceId(id);
@@ -205,7 +251,9 @@ export default function IotAdminPanel() {
               }}
               className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
             >
-              <option value="">{cloudDevices.length ? "Choose a Tuya device..." : "Click Find / Import Devices first"}</option>
+              <option value="">
+                {discovering ? "Loading Tuya devices..." : cloudDevices.length ? "Choose a Tuya device..." : "Click to Find / Import Devices"}
+              </option>
               {cloudDevices.map((device: any) => {
                 const id = String(device.id || device.device_id || device.deviceId || "");
                 const name = String(device.name || device.device_name || device.product_name || id);
@@ -232,7 +280,13 @@ export default function IotAdminPanel() {
         </div>
 
         {deviceId && <p className="mt-3 break-all text-xs text-slate-500">Tuya Device ID: {deviceId}</p>}
-        <Button onClick={assignDevice} className="mt-4 bg-blue-600 hover:bg-blue-500 text-white"><Plus className="mr-2 h-4 w-4" />Assign Device</Button>
+        <Button
+          onClick={assignDevice}
+          disabled={!canAssign}
+          className="mt-4 bg-blue-600 hover:bg-blue-500 text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="mr-2 h-4 w-4" />Assign Device
+        </Button>
       </div>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
