@@ -143,26 +143,42 @@ export async function getAllTuyaDevices(): Promise<any[]> {
     devices.push({ ...device, id, _source_uid: uid || device?._source_uid });
   };
 
+  const collect = async (path: string, uid?: string) => {
+    try {
+      const result = await request<any>("GET", path, null, token);
+      const list = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.list)
+          ? result.list
+          : Array.isArray(result?.devices)
+            ? result.devices
+            : Array.isArray(result?.data)
+              ? result.data
+              : [];
+      list.forEach((device: any) => push(device, uid));
+    } catch (_) {}
+  };
+
   try {
     const usersResult = await request<any>("GET", "/v1.0/apps/users?page_no=1&page_size=100", null, token);
     const users = usersResult?.list || usersResult?.data || [];
     for (const user of users) {
       const uid = user.uid || user.id;
       if (!uid) continue;
-      try {
-        const result = await request<any>("GET", `/v1.0/users/${uid}/devices`, null, token);
-        const list = Array.isArray(result) ? result : result?.list || [];
-        list.forEach((device: any) => push(device, uid));
-      } catch (_) {}
+      await collect(`/v1.0/users/${encodeURIComponent(uid)}/devices`, uid);
     }
   } catch (_) {}
 
   if (devices.length === 0) {
-    try {
-      const result = await request<any>("GET", "/v1.0/iot-01/associated-users/devices?last_row_key=", null, token);
-      const list = Array.isArray(result) ? result : result?.list || [];
-      list.forEach((device: any) => push(device));
-    } catch (_) {}
+    await collect("/v1.0/iot-03/devices?page_no=1&page_size=100");
+  }
+
+  if (devices.length === 0) {
+    await collect("/v1.0/devices?page_no=1&page_size=100");
+  }
+
+  if (devices.length === 0) {
+    await collect("/v1.0/iot-01/associated-users/devices?last_row_key=");
   }
 
   return devices;
