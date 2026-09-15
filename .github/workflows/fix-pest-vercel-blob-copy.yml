@@ -1,4 +1,4 @@
-name: Finalize Pest Control Live Migration
+name: Deploy Pest Control Mobile Fix
 
 on:
   push:
@@ -7,96 +7,59 @@ on:
       - '.github/workflows/fix-pest-vercel-blob-copy.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch-live-generated-project:
+  deploy-pest-mobile-fix:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
-      - name: Checkout repository history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Checkout live Pest Control generated branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          TARGET_BRANCH='generated/22c299f8-bf65-410f-9643-92a9776dbfca/0ae18329-440c-47e3-8-mtz3rq37-04992'
-          git fetch origin "$TARGET_BRANCH:$TARGET_BRANCH"
-          echo "TARGET_BRANCH=$TARGET_BRANCH" >> "$GITHUB_ENV"
-          git checkout --detach "$TARGET_BRANCH"
-
-      - name: Remove leftover Replit development banner
-        shell: python
-        run: |
-          from pathlib import Path
-          import re
-
-          index = Path('generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html')
-          html = index.read_text()
-          cleaned = re.sub(
-            r'\s*<!--\s*This is a replit script.*?-->\s*<script[^>]+src=["\']https://replit\.com/public/js/replit-dev-banner\.js["\'][^>]*></script>\s*',
-            '\n',
-            html,
-            flags=re.DOTALL | re.IGNORECASE,
-          )
-          if cleaned == html and 'replit-dev-banner.js' in html:
-            cleaned = re.sub(
-              r'\s*<script[^>]+replit-dev-banner\.js[^>]*></script>\s*',
-              '\n',
-              html,
-              flags=re.IGNORECASE,
-            )
-          if 'replit-dev-banner.js' in cleaned:
-            raise SystemExit('Replit development banner still present after cleanup')
-          if cleaned != html:
-            index.write_text(cleaned)
-            print('Removed Replit development banner from live Pest Control source')
-          else:
-            print('Replit development banner already absent')
-
-      - name: Commit and push live cleanup
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "786.Chat Automation"
-          git config user.email "actions@786.chat"
-          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/index.html
-          git diff --cached --check
-          if ! git diff --cached --quiet; then
-            git commit -m "fix(pest-control): remove leftover Replit banner"
-            git push origin "HEAD:${TARGET_BRANCH}"
-          else
-            echo "No live source change required"
-          fi
-          echo "CLEAN_COMMIT_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-
-      - name: Deploy cleaned Pest Control branch to generated Vercel project
+      - name: Deploy exact repaired Pest Control commit to generated Vercel project
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_TEAM_ID: team_ramDdJPbDZUAmHzZhWYHvxEt
           VERCEL_PROJECT_NAME: 786-generated-22c299f8bf65
           VERCEL_REPOSITORY_ID: '1250394192'
+          TARGET_BRANCH: generated/22c299f8-bf65-410f-9643-92a9776dbfca/4870cc9e-a28b-4a43-a-mu2pm006-ibaq5
+          TARGET_SHA: cca4a05f0b786684a559c24c22cae3e4c5426113
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN GitHub secret is missing"; exit 1; }
+
           payload=$(jq -n \
             --arg name "$VERCEL_PROJECT_NAME" \
             --arg ref "$TARGET_BRANCH" \
-            --arg sha "$CLEAN_COMMIT_SHA" \
+            --arg sha "$TARGET_SHA" \
             --argjson repoId "$VERCEL_REPOSITORY_ID" \
             '{name:$name,target:"staging",gitSource:{type:"github",repoId:$repoId,ref:$ref,sha:$sha}}')
+
           response=$(curl --fail-with-body --silent --show-error \
             -X POST \
             -H "Authorization: Bearer $VERCEL_TOKEN" \
             -H "Content-Type: application/json" \
             --data "$payload" \
             "https://api.vercel.com/v13/deployments?teamId=$VERCEL_TEAM_ID")
+
           deployment_id=$(echo "$response" | jq -r '.id // empty')
           deployment_url=$(echo "$response" | jq -r '.url // empty')
-          test -n "$deployment_id" || { echo "Vercel did not return a deployment id"; exit 1; }
-          echo "Triggered cleaned Pest Control deployment: $deployment_id"
-          echo "CLEAN_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
-          echo "CLEAN_DEPLOYMENT_URL=$deployment_url" >> "$GITHUB_ENV"
+          test -n "$deployment_id" || { echo "Vercel did not return a deployment id"; echo "$response"; exit 1; }
+          echo "Triggered Pest Control mobile-fix deployment: $deployment_id"
+          echo "Deployment URL: https://$deployment_url"
+
+          ready=""
+          for attempt in $(seq 1 90); do
+            status=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_TEAM_ID")
+            ready=$(echo "$status" | jq -r '.readyState // .state // empty')
+            echo "Vercel state: $ready"
+            case "$ready" in
+              READY) break ;;
+              ERROR|CANCELED) echo "$status"; exit 1 ;;
+            esac
+            sleep 5
+          done
+
+          test "$ready" = "READY" || { echo "Deployment did not become READY in time"; exit 1; }
+          echo "Verified READY deployment for $TARGET_SHA"
