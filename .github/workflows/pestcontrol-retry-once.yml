@@ -8,6 +8,7 @@ name: PestControl Retry Stuck Preview
 # 2026-09-13: rebuild after imported-project syntax repair path.
 # 2026-09-13: rerun after retry endpoint normalization reached production.
 # 2026-09-13: rebuild after mobile admin/branch login overflow and scrolling repair.
+# 2026-09-16: rebuild after Tuya provider/import controls and device discovery repair.
 on:
   push:
     branches:
