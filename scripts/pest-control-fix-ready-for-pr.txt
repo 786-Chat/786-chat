@@ -1,0 +1,1 @@
+Permanent generator repair is ready for pull-request deployment verification.
