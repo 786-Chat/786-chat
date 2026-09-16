@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "simulate": "tsx device-simulator.ts",
+    "ingest": "tsx ingestion-service.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "mqtt": "^5.14.1"
+    "mqtt": "^5.14.1",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
