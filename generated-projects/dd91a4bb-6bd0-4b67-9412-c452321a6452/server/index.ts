@@ -247,16 +247,19 @@ app.use((req, res, next) => {
     if (urlPath !== '/' && urlPath !== '/index.html') return next();
     
     try {
-      const hostname = (req.hostname || (req.headers.host || '').replace(/:\d+$/, '')).toLowerCase().replace(/\.$/, '');
+      const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+      const hostname = (forwardedHost || req.hostname || (req.headers.host || '').replace(/:\d+$/, '')).toLowerCase().replace(/\.$/, '');
       const normalizeDomain = (d: string) => d.toLowerCase().trim().replace(/\.$/, '').replace(/^www\./, '');
       const cleanHost = normalizeDomain(hostname);
       
-      const isSubdomain = cleanHost.endsWith('.link24.online') && 
-        cleanHost !== 'link24.online' && 
-        cleanHost !== 'www.link24.online';
+      const is786Subdomain = cleanHost.endsWith('.786.chat') && cleanHost !== '786.chat' && cleanHost !== 'www.786.chat';
+      const isLegacyLink24Subdomain = cleanHost.endsWith('.link24.online') && cleanHost !== 'link24.online' && cleanHost !== 'www.link24.online';
+      const isSubdomain = is786Subdomain || isLegacyLink24Subdomain;
       const isCustomDomain = !cleanHost.includes('replit') && 
         !cleanHost.includes('localhost') && 
         !cleanHost.includes('127.0.0.1') &&
+        cleanHost !== '786.chat' &&
+        cleanHost !== 'www.786.chat' &&
         cleanHost !== 'link24.online' &&
         cleanHost !== 'www.link24.online' &&
         !isSubdomain &&
