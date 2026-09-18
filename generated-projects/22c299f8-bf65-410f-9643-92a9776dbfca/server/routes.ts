@@ -7394,11 +7394,105 @@ Generated: ${new Date().toISOString()}
     return enrichIotBranchNames([...ownedDevices, ...legacyDevices]);
   };
 
+  const loadIotAlarmHistory = async (branchId?: string) => {
+    const branchFilter = branchId ? sql`AND n.branch_id::text = ${String(branchId)}` : sql``;
+    const ownedBranchFilter = branchId ? sql`AND d.branch_id::text = ${String(branchId)}` : sql``;
+
+    const legacyResult: any = await db.execute(sql`
+      SELECT
+        ('legacy-' || n.id)::text AS id,
+        matched.device_id,
+        matched.device_name,
+        n.branch_id::text AS branch_id,
+        b.name AS branch_name,
+        matched.notes AS location,
+        n.message,
+        COALESCE(n.sent_at, n.created_at) AS event_at,
+        ('smart-device-alarm' = ANY(COALESCE(n.visit_types, ARRAY[]::text[]))) AS is_alarm,
+        ('test-alarm' = ANY(COALESCE(n.visit_types, ARRAY[]::text[]))) AS is_test,
+        'legacy'::text AS source
+      FROM notifications n
+      LEFT JOIN branches b ON b.id::text = n.branch_id::text
+      LEFT JOIN LATERAL (
+        SELECT d.device_id, d.device_name, d.notes
+        FROM iot_devices d
+        WHERE d.branch_id::text = n.branch_id::text
+          AND (
+            n.message ILIKE ('%' || d.device_name || '%')
+            OR n.purpose_of_visit ILIKE ('%' || d.device_id || '%')
+          )
+        ORDER BY d.updated_at DESC NULLS LAST
+        LIMIT 1
+      ) matched ON true
+      WHERE 'smart-device-alarm' = ANY(COALESCE(n.visit_types, ARRAY[]::text[]))
+      ${branchFilter}
+      ORDER BY COALESCE(n.sent_at, n.created_at) DESC
+      LIMIT 200
+    `);
+
+    const ownedResult: any = await db.execute(sql`
+      SELECT
+        ('owned-' || e.id::text) AS id,
+        d.device_id,
+        COALESCE(d.friendly_name, d.device_id) AS device_name,
+        d.branch_id::text AS branch_id,
+        b.name AS branch_name,
+        COALESCE(d.installation_location, d.hardware_model) AS location,
+        CASE
+          WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
+          ELSE ('Device event: ' || e.event_type)
+        END AS message,
+        e.event_at,
+        true AS is_alarm,
+        (COALESCE(d.firmware_version, '') ILIKE '%sim%') AS is_test,
+        'owned'::text AS source
+      FROM owned_iot_events e
+      JOIN owned_iot_devices d ON d.device_id = e.device_id
+      LEFT JOIN branches b ON b.id::text = d.branch_id::text
+      WHERE (
+        e.event_type ILIKE '%trap%'
+        OR e.event_type ILIKE '%alarm%'
+        OR e.event_type ILIKE '%caught%'
+      )
+        AND COALESCE(d.firmware_version, '') NOT ILIKE '%sim%'
+      ${ownedBranchFilter}
+      ORDER BY e.event_at DESC
+      LIMIT 200
+    `).catch(() => ({ rows: [] }));
+
+    const legacyRows = Array.isArray(legacyResult) ? legacyResult : (legacyResult?.rows || []);
+    const ownedRows = Array.isArray(ownedResult) ? ownedResult : (ownedResult?.rows || []);
+    return [...legacyRows, ...ownedRows]
+      .map((row: any) => ({
+        id: row.id,
+        deviceId: row.device_id || null,
+        deviceName: row.device_name || "Food Safety Smart Device",
+        branchId: row.branch_id || null,
+        branchName: row.branch_name || "Unknown branch",
+        location: row.location || null,
+        message: row.message,
+        eventAt: row.event_at,
+        isAlarm: Boolean(row.is_alarm),
+        isTest: Boolean(row.is_test),
+        source: row.source,
+      }))
+      .sort((a: any, b: any) => new Date(b.eventAt).getTime() - new Date(a.eventAt).getTime())
+      .slice(0, 200);
+  };
+
   app.get("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
       res.json(await loadAdminIotDevices(String(req.query.refresh || "") === "1"));
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load assigned devices" });
+    }
+  });
+
+  app.get("/api/iot/alarm-history", isAdminAuthenticated, async (_req, res) => {
+    try {
+      res.json(await loadIotAlarmHistory());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarm history" });
     }
   });
 
@@ -7515,6 +7609,13 @@ Generated: ${new Date().toISOString()}
             { code: "shock", value: true },
           ],
         };
+        await db.execute(sql`
+          INSERT INTO owned_iot_events
+            (event_id, device_id, event_type, event_value, event_at, raw_payload)
+          VALUES
+            (gen_random_uuid()::text, ${String(row.device_id)}, 'trap_triggered', 'true'::jsonb, now(),
+             jsonb_build_object('source','admin-test-alarm','deviceId',${String(row.device_id)},'type','trap_triggered','value',true))
+        `).catch(() => null);
         const [enriched] = await enrichIotBranchNames([owned]);
         return res.json({ ...enriched, testAlarm: true });
       }
@@ -7534,6 +7635,18 @@ Generated: ${new Date().toISOString()}
         lastStatus: testStatus,
         lastCheckedAt: now,
       });
+      if (updated?.branchId) {
+        const dateStr = now.toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+        const timeStr = now.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+        await storage.createNotification({
+          branchId: updated.branchId,
+          message: `🚨 TEST ALARM — Mouse trap triggered: ${updated.deviceName}${updated.notes ? ` (${updated.notes})` : ""}. This test record remains in alarm history after acknowledgement.`,
+          visitDate: dateStr,
+          visitTime: timeStr,
+          purposeOfVisit: `Smart Device Alarm — Mouse / rat trap triggered — ${updated.deviceId}`,
+          visitTypes: ["smart-device-alarm", "test-alarm"],
+        });
+      }
       const [enriched] = await enrichIotBranchNames([updated]);
       res.json({ ...enriched, testAlarm: true });
     } catch (err: any) {
@@ -7655,6 +7768,16 @@ Generated: ${new Date().toISOString()}
       throw error;
     }
   };
+
+  app.get("/api/branch/iot-alarm-history", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+      res.json(await loadIotAlarmHistory(String(session.branchId)));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarm history" });
+    }
+  });
 
   app.get("/api/branch/iot-devices", async (req, res) => {
     try {
