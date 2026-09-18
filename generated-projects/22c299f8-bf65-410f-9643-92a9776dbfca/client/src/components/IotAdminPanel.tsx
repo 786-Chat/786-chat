@@ -4,14 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 interface BranchOption {
   id: string;
@@ -56,7 +48,7 @@ export default function IotAdminPanel() {
   const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
   const [gatewayPort, setGatewayPort] = useState("1883");
   const [sendingWifi, setSendingWifi] = useState(false);
-  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -215,7 +207,7 @@ export default function IotAdminPanel() {
       try {
         await navigator.clipboard.writeText(JSON.stringify(provisioningPayload(), null, 2));
       } catch (_) {}
-      setSetupDialogOpen(true);
+      setShowSetupGuide(true);
     } finally {
       setSendingWifi(false);
     }
@@ -447,7 +439,7 @@ export default function IotAdminPanel() {
             Copy Setup Details
           </Button>
           <Button
-            onClick={() => setSetupDialogOpen(true)}
+            onClick={() => setShowSetupGuide((value) => !value)}
             variant="outline"
             className="border-slate-600 text-slate-200"
           >
@@ -461,77 +453,60 @@ export default function IotAdminPanel() {
         </p>
       </div>
 
-      <Dialog open={setupDialogOpen} onOpenChange={setSetupDialogOpen}>
-        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto border-cyan-500/30 bg-slate-950 text-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white">
-              <Wifi className="h-5 w-5 text-cyan-300" />
-              Food Safety Device Setup
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              This popup stays inside the Admin Dashboard. The trap's own local setup page cannot be embedded inside 786.Chat because the dashboard is HTTPS while the device setup address is local HTTP.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 text-sm">
-            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4">
-              <p className="font-semibold text-cyan-100">Before opening 192.168.4.1</p>
-              <ol className="mt-2 list-decimal space-y-2 pl-5 text-slate-300">
+      {showSetupGuide && (
+        <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/65 p-5 text-sm text-slate-200">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <h4 className="flex items-center gap-2 font-semibold text-cyan-100">
+                <Wifi className="h-4 w-4 text-cyan-300" />
+                Device setup steps
+              </h4>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
                 <li>Put the physical trap into Food Safety setup mode.</li>
-                <li>On this phone, tablet or computer, connect to the trap's temporary Food Safety Wi-Fi network.</li>
-                <li>Then open the local setup page below and enter the customer 2.4 GHz Wi-Fi details.</li>
+                <li>Connect this phone, tablet or computer to the trap's temporary Food Safety Wi-Fi network.</li>
+                <li>Only then open the local setup page and enter the customer 2.4 GHz Wi-Fi details.</li>
               </ol>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-slate-900 p-3">
+                  <span className="block text-xs text-slate-500">Device</span>
+                  <span className="break-all font-mono text-slate-100">{wifiDeviceId || "Select a device first"}</span>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-3">
+                  <span className="block text-xs text-slate-500">Customer Wi-Fi</span>
+                  <span className="break-all text-slate-100">{wifiSsid || "Enter Wi-Fi name first"}</span>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-3">
+                  <span className="block text-xs text-slate-500">Local setup address</span>
+                  <span className="break-all font-mono text-slate-100">{setupAddress.trim() || "http://192.168.4.1"}</span>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-3">
+                  <span className="block text-xs text-slate-500">Gateway</span>
+                  <span className="break-all font-mono text-slate-100">{gatewayHost}:{gatewayPort || "1883"}</span>
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
+                If 192.168.4.1 is blank after you connect to the trap's setup Wi-Fi, the Food Safety setup firmware/portal is not running on that trap yet.
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                Your Wi-Fi password stays in this browser and is not stored in Neon.
+              </p>
             </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-slate-900 p-3">
-                <span className="block text-xs text-slate-500">Device</span>
-                <span className="break-all font-mono text-slate-100">{wifiDeviceId || "Select a device first"}</span>
-              </div>
-              <div className="rounded-lg bg-slate-900 p-3">
-                <span className="block text-xs text-slate-500">Customer Wi-Fi</span>
-                <span className="break-all text-slate-100">{wifiSsid || "Enter Wi-Fi name first"}</span>
-              </div>
-              <div className="rounded-lg bg-slate-900 p-3">
-                <span className="block text-xs text-slate-500">Local setup address</span>
-                <span className="break-all font-mono text-slate-100">{setupAddress.trim() || "http://192.168.4.1"}</span>
-              </div>
-              <div className="rounded-lg bg-slate-900 p-3">
-                <span className="block text-xs text-slate-500">Gateway</span>
-                <span className="break-all font-mono text-slate-100">{gatewayHost}:{gatewayPort || "1883"}</span>
-              </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={copyWifiSetup} className="border-slate-600 text-slate-200">
+                <Copy className="mr-2 h-4 w-4" />
+                Copy Setup Details
+              </Button>
+              <Button type="button" onClick={openLocalSetupPage} className="bg-cyan-600 text-white hover:bg-cyan-500">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open Local Setup Page
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setShowSetupGuide(false)} className="text-slate-300">
+                Close Guide
+              </Button>
             </div>
-
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
-              If 192.168.4.1 is blank after you connect to the trap's setup Wi-Fi, the Food Safety setup firmware/portal is not running on that trap yet. The Admin Dashboard cannot create that local page by itself.
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Your Wi-Fi password stays in this browser. It is not displayed in this popup and is not stored in Neon.
-            </p>
           </div>
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={copyWifiSetup}
-              className="border-slate-600 text-slate-200"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy Setup Details
-            </Button>
-            <Button
-              type="button"
-              onClick={openLocalSetupPage}
-              className="bg-cyan-600 text-white hover:bg-cyan-500"
-            >
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Open Local Setup Page
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
