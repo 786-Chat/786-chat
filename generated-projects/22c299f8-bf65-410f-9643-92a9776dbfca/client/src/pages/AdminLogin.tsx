@@ -258,7 +258,7 @@ export default function AdminLogin() {
           </CardHeader>
           
           <CardContent className="px-4 py-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="relative z-30 space-y-4 pointer-events-auto">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-purple-400" />
@@ -269,8 +269,10 @@ export default function AdminLogin() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="username"
                   placeholder="Enter your email"
-                  className="bg-slate-700/50 border-purple-500/30 text-white placeholder-slate-400 focus:border-purple-400 transition-colors text-sm sm:text-base"
+                  className="relative z-30 pointer-events-auto border-purple-500/30 text-white placeholder:text-slate-400 focus:border-purple-400 transition-colors text-sm sm:text-base"
+                  style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
                 />
               </div>
 
@@ -287,10 +289,11 @@ export default function AdminLogin() {
                       setPassword(e.target.value);
                       if (Math.random() > 0.8) playMagicSound(600 + Math.random() * 200, 50);
                     }}
-                    className="bg-slate-700/50 border-purple-500/30 text-white pr-12 focus:border-purple-400 focus:ring-purple-400/20 h-11"
+                    className="relative z-30 pointer-events-auto border-purple-500/30 text-white pr-12 placeholder:text-slate-400 focus:border-purple-400 focus:ring-purple-400/20 h-11"
+                    style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
                     placeholder="Enter your password"
                     required
-                    autoComplete="off"
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"
