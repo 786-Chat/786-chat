@@ -2272,7 +2272,7 @@ export class DatabaseStorage implements IStorage {
         sentAt: new Date(),
         updatedAt: new Date() 
       })
-      .where(eq(monthlyReports.id, reportId))
+      .where(eq(monthlyReports.id, canonicalReportId))
       .returning();
     
     return updatedReport;
@@ -2301,14 +2301,17 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     
-    if (existingDoc) throw new Error('Report already exists in My Docs');
+    if (existingDoc) {
+      console.log('Monthly report is already saved in My Docs; treating as success');
+      return;
+    }
     
     // Validate and correct file path before saving to My Docs
     let correctedFilePath = report.filepath;
     let correctedFilename = report.filename;
     
     // Check if file exists at current path
-    if (correctedFilePath && !fs.existsSync(correctedFilePath)) {
+    if (correctedFilePath && !correctedFilePath.startsWith('/objects/') && !fs.existsSync(correctedFilePath)) {
       console.log(`🔧 Monthly report file not found at ${correctedFilePath}, attempting to fix...`);
       
       // Try to find the file in common directories with both filename and filepath-based names
@@ -2495,7 +2498,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async sendMonthlyReportToBranch(reportId: string, branchId: string): Promise<MonthlyReport> {
-    const original = await this.getMonthlyReport(reportId);
+    let original = await this.getMonthlyReport(reportId);
+    let canonicalReportId = reportId;
+
+    // Some legacy/admin cards can reference the documents-table copy of a
+    // monthly report. Resolve that copy back to the canonical monthly_reports
+    // row instead of failing with "Report not found".
+    if (!original) {
+      const documentCopy = await this.getDocument(reportId);
+      if (documentCopy?.filepath) {
+        const [matchingReport] = await db
+          .select()
+          .from(monthlyReports)
+          .where(eq(monthlyReports.filepath, documentCopy.filepath))
+          .orderBy(desc(monthlyReports.createdAt))
+          .limit(1);
+        if (matchingReport) {
+          original = matchingReport;
+          canonicalReportId = matchingReport.id;
+        }
+      }
+    }
+
     if (!original) throw new Error('Report not found');
     const branch = await this.getBranch(branchId);
     if (!branch) throw new Error('Branch not found');
@@ -2509,7 +2533,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(monthlyReports).where(
       and(
         eq(monthlyReports.filepath, original.filepath),
-        ne(monthlyReports.id, reportId)
+        ne(monthlyReports.id, canonicalReportId)
       )
     );
 
