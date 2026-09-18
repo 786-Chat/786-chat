@@ -3,6 +3,7 @@ import { Copy, ExternalLink, HardDrive, Plus, RefreshCw, ShieldCheck, Trash2, Wi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface BranchOption {
@@ -292,14 +293,22 @@ export default function IotAdminPanel() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Branch</label>
-            <select
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
-            >
-              <option value="">Select customer branch...</option>
-              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-            </select>
+            <Select value={branchId || undefined} onValueChange={setBranchId}>
+              <SelectTrigger className="w-full border-slate-600 bg-slate-900 text-white focus:ring-cyan-500/40">
+                <SelectValue placeholder="Select customer branch..." />
+              </SelectTrigger>
+              <SelectContent className="z-[9999] border-slate-600 bg-slate-950 text-white shadow-2xl">
+                {branches.map((branch) => (
+                  <SelectItem
+                    key={branch.id}
+                    value={branch.id}
+                    className="text-white focus:bg-cyan-600/30 focus:text-white"
+                  >
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device ID</label>
@@ -359,16 +368,22 @@ export default function IotAdminPanel() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
-            <select
-              value={wifiDeviceId}
-              onChange={(event) => setWifiDeviceId(event.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
-            >
-              <option value="">Select registered device...</option>
-              {ownedDevices.map((device: any) => (
-                <option key={device.id} value={device.deviceId}>{device.deviceName} — {device.deviceId}</option>
-              ))}
-            </select>
+            <Select value={wifiDeviceId || undefined} onValueChange={setWifiDeviceId}>
+              <SelectTrigger className="w-full border-slate-600 bg-slate-900 text-white focus:ring-cyan-500/40">
+                <SelectValue placeholder="Select registered device..." />
+              </SelectTrigger>
+              <SelectContent className="z-[9999] border-slate-600 bg-slate-950 text-white shadow-2xl">
+                {ownedDevices.map((device: any) => (
+                  <SelectItem
+                    key={device.id}
+                    value={String(device.deviceId)}
+                    className="text-white focus:bg-cyan-600/30 focus:text-white"
+                  >
+                    {device.deviceName} — {device.deviceId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
