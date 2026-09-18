@@ -1,0 +1,30 @@
+# Food Safety owned-IoT prototype broker configuration
+# Copy to C:\FoodSafety\mqtt\config\mosquitto.conf on the Dell gateway.
+# Do not commit generated password files or certificates.
+
+listener 1883 0.0.0.0
+protocol mqtt
+
+allow_anonymous false
+password_file C:\FoodSafety\secrets\mqtt.passwd
+
+persistence true
+persistence_location C:\FoodSafety\mqtt\data\
+
+log_dest file C:\FoodSafety\mqtt\log\mosquitto.log
+log_type error
+log_type warning
+log_type notice
+log_type information
+
+connection_messages true
+log_timestamp true
+
+# Phase 1 is LAN-only. Windows Firewall must restrict TCP/1883 to the trusted
+# private LAN. Do not port-forward 1883 on the Virgin Media router.
+#
+# Phase 2 hardening:
+# - add TLS listener on 8883
+# - add per-device ACLs
+# - use unique device credentials/certificates
+# - disable plaintext 1883 for device traffic
