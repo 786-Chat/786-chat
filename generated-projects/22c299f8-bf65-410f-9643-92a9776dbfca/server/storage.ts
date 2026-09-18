@@ -2272,7 +2272,7 @@ export class DatabaseStorage implements IStorage {
         sentAt: new Date(),
         updatedAt: new Date() 
       })
-      .where(eq(monthlyReports.id, canonicalReportId))
+      .where(eq(monthlyReports.id, reportId))
       .returning();
     
     return updatedReport;
@@ -2540,7 +2540,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedReport] = await db
       .update(monthlyReports)
       .set({ branchId, sentAt: now, receivedAt: now, updatedAt: now })
-      .where(eq(monthlyReports.id, reportId))
+      .where(eq(monthlyReports.id, canonicalReportId))
       .returning();
 
     await db
