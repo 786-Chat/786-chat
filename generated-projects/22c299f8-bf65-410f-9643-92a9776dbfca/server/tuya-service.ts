@@ -283,7 +283,9 @@ export async function refreshAssignedDevice(storageInstance: any, dev: any, opti
   const alarmDetected = checkAlarmActive(statusList);
   const previousAlarmDetected = checkAlarmActive(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
   const newAlarmTransition = alarmDetected && !previousAlarmDetected;
-  const nextAlarmActive = alarmDetected ? Boolean(dev.alarmActive || newAlarmTransition) : false;
+  // Latch every trap alarm until an authorised admin/branch user acknowledges it.
+  // A physical sensor may pulse briefly and return to normal before anyone sees the dashboard.
+  const nextAlarmActive = Boolean(dev.alarmActive || alarmDetected || newAlarmTransition);
   const batteryPercent = getBatteryPercent(statusList);
   const powerStatus = getPowerStatus(statusList);
   const now = new Date();
