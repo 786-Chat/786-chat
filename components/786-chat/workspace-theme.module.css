@@ -104,10 +104,14 @@
 /* Device previews stay top-aligned, centred, touch-scrollable and clipped to the selected viewport. */
 .previewPanel :global(iframe[title$="compiled preview"]) {
   display: block;
+  position: relative;
+  z-index: 20;
   max-width: 100%;
   background: #fff;
+  pointer-events: auto !important;
+  user-select: auto !important;
   overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
   -webkit-overflow-scrolling: touch;
 }
 
