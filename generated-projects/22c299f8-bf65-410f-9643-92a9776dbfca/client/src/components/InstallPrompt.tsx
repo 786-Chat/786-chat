@@ -11,10 +11,8 @@ export default function InstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e);
       
-      // Show prompt after a short delay
-      setTimeout(() => {
-        setShowPrompt(true);
-      }, 3000);
+      // Do not show an automatic overlay. Users can open /install when they want the app.
+      setShowPrompt(false);
     };
 
     const handleAppInstalled = () => {
