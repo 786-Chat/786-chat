@@ -22,7 +22,7 @@ jobs:
           VERCEL_PROJECT_NAME: 786-generated-22c299f8bf65
           VERCEL_REPOSITORY_ID: '1250394192'
           TARGET_BRANCH: generated/22c299f8-bf65-410f-9643-92a9776dbfca/34e89168-bba8-4b43-9-mu7dt6wx-nac21
-          TARGET_SHA: 865ad54c0f5ee6b3e3264a7f1ff9810e98d291e6
+          TARGET_SHA: 7f4f8153e0a72d445b6e6f32a9d4d1d53b6aee1a
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN GitHub secret is missing"; exit 1; }
