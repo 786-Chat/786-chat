@@ -133,6 +133,26 @@ export default function BranchLogin() {
     <div 
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
     >
+      <style>{`
+        .pest-login-input,
+        .pest-login-input:focus,
+        .pest-login-input:active {
+          background-color: rgba(51, 65, 85, 0.92) !important;
+          color: #fff !important;
+          -webkit-text-fill-color: #fff !important;
+          caret-color: #fff !important;
+        }
+        .pest-login-input:-webkit-autofill,
+        .pest-login-input:-webkit-autofill:hover,
+        .pest-login-input:-webkit-autofill:focus,
+        .pest-login-input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 1000px rgb(51 65 85) inset !important;
+          box-shadow: 0 0 0 1000px rgb(51 65 85) inset !important;
+          -webkit-text-fill-color: #fff !important;
+          caret-color: #fff !important;
+          transition: background-color 9999s ease-out 0s;
+        }
+      `}</style>
       {/* Animated Background Particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(60)].map((_, i) => (
@@ -275,7 +295,7 @@ export default function BranchLogin() {
                     setBranchPin(e.target.value);
                     if (Math.random() > 0.8) playMagicSound(600 + Math.random() * 200, 50);
                   }}
-                  className="bg-slate-700/50 border-purple-500/30 text-white focus:border-purple-400 focus:ring-purple-400/20"
+                  className="pest-login-input bg-slate-700/50 border-purple-500/30 text-white focus:border-purple-400 focus:ring-purple-400/20"
                   placeholder="Enter your email..."
                   required
                   autoComplete="off"
@@ -295,7 +315,7 @@ export default function BranchLogin() {
                       setPassword(e.target.value);
                       if (Math.random() > 0.8) playMagicSound(700 + Math.random() * 200, 50);
                     }}
-                    className="bg-slate-700/50 border-purple-500/30 text-white pr-12 focus:border-purple-400 focus:ring-purple-400/20"
+                    className="pest-login-input bg-slate-700/50 border-purple-500/30 text-white pr-12 focus:border-purple-400 focus:ring-purple-400/20"
                     placeholder="Enter your password..."
                     required
                     autoComplete="off"
