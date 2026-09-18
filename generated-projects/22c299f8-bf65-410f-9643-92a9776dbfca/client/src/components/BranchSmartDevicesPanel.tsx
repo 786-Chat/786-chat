@@ -124,7 +124,7 @@ export default function BranchSmartDevicesPanel() {
         </div>
       )}
 
-      <p className="text-center text-xs text-slate-600">Powered by Tuya / Smart Life Cloud • Live IoT pest monitoring</p>
+      <p className="text-center text-xs text-slate-600">Food Safety owned MQTT + legacy cloud devices • Live IoT pest monitoring</p>
     </div>
   );
 }
