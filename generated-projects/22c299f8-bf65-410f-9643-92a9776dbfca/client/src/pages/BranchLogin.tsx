@@ -6,14 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, Lock, Sparkles, Star, Volume2, Mail, MessageCircle, HelpCircle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface MouseTrail {
-  x: number;
-  y: number;
-  id: number;
-  color: string;
-  size: number;
-}
-
 const branchCubeImages = [
   "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087872596-7c3dec17-9044-4dd6-a870-6595396b61ca-logo2-4QPqPg5WqzqAdqmEY7rLQnJdrTTlf7.png",
   "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087871673-1829269c-78e7-4c76-a6e2-0c1090fd8c2e-logo1-m5BHauMOSuVvkp1yxc1LjRvdzjOuL4.png",
@@ -27,12 +19,10 @@ export default function BranchLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSupportPopup, setShowSupportPopup] = useState(false);
   const [, setBranchLoginVideoUrl] = useState("");
   const { toast } = useToast();
-  const trailIdRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   // Initialize audio context
@@ -91,29 +81,6 @@ export default function BranchLogin() {
     });
   };
 
-  // Mouse movement handler with colorful trails and flowing glow effect
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const colors = ['#00ff88', '#00ccff', '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3'];
-    const newTrail: MouseTrail = {
-      x: e.clientX,
-      y: e.clientY,
-      id: trailIdRef.current++,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: Math.random() * 30 + 20
-    };
-    
-    setMouseTrails(prev => [...prev.slice(-25), newTrail]);
-    
-    // Play magic sound on mouse move
-    if (Math.random() > 0.96) { // Occasional sounds
-      playMagicSound(Math.random() * 400 + 400, 100);
-    }
-    
-    // Clean up old trails
-    setTimeout(() => {
-      setMouseTrails(prev => prev.filter(trail => trail.id !== newTrail.id));
-    }, 1200);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +133,6 @@ export default function BranchLogin() {
   return (
     <div 
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
-      onMouseMove={handleMouseMove}
     >
       {/* Animated Background Particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -175,57 +141,14 @@ export default function BranchLogin() {
             key={i}
             className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 2}s`
+              left: `${(i * 31) % 100}%`,
+              top: `${(i * 47) % 100}%`,
+              animationDelay: `${(i % 6) * 0.35}s`,
+              animationDuration: `${2 + (i % 4) * 0.4}s`
             }}
           />
         ))}
       </div>
-
-      {/* Beautiful Flowing Glow Effects - Like in the image */}
-      {mouseTrails.map((trail) => (
-        <div
-          key={trail.id}
-          className="fixed pointer-events-none z-10"
-          style={{
-            left: trail.x - trail.size / 2,
-            top: trail.y - trail.size / 2,
-            width: trail.size * 2,
-            height: trail.size * 2,
-          }}
-        >
-          {/* Main glow orb */}
-          <div
-            className="absolute inset-0 rounded-full animate-pulse"
-            style={{
-              background: `radial-gradient(circle, ${trail.color}80 0%, ${trail.color}40 30%, ${trail.color}20 60%, transparent 100%)`,
-              filter: 'blur(8px)',
-              opacity: 0.8
-            }}
-          />
-          {/* Inner bright core */}
-          <div
-            className="absolute inset-1/4 rounded-full animate-ping"
-            style={{
-              background: `radial-gradient(circle, ${trail.color} 0%, ${trail.color}60 50%, transparent 100%)`,
-              filter: 'blur(4px)',
-              opacity: 0.9
-            }}
-          />
-          {/* Ultra bright center */}
-          <div
-            className="absolute inset-2/5 rounded-full"
-            style={{
-              background: trail.color,
-              filter: 'blur(2px)',
-              opacity: 1,
-              boxShadow: `0 0 20px ${trail.color}, 0 0 40px ${trail.color}60`
-            }}
-          />
-        </div>
-      ))}
 
       {/* New isolated 3D cube: branch login only */}
       <style>{`
