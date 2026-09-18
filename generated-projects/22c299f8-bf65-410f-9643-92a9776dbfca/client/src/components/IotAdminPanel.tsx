@@ -280,7 +280,7 @@ export default function IotAdminPanel() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge className="border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-200">No Tuya / Smart Life required</Badge>
+        <Badge className="border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-200">Independent Food Safety IoT</Badge>
         <Badge className="border-blue-500/40 bg-blue-500/10 px-3 py-2 text-blue-200">Food Safety Gateway + Neon</Badge>
       </div>
 
@@ -460,7 +460,7 @@ export default function IotAdminPanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          For the first BK7231N trap, the Food Safety firmware/setup portal must be installed before this button can provision Wi-Fi. No Tuya account or subscription is used.
+          For the first BK7231N trap, install the Food Safety firmware/setup portal before using this button to provision Wi-Fi.
         </p>
       </div>
 
