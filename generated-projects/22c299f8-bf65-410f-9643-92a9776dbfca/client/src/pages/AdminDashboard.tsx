@@ -2866,7 +2866,7 @@ export default function AdminDashboard() {
                                     </div>
                                   </div>
 
-                                  {device.alarmActive && (
+                                  {device.alarmActive ? (
                                     <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3">
                                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                         <div>
@@ -2884,6 +2884,20 @@ export default function AdminDashboard() {
                                           Acknowledge
                                         </Button>
                                       </div>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-3 flex justify-end">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={async () => {
+                                          await fetch(`/api/iot/devices/${device.id}/test-alarm`, { method: "POST", credentials: "include" });
+                                          await refetchIotDevices();
+                                        }}
+                                        className="border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                                      >
+                                        <Bell className="mr-1.5 h-3.5 w-3.5" />Test Alarm
+                                      </Button>
                                     </div>
                                   )}
 
