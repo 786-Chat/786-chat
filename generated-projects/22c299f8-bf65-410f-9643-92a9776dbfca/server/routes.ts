@@ -7695,9 +7695,18 @@ Generated: ${new Date().toISOString()}
 
       const device = await storage.getIotDevice(req.params.id);
       if (!device) return res.status(404).json({ message: "Device not found" });
-      const nextStatus = Array.isArray((device as any).lastStatus)
-        ? (device as any).lastStatus.filter((item: any) => item?.code !== "food_safety_test_alarm")
-        : [];
+      const previousStatus = Array.isArray((device as any).lastStatus) ? (device as any).lastStatus : [];
+      const nextStatus = [
+        ...previousStatus.filter((item: any) =>
+          item?.code !== "food_safety_test_alarm" &&
+          item?.code !== "food_safety_alarm_acknowledged"
+        ),
+        {
+          code: "food_safety_alarm_acknowledged",
+          value: true,
+          acknowledgedAt: new Date().toISOString(),
+        },
+      ];
       const updated = await storage.updateIotDevice(req.params.id, {
         alarmActive: false,
         lastStatus: nextStatus,
@@ -7859,9 +7868,18 @@ Generated: ${new Date().toISOString()}
 
       const device = await storage.getIotDevice(req.params.id);
       if (!device || String(device.branchId) !== String(session.branchId)) return res.status(404).json({ message: "Device not found" });
-      const nextStatus = Array.isArray((device as any).lastStatus)
-        ? (device as any).lastStatus.filter((item: any) => item?.code !== "food_safety_test_alarm")
-        : [];
+      const previousStatus = Array.isArray((device as any).lastStatus) ? (device as any).lastStatus : [];
+      const nextStatus = [
+        ...previousStatus.filter((item: any) =>
+          item?.code !== "food_safety_test_alarm" &&
+          item?.code !== "food_safety_alarm_acknowledged"
+        ),
+        {
+          code: "food_safety_alarm_acknowledged",
+          value: true,
+          acknowledgedAt: new Date().toISOString(),
+        },
+      ];
       res.json(await storage.updateIotDevice(req.params.id, {
         alarmActive: false,
         lastStatus: nextStatus,
