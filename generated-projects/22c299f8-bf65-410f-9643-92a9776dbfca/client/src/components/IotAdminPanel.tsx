@@ -66,6 +66,7 @@ export default function IotAdminPanel() {
   const [deviceName, setDeviceName] = useState("");
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
+  const [clearingId, setClearingId] = useState<string | null>(null);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
 
@@ -160,6 +161,25 @@ export default function IotAdminPanel() {
   const refreshDevice = async (id: string) => {
     await fetch(`/api/iot/devices/${id}/refresh`, { method: "POST", credentials: "include" });
     await loadBase();
+  };
+
+  const clearCatch = async (id: string, name: string) => {
+    setClearingId(id);
+    try {
+      const response = await fetch(`/api/iot/devices/${id}/clear-alarm`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Could not clear catch", description: data?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Catch cleared", description: `${name} is marked serviced. The branch catch card will disappear automatically.` });
+      await loadBase();
+    } finally {
+      setClearingId(null);
+    }
   };
 
   const canAssign = Boolean(deviceId && deviceName.trim() && branchId);
@@ -314,13 +334,29 @@ export default function IotAdminPanel() {
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Provider</span><span className="text-white">Food Safety</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span></div>
-                    <div className={`rounded-lg p-2 ${snap.shock || device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap Event</span><span className={snap.shock || device.alarmActive ? "font-bold text-red-300" : "text-white"}>{snap.shock || device.alarmActive ? "Triggered" : "Normal"}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap Event</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Caught" : "Normal"}</span></div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-500"><Wifi className="h-3.5 w-3.5" />Wi-Fi / Cloud {device.lastCheckedAt ? `• Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}</div>
-                  {device.alarmActive && <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-2 text-sm font-semibold text-red-200">⚠ Pest trap triggered — check and reset this device.</div>}
+                  {device.alarmActive && (
+                    <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3 text-sm text-red-100">
+                      <p className="font-semibold">🐭 Mouse caught — service this trap.</p>
+                      {device.lastAlarmAt && <p className="mt-1 text-xs text-red-200">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
+                    </div>
+                  )}
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => refreshDevice(device.id)} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3 w-3" />Refresh</Button>
-                    <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300"><Trash2 className="mr-1 h-3 w-3" />Remove</Button>
+                    {device.alarmActive && (
+                      <Button
+                        size="sm"
+                        onClick={() => clearCatch(device.id, device.deviceName)}
+                        disabled={clearingId === device.id}
+                        className="bg-emerald-600 text-white hover:bg-emerald-500"
+                      >
+                        {clearingId === device.id ? <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1 h-3 w-3" />}
+                        {clearingId === device.id ? "Clearing..." : "Clear caught mouse"}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300"><Trash2 className="mr-1 h-3 w-3" />Remove Device</Button>
                   </div>
                 </div>
               );
