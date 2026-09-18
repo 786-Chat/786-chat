@@ -4,6 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface BranchOption {
   id: string;
@@ -48,6 +56,7 @@ export default function IotAdminPanel() {
   const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
   const [gatewayPort, setGatewayPort] = useState("1883");
   const [sendingWifi, setSendingWifi] = useState(false);
+  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -202,33 +211,21 @@ export default function IotAdminPanel() {
     }
 
     setSendingWifi(true);
-    const base = setupAddress.trim().replace(/\/$/, "");
-    const body = JSON.stringify(provisioningPayload());
-
     try {
-      await fetch(`${base}/api/food-safety/wifi`, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body,
-      });
-      setWifiPassword("");
-      toast({
-        title: "Wi-Fi details sent to device",
-        description: "The password was sent directly from this browser to the local device setup address and was not stored on the server.",
-      });
-    } catch (_error) {
       try {
-        await navigator.clipboard.writeText(body);
+        await navigator.clipboard.writeText(JSON.stringify(provisioningPayload(), null, 2));
       } catch (_) {}
-      window.open(base, "_blank", "noopener,noreferrer");
-      toast({
-        title: "Open the local device setup page",
-        description: "Your browser blocked the direct local request. The setup payload was copied so you can paste it into the Food Safety device setup page.",
-        variant: "destructive",
-      });
+      setSetupDialogOpen(true);
     } finally {
       setSendingWifi(false);
+    }
+  };
+
+  const openLocalSetupPage = () => {
+    const base = setupAddress.trim() || "http://192.168.4.1";
+    const opened = window.open(base, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      window.location.assign(base);
     }
   };
 
@@ -450,7 +447,7 @@ export default function IotAdminPanel() {
             Copy Setup Details
           </Button>
           <Button
-            onClick={() => window.open(setupAddress.trim() || "http://192.168.4.1", "_blank", "noopener,noreferrer")}
+            onClick={() => setSetupDialogOpen(true)}
             variant="outline"
             className="border-slate-600 text-slate-200"
           >
@@ -460,9 +457,81 @@ export default function IotAdminPanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          For the first BK7231N trap, install the Food Safety firmware/setup portal before using this button to provision Wi-Fi.
+          The first BK7231N trap must have the Food Safety firmware/setup portal installed before the local setup page can exist. After that firmware is proven, future shops use this same setup flow.
         </p>
       </div>
+
+      <Dialog open={setupDialogOpen} onOpenChange={setSetupDialogOpen}>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto border-cyan-500/30 bg-slate-950 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Wifi className="h-5 w-5 text-cyan-300" />
+              Food Safety Device Setup
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              This popup stays inside the Admin Dashboard. The trap's own local setup page cannot be embedded inside 786.Chat because the dashboard is HTTPS while the device setup address is local HTTP.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-sm">
+            <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/5 p-4">
+              <p className="font-semibold text-cyan-100">Before opening 192.168.4.1</p>
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-slate-300">
+                <li>Put the physical trap into Food Safety setup mode.</li>
+                <li>On this phone, tablet or computer, connect to the trap's temporary Food Safety Wi-Fi network.</li>
+                <li>Then open the local setup page below and enter the customer 2.4 GHz Wi-Fi details.</li>
+              </ol>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-slate-900 p-3">
+                <span className="block text-xs text-slate-500">Device</span>
+                <span className="break-all font-mono text-slate-100">{wifiDeviceId || "Select a device first"}</span>
+              </div>
+              <div className="rounded-lg bg-slate-900 p-3">
+                <span className="block text-xs text-slate-500">Customer Wi-Fi</span>
+                <span className="break-all text-slate-100">{wifiSsid || "Enter Wi-Fi name first"}</span>
+              </div>
+              <div className="rounded-lg bg-slate-900 p-3">
+                <span className="block text-xs text-slate-500">Local setup address</span>
+                <span className="break-all font-mono text-slate-100">{setupAddress.trim() || "http://192.168.4.1"}</span>
+              </div>
+              <div className="rounded-lg bg-slate-900 p-3">
+                <span className="block text-xs text-slate-500">Gateway</span>
+                <span className="break-all font-mono text-slate-100">{gatewayHost}:{gatewayPort || "1883"}</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
+              If 192.168.4.1 is blank after you connect to the trap's setup Wi-Fi, the Food Safety setup firmware/portal is not running on that trap yet. The Admin Dashboard cannot create that local page by itself.
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Your Wi-Fi password stays in this browser. It is not displayed in this popup and is not stored in Neon.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={copyWifiSetup}
+              className="border-slate-600 text-slate-200"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Setup Details
+            </Button>
+            <Button
+              type="button"
+              onClick={openLocalSetupPage}
+              className="bg-cyan-600 text-white hover:bg-cyan-500"
+            >
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open Local Setup Page
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
