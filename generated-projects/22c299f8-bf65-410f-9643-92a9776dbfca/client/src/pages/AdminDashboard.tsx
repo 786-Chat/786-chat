@@ -691,22 +691,7 @@ export default function AdminDashboard() {
     }
   }, [statsError]);
 
-  // IoT Cloud state
-  const [iotAssignDeviceId, setIotAssignDeviceId] = useState("");
-  const [iotAssignDeviceName, setIotAssignDeviceName] = useState("");
-  const [iotAssignBranchId, setIotAssignBranchId] = useState("");
-  const [iotAssignNotes, setIotAssignNotes] = useState("");
-  const [iotTestResult, setIotTestResult] = useState<{success:boolean;message:string}|null>(null);
-  const [iotTestLoading, setIotTestLoading] = useState(false);
-
-  const { data: iotStatusRaw } = useQuery({
-    queryKey: ["/api/tuya/status"],
-    queryFn: async () => { const r = await fetch("/api/tuya/status", { credentials: "include", cache: "no-store" }); return r.json(); },
-    enabled: adminAuthReady,
-    staleTime: 60000,
-  });
-  const iotStatus = iotStatusRaw as any;
-
+  // Food Safety owned-IoT device state.
   const { data: iotDevicesRaw, refetch: refetchIotDevices } = useQuery({
     queryKey: ["/api/iot/devices"],
     queryFn: async () => {
@@ -4050,7 +4035,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Smart Devices / Tuya IoT */}
+            {/* Smart Devices / Food Safety Owned IoT */}
             {activeTab === "iot-cloud" && <IotAdminPanel />}
 
             {/* Site Settings Section - Mobile Responsive */}
