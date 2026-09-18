@@ -809,7 +809,18 @@ function bridgeSource(state: VisualEditorState) {
 
   document.addEventListener("click", (event) => {
     if (!enabled) return;
-    const studioNode = event.target.closest("[data-editor786-text-id],[data-editor786-element-id]");
+    const eventTarget = event.target instanceof Element ? event.target : null;
+    if (!eventTarget) return;
+
+    // Keep live-preview forms usable while Design Studio is enabled. Clicking
+    // inputs, buttons, links, selects, labels or editable content must perform
+    // the real app action instead of being swallowed by the section picker.
+    const interactive = eventTarget.closest(
+      "input,textarea,select,option,button,a,label,[contenteditable='true'],[role='button']"
+    );
+    if (interactive && !interactive.closest("[data-editor786-text-id],[data-editor786-element-id]")) return;
+
+    const studioNode = eventTarget.closest("[data-editor786-text-id],[data-editor786-element-id]");
     if (studioNode) {
       event.preventDefault();
       event.stopPropagation();
@@ -821,7 +832,7 @@ function bridgeSource(state: VisualEditorState) {
       }, "*");
       return;
     }
-    const section = event.target.closest("[data-editor786-id]");
+    const section = eventTarget.closest("[data-editor786-id]");
     if (!section) return;
     event.preventDefault();
     event.stopPropagation();
