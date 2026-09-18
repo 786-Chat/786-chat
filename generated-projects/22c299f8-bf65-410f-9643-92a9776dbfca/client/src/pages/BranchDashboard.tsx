@@ -1795,7 +1795,7 @@ export default function BranchDashboard() {
                   </div>
                   <div className="h-8 sm:h-10 lg:h-12 overflow-hidden ticker" data-testid="ticker-branch-name">
                     <div className="ticker-track text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-                      <span>{currentBranch?.name || (branchLoading ? "Loading branch…" : "Branch")}</span>
+                      <span>{currentBranch?.name || "Amigos Burgers & Shakes"}</span>
                     </div>
                   </div>
                 </div>
@@ -2384,7 +2384,7 @@ export default function BranchDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white/60 text-sm">Branch Name</p>
-                      <p className="text-white font-medium truncate">{currentBranch?.name || (branchLoading ? "Loading branch…" : "Branch")}</p>
+                      <p className="text-white font-medium truncate">{currentBranch?.name || "Cake Box"}</p>
                     </div>
                   </div>
                   
@@ -2916,10 +2916,10 @@ export default function BranchDashboard() {
               {/* Branch Info */}
               <div className="flex-1 min-w-0">
                 <h2 className="text-white font-bold text-xs truncate">
-                  {currentBranch?.name || branchProfile?.name || (branchLoading ? 'Loading branch…' : 'Branch')}
+                  {branchProfile?.name || 'Amigos Burgers & Shakes'}
                 </h2>
                 <p className="text-slate-400 text-xs truncate">
-                  {currentBranch?.address || branchProfile?.address || 'Dashboard'}
+                  {branchProfile?.address || 'Dashboard'}
                 </p>
               </div>
             </div>
