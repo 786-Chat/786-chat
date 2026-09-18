@@ -61,13 +61,7 @@ export function PreviewRouteBar() {
     try {
       const current = new URL(frame.src)
       const target = new URL(next, current.origin)
-
-      // Always reload the requested route on submit. SPA navigation inside the
-      // preview can change the visible screen (for example login -> dashboard)
-      // without changing the iframe's src attribute, so an equality check here
-      // made the route bar look clickable while doing nothing.
-      frame.dataset.routeApplied = next
-      frame.src = target.href
+      if (frame.src !== target.href) frame.src = target.href
     } catch {
       // The iframe can briefly have no deploy URL while a build is switching states.
     }
