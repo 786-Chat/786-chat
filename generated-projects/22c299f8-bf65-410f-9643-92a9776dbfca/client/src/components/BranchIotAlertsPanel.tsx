@@ -10,13 +10,15 @@ interface BranchIotAlertsPanelProps {
 export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsPanelProps) {
   const [alarms, setAlarms] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     try {
-      const [alarmRes, deviceRes] = await Promise.all([
+      const [alarmRes, deviceRes, historyRes] = await Promise.all([
         fetch("/api/branch/iot-alarms?refresh=1", { credentials: "include", cache: "no-store" }),
         fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" }),
+        fetch("/api/branch/iot-alarm-history", { credentials: "include", cache: "no-store" }),
       ]);
       if (alarmRes.ok) {
         const data = await alarmRes.json();
@@ -25,6 +27,10 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
       if (deviceRes.ok) {
         const data = await deviceRes.json();
         setDevices(Array.isArray(data) ? data : []);
+      }
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        setHistory(Array.isArray(data) ? data : []);
       }
     } finally {
       setLoading(false);
@@ -122,6 +128,34 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
           ))}
         </div>
       )}
+
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-5">
+        <div className="mb-3">
+          <h3 className="font-bold text-white">Alarm / Catch History</h3>
+          <p className="mt-1 text-sm text-slate-400">History stays here after the live alarm is stopped or acknowledged.</p>
+        </div>
+        {history.length === 0 ? (
+          <p className="rounded-xl bg-slate-900/60 p-4 text-sm text-slate-400">No previous trap alarms recorded for this branch.</p>
+        ) : (
+          <div className="space-y-3">
+            {history.slice(0, 12).map((event: any) => (
+              <div key={event.id} className="rounded-xl border border-slate-700 bg-slate-900/55 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-white">{event.deviceName || "Food Safety Smart Device"}</p>
+                      {event.isTest && <Badge className="bg-amber-500/15 text-amber-300">TEST</Badge>}
+                    </div>
+                    {event.location && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{event.location}</p>}
+                    <p className="mt-1 text-xs text-slate-400">{event.message}</p>
+                  </div>
+                  <p className="flex-shrink-0 text-xs font-medium text-slate-300">{event.eventAt ? new Date(event.eventAt).toLocaleString("en-GB") : "Unknown time"}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
