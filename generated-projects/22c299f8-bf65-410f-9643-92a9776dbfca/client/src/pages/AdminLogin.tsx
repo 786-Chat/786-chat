@@ -11,14 +11,24 @@ const logo2 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1
 const logo3 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087873423-05924ff1-ac2f-4d93-b68c-224bd139a7d8-logo3-CxaNcaWzudsiU7GosFusQ7OJlxlKx4.png"; // 786.Chat: imported binary asset URL
 const logo4 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087874448-db35fc63-5281-4768-abcc-5bec4afb1c06-logo4-OtkAHniroCMOYCjhvbIKDaY0dXtEEe.png"; // 786.Chat: imported binary asset URL
 
+interface MouseTrail {
+  x: number;
+  y: number;
+  id: number;
+  color: string;
+  size: number;
+}
+
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { toast } = useToast();
+  const trailIdRef = useRef(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -79,6 +89,31 @@ export default function AdminLogin() {
     });
   };
 
+  // Mouse movement handler with colorful trails
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
+    const newTrail: MouseTrail = {
+      x: e.clientX,
+      y: e.clientY,
+      id: trailIdRef.current++,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: Math.random() * 20 + 10
+    };
+    
+    setMouseTrails(prev => [...prev.slice(-20), newTrail]);
+    
+    // Play magic sound on mouse move
+    if (Math.random() > 0.95) { // Occasional sounds
+      playMagicSound(Math.random() * 400 + 400, 100);
+    }
+    
+    // Simple background effects only
+    
+    // Clean up old trails
+    setTimeout(() => {
+      setMouseTrails(prev => prev.filter(trail => trail.id !== newTrail.id));
+    }, 1000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +179,7 @@ export default function AdminLogin() {
   return (
     <div 
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
+      onMouseMove={handleMouseMove}
     >
       {/* Animated Background Particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -152,14 +188,31 @@ export default function AdminLogin() {
             key={i}
             className="absolute w-1 h-1 sm:w-2 sm:h-2 bg-white/20 rounded-full animate-pulse"
             style={{
-              left: `${(i * 37) % 100}%`,
-              top: `${(i * 53) % 100}%`,
-              animationDelay: `${(i % 6) * 0.4}s`,
-              animationDuration: `${2 + (i % 4) * 0.45}s`
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 3}s`,
+              animationDuration: `${2 + Math.random() * 2}s`
             }}
           />
         ))}
       </div>
+
+      {/* Mouse Trail Effects */}
+      {mouseTrails.map((trail) => (
+        <div
+          key={trail.id}
+          className="fixed pointer-events-none rounded-full animate-ping z-10"
+          style={{
+            left: trail.x - trail.size / 2,
+            top: trail.y - trail.size / 2,
+            width: trail.size,
+            height: trail.size,
+            backgroundColor: trail.color,
+            boxShadow: `0 0 20px ${trail.color}`,
+            opacity: 0.7
+          }}
+        />
+      ))}
 
       {/* Main Content Container - Mobile Responsive */}
       <div className="relative z-20 flex flex-col items-center justify-center gap-4 sm:gap-8 lg:gap-12 max-w-7xl mx-auto w-full">
@@ -205,7 +258,7 @@ export default function AdminLogin() {
           </CardHeader>
           
           <CardContent className="px-4 py-4">
-            <form onSubmit={handleSubmit} className="relative z-30 space-y-4 pointer-events-auto">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-purple-400" />
@@ -216,10 +269,8 @@ export default function AdminLogin() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  autoComplete="username"
                   placeholder="Enter your email"
-                  className="relative z-30 pointer-events-auto border-purple-500/30 text-white placeholder:text-slate-400 focus:border-purple-400 transition-colors text-sm sm:text-base"
-                  style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
+                  className="bg-slate-700/50 border-purple-500/30 text-white placeholder-slate-400 focus:border-purple-400 transition-colors text-sm sm:text-base"
                 />
               </div>
 
@@ -236,11 +287,10 @@ export default function AdminLogin() {
                       setPassword(e.target.value);
                       if (Math.random() > 0.8) playMagicSound(600 + Math.random() * 200, 50);
                     }}
-                    className="relative z-30 pointer-events-auto border-purple-500/30 text-white pr-12 placeholder:text-slate-400 focus:border-purple-400 focus:ring-purple-400/20 h-11"
-                    style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
+                    className="bg-slate-700/50 border-purple-500/30 text-white pr-12 focus:border-purple-400 focus:ring-purple-400/20 h-11"
                     placeholder="Enter your password"
                     required
-                    autoComplete="current-password"
+                    autoComplete="off"
                   />
                   <Button
                     type="button"
