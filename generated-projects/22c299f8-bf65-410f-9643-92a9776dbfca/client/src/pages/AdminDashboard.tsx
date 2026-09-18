@@ -2626,9 +2626,6 @@ export default function AdminDashboard() {
         {/* Main Content - full width on mobile (sidebar is fixed overlay), flex-1 on desktop */}
         <div className="flex-1 overflow-hidden w-full">
           <div className="h-full overflow-y-auto p-4 lg:p-6 pt-16 lg:pt-6 scroll-ios">
-            {activeTab === "branch-login-video" && (
-              
-            )}
             {/* Dashboard Section */}
             {activeTab === "dashboard" && (
               <div className="space-y-8">
