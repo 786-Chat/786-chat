@@ -30,6 +30,7 @@ export default function BranchLogin() {
   const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSupportPopup, setShowSupportPopup] = useState(false);
+  const [, setBranchLoginVideoUrl] = useState("");
   const { toast } = useToast();
   const trailIdRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -56,14 +57,6 @@ export default function BranchLogin() {
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('keydown', handleFirstInteraction);
     };
-  }, []);
-
-  // Load the admin-managed Branch Login marketing video
-  useEffect(() => {
-    fetch('/api/public/branch-login-media')
-      .then((res) => res.json())
-      .then((data) => setBranchLoginVideoUrl(data?.videoUrl || ''))
-      .catch(() => setBranchLoginVideoUrl(''));
   }, []);
   // Magic sound generator
   const playMagicSound = (frequency: number = 800, duration: number = 200) => {

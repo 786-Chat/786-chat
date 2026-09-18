@@ -96,14 +96,14 @@ export default function IotAdminPanel() {
     try {
       const response = await fetch("/api/tuya/devices", { credentials: "include", cache: "no-store" });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.message || data?.msg || "Could not load Tuya devices");
+      if (!response.ok) throw new Error(data?.message || data?.msg || "Could not load Food Safety devices");
       const devices = extractDeviceList(data);
       setCloudDevices(devices);
       if (!silent) {
-        toast({ title: "Tuya devices loaded", description: `${devices.length} cloud device(s) found.` });
+        toast({ title: "Food Safety devices loaded", description: `${devices.length} cloud device(s) found.` });
       }
     } catch (error: any) {
-      toast({ title: "Device discovery failed", description: error?.message || "Could not load Tuya devices", variant: "destructive" });
+      toast({ title: "Device discovery failed", description: error?.message || "Could not load Food Safety devices", variant: "destructive" });
     } finally {
       setDiscovering(false);
     }
@@ -120,7 +120,7 @@ export default function IotAdminPanel() {
     try {
       const response = await fetch("/api/tuya/test-connection", { credentials: "include", cache: "no-store" });
       const data = await response.json();
-      toast({ title: data?.success ? "Tuya connected" : "Tuya connection failed", description: data?.message || "Connection check finished", variant: data?.success ? "default" : "destructive" });
+      toast({ title: data?.success ? "Device cloud connected" : "Device cloud connection failed", description: data?.message || "Connection check finished", variant: data?.success ? "default" : "destructive" });
       await loadBase();
     } finally {
       setTesting(false);
@@ -173,7 +173,7 @@ export default function IotAdminPanel() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Smart Devices</h2>
-            <p className="text-sm text-slate-400">Tuya / Smart Life cloud devices assigned to customer branches</p>
+            <p className="text-sm text-slate-400">Food Safety smart devices assigned to customer branches</p>
           </div>
         </div>
         <Button onClick={() => discover(false)} disabled={discovering} className="bg-cyan-600 hover:bg-cyan-500 text-white">
@@ -185,7 +185,7 @@ export default function IotAdminPanel() {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
           <p className="text-xs text-slate-400">Provider</p>
-          <p className="mt-1 font-semibold text-white">Tuya / Smart Life</p>
+          <p className="mt-1 font-semibold text-white">Food Safety Device Cloud</p>
         </div>
         <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
           <p className="text-xs text-slate-400">Cloud Status</p>
@@ -207,7 +207,7 @@ export default function IotAdminPanel() {
       <div className="flex flex-wrap gap-2">
         <Button onClick={testConnection} disabled={testing} variant="outline" className="border-slate-600 text-slate-200">
           {testing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Cloud className="mr-2 h-4 w-4" />}
-          Test Tuya Connection
+          Test Device Cloud
         </Button>
         <Badge className="border-blue-500/40 bg-blue-500/10 px-3 py-2 text-blue-200">Wi-Fi / Cloud</Badge>
       </div>
@@ -230,7 +230,7 @@ export default function IotAdminPanel() {
               }}
               className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
             >
-              <option value="tuya">Tuya / Smart Life</option>
+              <option value="tuya">Food Safety Device Cloud</option>
             </select>
           </div>
           <div>
@@ -252,7 +252,7 @@ export default function IotAdminPanel() {
               className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
             >
               <option value="">
-                {discovering ? "Loading Tuya devices..." : cloudDevices.length ? "Choose a Tuya device..." : "Click to Find / Import Devices"}
+                {discovering ? "Loading devices..." : cloudDevices.length ? "Choose a device..." : "Click to Find / Import Devices"}
               </option>
               {cloudDevices.map((device: any) => {
                 const id = String(device.id || device.device_id || device.deviceId || "");
@@ -279,7 +279,7 @@ export default function IotAdminPanel() {
           </div>
         </div>
 
-        {deviceId && <p className="mt-3 break-all text-xs text-slate-500">Tuya Device ID: {deviceId}</p>}
+        {deviceId && <p className="mt-3 break-all text-xs text-slate-500">Device ID: {deviceId}</p>}
         <Button
           onClick={assignDevice}
           disabled={!canAssign}
@@ -311,7 +311,7 @@ export default function IotAdminPanel() {
                     <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Online" : "Offline"}</Badge>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Provider</span><span className="text-white">Tuya</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Provider</span><span className="text-white">Food Safety</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span></div>
                     <div className={`rounded-lg p-2 ${snap.shock || device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap Event</span><span className={snap.shock || device.alarmActive ? "font-bold text-red-300" : "text-white"}>{snap.shock || device.alarmActive ? "Triggered" : "Normal"}</span></div>
@@ -330,7 +330,7 @@ export default function IotAdminPanel() {
       </div>
 
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-slate-300">
-        <div className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 text-cyan-300" /><p>Tuya secrets stay on the server. The branch dashboard receives only the assigned device status, battery, last-seen time and trap alerts.</p></div>
+        <div className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 text-cyan-300" /><p>Device-provider credentials stay protected on the server. Branch dashboards receive only their assigned device status, battery, last-seen time and trap alerts.</p></div>
       </div>
     </div>
   );
