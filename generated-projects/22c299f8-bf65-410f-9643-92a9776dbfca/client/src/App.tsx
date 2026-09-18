@@ -59,7 +59,8 @@ function Router() {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowInstallPrompt(true);
+      // Keep install available from /install, but never cover login/dashboard with a popup.
+      setShowInstallPrompt(false);
     };
 
     // Dynamic favicon based on current section
