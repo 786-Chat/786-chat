@@ -14,6 +14,8 @@ test("generated projects receive the isolated visual-editor bridge", async () =>
   assert.match(bridge, /desiredCloneIds/)
   assert.match(bridge, /originalStyles/)
   assert.match(bridge, /allowedParent/)
+  assert.match(bridge, /input,textarea,select,option,button,a,label/)
+  assert.match(bridge, /if \(interactive.*return/)
   assert.doesNotMatch(bridge, /srcdoc/)
 })
 
