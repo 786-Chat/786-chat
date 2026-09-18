@@ -144,7 +144,7 @@ export default function BranchSmartDevicesPanel() {
         </>
       )}
 
-      <p className="text-center text-xs text-slate-600">Powered by Food Safety / Smart Life Cloud • Live IoT pest monitoring</p>
+      <p className="text-center text-xs text-slate-600">Powered by Food Safety Owned IoT • Live pest monitoring</p>
     </div>
   );
 }
