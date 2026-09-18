@@ -246,6 +246,23 @@ export function getAlarmDp(statusList: any[]): string | null {
   return status?.code || status?.name || status?.dpId || null;
 }
 
+const ALARM_ACK_CODE = "food_safety_alarm_acknowledged";
+
+function hasAlarmAcknowledgement(statusList: any[]): boolean {
+  if (!Array.isArray(statusList)) return false;
+  const ackCode = normalize(ALARM_ACK_CODE);
+  return statusList.some((item) => getStatusCode(item) === ackCode && item?.value === true);
+}
+
+function preserveAlarmAcknowledgement(statusList: any[]): any[] {
+  const source = Array.isArray(statusList) ? statusList : [];
+  const ackCode = normalize(ALARM_ACK_CODE);
+  return [
+    ...source.filter((item) => getStatusCode(item) !== ackCode),
+    { code: ALARM_ACK_CODE, value: true },
+  ];
+}
+
 export function getBatteryPercent(statusList: any[]): number | null {
   if (!Array.isArray(statusList)) return null;
   const status = statusList.find((item) => getStatusCode(item).includes("battery"));
@@ -280,12 +297,31 @@ export async function refreshAssignedDevice(storageInstance: any, dev: any, opti
     getDeviceStatus(dev.deviceId),
   ]);
 
+  const previousStatus = Array.isArray(dev.lastStatus) ? dev.lastStatus : [];
   const alarmDetected = checkAlarmActive(statusList);
-  const previousAlarmDetected = checkAlarmActive(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
+  const previousAlarmDetected = checkAlarmActive(previousStatus);
+  const previousAlarmAcknowledged = hasAlarmAcknowledgement(previousStatus);
   const newAlarmTransition = alarmDetected && !previousAlarmDetected;
-  // Latch every trap alarm until an authorised admin/branch user acknowledges it.
-  // A physical sensor may pulse briefly and return to normal before anyone sees the dashboard.
-  const nextAlarmActive = Boolean(dev.alarmActive || alarmDetected || newAlarmTransition);
+
+  // Once a user acknowledges a currently-held trap signal, do not reactivate
+  // that same physical event on every refresh. Keep the acknowledgement marker
+  // while the sensor still reports the alarm. The marker is automatically
+  // dropped after the sensor returns to normal; only a later normal -> alarm
+  // transition is treated as a genuinely new event.
+  const acknowledgedHeldAlarm =
+    alarmDetected &&
+    previousAlarmDetected &&
+    previousAlarmAcknowledged &&
+    !newAlarmTransition;
+
+  const nextAlarmActive = acknowledgedHeldAlarm
+    ? false
+    : Boolean(dev.alarmActive || alarmDetected || newAlarmTransition);
+
+  const nextStatus = acknowledgedHeldAlarm
+    ? preserveAlarmAcknowledgement(statusList)
+    : statusList;
+
   const batteryPercent = getBatteryPercent(statusList);
   const powerStatus = getPowerStatus(statusList);
   const now = new Date();
@@ -293,7 +329,7 @@ export async function refreshAssignedDevice(storageInstance: any, dev: any, opti
   const updated = await storageInstance.updateIotDevice(dev.id, {
     isOnline: info?.online ?? info?.is_online ?? false,
     alarmActive: nextAlarmActive,
-    lastStatus: statusList,
+    lastStatus: nextStatus,
     lastCheckedAt: now,
     ...(newAlarmTransition ? { lastAlarmAt: now } : {}),
   });
