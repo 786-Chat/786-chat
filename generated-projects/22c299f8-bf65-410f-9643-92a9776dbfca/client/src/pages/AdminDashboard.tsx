@@ -2800,95 +2800,32 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Live Pest Control & IoT System Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Live Food Safety Device Monitoring & Alarm Card */}
+                <div className="grid grid-cols-1 gap-6">
                   <div className="group">
-                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.02]">
-                      <div className={`absolute inset-0 rounded-2xl blur-xl ${iotAlarmDevices.length ? "bg-red-500/20" : "bg-emerald-500/20"}`}></div>
+                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.01]">
+                      <div className={`absolute inset-0 rounded-2xl blur-xl ${iotAlarmDevices.length ? "bg-red-500/20" : "bg-blue-500/20"}`}></div>
                       <Card className="relative h-full rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl">
                         <CardHeader className="pb-4">
-                          <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
-                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iotAlarmDevices.length ? "bg-red-500" : "bg-emerald-500"}`}>
-                              {iotAlarmDevices.length ? <Bell className="h-5 w-5 text-white" /> : <Bug className="h-5 w-5 text-white" />}
-                            </div>
-                            <span>Pest Monitoring</span>
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">Real device alarm status</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className={`rounded-xl border p-3 ${iotAlarmDevices.length ? "border-red-500/40 bg-red-500/15" : "border-emerald-500/30 bg-emerald-500/10"}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className={`font-semibold ${iotAlarmDevices.length ? "text-red-200" : "text-emerald-200"}`}>
-                                {iotAlarmDevices.length ? `${iotAlarmDevices.length} active trap alert${iotAlarmDevices.length === 1 ? "" : "s"}` : "No active trap alerts"}
-                              </span>
-                              {iotAlarmDevices.length ? <AlertTriangle className="h-5 w-5 text-red-300" /> : <CheckCircle className="h-5 w-5 text-emerald-300" />}
-                            </div>
-                          </div>
-                          <div className="rounded-xl bg-slate-800/50 p-3 text-sm text-slate-300">
-                            Assigned smart devices: <span className="font-bold text-white">{iotDevices.length}</span>
-                          </div>
-                          {iotAlarmDevices.slice(0, 2).map((device: any) => (
-                            <div key={device.id} className="rounded-xl border border-red-500/30 bg-red-950/20 p-3">
-                              <p className="font-semibold text-red-100">{device.deviceName || "Food Safety Smart Device"}</p>
-                              <p className="mt-1 text-xs text-slate-300">{iotBranchName(device)}</p>
-                              {device.notes && <p className="mt-1 text-xs text-slate-400">{device.notes}</p>}
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-
-                  <div className="group">
-                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.02]">
-                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 blur-xl"></div>
-                      <Card className="relative h-full rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl">
-                        <CardHeader className="pb-4">
-                          <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
-                              <Globe className="h-5 w-5 text-white" />
-                            </div>
-                            <span>Device Monitoring</span>
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">Live Food Safety smart devices</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {iotDevices.length === 0 ? (
-                            <div className="rounded-xl bg-slate-800/50 p-4 text-sm text-slate-400">No smart devices assigned yet.</div>
-                          ) : (
-                            iotDevices.slice(0, 6).map((device: any) => (
-                              <div key={device.id} className={`rounded-xl border p-3 ${device.alarmActive ? "border-red-500/40 bg-red-500/10" : device.isOnline ? "border-emerald-500/20 bg-emerald-500/10" : "border-slate-700 bg-slate-800/50"}`}>
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className={`truncate font-medium ${device.alarmActive ? "text-red-200" : device.isOnline ? "text-emerald-200" : "text-slate-200"}`}>{device.deviceName || device.deviceId}</p>
-                                    <p className="truncate text-xs text-slate-400">{iotBranchName(device)}</p>
-                                  </div>
-                                  <span className={`text-xs font-semibold ${device.isOnline ? "text-emerald-300" : "text-red-300"}`}>{device.isOnline ? "Online" : "Offline"}</span>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iotAlarmDevices.length ? "bg-red-500" : "bg-gradient-to-br from-blue-500 to-cyan-500"}`}>
+                                  {iotAlarmDevices.length ? <Bell className="h-5 w-5 text-white" /> : <Globe className="h-5 w-5 text-white" />}
                                 </div>
-                              </div>
-                            ))
-                          )}
-                          {iotDevices.length > 6 && <p className="text-xs text-slate-500">+ {iotDevices.length - 6} more devices</p>}
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-
-                  <div className="group">
-                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.02]">
-                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-xl"></div>
-                      <Card className="relative h-full rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl">
-                        <CardHeader className="pb-4">
-                          <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500">
-                              <Activity className="h-5 w-5 text-white" />
+                                <span>Device Monitoring & Alerts</span>
+                              </CardTitle>
+                              <CardDescription className="mt-1 text-slate-400">Each device shows its branch, connection and alarm status in the same card</CardDescription>
                             </div>
-                            <span>Trap Activity</span>
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">Live counts from assigned devices</CardDescription>
+                            <Button onClick={() => setActiveTab("iot-cloud")} variant="outline" className="border-slate-600 text-slate-200">Open Smart Devices</Button>
+                          </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
+                              <p className="text-2xl font-bold text-blue-200">{iotDevices.length}</p>
+                              <p className="text-xs text-blue-200/80">Assigned</p>
+                            </div>
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
                               <p className="text-2xl font-bold text-emerald-300">{iotOnlineCount}</p>
                               <p className="text-xs text-emerald-200">Online</p>
@@ -2897,17 +2834,69 @@ export default function AdminDashboard() {
                               <p className="text-2xl font-bold text-slate-200">{iotOfflineCount}</p>
                               <p className="text-xs text-slate-400">Offline</p>
                             </div>
-                            <div className={`rounded-xl border p-3 text-center ${iotAlarmDevices.length ? "border-red-500/40 bg-red-500/15" : "border-slate-700 bg-slate-800/50"}`}>
-                              <p className={`text-2xl font-bold ${iotAlarmDevices.length ? "text-red-300" : "text-slate-200"}`}>{iotAlarmDevices.length}</p>
-                              <p className={`text-xs ${iotAlarmDevices.length ? "text-red-200" : "text-slate-400"}`}>Alerts</p>
+                            <div className={`rounded-xl border p-3 text-center ${iotAlarmDevices.length ? "border-red-500/40 bg-red-500/15" : "border-emerald-500/20 bg-emerald-500/10"}`}>
+                              <p className={`text-2xl font-bold ${iotAlarmDevices.length ? "text-red-300" : "text-emerald-300"}`}>{iotAlarmDevices.length}</p>
+                              <p className={`text-xs ${iotAlarmDevices.length ? "text-red-200" : "text-emerald-200"}`}>Active Alerts</p>
                             </div>
                           </div>
-                          <div className="rounded-xl bg-slate-800/50 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Latest Alert</p>
-                            <p className="mt-1 text-sm font-medium text-white">{latestIotAlarm ? latestIotAlarm.deviceName || latestIotAlarm.deviceId : "No active alerts"}</p>
-                            {latestIotAlarm && <p className="mt-1 text-xs text-slate-400">{iotBranchName(latestIotAlarm)}{latestIotAlarm.lastAlarmAt ? ` • ${new Date(latestIotAlarm.lastAlarmAt).toLocaleString("en-GB")}` : ""}</p>}
-                          </div>
-                          <Button onClick={() => setActiveTab("iot-cloud")} variant="outline" className="w-full border-slate-600 text-slate-200">Open Smart Devices</Button>
+
+                          {iotDevices.length === 0 ? (
+                            <div className="rounded-xl bg-slate-800/50 p-4 text-sm text-slate-400">No smart devices assigned yet.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              {iotDevices.slice(0, 8).map((device: any) => (
+                                <div key={device.id} className={`rounded-xl border p-4 ${device.alarmActive ? "border-red-500/50 bg-red-950/25" : device.isOnline ? "border-emerald-500/20 bg-emerald-500/10" : "border-slate-700 bg-slate-800/50"}`}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className={`truncate font-semibold ${device.alarmActive ? "text-red-100" : "text-white"}`}>{device.deviceName || device.deviceId}</p>
+                                      <p className="mt-1 truncate text-xs text-slate-400">Branch: {iotBranchName(device)}</p>
+                                      <p className="mt-1 break-all text-[11px] text-slate-500">{device.deviceId}</p>
+                                    </div>
+                                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{device.isOnline ? "Online" : "Offline"}</span>
+                                  </div>
+
+                                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                                    <div className="rounded-lg bg-slate-900/60 p-2">
+                                      <span className="block text-slate-500">Connection</span>
+                                      <span className={device.isOnline ? "font-semibold text-emerald-300" : "font-semibold text-red-300"}>{device.isOnline ? "Online" : "Offline"}</span>
+                                    </div>
+                                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-900/60"}`}>
+                                      <span className="block text-slate-500">Trap / Alarm</span>
+                                      <span className={device.alarmActive ? "font-bold text-red-300" : "font-semibold text-emerald-300"}>{device.alarmActive ? "ALARM TRIGGERED" : "Normal"}</span>
+                                    </div>
+                                  </div>
+
+                                  {device.alarmActive && (
+                                    <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3">
+                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                          <p className="font-semibold text-red-100">⚠ Pest trap triggered</p>
+                                          <p className="mt-0.5 text-xs text-red-200/80">Check this device at {iotBranchName(device)}, clean/reset the trap, then acknowledge the alert.</p>
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          onClick={async () => {
+                                            await fetch(`/api/iot/devices/${device.id}/clear-alarm`, { method: "POST", credentials: "include" });
+                                            await refetchIotDevices();
+                                          }}
+                                          className="bg-red-600 text-white hover:bg-red-500"
+                                        >
+                                          Acknowledge
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                                    <span>{device.lastCheckedAt ? `Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : "Waiting for first device update"}</span>
+                                    {device.alarmActive && <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-300" />}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {iotDevices.length > 8 && <p className="text-xs text-slate-500">+ {iotDevices.length - 8} more devices. Open Smart Devices to view all.</p>}
                         </CardContent>
                       </Card>
                     </div>
