@@ -720,6 +720,19 @@ export default function AdminDashboard() {
     refetchOnWindowFocus: true,
   });
   const iotDevices: any[] = Array.isArray(iotDevicesRaw) ? iotDevicesRaw : [];
+  const { data: iotAlarmHistoryRaw, refetch: refetchIotAlarmHistory } = useQuery<any[]>({
+    queryKey: ["/api/iot/alarm-history"],
+    queryFn: async () => {
+      const r = await fetch("/api/iot/alarm-history", { credentials: "include", cache: "no-store" });
+      if (!r.ok) throw new Error("Failed to load alarm history");
+      return r.json();
+    },
+    enabled: adminAuthReady,
+    staleTime: 5000,
+    refetchInterval: adminAuthReady ? 30000 : false,
+    refetchOnWindowFocus: true,
+  });
+  const iotAlarmHistory: any[] = Array.isArray(iotAlarmHistoryRaw) ? iotAlarmHistoryRaw : [];
 
   // Branch pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -2877,7 +2890,7 @@ export default function AdminDashboard() {
                                           size="sm"
                                           onClick={async () => {
                                             await fetch(`/api/iot/devices/${device.id}/clear-alarm`, { method: "POST", credentials: "include" });
-                                            await refetchIotDevices();
+                                            await Promise.all([refetchIotDevices(), refetchIotAlarmHistory()]);
                                           }}
                                           className="bg-red-600 text-white hover:bg-red-500"
                                         >
@@ -2892,7 +2905,7 @@ export default function AdminDashboard() {
                                         variant="outline"
                                         onClick={async () => {
                                           await fetch(`/api/iot/devices/${device.id}/test-alarm`, { method: "POST", credentials: "include" });
-                                          await refetchIotDevices();
+                                          await Promise.all([refetchIotDevices(), refetchIotAlarmHistory()]);
                                         }}
                                         className="border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
                                       >
@@ -2911,6 +2924,41 @@ export default function AdminDashboard() {
                           )}
 
                           {iotDevices.length > 8 && <p className="text-xs text-slate-500">+ {iotDevices.length - 8} more devices. Open Smart Devices to view all.</p>}
+                          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+                            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <h3 className="font-semibold text-white">Alarm / Catch History</h3>
+                                <p className="text-xs text-slate-400">Retained after Stop/Acknowledge, so old catches remain visible days or weeks later.</p>
+                              </div>
+                              <span className="text-xs text-slate-500">{iotAlarmHistory.length} recorded event{iotAlarmHistory.length === 1 ? "" : "s"}</span>
+                            </div>
+                            {iotAlarmHistory.length === 0 ? (
+                              <p className="rounded-lg bg-slate-800/60 p-3 text-sm text-slate-400">No recorded trap alarms yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {iotAlarmHistory.slice(0, 8).map((event: any) => (
+                                  <div key={event.id} className="rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-semibold text-white">{event.deviceName || "Food Safety Smart Device"}</span>
+                                          {event.isTest && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">TEST</span>}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-300">
+                                          Branch: {event.branchName || "Unknown branch"}
+                                          {event.location ? " • Location: " + event.location : ""}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-400">{event.message}</p>
+                                      </div>
+                                      <div className="flex-shrink-0 text-xs font-medium text-slate-300">
+                                        {event.eventAt ? new Date(event.eventAt).toLocaleString("en-GB") : "Unknown time"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
