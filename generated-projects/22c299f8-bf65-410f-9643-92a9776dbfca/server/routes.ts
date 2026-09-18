@@ -7288,13 +7288,13 @@ Generated: ${new Date().toISOString()}
         provider: "Food Safety Owned IoT",
         transport: "MQTT / Wi-Fi",
         registeredDevices: Number(rows?.[0]?.registered_devices || 0),
-        requiresTuya: false,
+        thirdPartyCloudRequired: false,
       });
     } catch (error: any) {
       res.status(500).json({
         configured: false,
         provider: "Food Safety Owned IoT",
-        requiresTuya: false,
+        thirdPartyCloudRequired: false,
         message: error?.message || "Unable to check owned IoT status",
       });
     }
@@ -7724,8 +7724,7 @@ Generated: ${new Date().toISOString()}
         ],
       }));
     } catch (error: any) {
-      // Keep the legacy Tuya path operational on deployments that have not
-      // received the owned-IoT schema yet.
+      // Older deployments may not have received the owned-IoT schema yet.
       if (String(error?.message || "").includes("owned_iot_devices")) return [];
       throw error;
     }
