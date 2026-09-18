@@ -340,11 +340,11 @@ export default function BranchLogin() {
           </CardHeader>
           
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="relative z-30 space-y-3 pointer-events-auto">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-purple-400" />
-                  Enter your Email
+                  Shop / Branch Email
                 </label>
                 <Input
                   type="email"
@@ -353,10 +353,11 @@ export default function BranchLogin() {
                     setBranchPin(e.target.value);
                     if (Math.random() > 0.8) playMagicSound(600 + Math.random() * 200, 50);
                   }}
-                  className="bg-slate-700/50 border-purple-500/30 text-white focus:border-purple-400 focus:ring-purple-400/20"
-                  placeholder="Enter your email..."
+                  className="relative z-30 pointer-events-auto border-purple-500/30 text-white placeholder:text-slate-400 focus:border-purple-400 focus:ring-purple-400/20"
+                  style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
+                  placeholder="Enter shop / branch email..."
                   required
-                  autoComplete="off"
+                  autoComplete="username"
                 />
               </div>
 
@@ -373,10 +374,11 @@ export default function BranchLogin() {
                       setPassword(e.target.value);
                       if (Math.random() > 0.8) playMagicSound(700 + Math.random() * 200, 50);
                     }}
-                    className="bg-slate-700/50 border-purple-500/30 text-white pr-12 focus:border-purple-400 focus:ring-purple-400/20"
+                    className="relative z-30 pointer-events-auto border-purple-500/30 text-white pr-12 placeholder:text-slate-400 focus:border-purple-400 focus:ring-purple-400/20"
+                    style={{ backgroundColor: "rgba(51,65,85,.92)", color: "#fff", WebkitTextFillColor: "#fff", caretColor: "#fff" }}
                     placeholder="Enter your password..."
                     required
-                    autoComplete="off"
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"
