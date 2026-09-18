@@ -2301,14 +2301,17 @@ export class DatabaseStorage implements IStorage {
       )
       .limit(1);
     
-    if (existingDoc) throw new Error('Report already exists in My Docs');
+    if (existingDoc) {
+      console.log('Monthly report is already saved in My Docs; treating as success');
+      return;
+    }
     
     // Validate and correct file path before saving to My Docs
     let correctedFilePath = report.filepath;
     let correctedFilename = report.filename;
     
     // Check if file exists at current path
-    if (correctedFilePath && !fs.existsSync(correctedFilePath)) {
+    if (correctedFilePath && !correctedFilePath.startsWith('/objects/') && !fs.existsSync(correctedFilePath)) {
       console.log(`🔧 Monthly report file not found at ${correctedFilePath}, attempting to fix...`);
       
       // Try to find the file in common directories with both filename and filepath-based names
