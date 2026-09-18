@@ -7405,18 +7405,71 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  const ownedIotDevicesForBranch = async (branchId: string) => {
+    try {
+      const result: any = await db.execute(sql`
+        SELECT
+          id,
+          device_id,
+          hardware_model,
+          firmware_version,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          battery_pct,
+          rssi,
+          last_seen_at,
+          last_alarm_at
+        FROM owned_iot_devices
+        WHERE branch_id::text = ${String(branchId)}
+        ORDER BY friendly_name NULLS LAST, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return rows.map((row: any) => ({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      }));
+    } catch (error: any) {
+      // Keep the legacy Tuya path operational on deployments that have not
+      // received the owned-IoT schema yet.
+      if (String(error?.message || "").includes("owned_iot_devices")) return [];
+      throw error;
+    }
+  };
+
   app.get("/api/branch/iot-devices", async (req, res) => {
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
-      let devices = await storage.getIotDevicesByBranch(session.branchId);
+
+      let legacyDevices = await storage.getIotDevicesByBranch(session.branchId);
       if (String(req.query.refresh || "") === "1" && tuyaService.isConfigured()) {
-        devices = await Promise.all(devices.map(async (device: any) => {
+        legacyDevices = await Promise.all(legacyDevices.map(async (device: any) => {
           try { return await tuyaService.refreshAssignedDevice(storage, device, { notify: true }); }
           catch (_) { return device; }
         }));
       }
-      res.json(devices);
+
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json([...ownedDevices, ...legacyDevices]);
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load branch devices" });
     }
@@ -7426,14 +7479,20 @@ Generated: ${new Date().toISOString()}
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
-      let devices = await storage.getIotDevicesByBranch(session.branchId);
+
+      let legacyDevices = await storage.getIotDevicesByBranch(session.branchId);
       if (String(req.query.refresh || "") === "1" && tuyaService.isConfigured()) {
-        devices = await Promise.all(devices.map(async (device: any) => {
+        legacyDevices = await Promise.all(legacyDevices.map(async (device: any) => {
           try { return await tuyaService.refreshAssignedDevice(storage, device, { notify: true }); }
           catch (_) { return device; }
         }));
       }
-      res.json(devices.filter((device: any) => device?.alarmActive));
+
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json([
+        ...ownedDevices.filter((device: any) => device.alarmActive),
+        ...legacyDevices.filter((device: any) => device?.alarmActive),
+      ]);
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load branch alarms" });
     }
@@ -7443,6 +7502,30 @@ Generated: ${new Date().toISOString()}
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const ownedResult: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND branch_id::text = ${String(session.branchId)}
+        RETURNING id, device_id, friendly_name, branch_id, is_online, last_seen_at
+      `);
+      const ownedRows = Array.isArray(ownedResult) ? ownedResult : (ownedResult?.rows || []);
+      if (ownedRows.length > 0) {
+        const row = ownedRows[0];
+        return res.json({
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: row.friendly_name || row.device_id,
+          branchId: row.branch_id,
+          isOnline: Boolean(row.is_online),
+          lastCheckedAt: row.last_seen_at,
+          alarmActive: false,
+          provider: "food-safety-owned-mqtt",
+        });
+      }
+
       const device = await storage.getIotDevice(req.params.id);
       if (!device || String(device.branchId) !== String(session.branchId)) return res.status(404).json({ message: "Device not found" });
       res.json(await storage.updateIotDevice(req.params.id, { alarmActive: false }));
