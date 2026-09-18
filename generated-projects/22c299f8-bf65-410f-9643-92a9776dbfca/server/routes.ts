@@ -7300,7 +7300,7 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  const ownedIotDevicesForAdmin = async () => {  const ownedIotDevicesForAdmin = async () => {
+  const ownedIotDevicesForAdmin = async () => {
     try {
       const result: any = await db.execute(sql`
         SELECT
