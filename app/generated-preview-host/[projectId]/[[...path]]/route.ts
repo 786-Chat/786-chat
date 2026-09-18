@@ -102,6 +102,18 @@ function upstreamHeaders(request: Request) {
   return headers
 }
 
+function stripLegacyReplitBootstrap(html: string) {
+  return html
+    .replace(
+      /<!--\s*This is a replit script[^>]*-->\s*/gi,
+      "",
+    )
+    .replace(
+      /<script\b[^>]*\bsrc=["']https:\/\/replit\.com\/public\/js\/replit-dev-banner\.js(?:\?[^"']*)?["'][^>]*><\/script>\s*/gi,
+      "",
+    )
+}
+
 function downstreamHeaders(upstream: Response, runtimeUrl: URL, request: Request) {
   const headers = new Headers(upstream.headers)
   headers.delete("content-length")
@@ -149,10 +161,24 @@ async function handle(request: Request, { params }: Ctx) {
   }
 
   const upstream = await fetch(target, init)
+  const headers = downstreamHeaders(upstream, target, request)
+
+  if (
+    request.method !== "HEAD" &&
+    (upstream.headers.get("content-type") || "").toLowerCase().includes("text/html")
+  ) {
+    const html = stripLegacyReplitBootstrap(await upstream.text())
+    return new Response(html, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers,
+    })
+  }
+
   return new Response(request.method === "HEAD" ? null : upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers: downstreamHeaders(upstream, target, request),
+    headers,
   })
 }
 
