@@ -18,7 +18,6 @@ import LogoTest from "@/pages/LogoTest";
 import PDFBuilder from "@/pages/PDFBuilder";
 
 import NotFound from "@/pages/not-found";
-import InstallPrompt from "@/components/InstallPrompt";
 import GlobalIotAlarmListener from "@/components/GlobalIotAlarmListener";
 import InstallGuide from "@/pages/InstallGuide";
 
@@ -51,17 +50,7 @@ function BranchDashboardRedirect() {
 }
 
 function Router() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-
   useEffect(() => {
-    // PWA Install prompt handling
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallPrompt(true);
-    };
-
     // Dynamic favicon based on current section
     const updateFavicon = () => {
       const path = window.location.pathname;
@@ -79,57 +68,18 @@ function Router() {
       }
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('popstate', updateFavicon);
     updateFavicon();
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('popstate', updateFavicon);
     };
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setShowInstallPrompt(false);
-    }
-  };
 
   return (
     <>
-      {/* PWA Install Prompt */}
-      {showInstallPrompt && (
-        <div className="fixed top-4 right-4 z-50 bg-gradient-to-r from-yellow-400 to-green-400 text-black p-4 rounded-lg shadow-lg max-w-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <h3 className="font-bold text-sm">Install App</h3>
-              <p className="text-xs">Add to home screen for quick access</p>
-            </div>
-            <div className="flex gap-2 ml-3">
-              <button
-                onClick={handleInstallClick}
-                className="bg-black text-white px-3 py-1 rounded text-xs font-medium hover:bg-gray-800"
-              >
-                Install
-              </button>
-              <button
-                onClick={() => setShowInstallPrompt(false)}
-                className="text-black px-2 py-1 rounded text-xs"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <GlobalIotAlarmListener />
+<GlobalIotAlarmListener />
       <Switch>
       {/* Canonical login routes */}
       <Route path="/admin-login" component={AdminLogin} />
@@ -165,9 +115,7 @@ function Router() {
       
       <Route component={NotFound} />
     </Switch>
-    
-    {/* Install Prompt for PWA */}
-    <InstallPrompt />
+
     </>
   );
 }
