@@ -3,7 +3,6 @@ import { Copy, ExternalLink, HardDrive, Plus, RefreshCw, ShieldCheck, Trash2, Wi
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
 interface BranchOption {
@@ -49,7 +48,6 @@ export default function IotAdminPanel() {
   const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
   const [gatewayPort, setGatewayPort] = useState("1883");
   const [sendingWifi, setSendingWifi] = useState(false);
-  const [showSetupGuide, setShowSetupGuide] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -204,21 +202,33 @@ export default function IotAdminPanel() {
     }
 
     setSendingWifi(true);
+    const base = setupAddress.trim().replace(/\/$/, "");
+    const body = JSON.stringify(provisioningPayload());
+
     try {
+      await fetch(`${base}/api/food-safety/wifi`, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body,
+      });
+      setWifiPassword("");
+      toast({
+        title: "Wi-Fi details sent to device",
+        description: "The password was sent directly from this browser to the local device setup address and was not stored on the server.",
+      });
+    } catch (_error) {
       try {
-        await navigator.clipboard.writeText(JSON.stringify(provisioningPayload(), null, 2));
+        await navigator.clipboard.writeText(body);
       } catch (_) {}
-      setShowSetupGuide(true);
+      window.open(base, "_blank", "noopener,noreferrer");
+      toast({
+        title: "Open the local device setup page",
+        description: "Your browser blocked the direct local request. The setup payload was copied so you can paste it into the Food Safety device setup page.",
+        variant: "destructive",
+      });
     } finally {
       setSendingWifi(false);
-    }
-  };
-
-  const openLocalSetupPage = () => {
-    const base = setupAddress.trim() || "http://192.168.4.1";
-    const opened = window.open(base, "_blank", "noopener,noreferrer");
-    if (!opened) {
-      window.location.assign(base);
     }
   };
 
@@ -293,22 +303,14 @@ export default function IotAdminPanel() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Branch</label>
-            <Select value={branchId || undefined} onValueChange={setBranchId}>
-              <SelectTrigger className="w-full border-slate-600 bg-slate-900 text-white focus:ring-cyan-500/40">
-                <SelectValue placeholder="Select customer branch..." />
-              </SelectTrigger>
-              <SelectContent className="z-[9999] border-slate-600 bg-slate-950 text-white shadow-2xl">
-                {branches.map((branch) => (
-                  <SelectItem
-                    key={branch.id}
-                    value={branch.id}
-                    className="text-white focus:bg-cyan-600/30 focus:text-white"
-                  >
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              value={branchId}
+              onChange={(event) => setBranchId(event.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Select customer branch...</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device ID</label>
@@ -368,22 +370,16 @@ export default function IotAdminPanel() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
-            <Select value={wifiDeviceId || undefined} onValueChange={setWifiDeviceId}>
-              <SelectTrigger className="w-full border-slate-600 bg-slate-900 text-white focus:ring-cyan-500/40">
-                <SelectValue placeholder="Select registered device..." />
-              </SelectTrigger>
-              <SelectContent className="z-[9999] border-slate-600 bg-slate-950 text-white shadow-2xl">
-                {ownedDevices.map((device: any) => (
-                  <SelectItem
-                    key={device.id}
-                    value={String(device.deviceId)}
-                    className="text-white focus:bg-cyan-600/30 focus:text-white"
-                  >
-                    {device.deviceName} — {device.deviceId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              value={wifiDeviceId}
+              onChange={(event) => setWifiDeviceId(event.target.value)}
+              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              <option value="">Select registered device...</option>
+              {ownedDevices.map((device: any) => (
+                <option key={device.id} value={device.deviceId}>{device.deviceName} — {device.deviceId}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
@@ -454,7 +450,7 @@ export default function IotAdminPanel() {
             Copy Setup Details
           </Button>
           <Button
-            onClick={() => setShowSetupGuide((value) => !value)}
+            onClick={() => window.open(setupAddress.trim() || "http://192.168.4.1", "_blank", "noopener,noreferrer")}
             variant="outline"
             className="border-slate-600 text-slate-200"
           >
@@ -464,64 +460,9 @@ export default function IotAdminPanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          The first BK7231N trap must have the Food Safety firmware/setup portal installed before the local setup page can exist. After that firmware is proven, future shops use this same setup flow.
+          For the first BK7231N trap, install the Food Safety firmware/setup portal before using this button to provision Wi-Fi.
         </p>
       </div>
-
-      {showSetupGuide && (
-        <div className="rounded-2xl border border-cyan-500/25 bg-slate-950/65 p-5 text-sm text-slate-200">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <h4 className="flex items-center gap-2 font-semibold text-cyan-100">
-                <Wifi className="h-4 w-4 text-cyan-300" />
-                Device setup steps
-              </h4>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
-                <li>Put the physical trap into Food Safety setup mode.</li>
-                <li>Connect this phone, tablet or computer to the trap's temporary Food Safety Wi-Fi network.</li>
-                <li>Only then open the local setup page and enter the customer 2.4 GHz Wi-Fi details.</li>
-              </ol>
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-lg bg-slate-900 p-3">
-                  <span className="block text-xs text-slate-500">Device</span>
-                  <span className="break-all font-mono text-slate-100">{wifiDeviceId || "Select a device first"}</span>
-                </div>
-                <div className="rounded-lg bg-slate-900 p-3">
-                  <span className="block text-xs text-slate-500">Customer Wi-Fi</span>
-                  <span className="break-all text-slate-100">{wifiSsid || "Enter Wi-Fi name first"}</span>
-                </div>
-                <div className="rounded-lg bg-slate-900 p-3">
-                  <span className="block text-xs text-slate-500">Local setup address</span>
-                  <span className="break-all font-mono text-slate-100">{setupAddress.trim() || "http://192.168.4.1"}</span>
-                </div>
-                <div className="rounded-lg bg-slate-900 p-3">
-                  <span className="block text-xs text-slate-500">Gateway</span>
-                  <span className="break-all font-mono text-slate-100">{gatewayHost}:{gatewayPort || "1883"}</span>
-                </div>
-              </div>
-              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-100">
-                If 192.168.4.1 is blank after you connect to the trap's setup Wi-Fi, the Food Safety setup firmware/portal is not running on that trap yet.
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                Your Wi-Fi password stays in this browser and is not stored in Neon.
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={copyWifiSetup} className="border-slate-600 text-slate-200">
-                <Copy className="mr-2 h-4 w-4" />
-                Copy Setup Details
-              </Button>
-              <Button type="button" onClick={openLocalSetupPage} className="bg-cyan-600 text-white hover:bg-cyan-500">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Open Local Setup Page
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setShowSetupGuide(false)} className="text-slate-300">
-                Close Guide
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
