@@ -405,6 +405,12 @@ export default function AdminDashboard() {
   // States
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showNotificationSidebar, setShowNotificationSidebar] = useState(false);
+
+  useEffect(() => {
+    const openSmartDevices = () => setActiveTab("iot-cloud");
+    window.addEventListener("food-safety-open-smart-devices", openSmartDevices);
+    return () => window.removeEventListener("food-safety-open-smart-devices", openSmartDevices);
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [settingsTab, setSettingsTab] = useState("branch-dashboard");
@@ -695,15 +701,23 @@ export default function AdminDashboard() {
 
   const { data: iotStatusRaw } = useQuery({
     queryKey: ["/api/tuya/status"],
-    queryFn: async () => { const r = await fetch("/api/tuya/status"); return r.json(); },
+    queryFn: async () => { const r = await fetch("/api/tuya/status", { credentials: "include", cache: "no-store" }); return r.json(); },
+    enabled: adminAuthReady,
     staleTime: 60000,
   });
   const iotStatus = iotStatusRaw as any;
 
   const { data: iotDevicesRaw, refetch: refetchIotDevices } = useQuery({
     queryKey: ["/api/iot/devices"],
-    queryFn: async () => { const r = await fetch("/api/iot/devices"); return r.json(); },
-    staleTime: 30000,
+    queryFn: async () => {
+      const r = await fetch("/api/iot/devices?refresh=1", { credentials: "include", cache: "no-store" });
+      if (!r.ok) throw new Error("Failed to load smart devices");
+      return r.json();
+    },
+    enabled: adminAuthReady,
+    staleTime: 5000,
+    refetchInterval: adminAuthReady ? 12000 : false,
+    refetchOnWindowFocus: true,
   });
   const iotDevices: any[] = Array.isArray(iotDevicesRaw) ? iotDevicesRaw : [];
 
@@ -755,6 +769,18 @@ export default function AdminDashboard() {
     staleTime: 30000,
   });
    const reportBranchOptions: Branch[] = (reportBranchesResponse?.branches || branches).filter((branch: Branch) => Boolean(branch?.name?.trim()) && !String(branch.name).trim().startsWith("Available Branch "));
+
+  const iotOnlineCount = iotDevices.filter((device: any) => Boolean(device?.isOnline)).length;
+  const iotOfflineCount = Math.max(0, iotDevices.length - iotOnlineCount);
+  const iotAlarmDevices = iotDevices.filter((device: any) => Boolean(device?.alarmActive));
+  const iotBranchName = (device: any) =>
+    device?.branchName ||
+    reportBranchOptions.find((branch: Branch) => String(branch.id) === String(device?.branchId))?.name ||
+    "Unassigned branch";
+  const latestIotAlarm = [...iotAlarmDevices]
+    .filter((device: any) => device?.lastAlarmAt)
+    .sort((a: any, b: any) => new Date(b.lastAlarmAt).getTime() - new Date(a.lastAlarmAt).getTime())[0];
+
 
   const { data: documents = [], isLoading: documentsLoading } = useQuery<Document[]>({
     queryKey: ["/api/documents"],
@@ -2441,7 +2467,7 @@ export default function AdminDashboard() {
               <h1 className="text-xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
                 Admin Panel
               </h1>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
                 <Button
                   onClick={() => {
                     console.log("Master unlock button clicked");
@@ -2600,9 +2626,7 @@ export default function AdminDashboard() {
         {/* Main Content - full width on mobile (sidebar is fixed overlay), flex-1 on desktop */}
         <div className="flex-1 overflow-hidden w-full">
           <div className="h-full overflow-y-auto p-4 lg:p-6 pt-16 lg:pt-6 scroll-ios">
-            {activeTab === "branch-login-video" && (
-              
-            )}
+            
             {/* Dashboard Section */}
             {activeTab === "dashboard" && (
               <div className="space-y-8">
@@ -2777,140 +2801,117 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Pest Control System Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Pest Monitoring Status */}
+                {/* Live Food Safety Device Monitoring & Alarm Card */}
+                <div className="grid grid-cols-1 gap-6">
                   <div className="group">
-                    <div className="relative transform transition-all duration-300 group-hover:scale-[1.02] h-full">
-                      <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-2xl blur-xl"></div>
-                      <Card className="relative bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-slate-700/50 backdrop-blur-xl rounded-2xl h-full">
+                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.01]">
+                      <div className={`absolute inset-0 rounded-2xl blur-xl ${iotAlarmDevices.length ? "bg-red-500/20" : "bg-blue-500/20"}`}></div>
+                      <Card className="relative h-full rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl">
                         <CardHeader className="pb-4">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                              <CardTitle className="text-lg font-bold text-white flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
-                                  <Bug className="h-5 w-5 text-white" />
+                              <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iotAlarmDevices.length ? "bg-red-500" : "bg-gradient-to-br from-blue-500 to-cyan-500"}`}>
+                                  {iotAlarmDevices.length ? <Bell className="h-5 w-5 text-white" /> : <Globe className="h-5 w-5 text-white" />}
                                 </div>
-                                <span>Pest Monitoring</span>
+                                <span>Device Monitoring & Alerts</span>
                               </CardTitle>
-                              <CardDescription className="text-slate-400 mt-1">Real-time activity status</CardDescription>
+                              <CardDescription className="mt-1 text-slate-400">Each device shows its branch, connection and alarm status in the same card</CardDescription>
                             </div>
+                            <Button onClick={() => setActiveTab("iot-cloud")} variant="outline" className="border-slate-600 text-slate-200">Open Smart Devices</Button>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                                <span className="text-green-300 font-medium">Non-Toxic Activity Detected</span>
-                              </div>
-                              <CheckCircle className="h-5 w-5 text-green-400" />
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
+                              <p className="text-2xl font-bold text-blue-200">{iotDevices.length}</p>
+                              <p className="text-xs text-blue-200/80">Assigned</p>
                             </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-slate-400 rounded-full"></div>
-                                <span className="text-slate-300">Zone A1-A5</span>
-                              </div>
-                              <span className="text-slate-400 text-sm">Last check: 2h ago</span>
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
+                              <p className="text-2xl font-bold text-emerald-300">{iotOnlineCount}</p>
+                              <p className="text-xs text-emerald-200">Online</p>
                             </div>
-                            <div className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-slate-400 rounded-full"></div>
-                                <span className="text-slate-300">Zone B1-B3</span>
-                              </div>
-                              <span className="text-slate-400 text-sm">Last check: 4h ago</span>
+                            <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
+                              <p className="text-2xl font-bold text-slate-200">{iotOfflineCount}</p>
+                              <p className="text-xs text-slate-400">Offline</p>
+                            </div>
+                            <div className={`rounded-xl border p-3 text-center ${iotAlarmDevices.length ? "border-red-500/40 bg-red-500/15" : "border-emerald-500/20 bg-emerald-500/10"}`}>
+                              <p className={`text-2xl font-bold ${iotAlarmDevices.length ? "text-red-300" : "text-emerald-300"}`}>{iotAlarmDevices.length}</p>
+                              <p className={`text-xs ${iotAlarmDevices.length ? "text-red-200" : "text-emerald-200"}`}>Active Alerts</p>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
 
-                  {/* WiFi Device Monitoring */}
-                  <div className="group">
-                    <div className="relative transform transition-all duration-300 group-hover:scale-[1.02] h-full">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-2xl blur-xl"></div>
-                      <Card className="relative bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-slate-700/50 backdrop-blur-xl rounded-2xl h-full">
-                        <CardHeader className="pb-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-lg font-bold text-white flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
-                                  <Globe className="h-5 w-5 text-white" />
-                                </div>
-                                <span>Device Monitoring</span>
-                              </CardTitle>
-                              <CardDescription className="text-slate-400 mt-1">WiFi connected devices</CardDescription>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                                <span className="text-green-300 font-medium">Device #4</span>
-                              </div>
-                              <span className="text-green-400 text-sm font-medium">Online</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                                <span className="text-green-300 font-medium">Device #1</span>
-                              </div>
-                              <span className="text-green-400 text-sm font-medium">Online</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-red-500/10 rounded-xl border border-red-500/20">
-                              <div className="flex items-center space-x-3">
-                                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                                <span className="text-red-300 font-medium">Device #2</span>
-                              </div>
-                              <span className="text-red-400 text-sm font-medium">Offline</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
+                          {iotDevices.length === 0 ? (
+                            <div className="rounded-xl bg-slate-800/50 p-4 text-sm text-slate-400">No smart devices assigned yet.</div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              {iotDevices.slice(0, 8).map((device: any) => (
+                                <div key={device.id} className={`rounded-xl border p-4 ${device.alarmActive ? "border-red-500/50 bg-red-950/25" : device.isOnline ? "border-emerald-500/20 bg-emerald-500/10" : "border-slate-700 bg-slate-800/50"}`}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className={`truncate font-semibold ${device.alarmActive ? "text-red-100" : "text-white"}`}>{device.deviceName || device.deviceId}</p>
+                                      <p className="mt-1 truncate text-xs text-slate-400">Branch: {iotBranchName(device)}</p>
+                                      <p className="mt-1 break-all text-[11px] text-slate-500">{device.deviceId}</p>
+                                    </div>
+                                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{device.isOnline ? "Online" : "Offline"}</span>
+                                  </div>
 
-                  {/* Trap Activity Logs */}
-                  <div className="group">
-                    <div className="relative transform transition-all duration-300 group-hover:scale-[1.02] h-full">
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-2xl blur-xl"></div>
-                      <Card className="relative bg-gradient-to-br from-slate-900/95 to-slate-800/95 border border-slate-700/50 backdrop-blur-xl rounded-2xl h-full">
-                        <CardHeader className="pb-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <CardTitle className="text-lg font-bold text-white flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                                  <Activity className="h-5 w-5 text-white" />
+                                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                                    <div className="rounded-lg bg-slate-900/60 p-2">
+                                      <span className="block text-slate-500">Connection</span>
+                                      <span className={device.isOnline ? "font-semibold text-emerald-300" : "font-semibold text-red-300"}>{device.isOnline ? "Online" : "Offline"}</span>
+                                    </div>
+                                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-900/60"}`}>
+                                      <span className="block text-slate-500">Trap / Alarm</span>
+                                      <span className={device.alarmActive ? "font-bold text-red-300" : "font-semibold text-emerald-300"}>{device.alarmActive ? "ALARM TRIGGERED" : "Normal"}</span>
+                                    </div>
+                                  </div>
+
+                                  {device.alarmActive ? (
+                                    <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3">
+                                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <div>
+                                          <p className="font-semibold text-red-100">⚠ Pest trap triggered</p>
+                                          <p className="mt-0.5 text-xs text-red-200/80">Check this device at {iotBranchName(device)}, clean/reset the trap, then acknowledge the alert.</p>
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          onClick={async () => {
+                                            await fetch(`/api/iot/devices/${device.id}/clear-alarm`, { method: "POST", credentials: "include" });
+                                            await refetchIotDevices();
+                                          }}
+                                          className="bg-red-600 text-white hover:bg-red-500"
+                                        >
+                                          Acknowledge
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-3 flex justify-end">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={async () => {
+                                          await fetch(`/api/iot/devices/${device.id}/test-alarm`, { method: "POST", credentials: "include" });
+                                          await refetchIotDevices();
+                                        }}
+                                        className="border-amber-500/50 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                                      >
+                                        <Bell className="mr-1.5 h-3.5 w-3.5" />Test Alarm
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
+                                    <span>{device.lastCheckedAt ? `Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : "Waiting for first device update"}</span>
+                                    {device.alarmActive && <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-300" />}
+                                  </div>
                                 </div>
-                                <span>Trap Activity</span>
-                              </CardTitle>
-                              <CardDescription className="text-slate-400 mt-1">Active monitoring logs</CardDescription>
+                              ))}
                             </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-slate-800/40 rounded-xl">
-                              <div>
-                                <p className="text-white text-sm font-medium">Last Activity</p>
-                                <p className="text-slate-400 text-xs">Today, 14:32</p>
-                              </div>
-                              <Clock className="h-4 w-4 text-slate-400" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="p-3 bg-green-500/10 rounded-xl border border-green-500/20 text-center">
-                                <p className="text-2xl font-bold text-green-400">12</p>
-                                <p className="text-green-300 text-xs">Active Traps</p>
-                              </div>
-                              <div className="p-3 bg-slate-800/40 rounded-xl text-center">
-                                <p className="text-2xl font-bold text-slate-400">3</p>
-                                <p className="text-slate-300 text-xs">Inactive Traps</p>
-                              </div>
-                            </div>
-                          </div>
+                          )}
+
+                          {iotDevices.length > 8 && <p className="text-xs text-slate-500">+ {iotDevices.length - 8} more devices. Open Smart Devices to view all.</p>}
                         </CardContent>
                       </Card>
                     </div>
@@ -4092,8 +4093,8 @@ export default function AdminDashboard() {
                     {selectedBranchForSettings ? (
                       <Card className="bg-slate-800/50 border-slate-700/50 backdrop-blur-sm">
                         <CardHeader>
-                          <CardTitle className="text-white flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
+                          <CardTitle className="text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
                                 <Building2 className="h-5 w-5 text-white" />
                               </div>
@@ -4108,7 +4109,7 @@ export default function AdminDashboard() {
                               <Button 
                                 size="sm" 
                                 variant="outline" 
-                                className="border-orange-500 text-orange-300 hover:bg-orange-500/10"
+                                className="border-orange-500 text-orange-300 hover:bg-orange-500/10 w-full sm:w-auto whitespace-normal"
                                 onClick={() => {
                                   setCurrentRating(5);
                                   setIsEditingRating(false);
@@ -4133,7 +4134,7 @@ export default function AdminDashboard() {
                               </Button>
                               <Button 
                                 size="sm" 
-                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 w-full sm:w-auto whitespace-normal"
                               >
                                 <Save className="h-4 w-4 mr-2" />
                                 Save for This Branch
@@ -4349,10 +4350,10 @@ export default function AdminDashboard() {
                                     </div>
                                   </div>
                                   
-                                  <div className="flex space-x-2">
+                                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                     <Button 
                                       size="sm" 
-                                      className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700"
+                                      className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 w-full sm:w-auto whitespace-normal h-auto min-h-9 text-center"
                                       onClick={async () => {
                                         try {
                                           const response = await fetch(`/api/branches/${selectedBranchForSettings}/settings`, {

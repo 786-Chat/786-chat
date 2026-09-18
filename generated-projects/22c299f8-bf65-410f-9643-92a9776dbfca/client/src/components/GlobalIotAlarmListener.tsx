@@ -7,6 +7,7 @@ interface AlarmDevice {
   deviceId: string;
   deviceName: string;
   branchId?: string;
+  branchName?: string;
   notes?: string;
   alarmActive?: boolean;
   lastAlarmAt?: string;
@@ -141,6 +142,7 @@ export default function GlobalIotAlarmListener() {
             {primary.deviceName || "Smart pest-control device"} has reported a trap/shock event.
             {alarms.length > 1 ? ` ${alarms.length} devices currently need attention.` : ""}
           </p>
+          {primary.branchName && <p className="mt-1 text-xs text-slate-300">Branch: <span className="font-semibold text-white">{primary.branchName}</span></p>}
           {primary.notes && <p className="mt-1 text-xs text-slate-400">Location: {primary.notes}</p>}
           <p className="mt-2 text-xs text-slate-400">Check the trap, remove the pest safely, clean/reset the device, then return it to service.</p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -149,6 +151,12 @@ export default function GlobalIotAlarmListener() {
               className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-400"
             >
               <VolumeX className="h-4 w-4" /> Stop alarm & acknowledge
+            </button>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("food-safety-open-smart-devices"))}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/20"
+            >
+              Open Smart Devices
             </button>
             <button
               onClick={() => setSoundMuted((value) => !value)}
