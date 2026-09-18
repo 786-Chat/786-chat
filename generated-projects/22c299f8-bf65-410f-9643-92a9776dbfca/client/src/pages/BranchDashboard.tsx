@@ -131,6 +131,19 @@ export default function BranchDashboard() {
   const [selectedFontSize, setSelectedFontSize] = useState("medium");
   const [savedTheme, setSavedTheme] = useState("blue");
   const [savedFontSize, setSavedFontSize] = useState("medium");
+
+  // Apply the branch's selected accessibility font size immediately. The value
+  // is persisted per branch by /api/user/preferences, so each customer can keep
+  // its own dashboard scale without affecting another branch.
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.fontSize;
+    const size = selectedFontSize === "small" ? "15px" : selectedFontSize === "large" ? "18px" : "16px";
+    root.style.fontSize = size;
+    return () => {
+      root.style.fontSize = previous;
+    };
+  }, [selectedFontSize]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scrollIndicators, setScrollIndicators] = useState({ top: false, bottom: false });
   const sidebarScrollRef = useRef<HTMLElement>(null);
@@ -2756,7 +2769,7 @@ export default function BranchDashboard() {
   };
 
   const getBackgroundGradient = () => {
-    switch (savedTheme) {
+    switch (selectedTheme) {
       case "blue":
         return "bg-gradient-to-br from-blue-900 via-slate-800 to-blue-900";
       case "purple":
