@@ -1287,13 +1287,13 @@ export function SevenEightSixWorkspace() {
               ) : (
                 <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {build?.status === "passed" && build.deployment_url ? (
-                    <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative shrink-0 ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
+                    <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative isolate shrink-0 pointer-events-auto ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
                       {phonePreview && <span className="pointer-events-none absolute left-1/2 top-2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-black" />}
                       <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
                         if (!designOpen) return
                         postVisualMessage({ type: "786-editor:enable", enabled: true })
                         postVisualMessage({ type: "786-editor:apply", state: visualState })
-                      }} className={`h-full w-full border-0 bg-white ${phonePreview ? "rounded-[32px]" : "min-h-full rounded-md"}`} />
+                      }} className={`relative z-20 h-full w-full pointer-events-auto select-auto border-0 bg-white ${phonePreview ? "rounded-[32px]" : "min-h-full rounded-md"}`} />
                       {phonePreview && <span className="pointer-events-none absolute bottom-2 left-1/2 z-20 h-1 w-28 -translate-x-1/2 rounded-full bg-white/80" />}
                     </div>
                   ) : (
