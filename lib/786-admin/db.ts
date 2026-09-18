@@ -3,7 +3,7 @@
 // lazily-instantiated Neon HTTP client so the admin scope can persist
 // project + files + preview_state + messages atomically (all-or-nothing).
 import { neon } from "@neondatabase/serverless"
-import { sql } from "@/lib/db"
+import { platformDatabaseUrl, sql } from "@/lib/db"
 
 export { sql }
 
@@ -13,10 +13,7 @@ let txClient: NeonSqlClient | null = null
 
 function getTxClient(): NeonSqlClient {
   if (!txClient) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL environment variable is not set")
-    }
-    txClient = neon(process.env.DATABASE_URL)
+    txClient = neon(platformDatabaseUrl())
   }
   return txClient
 }
