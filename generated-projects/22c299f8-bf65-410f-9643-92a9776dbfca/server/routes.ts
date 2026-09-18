@@ -7225,14 +7225,14 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  // ==================== IoT / Tuya Smart Devices Routes ====================
+  // ==================== Food Safety Smart Devices Routes ====================
   const tuyaService = await import("./tuya-service.js");
 
   app.get("/api/tuya/status", isAdminAuthenticated, (_req, res) => {
     const configured = tuyaService.isConfigured();
     res.json({
       configured,
-      provider: "Tuya / Smart Life",
+      provider: "Food Safety Device Cloud",
       accessId: configured ? (process.env.TUYA_ACCESS_ID || "").replace(/.(?=.{4})/g, "•") : null,
       dataCenter: "Central Europe",
       baseUrl: "openapi.tuyaeu.com",
@@ -7274,7 +7274,7 @@ Generated: ${new Date().toISOString()}
       }));
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to load Tuya devices" });
+      res.status(500).json({ message: err?.message || "Unable to load Food Safety devices" });
     }
   });
 
@@ -7411,7 +7411,7 @@ Generated: ${new Date().toISOString()}
       const existingDevices = await storage.getIotDevices();
       const existing = existingDevices.find((device: any) => String(device.deviceId) === String(deviceId));
       if (existing) {
-        return res.status(409).json({ message: `This Tuya device is already assigned as ${existing.deviceName}. Remove or reassign it first.` });
+        return res.status(409).json({ message: `This device is already assigned as ${existing.deviceName}. Remove or reassign it first.` });
       }
 
       let info: any = null;
@@ -7422,7 +7422,7 @@ Generated: ${new Date().toISOString()}
           tuyaService.getDeviceStatus(String(deviceId)),
         ]);
       } catch (error: any) {
-        return res.status(400).json({ message: `Tuya could not verify this device: ${error?.message || "unknown error"}` });
+        return res.status(400).json({ message: `The device cloud could not verify this device: ${error?.message || "unknown error"}` });
       }
 
       const device = await storage.createIotDevice({
