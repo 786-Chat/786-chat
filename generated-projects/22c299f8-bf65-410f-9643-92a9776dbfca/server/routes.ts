@@ -7479,6 +7479,68 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  app.post("/api/iot/devices/:id/test-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      const ownedResult: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = now(),
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `).catch(() => null);
+      const ownedRows = ownedResult ? (Array.isArray(ownedResult) ? ownedResult : (ownedResult?.rows || [])) : [];
+      if (ownedRows.length > 0) {
+        const row: any = ownedRows[0];
+        const owned = {
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: row.friendly_name || row.device_id,
+          branchId: row.branch_id,
+          notes: row.installation_location || row.hardware_model,
+          isOnline: Boolean(row.is_online),
+          alarmActive: true,
+          lastAlarmAt: row.last_alarm_at,
+          lastCheckedAt: row.last_seen_at,
+          hardwareModel: row.hardware_model,
+          firmwareVersion: row.firmware_version,
+          provider: "food-safety-owned-mqtt",
+          lastStatus: [
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+            { code: "rssi", value: row.rssi },
+            { code: "shock", value: true },
+          ],
+        };
+        const [enriched] = await enrichIotBranchNames([owned]);
+        return res.json({ ...enriched, testAlarm: true });
+      }
+
+      const device = await storage.getIotDevice(req.params.id);
+      if (!device) return res.status(404).json({ message: "Device not found" });
+
+      const now = new Date();
+      const currentStatus = Array.isArray((device as any).lastStatus) ? (device as any).lastStatus : [];
+      const testStatus = [
+        ...currentStatus.filter((item: any) => item?.code !== "food_safety_test_alarm"),
+        { code: "food_safety_test_alarm", value: true },
+      ];
+      const updated = await storage.updateIotDevice(req.params.id, {
+        alarmActive: true,
+        lastAlarmAt: now,
+        lastStatus: testStatus,
+        lastCheckedAt: now,
+      });
+      const [enriched] = await enrichIotBranchNames([updated]);
+      res.json({ ...enriched, testAlarm: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to trigger test alarm" });
+    }
+  });
+
   app.post("/api/iot/devices/:id/clear-alarm", isAdminAuthenticated, async (req, res) => {
     try {
       const ownedResult: any = await db.execute(sql`
@@ -7520,7 +7582,13 @@ Generated: ${new Date().toISOString()}
 
       const device = await storage.getIotDevice(req.params.id);
       if (!device) return res.status(404).json({ message: "Device not found" });
-      const updated = await storage.updateIotDevice(req.params.id, { alarmActive: false });
+      const nextStatus = Array.isArray((device as any).lastStatus)
+        ? (device as any).lastStatus.filter((item: any) => item?.code !== "food_safety_test_alarm")
+        : [];
+      const updated = await storage.updateIotDevice(req.params.id, {
+        alarmActive: false,
+        lastStatus: nextStatus,
+      });
       const [enriched] = await enrichIotBranchNames([updated]);
       res.json(enriched);
     } catch (err: any) {
@@ -7668,7 +7736,13 @@ Generated: ${new Date().toISOString()}
 
       const device = await storage.getIotDevice(req.params.id);
       if (!device || String(device.branchId) !== String(session.branchId)) return res.status(404).json({ message: "Device not found" });
-      res.json(await storage.updateIotDevice(req.params.id, { alarmActive: false }));
+      const nextStatus = Array.isArray((device as any).lastStatus)
+        ? (device as any).lastStatus.filter((item: any) => item?.code !== "food_safety_test_alarm")
+        : [];
+      res.json(await storage.updateIotDevice(req.params.id, {
+        alarmActive: false,
+        lastStatus: nextStatus,
+      }));
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
     }
