@@ -204,35 +204,26 @@ export default function IotAdminPanel() {
 
   const sendWifiDirect = async () => {
     if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
-      toast({ title: "Wi-Fi details needed", description: "Choose a device, enter Wi-Fi details and the device setup address.", variant: "destructive" });
+      toast({ title: "Wi-Fi details needed", description: "Choose the HP2 device, enter the Wi-Fi name and password, then continue.", variant: "destructive" });
       return;
     }
 
     setSendingWifi(true);
     const base = setupAddress.trim().replace(/\/$/, "");
-    const body = JSON.stringify(provisioningPayload());
+    const body = JSON.stringify(provisioningPayload(), null, 2);
 
     try {
-      await fetch(`${base}/api/food-safety/wifi`, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body,
-      });
-      setWifiPassword("");
-      toast({
-        title: "Wi-Fi details sent to device",
-        description: "The password was sent directly from this browser to the local device setup address and was not stored on the server.",
-      });
-    } catch (_error) {
       try {
         await navigator.clipboard.writeText(body);
       } catch (_) {}
+
+      // A cloud HTTPS dashboard cannot safely verify or control a trap's private
+      // HTTP page at 192.168.4.1. Open the trap-owned page instead of pretending
+      // an opaque no-cors request succeeded.
       window.open(base, "_blank", "noopener,noreferrer");
       toast({
-        title: "Open the local device setup page",
-        description: "Your browser blocked the direct local request. The setup payload was copied so you can paste it into the Food Safety device setup page.",
-        variant: "destructive",
+        title: "HP2 Wi-Fi setup prepared",
+        description: "The setup details were copied. Connect to the trap's Food Safety setup Wi-Fi and finish on its local page. The password is not stored in 786.Chat.",
       });
     } finally {
       setSendingWifi(false);
@@ -497,7 +488,7 @@ export default function IotAdminPanel() {
             className="bg-cyan-600 text-white hover:bg-cyan-500"
           >
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Sending..." : "Send Wi-Fi to Device"}
+            {sendingWifi ? "Preparing..." : "Connect Device to Wi-Fi"}
           </Button>
           <Button
             onClick={copyWifiSetup}
@@ -518,7 +509,7 @@ export default function IotAdminPanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          For the first BK7231N trap, install the Food Safety firmware/setup portal before using this button to provision Wi-Fi.
+          HP2 is ready on the dashboard side. The physical BK7231N must run the Food Safety setup firmware/portal before 192.168.4.1 can accept Wi-Fi details.
         </p>
       </div>
 
