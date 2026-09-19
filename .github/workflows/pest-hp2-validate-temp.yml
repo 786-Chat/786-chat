@@ -1,0 +1,27 @@
+name: Pest HP2 temporary validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pest-hp2-validate-temp.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout HP2 Pest Control commit
+        uses: actions/checkout@v4
+        with:
+          ref: 76f776e0818164340320f497dea9404c50d890bd
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        working-directory: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca
+        run: npm install --no-audit --no-fund
+      - name: Build
+        working-directory: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca
+        run: npm run build
