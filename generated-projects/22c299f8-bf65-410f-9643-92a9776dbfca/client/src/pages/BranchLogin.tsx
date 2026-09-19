@@ -30,6 +30,7 @@ export default function BranchLogin() {
   const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showSupportPopup, setShowSupportPopup] = useState(false);
+  const [, setBranchLoginVideoUrl] = useState("");
   const { toast } = useToast();
   const trailIdRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
