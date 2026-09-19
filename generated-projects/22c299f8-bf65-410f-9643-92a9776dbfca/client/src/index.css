@@ -1238,3 +1238,50 @@ button, [role="button"], a, input[type="checkbox"], input[type="radio"], select 
     min-width: 40px;
   }
 }
+
+
+/* 786.Chat Pest Control mobile vertical scroll guard */
+@media (max-width: 640px) {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    height: auto !important;
+    max-width: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root {
+    min-height: 100dvh;
+    height: auto !important;
+    max-width: 100%;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+  }
+
+  #root .h-screen {
+    height: auto !important;
+    min-height: 100dvh !important;
+  }
+
+  #root main,
+  #root [role="main"] {
+    min-height: 0;
+    max-height: none !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+
+/* 786.Chat Pest Control mobile settings overflow guard */
+@media (max-width: 640px) {
+  html, body, #root { max-width: 100%; overflow-x: hidden; }
+  #root *, #root *::before, #root *::after { box-sizing: border-box; }
+  #root .flex > *, #root .grid > * { min-width: 0; }
+  #root input, #root select, #root textarea, #root button { max-width: 100%; }
+  #root button, #root label, #root p, #root span:not(.ticker-track), #root h1, #root h2, #root h3, #root h4 { overflow-wrap: anywhere; }
+  #root img, #root video, #root svg { max-width: 100%; }
+}
