@@ -2441,7 +2441,7 @@ export default function AdminDashboard() {
               <h1 className="text-xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
                 Admin Panel
               </h1>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
                 <Button
                   onClick={() => {
                     console.log("Master unlock button clicked");
@@ -2600,9 +2600,7 @@ export default function AdminDashboard() {
         {/* Main Content - full width on mobile (sidebar is fixed overlay), flex-1 on desktop */}
         <div className="flex-1 overflow-hidden w-full">
           <div className="h-full overflow-y-auto p-4 lg:p-6 pt-16 lg:pt-6 scroll-ios">
-            {activeTab === "branch-login-video" && (
-              
-            )}
+            
             {/* Dashboard Section */}
             {activeTab === "dashboard" && (
               <div className="space-y-8">
@@ -2800,7 +2798,7 @@ export default function AdminDashboard() {
                         <CardContent className="space-y-4">
                           <div className="space-y-3">
                             <div className="flex items-center justify-between p-3 bg-green-500/10 rounded-xl border border-green-500/20">
-                              <div className="flex items-center space-x-3">
+                              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                                 <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                                 <span className="text-green-300 font-medium">Non-Toxic Activity Detected</span>
                               </div>
@@ -4092,7 +4090,7 @@ export default function AdminDashboard() {
                     {selectedBranchForSettings ? (
                       <Card className="bg-slate-800/50 border-slate-700/50 backdrop-blur-sm">
                         <CardHeader>
-                          <CardTitle className="text-white flex items-center justify-between">
+                          <CardTitle className="text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div className="flex items-center space-x-3">
                               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
                                 <Building2 className="h-5 w-5 text-white" />
@@ -4108,7 +4106,7 @@ export default function AdminDashboard() {
                               <Button 
                                 size="sm" 
                                 variant="outline" 
-                                className="border-orange-500 text-orange-300 hover:bg-orange-500/10"
+                                className="border-orange-500 text-orange-300 hover:bg-orange-500/10 w-full sm:w-auto whitespace-normal"
                                 onClick={() => {
                                   setCurrentRating(5);
                                   setIsEditingRating(false);
@@ -4133,7 +4131,7 @@ export default function AdminDashboard() {
                               </Button>
                               <Button 
                                 size="sm" 
-                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 w-full sm:w-auto whitespace-normal"
                               >
                                 <Save className="h-4 w-4 mr-2" />
                                 Save for This Branch
@@ -4349,10 +4347,10 @@ export default function AdminDashboard() {
                                     </div>
                                   </div>
                                   
-                                  <div className="flex space-x-2">
+                                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                     <Button 
                                       size="sm" 
-                                      className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700"
+                                      className="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 w-full sm:w-auto whitespace-normal h-auto min-h-9 text-center"
                                       onClick={async () => {
                                         try {
                                           const response = await fetch(`/api/branches/${selectedBranchForSettings}/settings`, {
