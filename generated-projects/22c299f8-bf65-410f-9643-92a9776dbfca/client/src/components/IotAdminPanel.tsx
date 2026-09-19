@@ -41,6 +41,9 @@ export default function IotAdminPanel() {
   const [lastCreatedId, setLastCreatedId] = useState("");
   const [clearingId, setClearingId] = useState<string | null>(null);
 
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  const [branchLoadError, setBranchLoadError] = useState("");
   const [wifiDeviceId, setWifiDeviceId] = useState("");
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
@@ -70,10 +73,14 @@ export default function IotAdminPanel() {
     if (branchRes.ok) {
       const data = await branchRes.json();
       const all = Array.isArray(data?.branches) ? data.branches : [];
-      setBranches(all.filter((branch: any) =>
+      const realBranches = all.filter((branch: any) =>
         Boolean(String(branch?.name || "").trim()) &&
         !String(branch.name).startsWith("Available Branch ")
-      ));
+      );
+      setBranches(realBranches);
+      setBranchLoadError(realBranches.length ? "" : "No customer branches were returned.");
+    } else {
+      setBranchLoadError("Could not load customer branches. Refresh after admin login.");
     }
   };
 
@@ -301,16 +308,46 @@ export default function IotAdminPanel() {
               className="border-slate-600 bg-slate-900 text-white"
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="mb-1 block text-xs font-medium text-slate-400">Branch</label>
-            <select
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
+            <button
+              type="button"
+              onClick={() => setBranchMenuOpen((open) => !open)}
+              className="flex w-full items-center justify-between rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-white"
             >
-              <option value="">Select customer branch...</option>
-              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-            </select>
+              <span className="truncate">{branchById.get(branchId) || "Select customer branch..."}</span>
+              <span className="ml-3 text-slate-400">⌄</span>
+            </button>
+            {branchMenuOpen && (
+              <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
+                {branches.length ? branches.map((branch) => (
+                  <button
+                    type="button"
+                    key={branch.id}
+                    onClick={() => {
+                      setBranchId(branch.id);
+                      setBranchMenuOpen(false);
+                    }}
+                    className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
+                  >
+                    {branch.name}
+                  </button>
+                )) : (
+                  <div className="p-3 text-sm text-amber-200">
+                    {branchLoadError || "No customer branches loaded."}
+                  </div>
+                )}
+              </div>
+            )}
+            {branchLoadError && (
+              <button
+                type="button"
+                onClick={() => loadBase().catch(() => {})}
+                className="mt-2 text-xs font-medium text-cyan-300 hover:text-cyan-200"
+              >
+                Refresh customer branches
+              </button>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device ID</label>
@@ -368,18 +405,39 @@ export default function IotAdminPanel() {
         </p>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
+          <div className="relative">
             <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
-            <select
-              value={wifiDeviceId}
-              onChange={(event) => setWifiDeviceId(event.target.value)}
-              className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white"
+            <button
+              type="button"
+              onClick={() => setDeviceMenuOpen((open) => !open)}
+              className="flex w-full items-center justify-between rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-white"
             >
-              <option value="">Select registered device...</option>
-              {ownedDevices.map((device: any) => (
-                <option key={device.id} value={device.deviceId}>{device.deviceName} — {device.deviceId}</option>
-              ))}
-            </select>
+              <span className="truncate">
+                {ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))
+                  ? `${ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))?.deviceName} — ${wifiDeviceId}`
+                  : "Select registered device..."}
+              </span>
+              <span className="ml-3 text-slate-400">⌄</span>
+            </button>
+            {deviceMenuOpen && (
+              <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
+                {ownedDevices.length ? ownedDevices.map((device: any) => (
+                  <button
+                    type="button"
+                    key={device.id}
+                    onClick={() => {
+                      setWifiDeviceId(String(device.deviceId));
+                      setDeviceMenuOpen(false);
+                    }}
+                    className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
+                  >
+                    {device.deviceName} — {device.deviceId}
+                  </button>
+                )) : (
+                  <div className="p-3 text-sm text-slate-400">No registered Food Safety devices yet.</div>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
