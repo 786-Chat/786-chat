@@ -3756,6 +3756,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
       }
 
+      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
+        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
+      }
+
       console.log(`✅ Monthly report uploaded to Object Storage: ${filepath}`);
 
       const reportData = {
@@ -7225,146 +7229,336 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  // ==================== IoT / Tuya Smart Devices Routes ====================
-  const tuyaService = await import("./tuya-service.js");
+  // ==================== Food Safety Owned Smart Devices Routes ====================
+  const ensureOwnedIotSchema = async () => {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_devices (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        device_id text NOT NULL UNIQUE,
+        hardware_model text NOT NULL,
+        firmware_version text,
+        customer_id uuid,
+        branch_id uuid,
+        friendly_name text,
+        installation_location text,
+        lifecycle_state text NOT NULL DEFAULT 'pre_registered',
+        is_online boolean NOT NULL DEFAULT false,
+        battery_pct integer,
+        rssi integer,
+        last_seen_at timestamptz,
+        last_alarm_at timestamptz,
+        last_event_id text,
+        credential_fingerprint text,
+        activated_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        CONSTRAINT owned_iot_devices_battery_pct_check CHECK (battery_pct IS NULL OR battery_pct BETWEEN 0 AND 100)
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_events (
+        id bigserial PRIMARY KEY,
+        event_id text NOT NULL UNIQUE,
+        device_id text NOT NULL REFERENCES owned_iot_devices(device_id) ON DELETE CASCADE,
+        event_type text NOT NULL,
+        event_value jsonb,
+        event_at timestamptz NOT NULL,
+        received_at timestamptz NOT NULL DEFAULT now(),
+        raw_payload jsonb NOT NULL
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_last_seen_idx ON owned_iot_devices(last_seen_at DESC)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
+  };
 
-  app.get("/api/tuya/status", isAdminAuthenticated, (_req, res) => {
-    const configured = tuyaService.isConfigured();
-    res.json({
-      configured,
-      provider: "Tuya / Smart Life",
-      accessId: configured ? (process.env.TUYA_ACCESS_ID || "").replace(/.(?=.{4})/g, "•") : null,
-      dataCenter: "Central Europe",
-      baseUrl: "openapi.tuyaeu.com",
-    });
-  });
+  await ensureOwnedIotSchema();
 
-  app.get("/api/tuya/test-connection", isAdminAuthenticated, async (_req, res) => {
+  app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {
     try {
-      res.json(await tuyaService.testConnection());
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err?.message || "Connection failed" });
-    }
-  });
-
-  app.get("/api/tuya/devices", isAdminAuthenticated, async (_req, res) => {
-    try {
-      const devices = await tuyaService.getAllTuyaDevices();
-      const enriched = await Promise.all(devices.map(async (device: any) => {
-        const id = String(device.id || device.device_id || device.deviceId || "");
-        if (!id) return device;
-        try {
-          const [info, status] = await Promise.all([
-            tuyaService.getDeviceInfo(id).catch(() => null),
-            tuyaService.getDeviceStatus(id).catch(() => []),
-          ]);
-          return {
-            ...device,
-            ...info,
-            id,
-            online: info?.online ?? info?.is_online ?? device?.online ?? false,
-            status,
-            batteryPercent: tuyaService.getBatteryPercent(status),
-            powerStatus: tuyaService.getPowerStatus(status),
-            alarmActive: tuyaService.checkAlarmActive(status),
-          };
-        } catch (_) {
-          return { ...device, id };
-        }
-      }));
-      res.json(enriched);
-    } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to load Tuya devices" });
-    }
-  });
-
-  app.get("/api/tuya/devices/:deviceId", isAdminAuthenticated, async (req, res) => {
-    try {
-      const info = await tuyaService.getDeviceInfo(req.params.deviceId);
-      const status = await tuyaService.getDeviceStatus(req.params.deviceId).catch(() => []);
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        SELECT COUNT(*)::int AS registered_devices
+        FROM owned_iot_devices
+        WHERE COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
       res.json({
-        ...info,
-        status,
-        batteryPercent: tuyaService.getBatteryPercent(status),
-        powerStatus: tuyaService.getPowerStatus(status),
-        alarmActive: tuyaService.checkAlarmActive(status),
+        configured: true,
+        provider: "Food Safety Owned IoT",
+        transport: "MQTT / Wi-Fi",
+        registeredDevices: Number(rows?.[0]?.registered_devices || 0),
+        thirdPartyCloudRequired: false,
       });
-    } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to load device" });
+    } catch (error: any) {
+      res.status(500).json({
+        configured: false,
+        provider: "Food Safety Owned IoT",
+        thirdPartyCloudRequired: false,
+        message: error?.message || "Unable to check owned IoT status",
+      });
     }
   });
 
-  app.get("/api/tuya/devices/:deviceId/status", isAdminAuthenticated, async (req, res) => {
+  const ownedIotDevicesForAdmin = async () => {
     try {
-      res.json(await tuyaService.getDeviceStatus(req.params.deviceId));
-    } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to load device status" });
+      const result: any = await db.execute(sql`
+        SELECT
+          id,
+          device_id,
+          hardware_model,
+          firmware_version,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          battery_pct,
+          rssi,
+          last_seen_at,
+          last_alarm_at
+        FROM owned_iot_devices
+        WHERE COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        ORDER BY friendly_name NULLS LAST, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return rows.map((row: any) => ({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      }));
+    } catch (error: any) {
+      if (String(error?.message || "").includes("owned_iot_devices")) return [];
+      throw error;
     }
-  });
+  };
 
-  app.post("/api/tuya/devices/:deviceId/commands", isAdminAuthenticated, async (req, res) => {
-    try {
-      const commands = Array.isArray(req.body?.commands) ? req.body.commands : [];
-      if (!commands.length) return res.status(400).json({ message: "commands are required" });
-      res.json(await tuyaService.sendDeviceCommands(req.params.deviceId, commands));
-    } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to send command" });
-    }
-  });
+  const enrichIotBranchNames = async (devices: any[]) => {
+    const branchIds = [...new Set(
+      devices
+        .map((device: any) => String(device?.branchId || "").trim())
+        .filter(Boolean)
+    )];
+    const branchPairs = await Promise.all(branchIds.map(async (branchId) => {
+      try {
+        const branch = await storage.getBranch(branchId);
+        return [branchId, branch?.name || "Unknown branch"] as const;
+      } catch (_) {
+        return [branchId, "Unknown branch"] as const;
+      }
+    }));
+    const names = new Map(branchPairs);
+    return devices.map((device: any) => ({
+      ...device,
+      branchName: names.get(String(device?.branchId || "")) || "Unassigned branch",
+      provider: "food-safety-owned-mqtt",
+    }));
+  };
 
-  app.get("/api/iot/devices", isAdminAuthenticated, async (_req, res) => {
+  const loadAdminIotDevices = async () => {
+    await ensureOwnedIotSchema();
+    const ownedDevices = await ownedIotDevicesForAdmin();
+    return enrichIotBranchNames(ownedDevices);
+  };
+
+  const loadIotAlarmHistory = async (branchId?: string) => {
+    await ensureOwnedIotSchema();
+    const ownedBranchFilter = branchId ? sql`AND d.branch_id::text = ${String(branchId)}` : sql``;
+    const result: any = await db.execute(sql`
+      SELECT
+        ('owned-' || e.id::text) AS id,
+        d.device_id,
+        COALESCE(d.friendly_name, d.device_id) AS device_name,
+        d.branch_id::text AS branch_id,
+        b.name AS branch_name,
+        COALESCE(d.installation_location, d.hardware_model) AS location,
+        CASE
+          WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
+          WHEN e.event_type = 'trap_reset' THEN 'Mouse trap reset'
+          WHEN e.event_type = 'low_battery' THEN 'Low battery'
+          ELSE ('Device event: ' || e.event_type)
+        END AS message,
+        e.event_at,
+        (e.event_type = 'trap_triggered') AS is_alarm,
+        false AS is_test,
+        'owned'::text AS source
+      FROM owned_iot_events e
+      JOIN owned_iot_devices d ON d.device_id = e.device_id
+      LEFT JOIN branches b ON b.id::text = d.branch_id::text
+      WHERE COALESCE(d.firmware_version, '') NOT ILIKE '%sim%'
+      ${ownedBranchFilter}
+      ORDER BY e.event_at DESC
+      LIMIT 200
+    `);
+
+    const rows = Array.isArray(result) ? result : (result?.rows || []);
+    return rows.map((row: any) => ({
+      id: row.id,
+      deviceId: row.device_id || null,
+      deviceName: row.device_name || "Food Safety Smart Device",
+      branchId: row.branch_id || null,
+      branchName: row.branch_name || "Unknown branch",
+      location: row.location || null,
+      message: row.message,
+      eventAt: row.event_at,
+      isAlarm: Boolean(row.is_alarm),
+      isTest: false,
+      source: "owned",
+    }));
+  };
+
+  app.get("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
-      res.json(await storage.getIotDevices());
+      res.json(await loadAdminIotDevices());
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load assigned devices" });
     }
   });
 
+  app.get("/api/iot/alarm-history", isAdminAuthenticated, async (_req, res) => {
+    try {
+      res.json(await loadIotAlarmHistory());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarm history" });
+    }
+  });
+
   app.post("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
-      const { deviceId, deviceName, branchId, notes } = req.body || {};
-      if (!deviceId || !String(deviceName || "").trim() || !branchId) {
-        return res.status(400).json({ message: "Cloud device, friendly name, and branch are required" });
+      await ensureOwnedIotSchema();
+      const { deviceId, deviceName, branchId, notes, hardwareModel } = req.body || {};
+      const friendlyName = String(deviceName || "").trim();
+      const targetBranchId = String(branchId || "").trim();
+
+      if (!friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Friendly device name and branch are required" });
       }
 
-      const existingDevices = await storage.getIotDevices();
-      const existing = existingDevices.find((device: any) => String(device.deviceId) === String(deviceId));
-      if (existing) {
-        return res.status(409).json({ message: `This Tuya device is already assigned as ${existing.deviceName}. Remove or reassign it first.` });
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) {
+        return res.status(400).json({ message: "The selected branch does not exist" });
       }
 
-      let info: any = null;
-      let statusList: any[] = [];
-      try {
-        [info, statusList] = await Promise.all([
-          tuyaService.getDeviceInfo(String(deviceId)),
-          tuyaService.getDeviceStatus(String(deviceId)),
-        ]);
-      } catch (error: any) {
-        return res.status(400).json({ message: `Tuya could not verify this device: ${error?.message || "unknown error"}` });
+      let resolvedDeviceId = String(deviceId || "").trim().toUpperCase();
+      if (!resolvedDeviceId) {
+        const nextResult: any = await db.execute(sql`
+          SELECT COALESCE(
+            MAX((substring(device_id from '([0-9]{6,})$'))::bigint),
+            0
+          ) AS max_id
+          FROM owned_iot_devices
+          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
+            AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        `);
+        const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
+        const nextNumber = Number(nextRows?.[0]?.max_id || 0) + 1;
+        resolvedDeviceId = "FS-MOUSE-" + String(nextNumber).padStart(6, "0");
       }
 
-      const device = await storage.createIotDevice({
-        deviceId: String(deviceId),
-        deviceName: String(deviceName).trim(),
-        branchId: String(branchId),
-        notes: String(notes || "").trim() || null,
-        isOnline: info?.online ?? info?.is_online ?? false,
-        alarmActive: tuyaService.checkAlarmActive(statusList),
-        lastStatus: statusList,
-        lastAlarmAt: tuyaService.checkAlarmActive(statusList) ? new Date() : null,
-        lastCheckedAt: new Date(),
-      } as any);
-      res.json(device);
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(resolvedDeviceId)) {
+        return res.status(400).json({ message: "Device ID must use the Food Safety format, for example FS-MOUSE-000001" });
+      }
+
+      const existingResult: any = await db.execute(sql`
+        SELECT id, device_id, friendly_name
+        FROM owned_iot_devices
+        WHERE device_id = ${resolvedDeviceId}
+        LIMIT 1
+      `);
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      if (existingRows.length > 0) {
+        return res.status(409).json({
+          message: "This Food Safety device ID is already registered as " + (existingRows[0]?.friendly_name || existingRows[0]?.device_id),
+        });
+      }
+
+      const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
+      const location = String(notes || "").trim() || null;
+
+      const createdResult: any = await db.execute(sql`
+        INSERT INTO owned_iot_devices (
+          device_id,
+          hardware_model,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${resolvedDeviceId},
+          ${model},
+          ${targetBranchId}::uuid,
+          ${friendlyName},
+          ${location},
+          'awaiting_activation',
+          false,
+          now(),
+          now()
+        )
+        RETURNING
+          id, device_id, hardware_model, firmware_version, branch_id,
+          friendly_name, installation_location, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+
+      const createdRows = Array.isArray(createdResult) ? createdResult : (createdResult?.rows || []);
+      const row: any = createdRows[0];
+      if (!row) return res.status(500).json({ message: "Device registration did not return a device" });
+
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || "awaiting_activation" },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      });
     } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to assign device" });
+      res.status(500).json({ message: err?.message || "Unable to register Food Safety device" });
     }
   });
 
   app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
-      await storage.deleteIotDevice(req.params.id);
-      res.json({ success: true });
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        DELETE FROM owned_iot_devices
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned" });
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to remove device" });
     }
@@ -7372,19 +7566,106 @@ Generated: ${new Date().toISOString()}
 
   app.post("/api/iot/devices/:id/refresh", isAdminAuthenticated, async (req, res) => {
     try {
-      const device = await storage.getIotDevice(req.params.id);
-      if (!device) return res.status(404).json({ message: "Device not found" });
-      res.json(await tuyaService.refreshAssignedDevice(storage, device, { notify: true }));
+      const ownedDevices = await ownedIotDevicesForAdmin();
+      const owned = ownedDevices.find((device: any) => String(device.id) === String(req.params.id));
+      if (!owned) return res.status(404).json({ message: "Device not found" });
+      const [enriched] = await enrichIotBranchNames([owned]);
+      res.json(enriched);
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to refresh device" });
     }
   });
 
+  app.post("/api/iot/devices/:id/test-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = now(),
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      await db.execute(sql`
+        INSERT INTO owned_iot_events
+          (event_id, device_id, event_type, event_value, event_at, raw_payload)
+        VALUES
+          (gen_random_uuid()::text, ${String(row.device_id)}, 'trap_triggered', 'true'::jsonb, now(),
+           jsonb_build_object('source','admin-test-alarm','deviceId',${String(row.device_id)},'type','trap_triggered','value',true))
+      `);
+
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: true,
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: true },
+        ],
+      }]);
+      res.json({ ...enriched, testAlarm: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to trigger test alarm" });
+    }
+  });
+
   app.post("/api/iot/devices/:id/clear-alarm", isAdminAuthenticated, async (req, res) => {
     try {
-      const device = await storage.getIotDevice(req.params.id);
-      if (!device) return res.status(404).json({ message: "Device not found" });
-      res.json(await storage.updateIotDevice(req.params.id, { alarmActive: false }));
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: false,
+        lastAlarmAt: null,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: false },
+        ],
+      }]);
+      res.json(enriched);
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
     }
@@ -7392,16 +7673,70 @@ Generated: ${new Date().toISOString()}
 
   app.get("/api/iot/alarms", isAdminAuthenticated, async (req, res) => {
     try {
-      let devices = await storage.getIotDevices();
-      if (String(req.query.refresh || "") === "1" && tuyaService.isConfigured()) {
-        devices = await Promise.all(devices.map(async (device: any) => {
-          try { return await tuyaService.refreshAssignedDevice(storage, device, { notify: true }); }
-          catch (_) { return device; }
-        }));
-      }
+      const devices = await loadAdminIotDevices();
       res.json(devices.filter((device: any) => device?.alarmActive));
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load alarms" });
+    }
+  });
+
+  const ownedIotDevicesForBranch = async (branchId: string) => {
+    try {
+      const result: any = await db.execute(sql`
+        SELECT
+          id,
+          device_id,
+          hardware_model,
+          firmware_version,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          battery_pct,
+          rssi,
+          last_seen_at,
+          last_alarm_at
+        FROM owned_iot_devices
+        WHERE branch_id::text = ${String(branchId)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        ORDER BY friendly_name NULLS LAST, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return rows.map((row: any) => ({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      }));
+    } catch (error: any) {
+      // Older deployments may not have received the owned-IoT schema yet.
+      if (String(error?.message || "").includes("owned_iot_devices")) return [];
+      throw error;
+    }
+  };
+
+  app.get("/api/branch/iot-alarm-history", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+      res.json(await loadIotAlarmHistory(String(session.branchId)));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarm history" });
     }
   });
 
@@ -7409,14 +7744,11 @@ Generated: ${new Date().toISOString()}
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
-      let devices = await storage.getIotDevicesByBranch(session.branchId);
-      if (String(req.query.refresh || "") === "1" && tuyaService.isConfigured()) {
-        devices = await Promise.all(devices.map(async (device: any) => {
-          try { return await tuyaService.refreshAssignedDevice(storage, device, { notify: true }); }
-          catch (_) { return device; }
-        }));
-      }
-      res.json(devices);
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(ownedDevices.map((device: any) => ({ ...device, branchName })));
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load branch devices" });
     }
@@ -7426,14 +7758,15 @@ Generated: ${new Date().toISOString()}
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
-      let devices = await storage.getIotDevicesByBranch(session.branchId);
-      if (String(req.query.refresh || "") === "1" && tuyaService.isConfigured()) {
-        devices = await Promise.all(devices.map(async (device: any) => {
-          try { return await tuyaService.refreshAssignedDevice(storage, device, { notify: true }); }
-          catch (_) { return device; }
-        }));
-      }
-      res.json(devices.filter((device: any) => device?.alarmActive));
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(
+        ownedDevices
+          .filter((device: any) => device.alarmActive)
+          .map((device: any) => ({ ...device, branchName }))
+      );
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to load branch alarms" });
     }
@@ -7443,9 +7776,29 @@ Generated: ${new Date().toISOString()}
     try {
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
-      const device = await storage.getIotDevice(req.params.id);
-      if (!device || String(device.branchId) !== String(session.branchId)) return res.status(404).json({ message: "Device not found" });
-      res.json(await storage.updateIotDevice(req.params.id, { alarmActive: false }));
+
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND branch_id::text = ${String(session.branchId)}
+        RETURNING id, device_id, friendly_name, branch_id, is_online, last_seen_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row = rows[0];
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        isOnline: Boolean(row.is_online),
+        lastCheckedAt: row.last_seen_at,
+        alarmActive: false,
+        provider: "food-safety-owned-mqtt",
+      });
     } catch (err: any) {
       res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
     }

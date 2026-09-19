@@ -57,6 +57,7 @@ import PDFViewer from "@/components/PDFViewer";
 import BranchNotificationPanel from "@/components/BranchNotificationPanel";
 import BranchChartPage from "@/pages/BranchChartPage";
 import BranchSmartDevicesPanel from "@/components/BranchSmartDevicesPanel";
+import BranchIotAlertsPanel from "@/components/BranchIotAlertsPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -130,6 +131,19 @@ export default function BranchDashboard() {
   const [selectedFontSize, setSelectedFontSize] = useState("medium");
   const [savedTheme, setSavedTheme] = useState("blue");
   const [savedFontSize, setSavedFontSize] = useState("medium");
+
+  // Apply the branch's selected accessibility font size immediately. The value
+  // is persisted per branch by /api/user/preferences, so each customer can keep
+  // its own dashboard scale without affecting another branch.
+  useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.fontSize;
+    const size = selectedFontSize === "small" ? "15px" : selectedFontSize === "large" ? "18px" : "16px";
+    root.style.fontSize = size;
+    return () => {
+      root.style.fontSize = previous;
+    };
+  }, [selectedFontSize]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scrollIndicators, setScrollIndicators] = useState({ top: false, bottom: false });
   const sidebarScrollRef = useRef<HTMLElement>(null);
@@ -152,11 +166,33 @@ export default function BranchDashboard() {
   // IoT Smart Devices query
   const { data: iotDevicesRaw, refetch: refetchIotDevices } = useQuery<any[]>({
     queryKey: ["/api/branch/iot-devices"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async () => {
+      const response = await fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" });
+      if (response.status === 401) return [];
+      if (!response.ok) throw new Error("Failed to load branch smart devices");
+      return response.json();
+    },
     retry: false,
-    staleTime: 30000,
+    staleTime: 5000,
+    refetchInterval: 12000,
+    refetchOnWindowFocus: true,
   });
   const branchIotDevices: any[] = Array.isArray(iotDevicesRaw) ? iotDevicesRaw : [];
+  const branchIotAlarms = branchIotDevices.filter((device: any) => Boolean(device?.alarmActive));
+
+  useEffect(() => {
+    const openSmartDevices = () => {
+      setActiveSection("smart-devices");
+      setSidebarOpen(false);
+      void refetchIotDevices();
+    };
+    window.addEventListener("food-safety-open-smart-devices", openSmartDevices);
+    window.addEventListener("food-safety-iot-alerts-updated", openSmartDevices);
+    return () => {
+      window.removeEventListener("food-safety-open-smart-devices", openSmartDevices);
+      window.removeEventListener("food-safety-iot-alerts-updated", openSmartDevices);
+    };
+  }, [refetchIotDevices]);
 
   // Yearly docs state
   const [showViewer, setShowViewer] = useState(false);
@@ -1652,6 +1688,7 @@ export default function BranchDashboard() {
         { id: "monthly-reports", label: "Monthly Reports", icon: Calendar },
         { id: "yearly-docs", label: "Yearly Docs", icon: Archive },
         { id: "useful-links", label: "Useful Links", icon: LinkIcon },
+        { id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell },
         { id: "smart-devices", label: "Smart Devices", icon: Shield }
       ]
     },
@@ -1817,6 +1854,41 @@ export default function BranchDashboard() {
                 </Card>
               ))}
             </div>
+
+            {/* Live Food Safety smart-device alarm summary */}
+            <Card className={`border ${branchIotAlarms.length ? "border-red-500/50 bg-red-950/30" : "border-emerald-500/25 bg-slate-800/60"}`}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${branchIotAlarms.length ? "bg-red-500/20" : "bg-emerald-500/15"}`}>
+                      {branchIotAlarms.length ? <Bell className="h-5 w-5 text-red-300" /> : <Shield className="h-5 w-5 text-emerald-300" />}
+                    </div>
+                    <div>
+                      <h2 className={`font-bold ${branchIotAlarms.length ? "text-red-100" : "text-white"}`}>
+                        {branchIotAlarms.length
+                          ? `${branchIotAlarms.length} smart-device alert${branchIotAlarms.length === 1 ? "" : "s"} need attention`
+                          : "Smart-device monitoring is clear"}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {branchIotDevices.length === 0
+                          ? "No smart devices are assigned to this branch yet."
+                          : branchIotAlarms.length
+                            ? `A trap event was detected at ${currentBranch?.name || "this branch"}. Open Smart Devices to see the exact device and location.`
+                            : `${branchIotDevices.filter((device: any) => device?.isOnline).length} of ${branchIotDevices.length} assigned device${branchIotDevices.length === 1 ? "" : "s"} online. No active trap alarms.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => setActiveSection("device-alerts")} variant="outline" className={branchIotAlarms.length ? "border-red-500/50 text-red-200" : "border-slate-600 text-slate-200"}>
+                      <Bell className="mr-2 h-4 w-4" />View Alerts
+                    </Button>
+                    <Button onClick={() => setActiveSection("smart-devices")} className="bg-blue-600 text-white hover:bg-blue-500">
+                      <Shield className="mr-2 h-4 w-4" />Smart Devices
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Food Safety Rating Section */}
             <div className="text-center mb-8">
@@ -2022,7 +2094,7 @@ export default function BranchDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Last Audit</span>
-                      <span className="text-white font-semibold">20 Apr 2025</span>
+                      <span className="text-white font-semibold">20 Apr {new Date().getFullYear()}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -2395,7 +2467,10 @@ export default function BranchDashboard() {
           </div>
         );
 
-       case "smart-devices":
+      case "device-alerts":
+        return <BranchIotAlertsPanel onOpenDevices={() => setActiveSection("smart-devices")} />;
+
+      case "smart-devices":
         return <BranchSmartDevicesPanel />;
 
       case "payments":
@@ -2694,7 +2769,7 @@ export default function BranchDashboard() {
   };
 
   const getBackgroundGradient = () => {
-    switch (savedTheme) {
+    switch (selectedTheme) {
       case "blue":
         return "bg-gradient-to-br from-blue-900 via-slate-800 to-blue-900";
       case "purple":
