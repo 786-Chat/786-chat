@@ -7466,7 +7466,7 @@ Generated: ${new Date().toISOString()}
             0
           ) AS max_id
           FROM owned_iot_devices
-          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}
+          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
         `);
         const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
         const nextNumber = Number(nextRows?.[0]?.max_id || 0) + 1;
