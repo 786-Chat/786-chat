@@ -7336,10 +7336,21 @@ Generated: ${new Date().toISOString()}
       let info: any = null;
       let statusList: any[] = [];
       try {
-        [info, statusList] = await Promise.all([
-          tuyaService.getDeviceInfo(String(deviceId)),
-          tuyaService.getDeviceStatus(String(deviceId)),
-        ]);
+        const cloudDevices = await tuyaService.getAllTuyaDevices();
+        info = cloudDevices.find((device: any) =>
+          String(device?.id || device?.device_id || device?.deviceId || "") === String(deviceId)
+        ) || null;
+
+        if (!info) {
+          return res.status(400).json({ message: "Tuya could not verify this device: selected device is not linked to this Tuya project" });
+        }
+
+        try {
+          statusList = await tuyaService.getDeviceStatus(String(deviceId));
+        } catch (statusError: any) {
+          console.warn("Tuya device status is not supported for this device; assigning from discovered device list:", statusError?.message || statusError);
+          statusList = [];
+        }
       } catch (error: any) {
         return res.status(400).json({ message: `Tuya could not verify this device: ${error?.message || "unknown error"}` });
       }
