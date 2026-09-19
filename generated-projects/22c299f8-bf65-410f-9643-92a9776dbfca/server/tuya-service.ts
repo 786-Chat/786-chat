@@ -195,6 +195,65 @@ export async function getDeviceStatus(deviceId: string): Promise<any[]> {
   return Array.isArray(result) ? result : result ? [result] : [];
 }
 
+function statusArrayFromUnknown(value: any): any[] {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  for (const key of ["status", "status_list", "statusList", "properties", "dp_status", "dpStatus"]) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  const dps = value.dps;
+  if (dps && typeof dps === "object" && !Array.isArray(dps)) {
+    return Object.entries(dps).map(([code, dpValue]) => ({ code, value: dpValue }));
+  }
+  return [];
+}
+
+function extractReportLogs(result: any): any[] {
+  const candidates = [result?.logs, result?.data?.logs, result?.list, result?.data, result];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (candidate?.logs && Array.isArray(candidate.logs)) return candidate.logs;
+  }
+  return [];
+}
+
+export async function getDeviceReportStatus(deviceId: string): Promise<any[]> {
+  const token = await getToken();
+  const endTime = Date.now();
+  const startTime = endTime - 24 * 60 * 60 * 1000;
+  const encodedId = encodeURIComponent(deviceId);
+  const paths = [
+    `/v2.1/cloud/thing/${encodedId}/report-logs?codes=&start_time=${startTime}&end_time=${endTime}&last_row_key=&size=100`,
+    `/v1.0/iot-03/devices/${encodedId}/report-logs?codes=&start_time=${startTime}&end_time=${endTime}&last_row_key=&size=100`,
+    `/v1.0/devices/${encodedId}/logs?type=7&start_time=${startTime}&end_time=${endTime}&size=100&query_type=1&start_row_key=`,
+  ];
+
+  let lastError: any = null;
+  for (const path of paths) {
+    try {
+      const result = await request<any>("GET", path, null, token);
+      const logs = extractReportLogs(result);
+      if (!logs.length) continue;
+      const sorted = [...logs].sort((a: any, b: any) => Number(b?.event_time || b?.eventTime || b?.time || 0) - Number(a?.event_time || a?.eventTime || a?.time || 0));
+      const latestByCode = new Map<string, any>();
+      for (const log of sorted) {
+        const code = String(log?.code || log?.dp_code || log?.name || log?.dpId || "");
+        if (!code || latestByCode.has(code)) continue;
+        latestByCode.set(code, {
+          code,
+          value: log?.value,
+          event_time: log?.event_time || log?.eventTime || log?.time || null,
+        });
+      }
+      if (latestByCode.size) return Array.from(latestByCode.values());
+    } catch (error: any) {
+      lastError = error;
+    }
+  }
+  if (lastError) console.warn("Tuya report-log fallback unavailable:", lastError?.message || lastError);
+  return [];
+}
+
 export async function sendDeviceCommands(deviceId: string, commands: { code: string; value: any }[]): Promise<any> {
   const token = await getToken();
   return request<any>("POST", `/v1.0/devices/${encodeURIComponent(deviceId)}/commands`, { commands }, token);
@@ -232,7 +291,7 @@ function isAlarmCode(code: string): boolean {
     "cockroach", "roach", "insect", "insectalarm", "pestalarm",
   ]);
   if (exact.has(code)) return true;
-  return code.includes("shock") || code.includes("catchmouse") || code.includes("catchrat") || code.includes("cockroach") || code.includes("roachalarm") || code.includes("pestalarm");
+  return code.includes("alarm") || code.includes("shock") || code.includes("vibration") || code.includes("motion") || code.includes("pir") || code.includes("trap") || code.includes("catchmouse") || code.includes("catchrat") || code.includes("mousecaught") || code.includes("ratcaught") || code.includes("cockroach") || code.includes("roach") || code.includes("insect") || code.includes("pest");
 }
 
 export function checkAlarmActive(statusList: any[]): boolean {
@@ -275,23 +334,70 @@ export function getAlarmLabel(statusList: any[]): string {
 
 export async function refreshAssignedDevice(storageInstance: any, dev: any, options: { notify?: boolean } = {}): Promise<any> {
   const notify = options.notify !== false;
-  const [info, statusList] = await Promise.all([
-    getDeviceInfo(dev.deviceId),
-    getDeviceStatus(dev.deviceId),
-  ]);
+  let info: any = null;
+  let discovered: any = null;
+  let statusList: any[] = [];
+  let gotLiveData = false;
 
-  const alarmDetected = checkAlarmActive(statusList);
-  const previousAlarmDetected = checkAlarmActive(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
-  const newAlarmTransition = alarmDetected && !previousAlarmDetected;
-  const nextAlarmActive = alarmDetected ? Boolean(dev.alarmActive || newAlarmTransition) : false;
-  const batteryPercent = getBatteryPercent(statusList);
-  const powerStatus = getPowerStatus(statusList);
+  try {
+    info = await getDeviceInfo(dev.deviceId);
+    gotLiveData = true;
+  } catch (error: any) {
+    console.warn("Tuya device info refresh failed; trying discovery fallback:", error?.message || error);
+  }
+
+  try {
+    statusList = await getDeviceStatus(dev.deviceId);
+    gotLiveData = true;
+  } catch (error: any) {
+    console.warn("Tuya direct status unsupported; trying report-log fallback:", error?.message || error);
+  }
+
+  if (!info || statusList.length === 0) {
+    try {
+      const devices = await getAllTuyaDevices();
+      discovered = devices.find((item: any) => String(item?.id || item?.device_id || item?.deviceId || "") === String(dev.deviceId)) || null;
+      if (discovered) gotLiveData = true;
+    } catch (error: any) {
+      console.warn("Tuya discovery refresh fallback failed:", error?.message || error);
+    }
+  }
+
+  if (!info && discovered) info = discovered;
+  if (statusList.length === 0) {
+    statusList = statusArrayFromUnknown(info);
+  }
+  if (statusList.length === 0) {
+    statusList = statusArrayFromUnknown(discovered);
+  }
+  if (statusList.length === 0) {
+    try {
+      statusList = await getDeviceReportStatus(dev.deviceId);
+      if (statusList.length) gotLiveData = true;
+    } catch (error: any) {
+      console.warn("Tuya report-log status refresh failed:", error?.message || error);
+    }
+  }
+
+  if (!gotLiveData) {
+    throw new Error("Tuya did not return fresh device data");
+  }
+
+  const hasFreshStatus = statusList.length > 0;
+  const previousAlarmDetected = Boolean(dev.alarmActive) || checkAlarmActive(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
+  const alarmDetected = hasFreshStatus ? checkAlarmActive(statusList) : previousAlarmDetected;
+  const newAlarmTransition = hasFreshStatus && alarmDetected && !previousAlarmDetected;
+  const nextAlarmActive = hasFreshStatus ? alarmDetected : Boolean(dev.alarmActive);
+  const batteryPercent = hasFreshStatus ? getBatteryPercent(statusList) : getBatteryPercent(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
+  const powerStatus = hasFreshStatus ? getPowerStatus(statusList) : getPowerStatus(Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
   const now = new Date();
+  const isOnline = info?.online ?? info?.is_online ?? discovered?.online ?? discovered?.is_online ?? dev.isOnline ?? false;
+  const nextStatus = hasFreshStatus ? statusList : (Array.isArray(dev.lastStatus) ? dev.lastStatus : []);
 
   const updated = await storageInstance.updateIotDevice(dev.id, {
-    isOnline: info?.online ?? info?.is_online ?? false,
+    isOnline: Boolean(isOnline),
     alarmActive: nextAlarmActive,
-    lastStatus: statusList,
+    lastStatus: nextStatus,
     lastCheckedAt: now,
     ...(newAlarmTransition ? { lastAlarmAt: now } : {}),
   });
@@ -302,7 +408,7 @@ export async function refreshAssignedDevice(storageInstance: any, dev: any, opti
     const label = getAlarmLabel(statusList);
     await storageInstance.createNotification({
       branchId: dev.branchId,
-      message: `🚨 ${label}: ${dev.deviceName}${dev.notes ? ` (${dev.notes})` : ""}. Battery ${batteryPercent === null ? "unknown" : `${batteryPercent}%`}. Device status ${powerStatus || (info?.online ? "online" : "offline")}. Please attend, remove the pest safely, clean/reset the trap and return it to service.`,
+      message: `🚨 ${label}: ${dev.deviceName}${dev.notes ? ` (${dev.notes})` : ""}. Battery ${batteryPercent === null ? "unknown" : `${batteryPercent}%`}. Device status ${powerStatus || (isOnline ? "online" : "offline")}. Please attend, remove the pest safely, clean/reset the trap and return it to service.`,
       visitDate: dateStr,
       visitTime: timeStr,
       purposeOfVisit: `Smart Device Alarm — ${label}`,
@@ -310,7 +416,7 @@ export async function refreshAssignedDevice(storageInstance: any, dev: any, opti
     });
   }
 
-  return updated || { ...dev, isOnline: info?.online ?? false, alarmActive: nextAlarmActive, lastStatus: statusList, lastCheckedAt: now };
+  return updated || { ...dev, isOnline: Boolean(isOnline), alarmActive: nextAlarmActive, lastStatus: nextStatus, lastCheckedAt: now };
 }
 
 export function startAlarmPolling(storageInstance: any): void {
