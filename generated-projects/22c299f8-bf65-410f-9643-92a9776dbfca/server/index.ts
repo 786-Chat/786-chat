@@ -131,7 +131,7 @@ app.use((req, res, next) => {
 // CRITICAL: DISABLED AUTOMATIC REPAIR TO PREVENT DATA LOSS
 // These functions were rewriting file paths and causing files to disappear
 // User data must persist permanently - no automatic cleanup allowed
-(async () => {
+export const runtimeReady = (async () => {
   console.log('✅ STARTUP: Automatic repair functions DISABLED to protect user data');
   console.log('📋 All files will persist permanently unless manually deleted by user');
   
@@ -198,4 +198,6 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
   });
+
+  return app;
 })();
