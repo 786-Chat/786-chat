@@ -80,6 +80,12 @@ async function loadImportedRuntime() {
         await fs.promises.writeFile(destination, Buffer.from(await response.arrayBuffer()));
       }));
       const runtime = await import("./dist/index.js");
+      // The imported server registers its API routes asynchronously. On a
+      // serverless cold start, routing requests before that setup finishes can
+      // briefly return 404 for valid endpoints such as /api/branches.
+      if (runtime.ready && typeof runtime.ready.then === "function") {
+        await runtime.ready;
+      }
       const runtimeApp = runtime.app ?? runtime.default?.app ?? runtime.default;
       if (!runtimeApp) {
         throw new Error("Imported Express runtime did not export an app");
