@@ -1,43 +1,47 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, CheckCircle2, Volume2, VolumeX } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface AlarmDevice {
   id: string;
   deviceId: string;
   deviceName: string;
   branchId?: string;
+  branchName?: string;
   notes?: string;
   alarmActive?: boolean;
   lastAlarmAt?: string;
 }
 
-function createChime(ctx: AudioContext) {
+function createAlarmTone(ctx: AudioContext) {
   const now = ctx.currentTime;
   const master = ctx.createGain();
   master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(0.22, now + 0.03);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+  master.gain.exponentialRampToValueAtTime(0.38, now + 0.03);
+  master.gain.setValueAtTime(0.38, now + 1.15);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
   master.connect(ctx.destination);
 
-  const notes = [659.25, 783.99, 987.77];
-  notes.forEach((frequency, index) => {
+  // A clearly audible two-tone pest alarm rather than a soft notification chime.
+  [0, 0.34, 0.68, 1.02].forEach((offset, index) => {
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
-    oscillator.type = index === 0 ? "sine" : "triangle";
-    oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(0.0001, now + index * 0.16);
-    gain.gain.exponentialRampToValueAtTime(0.24, now + index * 0.16 + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.16 + 0.36);
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(index % 2 === 0 ? 880 : 660, now + offset);
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.24, now + offset + 0.02);
+    gain.gain.setValueAtTime(0.24, now + offset + 0.22);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.30);
     oscillator.connect(gain);
     gain.connect(master);
-    oscillator.start(now + index * 0.16);
-    oscillator.stop(now + index * 0.16 + 0.42);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + 0.31);
   });
 }
 
 export default function GlobalIotAlarmListener() {
-  const path = typeof window !== "undefined" ? window.location.pathname : "";
+  const [path] = useLocation();
   const mode = useMemo<"admin" | "branch" | null>(() => {
     if (path === "/admin-dashboard") return "admin";
     if (path === "/branch-dashboard") return "branch";
@@ -50,7 +54,8 @@ export default function GlobalIotAlarmListener() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    if (!mode) return;
+    // Register from the login screen onward. The login click is a valid browser
+    // user gesture, so it unlocks audio before navigation to the dashboard.
     const unlockAudio = async () => {
       try {
         const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
@@ -58,16 +63,42 @@ export default function GlobalIotAlarmListener() {
         const ctx = audioContextRef.current || new AudioContextCtor();
         audioContextRef.current = ctx;
         if (ctx.state === "suspended") await ctx.resume();
-        setAudioReady(true);
+
+        // Run a silent oscillator during the user gesture so Chrome/Edge fully
+        // unlocks WebAudio for later asynchronous IoT alarm events.
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0001;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.02);
+
+        setAudioReady(ctx.state === "running");
       } catch (_) {}
     };
-    window.addEventListener("pointerdown", unlockAudio, { once: true });
-    window.addEventListener("keydown", unlockAudio, { once: true });
+
+    const resumeAudio = () => {
+      const ctx = audioContextRef.current;
+      if (ctx?.state === "suspended") {
+        void ctx.resume().then(() => setAudioReady(ctx.state === "running")).catch(() => {});
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+    window.addEventListener("focus", resumeAudio);
+    document.addEventListener("visibilitychange", resumeAudio);
+
     return () => {
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("focus", resumeAudio);
+      document.removeEventListener("visibilitychange", resumeAudio);
     };
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
     if (!mode) return;
@@ -97,14 +128,16 @@ export default function GlobalIotAlarmListener() {
 
   useEffect(() => {
     if (!mode || alarms.length === 0 || soundMuted || !audioReady) return;
-    const play = () => {
+    const play = async () => {
       const ctx = audioContextRef.current;
       if (!ctx) return;
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
-      createChime(ctx);
+      try {
+        if (ctx.state === "suspended") await ctx.resume();
+        if (ctx.state === "running") createAlarmTone(ctx);
+      } catch (_) {}
     };
-    play();
-    const timer = window.setInterval(play, 2200);
+    void play();
+    const timer = window.setInterval(() => void play(), 2600);
     return () => window.clearInterval(timer);
   }, [mode, alarms.length, soundMuted, audioReady]);
 
@@ -141,6 +174,7 @@ export default function GlobalIotAlarmListener() {
             {primary.deviceName || "Smart pest-control device"} has reported a trap/shock event.
             {alarms.length > 1 ? ` ${alarms.length} devices currently need attention.` : ""}
           </p>
+          {primary.branchName && <p className="mt-1 text-xs text-slate-300">Branch: <span className="font-semibold text-white">{primary.branchName}</span></p>}
           {primary.notes && <p className="mt-1 text-xs text-slate-400">Location: {primary.notes}</p>}
           <p className="mt-2 text-xs text-slate-400">Check the trap, remove the pest safely, clean/reset the device, then return it to service.</p>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -151,11 +185,30 @@ export default function GlobalIotAlarmListener() {
               <VolumeX className="h-4 w-4" /> Stop alarm & acknowledge
             </button>
             <button
-              onClick={() => setSoundMuted((value) => !value)}
+              onClick={() => window.dispatchEvent(new CustomEvent("food-safety-open-smart-devices"))}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-500/50 bg-blue-500/10 px-3 py-2 text-sm font-medium text-blue-100 transition hover:bg-blue-500/20"
+            >
+              Open Smart Devices
+            </button>
+            <button
+              onClick={async () => {
+                if (!audioReady) {
+                  try {
+                    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+                    const ctx = audioContextRef.current || new AudioContextCtor();
+                    audioContextRef.current = ctx;
+                    if (ctx.state === "suspended") await ctx.resume();
+                    setAudioReady(ctx.state === "running");
+                    if (ctx.state === "running") createAlarmTone(ctx);
+                  } catch (_) {}
+                  return;
+                }
+                setSoundMuted((value) => !value);
+              }}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800"
             >
               {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              {soundMuted ? "Sound muted" : audioReady ? "Alarm sound on" : "Tap page once to enable sound"}
+              {soundMuted ? "Sound muted" : audioReady ? "Alarm sound on" : "Enable alarm sound"}
             </button>
           </div>
         </div>
