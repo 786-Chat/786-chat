@@ -725,7 +725,6 @@ const branchReportsUpload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Lightweight health check must not depend on Neon, sessions, or device hardware.
-  // This gives Vercel and operators a reliable go-live probe during cold starts.
   app.get("/api/health", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json({
@@ -739,9 +738,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
-  // Cold-start safety: Vercel serverless functions must not run database
-  // maintenance every time a new function instance starts. This normalization
-  // is not required to serve requests and remains available in local runtime.
+  // Do not run database maintenance during Vercel serverless cold starts.
+  // It is not required to serve requests and can fail before IoT routes register.
   if (!process.env.VERCEL) {
     try {
       await storage.normalizeReservedBranchSlots();
@@ -3767,6 +3765,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: 'monthly-reports',
         filename: req.file.originalname
       });
+
+      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
+        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
+      }
 
       if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
         throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
@@ -7133,10 +7135,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Vercel serverless functions are request-scoped: long-running timers and
-  // startup maintenance cause unnecessary Neon connections and socket resets.
-  // Keep the legacy cleanup only for the long-lived local server. Production
-  // data remains preserved; a scheduled cleanup can be added separately.
+  // Vercel functions are request-scoped. Keep the legacy maintenance timer
+  // only on a long-lived local server so cold starts cannot consume Neon sockets.
   if (!process.env.VERCEL) {
     setInterval(() => void cleanupOldNotifications(), 60 * 60 * 1000);
     void cleanupOldNotifications();
@@ -7297,8 +7297,8 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
-  await ensureOwnedIotSchema();
-
+  // Keep route registration independent of Neon availability.
+  // The schema is ensured lazily inside authenticated IoT handlers.
   app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
