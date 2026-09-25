@@ -724,7 +724,7 @@ const branchReportsUpload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Lightweight health check must not depend on Neon, sessions, or device hardware.
+  // 786.Chat: lightweight Vercel health probe that never waits for Neon.
   app.get("/api/health", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.status(200).json({
@@ -738,8 +738,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
-  // Do not run database maintenance during Vercel serverless cold starts.
-  // It is not required to serve requests and can fail before IoT routes register.
+  // 786.Chat: Vercel functions are request-scoped. Database maintenance is not
+  // required for route registration and must not block a serverless cold start.
   if (!process.env.VERCEL) {
     try {
       await storage.normalizeReservedBranchSlots();
@@ -7135,8 +7135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Vercel functions are request-scoped. Keep the legacy maintenance timer
-  // only on a long-lived local server so cold starts cannot consume Neon sockets.
+  // 786.Chat: do not run long-lived maintenance timers inside Vercel Functions.
   if (!process.env.VERCEL) {
     setInterval(() => void cleanupOldNotifications(), 60 * 60 * 1000);
     void cleanupOldNotifications();
@@ -7297,8 +7296,8 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
-  // Keep route registration independent of Neon availability.
-  // The schema is ensured lazily inside authenticated IoT handlers.
+  // 786.Chat: register Food Safety Owned IoT routes before any Neon call.
+  // Each authenticated handler ensures the schema lazily.
   app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
