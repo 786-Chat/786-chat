@@ -84,6 +84,12 @@ async function loadImportedRuntime() {
       if (!runtimeApp) {
         throw new Error("Imported Express runtime did not export an app");
       }
+
+      const runtimeReady = runtime.runtimeReady ?? runtime.default?.runtimeReady;
+      if (runtimeReady && typeof runtimeReady.then === "function") {
+        await runtimeReady;
+      }
+
       return runtimeApp;
     })();
   }
