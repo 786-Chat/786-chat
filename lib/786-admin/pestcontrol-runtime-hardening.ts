@@ -384,8 +384,81 @@ function patchBranchLoginVideoRoutes(source: string): string {
   return next
 }
 
+function patchPestControlServerlessStartup(source: string): string {
+  let next = source
+
+  const registerStart = `export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware (this sets up sessions first)
+  await setupAuth(app);
+
+  // Normalize legacy reserved branch slots. Real customer names are preserved.
+  try {
+    await storage.normalizeReservedBranchSlots();
+  } catch (error) {
+    console.error("Failed to normalize reserved branch slots:", error);
+  }
+`
+
+  const hardenedRegisterStart = `export async function registerRoutes(app: Express): Promise<Server> {
+  // 786.Chat: lightweight Vercel health probe that never waits for Neon.
+  app.get("/api/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      status: "ok",
+      service: "pest-control",
+      iotProvider: "Food Safety Owned IoT",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Auth middleware (this sets up sessions first)
+  await setupAuth(app);
+
+  // 786.Chat: Vercel functions are request-scoped. Database maintenance is not
+  // required for route registration and must not block a serverless cold start.
+  if (!process.env.VERCEL) {
+    try {
+      await storage.normalizeReservedBranchSlots();
+    } catch (error) {
+      console.error("Failed to normalize reserved branch slots:", error);
+    }
+  }
+`
+
+  next = replaceIfPresent(next, registerStart, hardenedRegisterStart)
+
+  const cleanupBlock = `  // Run cleanup every hour
+  setInterval(cleanupOldNotifications, 60 * 60 * 1000);
+  
+  // Run cleanup on startup
+  cleanupOldNotifications();
+`
+
+  const hardenedCleanupBlock = `  // 786.Chat: do not run long-lived maintenance timers inside Vercel Functions.
+  if (!process.env.VERCEL) {
+    setInterval(() => void cleanupOldNotifications(), 60 * 60 * 1000);
+    void cleanupOldNotifications();
+  } else {
+    console.log("Notification cleanup timer disabled in Vercel serverless runtime");
+  }
+`
+
+  next = replaceIfPresent(next, cleanupBlock, hardenedCleanupBlock)
+
+  const eagerOwnedSchema = `  await ensureOwnedIotSchema();
+
+  app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {`
+  const lazyOwnedSchema = `  // 786.Chat: register Food Safety Owned IoT routes before any Neon call.
+  // Each authenticated handler ensures the schema lazily.
+  app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {`
+
+  next = replaceIfPresent(next, eagerOwnedSchema, lazyOwnedSchema)
+  return next
+}
+
 function patchPestControlBranchRoutes(source: string): string {
   let next = source
+  next = patchPestControlServerlessStartup(next)
   next = patchCreateBranchContractDefault(next)
   next = patchNonBlockingBranchLogoUpdate(next)
   next = patchUpdateBranchContractDefault(next)
