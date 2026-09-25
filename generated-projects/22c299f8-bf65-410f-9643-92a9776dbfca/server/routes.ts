@@ -724,28 +724,14 @@ const branchReportsUpload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Lightweight health check must not depend on Neon, sessions, or device hardware.
-  app.get("/api/health", (_req, res) => {
-    res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({
-      status: "ok",
-      service: "pest-control",
-      iotProvider: "Food Safety Owned IoT",
-      timestamp: new Date().toISOString(),
-    });
-  });
-
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
-  // Do not run database maintenance during Vercel serverless cold starts.
-  // It is not required to serve requests and can fail before IoT routes register.
-  if (!process.env.VERCEL) {
-    try {
-      await storage.normalizeReservedBranchSlots();
-    } catch (error) {
-      console.error("Failed to normalize reserved branch slots:", error);
-    }
+  // Normalize legacy reserved branch slots. Real customer names are preserved.
+  try {
+    await storage.normalizeReservedBranchSlots();
+  } catch (error) {
+    console.error("Failed to normalize reserved branch slots:", error);
   }
 
   // Admin credentials management - persistent file storage
@@ -7135,14 +7121,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Vercel functions are request-scoped. Keep the legacy maintenance timer
-  // only on a long-lived local server so cold starts cannot consume Neon sockets.
-  if (!process.env.VERCEL) {
-    setInterval(() => void cleanupOldNotifications(), 60 * 60 * 1000);
-    void cleanupOldNotifications();
-  } else {
-    console.log("Notification cleanup timer disabled in Vercel serverless runtime");
-  }
+  // Run cleanup every hour
+  setInterval(cleanupOldNotifications, 60 * 60 * 1000);
+  
+  // Run cleanup on startup
+  cleanupOldNotifications();
 
   // SOURCE CODE DOWNLOAD ENDPOINT - Admin Only
   app.get('/api/download-source-code', async (req, res) => {
@@ -7297,8 +7280,8 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
-  // Keep route registration independent of Neon availability.
-  // The schema is ensured lazily inside authenticated IoT handlers.
+  await ensureOwnedIotSchema();
+
   app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
