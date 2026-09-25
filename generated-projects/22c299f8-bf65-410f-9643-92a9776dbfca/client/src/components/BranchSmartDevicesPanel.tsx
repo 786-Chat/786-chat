@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Battery, RefreshCw, Shield, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,18 +11,13 @@ function snapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
   let power: string | null = null;
-  let shock = false;
   for (const item of list) {
     const code = normalize(item?.code || item?.name || item?.dpId);
     const raw = item?.value;
     if (code.includes("battery")) battery = typeof raw === "number" ? `${raw}%` : String(raw ?? "");
     if (code === "status" || code.includes("switch")) power = String(raw ?? "");
-    if (code.includes("shock")) {
-      const v = normalize(raw);
-      shock = raw === true || ["over", "alarm", "triggered", "on", "1", "true"].includes(v);
-    }
   }
-  return { battery, power, shock };
+  return { battery, power };
 }
 
 export default function BranchSmartDevicesPanel() {
@@ -42,10 +36,12 @@ export default function BranchSmartDevicesPanel() {
   };
 
   useEffect(() => {
-    load();
-    const timer = window.setInterval(load, 12000);
+    void load();
+    const timer = window.setInterval(() => void load(), 12000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const activeCatches = devices.filter((device: any) => Boolean(device.alarmActive));
 
   return (
     <div className="space-y-6 min-h-screen">
@@ -59,7 +55,7 @@ export default function BranchSmartDevicesPanel() {
             <p className="text-sm text-slate-400">Live pest-control devices assigned to this branch</p>
           </div>
         </div>
-        <Button size="sm" variant="outline" onClick={load} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
+        <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
       </div>
 
       {loading ? (
@@ -70,61 +66,85 @@ export default function BranchSmartDevicesPanel() {
           <p className="mt-1 text-sm text-slate-500">Your pest-control provider will assign devices to this branch.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {devices.map((device: any) => {
-            const snap = snapshot(device.lastStatus);
-            const alarm = Boolean(device.alarmActive || snap.shock);
-            return (
-              <div key={device.id} className={`overflow-hidden rounded-2xl border ${alarm ? "border-red-500/60 bg-red-950/20" : "border-slate-700 bg-slate-800/60"}`}>
-                <div className={`h-1.5 ${alarm ? "bg-red-500" : device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="truncate text-lg font-semibold text-white">{device.deviceName}</p>
-                      <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
-                      {device.notes && <p className="mt-1 text-sm text-slate-400">{device.notes}</p>}
+        <>
+          {activeCatches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-white">Caught mice requiring service</h3>
+                  <p className="text-xs text-slate-400">Only active catches are shown here. Cleared catches disappear automatically.</p>
+                </div>
+                <Badge className="bg-red-500/20 text-red-200">{activeCatches.length} active</Badge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {activeCatches.map((device: any, index: number) => (
+                  <div key={`catch-${device.id}`} className="rounded-xl border border-red-500/50 bg-red-500/15 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-red-100">🐭 Mouse caught {index + 1}</p>
+                        <p className="mt-1 truncate text-sm font-medium text-white">{device.deviceName}</p>
+                        {device.notes && <p className="mt-1 text-xs text-red-200/80">{device.notes}</p>}
+                      </div>
+                      <Badge className="bg-red-500/25 text-red-100">Caught</Badge>
                     </div>
-                    <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Online" : "Offline"}</Badge>
+                    {device.lastAlarmAt && (
+                      <p className="mt-3 text-xs text-red-200">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>
+                    )}
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-                  {alarm && (
-                    <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/15 p-3">
-                      <p className="font-bold text-red-200">⚠ Pest trap triggered</p>
-                      <p className="mt-1 text-xs text-red-300">Check the trap safely, remove the pest, clean/reset the device, and return it to service.</p>
-                      {device.lastAlarmAt && <p className="mt-1 text-xs text-red-300">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {devices.map((device: any) => {
+              const snap = snapshot(device.lastStatus);
+              const alarm = Boolean(device.alarmActive);
+              return (
+                <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
+                  <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-semibold text-white">{device.deviceName}</p>
+                        <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
+                        {device.notes && <p className="mt-1 text-sm text-slate-400">{device.notes}</p>}
+                      </div>
+                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Online" : "Offline"}</Badge>
                     </div>
-                  )}
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">Battery</span>
-                      <div className="mt-1 flex items-center gap-1.5"><Battery className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{snap.battery || "—"}</span></div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-xl bg-slate-900/70 p-3">
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Battery</span>
+                        <div className="mt-1 flex items-center gap-1.5"><Battery className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{snap.battery || "—"}</span></div>
+                      </div>
+                      <div className="rounded-xl bg-slate-900/70 p-3">
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
+                        <span className="mt-1 block font-semibold text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span>
+                      </div>
+                      <div className={`rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap Event</span>
+                        <span className={`mt-1 block font-semibold ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Caught" : "Normal"}</span>
+                      </div>
+                      <div className="rounded-xl bg-slate-900/70 p-3">
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Connection</span>
+                        <div className="mt-1 flex items-center gap-1.5"><Wifi className="h-4 w-4 text-cyan-300" /><span className="font-semibold text-white">Wi-Fi / Cloud</span></div>
+                      </div>
                     </div>
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
-                      <span className="mt-1 block font-semibold text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span>
-                    </div>
-                    <div className={`rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap Event</span>
-                      <span className={`mt-1 block font-semibold ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Triggered" : "Normal"}</span>
-                    </div>
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <span className="block text-[11px] uppercase tracking-wide text-slate-500">Connection</span>
-                      <div className="mt-1 flex items-center gap-1.5"><Wifi className="h-4 w-4 text-cyan-300" /><span className="font-semibold text-white">Wi-Fi / Cloud</span></div>
-                    </div>
-                  </div>
 
-                  <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                    Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first cloud check"}
+                    <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
+                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first cloud check"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      <p className="text-center text-xs text-slate-600">Powered by Tuya / Smart Life Cloud • Live IoT pest monitoring</p>
+      <p className="text-center text-xs text-slate-600">Powered by Food Safety Owned IoT • Live pest monitoring</p>
     </div>
   );
 }

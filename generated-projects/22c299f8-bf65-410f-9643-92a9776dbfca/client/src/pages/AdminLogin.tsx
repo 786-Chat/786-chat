@@ -11,24 +11,14 @@ const logo2 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1
 const logo3 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087873423-05924ff1-ac2f-4d93-b68c-224bd139a7d8-logo3-CxaNcaWzudsiU7GosFusQ7OJlxlKx4.png"; // 786.Chat: imported binary asset URL
 const logo4 = "https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087874448-db35fc63-5281-4768-abcc-5bec4afb1c06-logo4-OtkAHniroCMOYCjhvbIKDaY0dXtEEe.png"; // 786.Chat: imported binary asset URL
 
-interface MouseTrail {
-  x: number;
-  y: number;
-  id: number;
-  color: string;
-  size: number;
-}
-
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [mouseTrails, setMouseTrails] = useState<MouseTrail[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const { toast } = useToast();
-  const trailIdRef = useRef(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -87,32 +77,6 @@ export default function AdminLogin() {
     frequencies.forEach((freq, index) => {
       setTimeout(() => playMagicSound(freq, 150), index * 50);
     });
-  };
-
-  // Mouse movement handler with colorful trails
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff', '#5f27cd'];
-    const newTrail: MouseTrail = {
-      x: e.clientX,
-      y: e.clientY,
-      id: trailIdRef.current++,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: Math.random() * 20 + 10
-    };
-    
-    setMouseTrails(prev => [...prev.slice(-20), newTrail]);
-    
-    // Play magic sound on mouse move
-    if (Math.random() > 0.95) { // Occasional sounds
-      playMagicSound(Math.random() * 400 + 400, 100);
-    }
-    
-    // Simple background effects only
-    
-    // Clean up old trails
-    setTimeout(() => {
-      setMouseTrails(prev => prev.filter(trail => trail.id !== newTrail.id));
-    }, 1000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -179,7 +143,6 @@ export default function AdminLogin() {
   return (
     <div 
       className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
-      onMouseMove={handleMouseMove}
     >
       {/* Animated Background Particles */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -196,23 +159,6 @@ export default function AdminLogin() {
           />
         ))}
       </div>
-
-      {/* Mouse Trail Effects */}
-      {mouseTrails.map((trail) => (
-        <div
-          key={trail.id}
-          className="fixed pointer-events-none rounded-full animate-ping z-10"
-          style={{
-            left: trail.x - trail.size / 2,
-            top: trail.y - trail.size / 2,
-            width: trail.size,
-            height: trail.size,
-            backgroundColor: trail.color,
-            boxShadow: `0 0 20px ${trail.color}`,
-            opacity: 0.7
-          }}
-        />
-      ))}
 
       {/* Main Content Container - Mobile Responsive */}
       <div className="relative z-20 flex flex-col items-center justify-center gap-4 sm:gap-8 lg:gap-12 max-w-7xl mx-auto w-full">

@@ -58,97 +58,15 @@ Preferred communication style: Simple, everyday language.
 - **Security**: `bcrypt` (password hashing)
 - **PDF Rendering**: `pdfjs-dist` (client-side PDF viewing)
 
-## IoT Integration — Link24 Cloud (April 2026)
+## Food Safety Owned IoT Integration (September 2026)
 
-### Smart Mouser Pest Control Device Integration
-- **Branding**: "Link24 Cloud" (Tuya IoT platform, never expose "Tuya" in UI)
-- **Data Center**: Central Europe (`openapi.tuyaeu.com`)
-- **Authentication**: HMAC-SHA256 signed requests with token caching
-- **Service**: `server/tuya-service.ts` — token management, device info, device status, commands
-- **DB Table**: `iotDevices` in `shared/schema.ts` — stores branch assignments with online/offline status cache
-- **Storage Methods**: `getIotDevices`, `getIotDevicesByBranch`, `getIotDevice`, `createIotDevice`, `updateIotDevice`, `deleteIotDevice`
-- **Admin Routes**: `GET /api/tuya/status`, `GET /api/tuya/test-connection`, `GET /api/tuya/devices`, `GET/POST /api/iot/devices`, `DELETE /api/iot/devices/:id`, `POST /api/iot/devices/:id/refresh`
-- **Branch Route**: `GET /api/branch/iot-devices` — returns only devices assigned to that branch
-- **Admin UI**: "IoT Cloud Settings" under DEVELOPER TOOLS in admin sidebar — connection status, test button, assign device form, device list with refresh/remove
-- **Branch UI**: "Smart Devices" section in branch sidebar — shows assigned devices with online/offline status and status codes
-- **Smart Mouser image**: `client/publichttps://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087853714-8a17cb6e-806a-433c-a5b2-5e616bbb45b2-smart-mouser-9IkSDc7KHY9vGd9hY9Z97CfS5sDivs.png`
-- **Env vars**: `TUYA_ACCESS_ID`, `TUYA_ACCESS_SECRET`
-
-## Report Generator Feature (February 2026)
-
-### PDF Report Generator from Company Templates
-- **Generate Report** button added to Monthly Reports section in Admin Panel
-- Admin fills in customer details (name, premises, address, telephone, date, contract no, postcode, town)
-- System overlays the data on the company PDF template (Inspection Report or COSHH Risk Assessment)
-- Preview the filled PDF before saving
-- Saved report appears in Monthly Reports list and can be sent to any branch
-- Templates stored in `server/templates/` directory
-- PDF generation uses `pdf-lib` library
-- API endpoints: `GET /api/report-templates`, `POST /api/monthly-reports/generate`, `POST /api/monthly-reports/preview`
-- PDF generator service: `server/pdfGenerator.ts`
-
-## Recent Critical Updates (November 2025)
-
-### COMPLETE Object Storage Migration (November 20, 2025) - PRODUCTION READY ✅
-**CRITICAL:** 100% of file uploads now use permanent Replit Object Storage. All future uploads automatically persist across republishing.
-
-**Phase 1 - Existing Files Migration:**
-- ✅ 6 files successfully migrated to Object Storage
-- ✅ 6 files verified with checksums (100% success rate)
-- ✅ Backup manifest saved for rollback capability
-- ✅ 0 failures during migration
-- ✅ Files now persist permanently across deployments
-
-**Phase 2 - ALL Upload Endpoints Migrated (COMPLETE):**
-- ✅ Admin Documents upload (`/api/documents/upload`)
-- ✅ Admin Photos upload (`/api/photos` and `/api/photos/upload`)
-- ✅ Admin Monthly Reports upload (`/api/monthly-reports`)
-- ✅ Admin Yearly Docs upload (`/api/yearly-docs`)
-- ✅ Admin Pest Control Docs upload (`/api/pest-control-docs`)
-- ✅ Monthly Report file update (`/api/monthly-reports/:id/update-file`)
-
-**Technical Implementation:**
-- **Object Storage Service** (server/objectStorage.ts): Upload, download, and ACL management
-- **ACL System** (server/objectAcl.ts): Branch data isolation with admin override access
-- **File Serving** (/objects/* route): Secure file access with admin/branch authentication
-- **Migration Script** (server/migrateToObjectStorage.ts): Safe migration with dry-run, verification, rollback support for yearly docs
-- **Backup Manifest**: /home/runner/workspace/migration-backup-manifest.json
-
-**Upload Flow (ALL endpoints):**
-1. Multer receives file → saves to temp location
-2. ObjectStorageService uploads to permanent storage (`/objects/branch/{branchId}/{category}/{uuid}.{ext}`)
-3. Database record updated with permanent Object Storage path
-4. Temporary file cleaned up
-5. File persists FOREVER unless manually deleted
-
-**File Categories Protected:**
-- Branch logos (permanent storage)
-- Document uploads (PDF, DOC, XLS, images) - ALL categories
-- Monthly reports (upload + file updates)
-- Yearly documents (NEW - added to migration)
-- Pest control documents
-- Photos and attachments (before/after treatment)
-
-**Rollback Capability:**
-If needed, run: `tsx server/migrateToObjectStorage.ts rollback`
-This will restore all original file paths from the backup manifest.
-
-**Security:**
-- Admins have full access to all files
-- Branches can only access their own files
-- ACL enforced at Object Storage level
-- Session-based authentication required
-
-### Previous Data Protection Fixes
-- **DISABLED** all automatic file deletion and repair functions (server/index.ts lines 130-148)
-- **RESTORED** 3,004 branch logos to permanent storage
-- **FIXED** PDF viewer to use PDF.js canvas rendering instead of iframe (bypasses Chrome blocking)
-- **CLEANED** database records pointing to missing files (20 broken records removed)
-- **PROTECTED** all user data with lifetime storage guarantee - files only delete when manually removed by user
-
-### Known Issues Fixed
-- "Failed to load report" error in branch dashboard → Fixed by cleaning orphaned database records
-- PDF inline viewer blocked by Chrome → Fixed by implementing PDF.js direct canvas rendering
-- Missing branch logos → Fixed by restoring from backup and implementing permanent storage paths
-- Document assignment corruption → Fixed by disabling automatic repair functions that were overwriting file paths
-- Filesystem files deleted on republish → Fixed by migrating to permanent Object Storage
+### Smart Mouse Trap Integration
+- **Provider**: Food Safety Owned IoT — no third-party device-cloud subscription required.
+- **Transport**: customer 2.4 GHz Wi-Fi → Food Safety gateway/MQTT → application backend.
+- **Device Registry**: `owned_iot_devices` stores Food Safety device IDs, branch assignment, online/offline state, battery, signal and current alarm state.
+- **Events**: `owned_iot_events` stores trap-triggered, trap-reset and other device events.
+- **Admin Routes**: `GET /api/iot/owned/status`, `GET/POST /api/iot/devices`, `DELETE /api/iot/devices/:id`, `POST /api/iot/devices/:id/refresh`, alarm test/clear routes.
+- **Branch Routes**: `GET /api/branch/iot-devices`, `GET /api/branch/iot-alarms`, and per-device alarm acknowledgement.
+- **Admin UI**: Smart Devices lets admin register a device, assign a branch and provision customer Wi-Fi directly to the local Food Safety device setup portal.
+- **Wi-Fi Security**: Wi-Fi passwords remain in the browser and are not persisted in the application database.
+- **Alarm Flow**: trap events update the owned device record and appear in Admin Dashboard, Branch Dashboard and Smart Devices; Stop Alarm clears the current caught state.
