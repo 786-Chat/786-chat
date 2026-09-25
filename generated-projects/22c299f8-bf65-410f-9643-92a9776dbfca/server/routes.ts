@@ -724,14 +724,30 @@ const branchReportsUpload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Lightweight health check must not depend on Neon, sessions, or device hardware.
+  // This gives Vercel and operators a reliable go-live probe during cold starts.
+  app.get("/api/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      status: "ok",
+      service: "pest-control",
+      iotProvider: "Food Safety Owned IoT",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
-  // Normalize legacy reserved branch slots. Real customer names are preserved.
-  try {
-    await storage.normalizeReservedBranchSlots();
-  } catch (error) {
-    console.error("Failed to normalize reserved branch slots:", error);
+  // Cold-start safety: Vercel serverless functions must not run database
+  // maintenance every time a new function instance starts. This normalization
+  // is not required to serve requests and remains available in local runtime.
+  if (!process.env.VERCEL) {
+    try {
+      await storage.normalizeReservedBranchSlots();
+    } catch (error) {
+      console.error("Failed to normalize reserved branch slots:", error);
+    }
   }
 
   // Admin credentials management - persistent file storage
@@ -7117,11 +7133,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Run cleanup every hour
-  setInterval(cleanupOldNotifications, 60 * 60 * 1000);
-  
-  // Run cleanup on startup
-  cleanupOldNotifications();
+  // Vercel serverless functions are request-scoped: long-running timers and
+  // startup maintenance cause unnecessary Neon connections and socket resets.
+  // Keep the legacy cleanup only for the long-lived local server. Production
+  // data remains preserved; a scheduled cleanup can be added separately.
+  if (!process.env.VERCEL) {
+    setInterval(() => void cleanupOldNotifications(), 60 * 60 * 1000);
+    void cleanupOldNotifications();
+  } else {
+    console.log("Notification cleanup timer disabled in Vercel serverless runtime");
+  }
 
   // SOURCE CODE DOWNLOAD ENDPOINT - Admin Only
   app.get('/api/download-source-code', async (req, res) => {
