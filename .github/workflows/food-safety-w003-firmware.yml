@@ -36,3 +36,13 @@ jobs:
         run: pio run
       - name: Show artifacts
         run: find .pio/build -maxdepth 3 -type f \( -name "*.bin" -o -name "*.uf2" \) -printf "%p %s bytes\n"
+      - name: Upload W003 firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: foodsafety-w003-bk7231n
+          path: |
+            services/food-safety-iot/firmware/w003-bk7231n/.pio/build/foodsafety_mouse/firmware.uf2
+            services/food-safety-iot/firmware/w003-bk7231n/.pio/build/foodsafety_mouse/firmware.bin
+            services/food-safety-iot/firmware/w003-bk7231n/.pio/build/foodsafety_mouse/raw_firmware.bin
+          if-no-files-found: error
+          retention-days: 30
