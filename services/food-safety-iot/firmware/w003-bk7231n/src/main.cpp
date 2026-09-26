@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <PubSubClient.h>\n#include <time.h>
 
 #ifndef WIFI_SSID
 #define WIFI_SSID ""
@@ -89,6 +89,16 @@ void publishStatus(bool online = true) {
   s += "\"timestamp\":\"" + String(millis()) + "\"";
   s += "}";
   mqttPublish("status", s, true);
+}
+
+String isoTimestamp() {
+  time_t now = time(nullptr);
+  if (now < 1700000000) return "1970-01-01T00:00:00Z";
+  struct tm tmUtc;
+  gmtime_r(&now, &tmUtc);
+  char buf[25];
+  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmUtc);
+  return String(buf);
 }
 
 String nextEventId() {
