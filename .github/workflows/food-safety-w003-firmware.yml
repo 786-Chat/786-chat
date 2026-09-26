@@ -29,9 +29,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.11"
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install "platformio==6.1.18" "scons<4.9"
       - name: Build W003 firmware
         run: pio run
       - name: Show artifacts
