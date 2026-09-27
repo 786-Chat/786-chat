@@ -1,25 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const units = ["kg", "g", "litres", "ml", "packs", "boxes", "pieces"];
 const storageLocations = ["Freezer 1", "Freezer 2", "Freezer 3", "Freezer 4", "Chiller 1", "Chiller 2", "Dry Store"];
-
-interface DeliveryRecord {
-  id: string;
-  name: string;
-  supplier: string;
-  supplier_batch: string;
-  quantity: string;
-  unit: string;
-  date_received: string;
-  use_by_date: string;
-  storage_location: string;
-  allergen_yes_no: string;
-  allergen_type: string;
-  notes: string;
-}
 
 const emptyForm = {
   name: "",
@@ -36,27 +21,9 @@ const emptyForm = {
 };
 
 export default function DeliveryPage() {
-  const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchRecords();
-  }, []);
-
-  async function fetchRecords() {
-    try {
-      const res = await fetch("/api/deliveries", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load deliveries");
-      const data = await res.json();
-      setRecords(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [saving, setSaving] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value } = e.target;
@@ -66,6 +33,7 @@ export default function DeliveryPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSaving(true);
     try {
       const res = await fetch("/api/deliveries", {
         method: "POST",
@@ -77,9 +45,10 @@ export default function DeliveryPage() {
         throw new Error(data.error?.message || data.error || "Failed to save delivery");
       }
       setForm({ ...emptyForm });
-      await fetchRecords();
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,50 +125,11 @@ export default function DeliveryPage() {
               <textarea name="notes" value={form.notes} onChange={handleChange} rows={2} className="rounded border-2 border-slate-400 px-3 py-2 focus:border-sky-500 focus:outline-none" />
             </div>
             <div className="flex gap-3 sm:col-span-2">
-              <button type="submit" className="h-11 cursor-pointer rounded bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-500">Save Delivery</button>
+              <button type="submit" disabled={saving} className="h-11 cursor-pointer rounded bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-500 disabled:opacity-60">
+                {saving ? "Saving..." : "Save Delivery"}
+              </button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <p className="p-4 text-sm text-slate-400">Loading deliveries...</p>
-          ) : records.length === 0 ? (
-            <p className="p-4 text-sm text-slate-400">No deliveries recorded yet</p>
-          ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[820px] w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Supplier</th>
-                    <th className="px-4 py-3 font-medium">Batch</th>
-                    <th className="px-4 py-3 font-medium">Quantity</th>
-                    <th className="px-4 py-3 font-medium">Received</th>
-                    <th className="px-4 py-3 font-medium">Use By</th>
-                    <th className="px-4 py-3 font-medium">Storage</th>
-                    <th className="px-4 py-3 font-medium">Allergen</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {records.map((rec) => (
-                    <tr key={rec.id} className="text-slate-300">
-                      <td className="px-4 py-3 font-medium text-slate-100">{rec.name}</td>
-                      <td className="px-4 py-3">{rec.supplier}</td>
-                      <td className="px-4 py-3">{rec.supplier_batch}</td>
-                      <td className="px-4 py-3">{rec.quantity} {rec.unit}</td>
-                      <td className="px-4 py-3">{rec.date_received}</td>
-                      <td className="px-4 py-3">{rec.use_by_date}</td>
-                      <td className="px-4 py-3">{rec.storage_location}</td>
-                      <td className="px-4 py-3">{rec.allergen_yes_no === "Yes" ? rec.allergen_type || "Yes" : "No"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>
