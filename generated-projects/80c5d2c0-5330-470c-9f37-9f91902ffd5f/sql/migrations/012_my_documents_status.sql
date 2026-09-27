@@ -1,0 +1,1 @@
+ALTER TABLE my_documents ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Incomplete';
