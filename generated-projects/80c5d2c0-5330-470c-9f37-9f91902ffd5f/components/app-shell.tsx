@@ -15,6 +15,8 @@ import {
   X,
   Truck,
   CornerDownRight,
+  ClipboardCheck,
+  FolderOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -28,32 +30,20 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/opening-checks", label: "Opening Checks", icon: ShieldCheck },
-
-  // Production records are saved into Ready Stock.
+  { href: "/opening-checks", label: "Opening Checks", icon: ClipboardCheck },
   { href: "/production", label: "Production", icon: Factory },
   { href: "/inventory", label: "Ready Stock", icon: Boxes, child: true },
-
-  // Delivery intake records are saved into Stock.
   { href: "/delivery", label: "Delivery", icon: Truck },
   { href: "/stock", label: "Stock", icon: Boxes, child: true },
-
   { href: "/products", label: "Products", icon: Package },
   { href: "/ingredients", label: "Ingredients", icon: Package },
-
-  // Daily food-safety operations kept together.
   { href: "/freezers", label: "Freezers", icon: Snowflake },
   { href: "/cleaning", label: "Cleaning", icon: SprayCan },
   { href: "/haccp", label: "HACCP", icon: ShieldCheck },
   { href: "/documents", label: "Documents", icon: FileText },
-  { href: "/process-flow", label: "Process Flow", icon: Factory, child: true },
+  { href: "/my-documents", label: "My Documents", icon: FolderOpen },
+  { href: "/closing-checks", label: "Closing Checks", icon: ClipboardCheck },
 ];
-
-const closingItem: NavItem = {
-  href: "/closing-checks",
-  label: "Closing Checks",
-  icon: ShieldCheck,
-};
 
 function SidebarLink({
   item,
@@ -67,17 +57,7 @@ function SidebarLink({
   return (
     <Link
       href={item.href}
-      onClick={(event) => {
-        onClick();
-
-        // Opening Checks is a daily record. On mobile, always enter it with a
-        // fresh document navigation so cached App Router state cannot reopen an
-        // older selected day (for example Monday after returning from Dashboard).
-        if (item.href === "/opening-checks" && window.innerWidth < 768) {
-          event.preventDefault();
-          window.location.assign("/opening-checks");
-        }
-      }}
+      onClick={onClick}
       className={cn(
         "flex items-center rounded-md text-sm font-medium transition-colors",
         item.child ? "ml-5 gap-2 px-3 py-1.5" : "gap-3 px-3 py-2",
@@ -111,9 +91,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded bg-sky-500 font-bold text-slate-950">RC</span>
-            <span className="text-sm font-semibold tracking-wide">Raja Catering</span>
+            <span className="flex h-8 w-8 items-center justify-center rounded bg-sky-500 font-bold text-slate-950">SB</span>
+            <span className="text-sm font-semibold tracking-wide">Super Business Mujeeb</span>
           </Link>
+          <span className="ml-auto hidden rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 sm:inline-block">
+            MASTER TEMPLATE – SUPER ADMIN ONLY
+          </span>
         </div>
       </header>
 
@@ -141,14 +124,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 onClick={() => setMobileOpen(false)}
               />
             ))}
-
-            <div className="mt-auto border-t border-slate-800 pt-3">
-              <SidebarLink
-                item={closingItem}
-                active={pathname === closingItem.href}
-                onClick={() => setMobileOpen(false)}
-              />
-            </div>
           </nav>
         </aside>
 
