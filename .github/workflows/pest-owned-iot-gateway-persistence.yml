@@ -1,0 +1,43 @@
+name: Pest Control owned IoT gateway persistence
+
+on:
+  push:
+    branches:
+      - 'generated/22c299f8-bf65-410f-9643-92a9776dbfca/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pest-owned-iot-gateway-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ensure-owned-iot-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout generated branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main gateway source
+        run: git fetch origin main
+
+      - name: Ensure owned IoT gateway survives rebuild
+        run: node scripts/ensure-pest-owned-iot-gateway.mjs
+
+      - name: Commit repair when required
+        shell: bash
+        run: |
+          if git diff --quiet -- generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/index.ts generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/owned-iot-gateway.ts; then
+            echo "Owned IoT gateway already present."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/index.ts
+          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/owned-iot-gateway.ts
+          git commit -m "fix(pest-iot): preserve owned IoT gateway after rebuild"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
