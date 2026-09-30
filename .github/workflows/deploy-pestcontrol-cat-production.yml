@@ -1,0 +1,104 @@
+name: Deploy PestControl.cat production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-pestcontrol-cat-production.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Deploy verified Pest Control build and attach pestcontrol.cat
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          TEAM_ID: team_ramDdJPbDZUAmHzZhWYHvxEt
+          PROJECT_NAME: 786-generated-22c299f8bf65
+          REPOSITORY_ID: '1250394192'
+          TARGET_BRANCH: generated/22c299f8-bf65-410f-9643-92a9776dbfca/1d7881ab-16ad-49e3-8-muo3tke1-kc5jq
+          TARGET_SHA: 2c93698ab9864adeb90e857e1b8196dc39d4ca4c
+          APEX_DOMAIN: pestcontrol.cat
+          WWW_DOMAIN: www.pestcontrol.cat
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo "VERCEL_TOKEN is missing"; exit 1; }
+
+          deploy_payload=$(jq -n \
+            --arg name "$PROJECT_NAME" \
+            --arg ref "$TARGET_BRANCH" \
+            --arg sha "$TARGET_SHA" \
+            --argjson repoId "$REPOSITORY_ID" \
+            '{name:$name,target:"production",gitSource:{type:"github",repoId:$repoId,ref:$ref,sha:$sha}}')
+
+          response=$(curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$deploy_payload" \
+            "https://api.vercel.com/v13/deployments?teamId=$TEAM_ID")
+
+          deployment_id=$(echo "$response" | jq -r '.id // empty')
+          deployment_url=$(echo "$response" | jq -r '.url // empty')
+          test -n "$deployment_id" || { echo "Vercel did not return a deployment id"; exit 1; }
+          test -n "$deployment_url" || { echo "Vercel did not return a deployment URL"; exit 1; }
+          echo "Production deployment queued: $deployment_id"
+
+          state=""
+          for attempt in $(seq 1 120); do
+            status=$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$TEAM_ID")
+            state=$(echo "$status" | jq -r '.readyState // .state // empty')
+            echo "Vercel state: $state"
+            case "$state" in
+              READY) break ;;
+              ERROR|CANCELED) exit 1 ;;
+            esac
+            sleep 5
+          done
+          test "$state" = "READY" || { echo "Production deployment did not become READY"; exit 1; }
+
+          health=$(curl --fail-with-body --silent --show-error "https://$deployment_url/api/iot/gateway/health")
+          echo "Deployment gateway health: $health"
+          echo "$health" | jq -e '.status == "ok" and .provider == "Food Safety Owned IoT" and .configured == true' >/dev/null
+
+          add_domain() {
+            local domain="$1"
+            local body status
+            body=$(jq -n --arg name "$domain" '{name:$name}')
+            status=$(curl --silent --show-error \
+              -o "/tmp/domain-${domain//./-}.json" \
+              -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$body" \
+              "https://api.vercel.com/v10/projects/$PROJECT_NAME/domains?teamId=$TEAM_ID")
+            case "$status" in
+              200|201|409) ;;
+              *) echo "Adding $domain failed with HTTP $status"; cat "/tmp/domain-${domain//./-}.json"; exit 1 ;;
+            esac
+            echo "Domain request for $domain returned HTTP $status"
+          }
+
+          add_domain "$APEX_DOMAIN"
+          add_domain "$WWW_DOMAIN"
+
+          domains=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v9/projects/$PROJECT_NAME/domains?teamId=$TEAM_ID&limit=100")
+          echo "$domains" | jq -e --arg d "$APEX_DOMAIN" '[.domains[]?.name] | index($d) != null' >/dev/null || {
+            echo "$APEX_DOMAIN is not attached to the Pest Control project"; exit 1;
+          }
+          echo "$domains" | jq -e --arg d "$WWW_DOMAIN" '[.domains[]?.name] | index($d) != null' >/dev/null || {
+            echo "$WWW_DOMAIN is not attached to the Pest Control project"; exit 1;
+          }
+
+          echo "Production deploy is READY and both PestControl.cat domains are attached."
+          echo "Namecheap DNS required: @ A 76.76.21.21 and www CNAME cname.vercel-dns-0.com"
