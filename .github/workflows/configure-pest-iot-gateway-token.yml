@@ -52,7 +52,7 @@ jobs:
           cat > /tmp/gateway-public.pem <<'PEM'
           -----BEGIN PUBLIC KEY-----
           MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoqZkHgVIMsu2M/E/TFIt
-          tRAraMgoeutGWhSdNGBKtRIoABgDCOZk+EdHVj6DIZdtZUYzgNc2Iqdnh/CHiO4j
+          tRAraMgoeutGWhSdNGBKtRIoABgDC0Zk+EdHVj6DIzdtZUYzgNc2IqdnH/CHi04j
           pRu8aj4NBWj5njnMGXPaL+RYMeRGI3t6v7GbsQftfdTyUZCC7KL4ePkXEm8SWA4B
           ea5HrJPbkql48Radd8Fj+ndmsVfAPu/8qtsIMTCqQJZW7qKQ8K/pzLYFvQhSKlww
           QWMItBwx9KqSl37bu8C4vGNf2NpAKhJybrhW7Eo6pl3+sbHyg6K2sk9u69JIsHFL
@@ -60,6 +60,13 @@ jobs:
           vQIDAQAB
           -----END PUBLIC KEY-----
           PEM
+
+          gateway_pub_fingerprint=$(openssl pkey -pubin -in /tmp/gateway-public.pem -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
+          test "$gateway_pub_fingerprint" = "1b987ddf2d55b1e15f87843b576c26644ee4f05bc3a23b4d6264072ac84f2cdc" || {
+            echo "HP2 public key fingerprint mismatch";
+            exit 1;
+          }
+          echo "Verified HP2 public key fingerprint."
 
           encrypted_token=$(printf '%s' "$gateway_token" \
             | openssl pkeyutl -encrypt -pubin -inkey /tmp/gateway-public.pem \
