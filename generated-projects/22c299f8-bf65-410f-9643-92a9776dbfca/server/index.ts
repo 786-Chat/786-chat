@@ -1,6 +1,7 @@
 // @ts-nocheck
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
+import { registerOwnedIotGatewayRoutes } from "./owned-iot-gateway.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -128,6 +129,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// Register the HP2/MQTT -> Pest Control owned-IoT event bridge before the main route set.
+registerOwnedIotGatewayRoutes(app);
 // CRITICAL: DISABLED AUTOMATIC REPAIR TO PREVENT DATA LOSS
 // These functions were rewriting file paths and causing files to disappear
 // User data must persist permanently - no automatic cleanup allowed
