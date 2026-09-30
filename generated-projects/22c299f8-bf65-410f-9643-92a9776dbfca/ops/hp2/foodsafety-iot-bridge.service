@@ -1,0 +1,17 @@
+[Unit]
+Description=Food Safety HP2 MQTT to Pest Control bridge
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+EnvironmentFile=/etc/foodsafety-iot-gateway.env
+ExecStart=/usr/bin/node /opt/foodsafety-iot/owned-iot-mqtt-bridge.mjs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
