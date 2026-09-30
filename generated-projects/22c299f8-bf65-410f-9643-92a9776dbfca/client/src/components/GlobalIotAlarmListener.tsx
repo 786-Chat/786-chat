@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BellRing, CheckCircle2, Volume2, VolumeX } from "lucide-react";
 import { useLocation } from "wouter";
@@ -14,6 +13,21 @@ interface AlarmDevice {
   lastAlarmAt?: string;
 }
 
+const ACK_STORAGE_KEY = "food-safety-iot-acknowledged-alarms-v1";
+
+function alarmKey(device: AlarmDevice) {
+  return `${device.id}:${device.lastAlarmAt || "active"}`;
+}
+
+function readAcknowledgedKeys() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(ACK_STORAGE_KEY) || "[]");
+    return new Set<string>(Array.isArray(value) ? value.map(String) : []);
+  } catch (_) {
+    return new Set<string>();
+  }
+}
+
 function createAlarmTone(ctx: AudioContext) {
   const now = ctx.currentTime;
   const master = ctx.createGain();
@@ -23,7 +37,6 @@ function createAlarmTone(ctx: AudioContext) {
   master.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
   master.connect(ctx.destination);
 
-  // A clearly audible two-tone pest alarm rather than a soft notification chime.
   [0, 0.34, 0.68, 1.02].forEach((offset, index) => {
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -52,10 +65,13 @@ export default function GlobalIotAlarmListener() {
   const [soundMuted, setSoundMuted] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const acknowledgedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    // Register from the login screen onward. The login click is a valid browser
-    // user gesture, so it unlocks audio before navigation to the dashboard.
+    acknowledgedRef.current = readAcknowledgedKeys();
+  }, []);
+
+  useEffect(() => {
     const unlockAudio = async () => {
       try {
         const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
@@ -64,8 +80,6 @@ export default function GlobalIotAlarmListener() {
         audioContextRef.current = ctx;
         if (ctx.state === "suspended") await ctx.resume();
 
-        // Run a silent oscillator during the user gesture so Chrome/Edge fully
-        // unlocks WebAudio for later asynchronous IoT alarm events.
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
         gain.gain.value = 0.0001;
@@ -110,16 +124,17 @@ export default function GlobalIotAlarmListener() {
         const response = await fetch(endpoint, { credentials: "include", cache: "no-store" });
         if (!response.ok) return;
         const data = await response.json();
-        if (!cancelled) {
-          const next = Array.isArray(data) ? data : [];
-          setAlarms(next);
-          if (next.length === 0) setSoundMuted(false);
-        }
+        if (cancelled) return;
+
+        const raw = (Array.isArray(data) ? data : []) as AlarmDevice[];
+        const next = raw.filter((device) => !acknowledgedRef.current.has(alarmKey(device)));
+        setAlarms(next);
+        if (next.length > 0) setSoundMuted(false);
       } catch (_) {}
     };
 
-    poll();
-    const timer = window.setInterval(poll, 12000);
+    void poll();
+    const timer = window.setInterval(() => void poll(), 12000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -143,18 +158,13 @@ export default function GlobalIotAlarmListener() {
 
   if (!mode || alarms.length === 0) return null;
 
-  const acknowledge = async () => {
+  const stopAlarm = () => {
+    const acknowledged = acknowledgedRef.current;
+    for (const device of alarms) acknowledged.add(alarmKey(device));
+    try {
+      window.localStorage.setItem(ACK_STORAGE_KEY, JSON.stringify([...acknowledged]));
+    } catch (_) {}
     setSoundMuted(true);
-    await Promise.all(
-      alarms.map(async (device) => {
-        const endpoint = mode === "admin"
-          ? `/api/iot/devices/${device.id}/clear-alarm`
-          : `/api/branch/iot-devices/${device.id}/clear-alarm`;
-        try {
-          await fetch(endpoint, { method: "POST", credentials: "include" });
-        } catch (_) {}
-      })
-    );
     setAlarms([]);
   };
 
@@ -167,22 +177,22 @@ export default function GlobalIotAlarmListener() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-bold text-white sm:text-lg">Pest trap alert</h3>
-            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-200">ACTION REQUIRED</span>
+            <h3 className="text-base font-bold text-white sm:text-lg">Mouse caught</h3>
+            <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-200">CAUGHT</span>
           </div>
           <p className="mt-1 text-sm text-slate-200">
-            {primary.deviceName || "Smart pest-control device"} has reported a trap/shock event.
-            {alarms.length > 1 ? ` ${alarms.length} devices currently need attention.` : ""}
+            {primary.deviceName || "Smart mouse device"} has reported a catch.
+            {alarms.length > 1 ? ` ${alarms.length} devices currently show a catch.` : ""}
           </p>
           {primary.branchName && <p className="mt-1 text-xs text-slate-300">Branch: <span className="font-semibold text-white">{primary.branchName}</span></p>}
           {primary.notes && <p className="mt-1 text-xs text-slate-400">Location: {primary.notes}</p>}
-          <p className="mt-2 text-xs text-slate-400">Check the trap, remove the pest safely, clean/reset the device, then return it to service.</p>
+          <p className="mt-2 text-xs text-slate-400">Stop the alarm here. The device remains marked Mouse Caught until the trap is physically reset and becomes Ready again.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={acknowledge}
+              onClick={stopAlarm}
               className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-400"
             >
-              <VolumeX className="h-4 w-4" /> Stop alarm & acknowledge
+              <VolumeX className="h-4 w-4" /> Stop Alarm
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("food-safety-open-smart-devices"))}
