@@ -39,6 +39,7 @@ export default function IotAdminPanel() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [clearingId, setClearingId] = useState<string | null>(null);
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
@@ -162,6 +163,25 @@ export default function IotAdminPanel() {
     await loadBase();
   };
 
+  const clearCatch = async (id: string, name: string) => {
+    setClearingId(id);
+    try {
+      const response = await fetch(`/api/iot/devices/${id}/clear-alarm`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Could not clear catch", description: data?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Catch cleared", description: `${name} is marked serviced. The branch catch card will disappear automatically.` });
+      await loadBase();
+    } finally {
+      setClearingId(null);
+    }
+  };
+
   const provisioningPayload = () => ({
     deviceId: wifiDeviceId,
     ssid: wifiSsid,
@@ -197,6 +217,9 @@ export default function IotAdminPanel() {
         await navigator.clipboard.writeText(body);
       } catch (_) {}
 
+      // A cloud HTTPS dashboard cannot safely verify or control a trap's private
+      // HTTP page at 192.168.4.1. Open the trap-owned page instead of pretending
+      // an opaque no-cors request succeeded.
       window.open(base, "_blank", "noopener,noreferrer");
       toast({
         title: "HP2 Wi-Fi setup prepared",
@@ -337,11 +360,11 @@ export default function IotAdminPanel() {
             />
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-slate-400">Installation Area / Notes</label>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Location / Notes</label>
             <Input
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              placeholder="e.g. Kitchen, back door, storage area, bathroom"
+              placeholder="e.g. Front counter, stock room, kitchen wall"
               className="border-slate-600 bg-slate-900 text-white"
             />
           </div>
@@ -358,7 +381,7 @@ export default function IotAdminPanel() {
 
         {lastCreatedId && (
           <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-            Device created: <span className="font-mono font-semibold">{lastCreatedId}</span>. It becomes Connected when the physical trap connects to your Food Safety gateway using this ID.
+            Device created: <span className="font-mono font-semibold">{lastCreatedId}</span>. It becomes Online when the physical trap connects to your Food Safety gateway using this ID.
           </div>
         )}
       </div>
@@ -506,26 +529,26 @@ export default function IotAdminPanel() {
           <div className="py-10 text-center text-slate-400">No owned devices assigned yet.</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {assigned.map((device: any, index: number) => {
+            {assigned.map((device: any) => {
               const snap = deviceSnapshot(device.lastStatus);
               return (
                 <div key={device.id} className={`rounded-xl border p-4 ${device.alarmActive ? "border-red-500/60 bg-red-950/20" : "border-slate-700 bg-slate-900/60"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                      <p className="truncate font-semibold text-white">{device.deviceName}</p>
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
                     <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
-                      {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
+                      {device.isOnline ? "Online" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Offline")}
                     </Badge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Online" : "Offline")}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap Event</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Caught" : "Normal"}</span></div>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
@@ -534,13 +557,12 @@ export default function IotAdminPanel() {
                     {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
                   </div>
 
-                  {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
+                  {device.notes && <p className="mt-2 text-xs text-slate-400">Location: {device.notes}</p>}
 
                   {device.alarmActive && (
                     <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3 text-sm text-red-100">
-                      <p className="font-semibold">🐭 Mouse caught</p>
-                      <p className="mt-1 text-xs text-red-200">Stop Alarm only stops the sound. This device stays Mouse Caught until the physical trap is reset.</p>
-                      {device.lastAlarmAt && <p className="mt-1 text-xs text-red-200">Caught: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
+                      <p className="font-semibold">🐭 Mouse caught — service this trap.</p>
+                      {device.lastAlarmAt && <p className="mt-1 text-xs text-red-200">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
                     </div>
                   )}
 
@@ -549,6 +571,17 @@ export default function IotAdminPanel() {
                       <RefreshCw className="mr-1 h-3 w-3" />
                       Refresh
                     </Button>
+                    {device.alarmActive && (
+                      <Button
+                        size="sm"
+                        onClick={() => clearCatch(device.id, device.deviceName)}
+                        disabled={clearingId === device.id}
+                        className="bg-emerald-600 text-white hover:bg-emerald-500"
+                      >
+                        {clearingId === device.id ? <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1 h-3 w-3" />}
+                        {clearingId === device.id ? "Clearing..." : "Clear caught mouse"}
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300">
                       <Trash2 className="mr-1 h-3 w-3" />
                       Remove Device
