@@ -69,6 +69,15 @@ export default function GlobalIotAlarmListener() {
 
   useEffect(() => {
     acknowledgedRef.current = readAcknowledgedKeys();
+
+    const syncStoppedAlarms = () => {
+      acknowledgedRef.current = readAcknowledgedKeys();
+      setSoundMuted(true);
+      setAlarms((current) => current.filter((device) => !acknowledgedRef.current.has(alarmKey(device))));
+    };
+
+    window.addEventListener("food-safety-alarm-stopped", syncStoppedAlarms);
+    return () => window.removeEventListener("food-safety-alarm-stopped", syncStoppedAlarms);
   }, []);
 
   useEffect(() => {
@@ -126,6 +135,7 @@ export default function GlobalIotAlarmListener() {
         const data = await response.json();
         if (cancelled) return;
 
+        acknowledgedRef.current = readAcknowledgedKeys();
         const raw = (Array.isArray(data) ? data : []) as AlarmDevice[];
         const next = raw.filter((device) => !acknowledgedRef.current.has(alarmKey(device)));
         setAlarms(next);
@@ -166,6 +176,7 @@ export default function GlobalIotAlarmListener() {
     } catch (_) {}
     setSoundMuted(true);
     setAlarms([]);
+    window.dispatchEvent(new CustomEvent("food-safety-alarm-stopped"));
   };
 
   const primary = alarms[0];
