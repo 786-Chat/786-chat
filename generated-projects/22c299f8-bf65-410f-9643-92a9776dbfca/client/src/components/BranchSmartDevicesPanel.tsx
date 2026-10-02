@@ -7,6 +7,28 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function readableStatus(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  const normalized = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  const known: Record<string, string> = {
+    awaiting_activation: "Awaiting activation",
+    active: "Active",
+    activated: "Activated",
+    ready: "Ready",
+    connected: "Connected",
+    disconnected: "Disconnected",
+    online: "Online",
+    offline: "Offline",
+  };
+
+  if (known[normalized]) return known[normalized];
+
+  const human = raw.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  return human ? human.charAt(0).toUpperCase() + human.slice(1) : raw;
+}
+
 function snapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -101,6 +123,7 @@ export default function BranchSmartDevicesPanel() {
             {devices.map((device: any) => {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
+              const powerLabel = readableStatus(snap.power) || (device.isOnline ? "Online" : "Offline");
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
                   <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
@@ -115,21 +138,21 @@ export default function BranchSmartDevicesPanel() {
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div className="rounded-xl bg-slate-900/70 p-3">
+                      <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Battery</span>
-                        <div className="mt-1 flex items-center gap-1.5"><Battery className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{snap.battery || "—"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5"><Battery className="h-4 w-4 flex-shrink-0 text-emerald-300" /><span className="min-w-0 break-words font-semibold text-white">{snap.battery || "—"}</span></div>
                       </div>
-                      <div className="rounded-xl bg-slate-900/70 p-3">
+                      <div className="min-w-0 overflow-hidden rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
-                        <span className="mt-1 block font-semibold text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span>
+                        <span className="mt-1 block min-w-0 break-words text-sm font-semibold leading-tight text-white">{powerLabel}</span>
                       </div>
-                      <div className={`rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
+                      <div className={`min-w-0 rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap Event</span>
-                        <span className={`mt-1 block font-semibold ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Caught" : "Normal"}</span>
+                        <span className={`mt-1 block break-words text-sm font-semibold leading-tight ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Caught" : "Normal"}</span>
                       </div>
-                      <div className="rounded-xl bg-slate-900/70 p-3">
+                      <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Connection</span>
-                        <div className="mt-1 flex items-center gap-1.5"><Wifi className="h-4 w-4 text-cyan-300" /><span className="font-semibold text-white">Wi-Fi / Cloud</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">Wi-Fi / Cloud</span></div>
                       </div>
                     </div>
 
