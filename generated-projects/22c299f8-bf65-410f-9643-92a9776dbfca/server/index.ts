@@ -2,6 +2,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
 import { registerOwnedIotGatewayRoutes } from "./owned-iot-gateway.js";
+import { registerBranchIotHistoryVisibilityRoutes } from "./branch-iot-history-visibility.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -139,6 +140,7 @@ registerOwnedIotGatewayRoutes(app);
   console.log('📋 All files will persist permanently unless manually deleted by user');
   
   const server = await registerRoutes(app);
+  registerBranchIotHistoryVisibilityRoutes(app);
 
   // Food Safety owned-IoT devices report through the MQTT ingestion service.
   // No third-party device-cloud polling is started by the web application.
