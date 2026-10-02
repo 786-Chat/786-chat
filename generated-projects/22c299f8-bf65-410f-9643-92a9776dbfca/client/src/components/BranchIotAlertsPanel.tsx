@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, CheckCircle2, MapPin, RefreshCw, ShieldCheck, Wifi } from "lucide-react";
+import { BellRing, CheckCircle2, MapPin, RefreshCw, ShieldCheck, Trash2, VolumeX, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -7,18 +7,38 @@ interface BranchIotAlertsPanelProps {
   onOpenDevices?: () => void;
 }
 
+const ACK_STORAGE_KEY = "food-safety-iot-acknowledged-alarms-v1";
+
+function alarmKey(device: any) {
+  return `${device.id}:${device.lastAlarmAt || "active"}`;
+}
+
+function readAcknowledgedKeys() {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(ACK_STORAGE_KEY) || "[]");
+    return new Set<string>(Array.isArray(value) ? value.map(String) : []);
+  } catch (_) {
+    return new Set<string>();
+  }
+}
+
 export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsPanelProps) {
   const [alarms, setAlarms] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [hiddenHistoryIds, setHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [stoppedKeys, setStoppedKeys] = useState<Set<string>>(new Set());
+  const [deleteArmedId, setDeleteArmedId] = useState<string | number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
 
   const load = async () => {
     try {
-      const [alarmRes, deviceRes, historyRes] = await Promise.all([
+      const [alarmRes, deviceRes, historyRes, hiddenRes] = await Promise.all([
         fetch("/api/branch/iot-alarms?refresh=1", { credentials: "include", cache: "no-store" }),
         fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" }),
         fetch("/api/branch/iot-alarm-history", { credentials: "include", cache: "no-store" }),
+        fetch("/api/branch/iot-alarm-history-hidden", { credentials: "include", cache: "no-store" }),
       ]);
       if (alarmRes.ok) {
         const data = await alarmRes.json();
@@ -32,6 +52,11 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
         const data = await historyRes.json();
         setHistory(Array.isArray(data) ? data : []);
       }
+      if (hiddenRes.ok) {
+        const data = await hiddenRes.json();
+        setHiddenHistoryIds(new Set(Array.isArray(data) ? data.map(String) : []));
+      }
+      setStoppedKeys(readAcknowledgedKeys());
     } finally {
       setLoading(false);
     }
@@ -45,14 +70,52 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   const onlineCount = useMemo(() => devices.filter((device) => device?.isOnline).length, [devices]);
   const offlineCount = devices.length - onlineCount;
+  const visibleHistory = useMemo(
+    () => history.filter((event) => !hiddenHistoryIds.has(String(event.id))),
+    [history, hiddenHistoryIds],
+  );
 
-  const acknowledge = async (device: any) => {
-    await fetch(`/api/branch/iot-devices/${device.id}/clear-alarm`, {
-      method: "POST",
-      credentials: "include",
-    });
-    await load();
-    window.dispatchEvent(new CustomEvent("food-safety-iot-alerts-updated"));
+  const stopAlarm = (device: any) => {
+    const next = readAcknowledgedKeys();
+    next.add(alarmKey(device));
+    try {
+      window.localStorage.setItem(ACK_STORAGE_KEY, JSON.stringify([...next]));
+    } catch (_) {}
+    setStoppedKeys(next);
+    window.dispatchEvent(new CustomEvent("food-safety-alarm-stopped"));
+  };
+
+  const armDelete = (eventId: string | number) => {
+    setDeleteArmedId(eventId);
+    window.setTimeout(() => {
+      setDeleteArmedId((current) => (current === eventId ? null : current));
+    }, 4000);
+  };
+
+  const archiveHistoryEvent = async (eventId: string | number) => {
+    if (deleteArmedId !== eventId || deletingId === eventId) {
+      armDelete(eventId);
+      return;
+    }
+
+    setDeletingId(eventId);
+    try {
+      const encodedId = encodeURIComponent(String(eventId));
+      const res = await fetch(`/api/branch/iot-alarm-history/${encodedId}/archive`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setHiddenHistoryIds((current) => {
+          const next = new Set(current);
+          next.add(String(eventId));
+          return next;
+        });
+      }
+    } finally {
+      setDeletingId(null);
+      setDeleteArmedId(null);
+    }
   };
 
   return (
@@ -82,7 +145,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
           <p className="mt-1 text-2xl font-bold text-emerald-200">{onlineCount}</p>
         </div>
         <div className={`rounded-xl border p-4 ${alarms.length ? "border-red-500/40 bg-red-500/15" : "border-slate-700 bg-slate-800/70"}`}>
-          <p className={`text-xs uppercase tracking-wide ${alarms.length ? "text-red-300" : "text-slate-500"}`}>Active Alerts</p>
+          <p className={`text-xs uppercase tracking-wide ${alarms.length ? "text-red-300" : "text-slate-500"}`}>Mouse Caught</p>
           <p className={`mt-1 text-2xl font-bold ${alarms.length ? "text-red-200" : "text-white"}`}>{alarms.length}</p>
         </div>
       </div>
@@ -94,10 +157,10 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" />
             <div>
-              <h3 className="font-bold text-emerald-100">No active pest-device alarms</h3>
+              <h3 className="font-bold text-emerald-100">Ready</h3>
               <p className="mt-1 text-sm text-emerald-200/80">
                 {devices.length
-                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are currently clear. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} offline and should be checked.` : ""}`
+                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
                   : "No smart devices are assigned to this branch yet."}
               </p>
             </div>
@@ -105,42 +168,59 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
         </div>
       ) : (
         <div className="space-y-4">
-          {alarms.map((device) => (
-            <div key={device.id} className="rounded-2xl border border-red-500/50 bg-red-950/25 p-5 shadow-lg shadow-red-950/20">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-bold text-white">{device.deviceName || "Food Safety Smart Device"}</h3>
-                    <Badge className="bg-red-500/20 text-red-200">ACTION REQUIRED</Badge>
+          {alarms.map((device) => {
+            const stopped = stoppedKeys.has(alarmKey(device));
+            return (
+              <div key={device.id} className="rounded-2xl border border-red-500/50 bg-red-950/25 p-5 shadow-lg shadow-red-950/20">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-bold text-white">{device.deviceName || "Food Safety Smart Device"}</h3>
+                      <Badge className="bg-red-500/20 text-red-200">MOUSE CAUGHT</Badge>
+                      {stopped && <Badge className="bg-slate-700 text-slate-200">ALARM STOPPED</Badge>}
+                    </div>
+                    <p className="mt-1 break-all text-xs text-slate-500">{device.deviceId}</p>
+                    {device.branchName && <p className="mt-2 text-sm text-slate-300">Branch: <span className="font-semibold text-white">{device.branchName}</span></p>}
+                    {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-red-300" />{device.notes}</p>}
+                    <p className="mt-2 text-sm font-semibold text-red-200">Mouse caught. The device returns to Ready only after the trap is physically reset.</p>
+                    {device.lastAlarmAt && <p className="mt-1 text-xs text-red-300">Caught: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
                   </div>
-                  <p className="mt-1 break-all text-xs text-slate-500">{device.deviceId}</p>
-                  {device.branchName && <p className="mt-2 text-sm text-slate-300">Branch: <span className="font-semibold text-white">{device.branchName}</span></p>}
-                  {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-red-300" />{device.notes}</p>}
-                  <p className="mt-2 text-sm font-semibold text-red-200">Pest trap triggered — check, clean and reset this device.</p>
-                  {device.lastAlarmAt && <p className="mt-1 text-xs text-red-300">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => void acknowledge(device)} className="bg-red-600 text-white hover:bg-red-500">Acknowledge</Button>
-                  <Button variant="outline" onClick={onOpenDevices} className="border-slate-600 text-slate-200"><Wifi className="mr-1 h-4 w-4" />Smart Devices</Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={stopped} onClick={() => stopAlarm(device)} className="bg-red-600 text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-300">
+                      <VolumeX className="mr-1 h-4 w-4" />{stopped ? "Alarm Stopped" : "Stop Alarm"}
+                    </Button>
+                    <Button variant="outline" onClick={onOpenDevices} className="border-slate-600 text-slate-200"><Wifi className="mr-1 h-4 w-4" />Smart Devices</Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-5">
         <div className="mb-3">
-          <h3 className="font-bold text-white">Alarm / Catch History</h3>
-          <p className="mt-1 text-sm text-slate-400">History stays here after the live alarm is stopped or acknowledged.</p>
+          <h3 className="font-bold text-white">Catch History</h3>
+          <p className="mt-1 text-sm text-slate-400">Resolved catches can be removed from this branch view; the underlying audit record is retained.</p>
         </div>
-        {history.length === 0 ? (
-          <p className="rounded-xl bg-slate-900/60 p-4 text-sm text-slate-400">No previous trap alarms recorded for this branch.</p>
+        {visibleHistory.length === 0 ? (
+          <p className="rounded-xl bg-slate-900/60 p-4 text-sm text-slate-400">No previous catches recorded for this branch.</p>
         ) : (
           <div className="space-y-3">
-            {history.slice(0, 12).map((event: any) => (
-              <div key={event.id} className="rounded-xl border border-slate-700 bg-slate-900/55 p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            {visibleHistory.slice(0, 12).map((event: any) => (
+              <div key={event.id} className="group relative rounded-xl border border-slate-700 bg-slate-900/55 p-4">
+                <button
+                  type="button"
+                  aria-label={deleteArmedId === event.id ? "Confirm remove catch from branch view" : "Remove catch from branch view"}
+                  title={deleteArmedId === event.id ? "Click again to remove" : "Double click to remove"}
+                  onClick={() => void archiveHistoryEvent(event.id)}
+                  onDoubleClick={() => void archiveHistoryEvent(event.id)}
+                  disabled={deletingId === event.id}
+                  className={`absolute right-3 top-3 rounded-md p-1.5 transition ${deleteArmedId === event.id ? "bg-red-600 text-white opacity-100" : "text-slate-500 opacity-0 hover:bg-red-500/15 hover:text-red-300 group-hover:opacity-100 focus:opacity-100"}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <div className="flex flex-col gap-2 pr-9 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-white">{event.deviceName || "Food Safety Smart Device"}</p>
@@ -148,6 +228,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
                     </div>
                     {event.location && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{event.location}</p>}
                     <p className="mt-1 text-xs text-slate-400">{event.message}</p>
+                    {deleteArmedId === event.id && <p className="mt-2 text-xs font-semibold text-red-300">Click the red bin again to remove this resolved catch from the branch view.</p>}
                   </div>
                   <p className="flex-shrink-0 text-xs font-medium text-slate-300">{event.eventAt ? new Date(event.eventAt).toLocaleString("en-GB") : "Unknown time"}</p>
                 </div>
