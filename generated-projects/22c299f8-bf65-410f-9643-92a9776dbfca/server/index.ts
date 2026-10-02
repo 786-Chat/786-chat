@@ -1,8 +1,6 @@
 // @ts-nocheck
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
-import { registerOwnedIotGatewayRoutes } from "./owned-iot-gateway.js";
-import { registerBranchIotHistoryVisibilityRoutes } from "./branch-iot-history-visibility.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import cookieParser from 'cookie-parser';
 import path from 'path';
@@ -130,9 +128,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Register the HP2/MQTT -> Pest Control event bridge before the main route set.
-registerOwnedIotGatewayRoutes(app);
-
 // CRITICAL: DISABLED AUTOMATIC REPAIR TO PREVENT DATA LOSS
 // These functions were rewriting file paths and causing files to disappear
 // User data must persist permanently - no automatic cleanup allowed
@@ -141,11 +136,6 @@ registerOwnedIotGatewayRoutes(app);
   console.log('📋 All files will persist permanently unless manually deleted by user');
   
   const server = await registerRoutes(app);
-
-  // Branch catch-history visibility routes are registered after the main routes so
-  // they use the existing branch session middleware. Archived records stay in the
-  // audit database; they are only removed from the normal branch-facing history list.
-  registerBranchIotHistoryVisibilityRoutes(app);
 
   // Food Safety owned-IoT devices report through the MQTT ingestion service.
   // No third-party device-cloud polling is started by the web application.
