@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Battery, MapPin, RefreshCw, Shield, Wifi } from "lucide-react";
+import { Battery, RefreshCw, Shield, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -52,7 +52,7 @@ export default function BranchSmartDevicesPanel() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Smart Devices</h2>
-            <p className="text-sm text-slate-400">Mouse devices assigned to this branch</p>
+            <p className="text-sm text-slate-400">Live pest-control devices assigned to this branch</p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
@@ -71,10 +71,10 @@ export default function BranchSmartDevicesPanel() {
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold text-white">Mouse caught</h3>
-                  <p className="text-xs text-slate-400">The trap stays marked Caught until it is physically reset and becomes Ready again.</p>
+                  <h3 className="font-semibold text-white">Caught mice requiring service</h3>
+                  <p className="text-xs text-slate-400">Only active catches are shown here. Cleared catches disappear automatically.</p>
                 </div>
-                <Badge className="bg-red-500/20 text-red-200">{activeCatches.length} caught</Badge>
+                <Badge className="bg-red-500/20 text-red-200">{activeCatches.length} active</Badge>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -84,12 +84,12 @@ export default function BranchSmartDevicesPanel() {
                       <div className="min-w-0">
                         <p className="font-bold text-red-100">🐭 Mouse caught {index + 1}</p>
                         <p className="mt-1 truncate text-sm font-medium text-white">{device.deviceName}</p>
-                        {device.notes && <p className="mt-1 flex items-center gap-1 text-xs text-red-200/80"><MapPin className="h-3.5 w-3.5" />{device.notes}</p>}
+                        {device.notes && <p className="mt-1 text-xs text-red-200/80">{device.notes}</p>}
                       </div>
                       <Badge className="bg-red-500/25 text-red-100">Caught</Badge>
                     </div>
                     {device.lastAlarmAt && (
-                      <p className="mt-3 text-xs text-red-200">Caught: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>
+                      <p className="mt-3 text-xs text-red-200">Triggered: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>
                     )}
                   </div>
                 ))}
@@ -98,7 +98,7 @@ export default function BranchSmartDevicesPanel() {
           )}
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            {devices.map((device: any, index: number) => {
+            {devices.map((device: any) => {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
               return (
@@ -107,11 +107,11 @@ export default function BranchSmartDevicesPanel() {
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate text-lg font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                        <p className="truncate text-lg font-semibold text-white">{device.deviceName}</p>
                         <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
-                        {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{device.notes}</p>}
+                        {device.notes && <p className="mt-1 text-sm text-slate-400">{device.notes}</p>}
                       </div>
-                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Connected" : "Disconnected"}</Badge>
+                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Online" : "Offline"}</Badge>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -121,20 +121,20 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className="rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
-                        <span className="mt-1 block font-semibold text-white">{snap.power || (device.isOnline ? "Connected" : "Disconnected")}</span>
+                        <span className="mt-1 block font-semibold text-white">{snap.power || (device.isOnline ? "Online" : "Offline")}</span>
                       </div>
                       <div className={`rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
-                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap</span>
-                        <span className={`mt-1 block font-semibold ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Mouse Caught" : "Ready"}</span>
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap Event</span>
+                        <span className={`mt-1 block font-semibold ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Caught" : "Normal"}</span>
                       </div>
                       <div className="rounded-xl bg-slate-900/70 p-3">
-                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex items-center gap-1.5"><Wifi className="h-4 w-4 text-cyan-300" /><span className="font-semibold text-white">{device.isOnline ? "Connected" : "Disconnected"}</span></div>
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Connection</span>
+                        <div className="mt-1 flex items-center gap-1.5"><Wifi className="h-4 w-4 text-cyan-300" /><span className="font-semibold text-white">Wi-Fi / Cloud</span></div>
                       </div>
                     </div>
 
                     <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first check"}
+                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first cloud check"}
                     </div>
                   </div>
                 </div>

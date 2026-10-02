@@ -129,9 +129,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Register the HP2/MQTT -> Pest Control event bridge before the main route set.
+// Register the HP2/MQTT -> Pest Control owned-IoT event bridge before the main route set.
 registerOwnedIotGatewayRoutes(app);
-
 // CRITICAL: DISABLED AUTOMATIC REPAIR TO PREVENT DATA LOSS
 // These functions were rewriting file paths and causing files to disappear
 // User data must persist permanently - no automatic cleanup allowed
