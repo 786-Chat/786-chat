@@ -26,6 +26,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
   const [alarms, setAlarms] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [hiddenHistoryIds, setHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [stoppedKeys, setStoppedKeys] = useState<Set<string>>(new Set());
   const [deleteArmedId, setDeleteArmedId] = useState<string | number | null>(null);
@@ -33,10 +34,11 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   const load = async () => {
     try {
-      const [alarmRes, deviceRes, historyRes] = await Promise.all([
+      const [alarmRes, deviceRes, historyRes, hiddenRes] = await Promise.all([
         fetch("/api/branch/iot-alarms?refresh=1", { credentials: "include", cache: "no-store" }),
         fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" }),
         fetch("/api/branch/iot-alarm-history", { credentials: "include", cache: "no-store" }),
+        fetch("/api/branch/iot-alarm-history-hidden", { credentials: "include", cache: "no-store" }),
       ]);
       if (alarmRes.ok) {
         const data = await alarmRes.json();
@@ -49,6 +51,10 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
       if (historyRes.ok) {
         const data = await historyRes.json();
         setHistory(Array.isArray(data) ? data : []);
+      }
+      if (hiddenRes.ok) {
+        const data = await hiddenRes.json();
+        setHiddenHistoryIds(new Set(Array.isArray(data) ? data.map(String) : []));
       }
       setStoppedKeys(readAcknowledgedKeys());
     } finally {
@@ -64,6 +70,10 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   const onlineCount = useMemo(() => devices.filter((device) => device?.isOnline).length, [devices]);
   const offlineCount = devices.length - onlineCount;
+  const visibleHistory = useMemo(
+    () => history.filter((event) => !hiddenHistoryIds.has(String(event.id))),
+    [history, hiddenHistoryIds],
+  );
 
   const stopAlarm = (device: any) => {
     const next = readAcknowledgedKeys();
@@ -82,7 +92,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
     }, 4000);
   };
 
-  const deleteHistoryEvent = async (eventId: string | number) => {
+  const archiveHistoryEvent = async (eventId: string | number) => {
     if (deleteArmedId !== eventId || deletingId === eventId) {
       armDelete(eventId);
       return;
@@ -90,12 +100,17 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
     setDeletingId(eventId);
     try {
-      const res = await fetch(`/api/branch/iot-alarm-history/${encodeURIComponent(String(eventId))}`, {
-        method: "DELETE",
+      const encodedId = encodeURIComponent(String(eventId));
+      const res = await fetch(`/api/branch/iot-alarm-history/${encodedId}/archive`, {
+        method: "POST",
         credentials: "include",
       });
       if (res.ok) {
-        setHistory((items) => items.filter((event) => event.id !== eventId));
+        setHiddenHistoryIds((current) => {
+          const next = new Set(current);
+          next.add(String(eventId));
+          return next;
+        });
       }
     } finally {
       setDeletingId(null);
@@ -186,20 +201,21 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
       <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-5">
         <div className="mb-3">
           <h3 className="font-bold text-white">Catch History</h3>
-          <p className="mt-1 text-sm text-slate-400">Previous catches stay in history after the alarm is stopped.</p>
+          <p className="mt-1 text-sm text-slate-400">Resolved catches can be removed from this branch view; the underlying audit record is retained.</p>
         </div>
-        {history.length === 0 ? (
+        {visibleHistory.length === 0 ? (
           <p className="rounded-xl bg-slate-900/60 p-4 text-sm text-slate-400">No previous catches recorded for this branch.</p>
         ) : (
           <div className="space-y-3">
-            {history.slice(0, 12).map((event: any) => (
+            {visibleHistory.slice(0, 12).map((event: any) => (
               <div key={event.id} className="group relative rounded-xl border border-slate-700 bg-slate-900/55 p-4">
                 <button
                   type="button"
-                  aria-label={deleteArmedId === event.id ? "Confirm delete catch history" : "Delete catch history"}
-                  title={deleteArmedId === event.id ? "Click again to delete" : "Double click to delete"}
-                  onClick={() => void deleteHistoryEvent(event.id)}
-                  onDoubleClick={() => void deleteHistoryEvent(event.id)}
+                  aria-label={deleteArmedId === event.id ? "Confirm remove catch from branch view" : "Remove catch from branch view"}
+                  title={deleteArmedId === event.id ? "Click again to remove" : "Double click to remove"}
+                  onClick={() => void archiveHistoryEvent(event.id)}
+                  onDoubleClick={() => void archiveHistoryEvent(event.id)}
+                  disabled={deletingId === event.id}
                   className={`absolute right-3 top-3 rounded-md p-1.5 transition ${deleteArmedId === event.id ? "bg-red-600 text-white opacity-100" : "text-slate-500 opacity-0 hover:bg-red-500/15 hover:text-red-300 group-hover:opacity-100 focus:opacity-100"}`}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -212,7 +228,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
                     </div>
                     {event.location && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{event.location}</p>}
                     <p className="mt-1 text-xs text-slate-400">{event.message}</p>
-                    {deleteArmedId === event.id && <p className="mt-2 text-xs font-semibold text-red-300">Click the red bin again to delete this catch record.</p>}
+                    {deleteArmedId === event.id && <p className="mt-2 text-xs font-semibold text-red-300">Click the red bin again to remove this resolved catch from the branch view.</p>}
                   </div>
                   <p className="flex-shrink-0 text-xs font-medium text-slate-300">{event.eventAt ? new Date(event.eventAt).toLocaleString("en-GB") : "Unknown time"}</p>
                 </div>
