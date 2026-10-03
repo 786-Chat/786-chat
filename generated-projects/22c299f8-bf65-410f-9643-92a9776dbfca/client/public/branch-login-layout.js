@@ -18,6 +18,7 @@
     catClone.classList.remove('-mt-1');
     catClone.classList.add('mt-0');
     catClone.removeAttribute('id');
+    catClone.style.display = '';
     const catImage = catClone.querySelector('img');
     if (catImage) {
       catImage.alt = 'Food Safety pest monitoring device illustration with cat';
@@ -62,6 +63,7 @@
     const infoClone = originalInfo.cloneNode(true);
     infoClone.classList.remove('mt-3');
     infoClone.classList.add('mt-3');
+    infoClone.style.display = '';
     wrapper.appendChild(infoClone);
 
     return wrapper;
