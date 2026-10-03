@@ -1,0 +1,144 @@
+/* Pest Control Branch Dashboard mobile Monthly Reports improvements.
+ * Keeps desktop/tablet layout unchanged while making report actions and PDF preview usable on phones.
+ */
+
+@media (max-width: 767px) {
+  /* Turn the Monthly Reports table into stacked cards on phones. */
+  .overflow-x-auto:has([data-testid^="button-view-monthly-report-"]) {
+    overflow: visible !important;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) thead {
+    display: none;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) tbody {
+    display: grid;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) tr {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid rgb(51 65 85 / 0.95);
+    border-radius: 0.9rem;
+    background: rgb(15 23 42 / 0.82);
+    box-shadow: 0 8px 24px rgb(2 6 23 / 0.18);
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td {
+    display: grid;
+    grid-template-columns: minmax(88px, 0.38fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.65rem 0.9rem !important;
+    border: 0 !important;
+    color: rgb(226 232 240);
+    text-align: left !important;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td + td {
+    border-top: 1px solid rgb(51 65 85 / 0.6) !important;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td::before {
+    color: rgb(148 163 184);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:nth-child(2)::before { content: "Type"; }
+  table:has([data-testid^="button-view-monthly-report-"]) td:nth-child(3)::before { content: "Size"; }
+  table:has([data-testid^="button-view-monthly-report-"]) td:nth-child(4)::before { content: "Received"; }
+  table:has([data-testid^="button-view-monthly-report-"]) td:nth-child(5)::before { content: "Format"; }
+  table:has([data-testid^="button-view-monthly-report-"]) td:nth-child(6)::before { content: "Status"; }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:first-child {
+    display: block;
+    padding: 0.95rem !important;
+    background: rgb(30 41 59 / 0.7);
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:first-child::before {
+    display: none;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:last-child {
+    display: block;
+    padding: 0.85rem 0.9rem 0.95rem !important;
+    background: rgb(15 23 42 / 0.92);
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:last-child::before {
+    content: "Actions";
+    display: block;
+    margin-bottom: 0.55rem;
+    color: rgb(148 163 184);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:last-child > div {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem !important;
+    width: 100%;
+  }
+
+  table:has([data-testid^="button-view-monthly-report-"]) td:last-child button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px;
+    border-radius: 0.7rem;
+  }
+
+  /* Keep the report viewer above the branch sidebar and use the whole phone screen. */
+  .fixed.inset-0.z-50:has(canvas) {
+    z-index: 10000 !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+    background: rgb(2 6 23 / 0.97) !important;
+  }
+
+  .fixed.inset-0.z-50:has(canvas) > div {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .fixed.inset-0.z-50:has(canvas) > div > div:first-child {
+    flex-wrap: wrap !important;
+    gap: 0.25rem !important;
+    padding: max(0.55rem, env(safe-area-inset-top)) 0.55rem 0.55rem !important;
+  }
+
+  .fixed.inset-0.z-50:has(canvas) > div > div:last-child {
+    padding: 0.45rem !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .fixed.inset-0.z-50:has(canvas) canvas {
+    display: block !important;
+    max-width: calc(100vw - 0.9rem) !important;
+    height: auto !important;
+    margin: 0 auto !important;
+  }
+}

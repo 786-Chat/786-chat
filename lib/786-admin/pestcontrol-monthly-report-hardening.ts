@@ -89,6 +89,34 @@ function patchMonthlyReportSend(source: string): string {
   return source.slice(0, start) + replacement + source.slice(end)
 }
 
+function patchMonthlyReportHistory(source: string): string {
+  if (!source) return source
+  const startMarker = '  async getMonthlyReports(branchId?: string, reportType?: string): Promise<MonthlyReport[]> {'
+  const endMarker = '  async getMonthlyReport(id: string): Promise<MonthlyReport | undefined> {'
+  const start = source.indexOf(startMarker)
+  const end = source.indexOf(endMarker, Math.max(0, start))
+  if (start < 0 || end <= start) return source
+
+  let section = source.slice(start, end)
+
+  // A branch can receive more than one document in a month. The old 50-row caps could
+  // hide historical records well before five years. Keep a large bounded history so
+  // the Branch Dashboard can show at least 12 months and up to five years of uploads.
+  section = section.replace(
+    '.limit(50); // Limit to most recent 50 reports for better performance',
+    '.limit(1000); // Preserve five-year Monthly Reports history (multiple uploads per month supported)'
+  )
+
+  // The same report can be restored from the documents persistence table, so expand
+  // that source too. This replacement is scoped to getMonthlyReports only.
+  section = section.replace(
+    '.orderBy(desc(documents.createdAt))\n      .limit(50);',
+    '.orderBy(desc(documents.createdAt))\n      .limit(1000); // Preserve five-year Monthly Reports history'
+  )
+
+  return source.slice(0, start) + section + source.slice(end)
+}
+
 export function hardenPestControlMonthlyReports(projectId: string, files: Record<string, string>): Record<string, string> {
   if (projectId !== PEST_CONTROL_PROJECT_ID) return files
   const next = { ...files }
@@ -97,6 +125,9 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
   const storagePath = "server/storage.ts"
   if (next[objectStoragePath]) next[objectStoragePath] = patchObjectStorage(next[objectStoragePath])
   if (next[routesPath]) next[routesPath] = patchMonthlyReportRoutes(next[routesPath])
-  if (next[storagePath]) next[storagePath] = patchMonthlyReportSend(next[storagePath])
+  if (next[storagePath]) {
+    next[storagePath] = patchMonthlyReportSend(next[storagePath])
+    next[storagePath] = patchMonthlyReportHistory(next[storagePath])
+  }
   return next
 }
