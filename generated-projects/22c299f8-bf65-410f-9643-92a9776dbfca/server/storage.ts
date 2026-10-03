@@ -688,6 +688,9 @@ export class DatabaseStorage implements IStorage {
       return null;
     } catch (error) {
       console.error('Authentication error:', error);
+      if (error instanceof Error && error.message === 'INACTIVE_BRANCH') {
+        throw error;
+      }
       return null;
     }
   }
