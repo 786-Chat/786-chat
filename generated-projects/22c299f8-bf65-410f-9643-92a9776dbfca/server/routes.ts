@@ -915,6 +915,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
+  // Enforce branch activation on every authenticated branch request.
+  // If Admin marks a branch inactive, its existing browser session is revoked
+  // on the very next request; reactivation allows login again without data loss.
+  app.use(async (req: any, res: any, next: any) => {
+    const session = req.session as any;
+
+    if (!session?.branchId || session?.userType !== 'branch') {
+      return next();
+    }
+
+    // Allow the login endpoints to handle credentials normally. This also lets
+    // a user sign into a different active branch from the same browser.
+    if (req.path === '/api/branch/login' || req.path === '/api/auth/branch-login') {
+      return next();
+    }
+
+    try {
+      const branch = await storage.getBranch(String(session.branchId));
+      if (branch && branch.status === 'active') {
+        return next();
+      }
+
+      const message = branch
+        ? 'Your branch account is inactive.'
+        : 'Your branch account is no longer available.';
+
+      return req.session.destroy((destroyError: any) => {
+        if (destroyError) {
+          console.error('Failed to revoke inactive branch session:', destroyError);
+        }
+        return res.status(401).json({
+          message,
+          code: branch ? 'INACTIVE_BRANCH' : 'BRANCH_NOT_FOUND',
+          inactive: true,
+        });
+      });
+    } catch (error) {
+      console.error('Branch activation check failed:', error);
+      return res.status(500).json({
+        message: 'Unable to verify branch account status',
+        code: 'BRANCH_STATUS_CHECK_FAILED',
+      });
+    }
+  });
+
   // 786.Chat: Vercel functions are request-scoped. Database maintenance is not
   // required for route registration and must not block a serverless cold start.
   if (!process.env.VERCEL) {
