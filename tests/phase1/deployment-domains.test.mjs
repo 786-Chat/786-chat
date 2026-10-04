@@ -101,3 +101,21 @@ test("custom host requests stay on the customer hostname and proxy the generated
   assert.match(route, /path\.join\("\/"\)/)
   assert.match(publishing, /ssl_status = 'active'/)
 })
+
+
+test("786.Chat adopts existing generated-project domains and deploys them through the platform flow", async () => {
+  const provider = await read("lib/786-admin/vercel-domains.ts")
+  const domains = await read("lib/786-admin/domains.ts")
+  const deployRoute = await read("app/api/786-chat/projects/[id]/deploy/route.ts")
+  const deployer = await read("lib/786-admin/vercel-project-deployer.ts")
+
+  assert.match(provider, /listGeneratedProjectDomains/)
+  assert.match(provider, /getGeneratedProjectDomainState/)
+  assert.match(provider, /removeGeneratedProjectDomain/)
+  assert.match(domains, /syncGeneratedProjectDomains/)
+  assert.match(domains, /vercel-generated/)
+  assert.match(deployRoute, /syncGeneratedProjectDomains/)
+  assert.match(deployRoute, /publishGeneratedProductionIfConnected/)
+  assert.match(deployRoute, /deployGeneratedProjectToProduction/)
+  assert.match(deployer, /target: "production"/)
+})
