@@ -175,9 +175,16 @@ export async function getVercelDomainState(hostname: string): Promise<VercelDoma
     .map(recordFromUnknown)
     .filter((record): record is VercelDnsRecord => Boolean(record))
   const records = [...verificationRecords, ...(await configurationRecords(hostname))]
-  const configured = body.configured === true || body.misconfigured === false
   const verified = body.verified === true
-  const sslReady = configured && verified ? await httpsIsReady(hostname) : false
+  const httpsReady = verified ? await httpsIsReady(hostname) : false
+  // Existing customer domains can be fully live even when this endpoint omits
+  // `configured` or reports legacy `misconfigured` metadata. If Vercel says the
+  // domain is verified and HTTPS is serving successfully, treat it as configured.
+  const configured =
+    body.configured === true ||
+    body.misconfigured === false ||
+    (verified && httpsReady)
+  const sslReady = configured && verified && httpsReady
   return {
     configured,
     verified,
