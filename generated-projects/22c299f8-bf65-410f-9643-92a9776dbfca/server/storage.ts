@@ -688,6 +688,9 @@ export class DatabaseStorage implements IStorage {
       return null;
     } catch (error) {
       console.error('Authentication error:', error);
+      if (error instanceof Error && error.message === 'INACTIVE_BRANCH') {
+        throw error;
+      }
       return null;
     }
   }
@@ -1435,7 +1438,8 @@ export class DatabaseStorage implements IStorage {
       let conditions = [
         eq(documents.branchId, branchId),
         sql`${documents.sentAt} IS NOT NULL`, // Only documents sent by admin
-        // No automatic expiration - documents stay for 24 months unless manually deleted
+        eq(documents.isDeleted, false), // Branch keeps it until the branch explicitly deletes it
+        // No automatic expiration. Admin-side deletion is ignored for branch access.
       ];
       
       const result = await db
@@ -1443,7 +1447,7 @@ export class DatabaseStorage implements IStorage {
         .from(documents)
         .where(and(...conditions))
         .orderBy(desc(documents.sentAt))
-        .limit(50); // Limit for performance like Monthly Reports
+        .limit(120); // Supports at least 5 years of monthly history plus other sent documents
       
       const endTime = Date.now();
       console.log(`Storage: Retrieved ${result.length} ALL documents for branch ${branchId} in ${endTime - startTime}ms`);
@@ -1659,7 +1663,7 @@ export class DatabaseStorage implements IStorage {
       .from(documents)
       .where(and(...documentConditions))
       .orderBy(desc(documents.createdAt))
-      .limit(50);
+      .limit(reportHistoryLimit);
     
     // CRITICAL FIX: Prevent duplicates when photos exist in both tables
     // Create a Map to track unique photos by title+branchId to avoid duplicates
@@ -2115,6 +2119,8 @@ export class DatabaseStorage implements IStorage {
       conditions.push(eq(monthlyReports.reportType, reportType));
     }
     
+    const reportHistoryLimit = branchId && branchId !== 'all' ? 120 : 50;
+
     const monthlyReportsResult = await db
       .select({
         id: monthlyReports.id,
@@ -2140,7 +2146,7 @@ export class DatabaseStorage implements IStorage {
       .from(monthlyReports)
       .where(conditions.length > 1 ? and(...conditions) : conditions[0])
       .orderBy(desc(monthlyReports.createdAt))
-      .limit(50); // Limit to most recent 50 reports for better performance
+      .limit(reportHistoryLimit); // Branch keeps at least 5 years of monthly history
     
     // FIXED: Also query documents table for monthly reports to ensure persistence
     let documentConditions = [
@@ -2151,8 +2157,8 @@ export class DatabaseStorage implements IStorage {
     if (branchId && branchId !== 'all') {
       documentConditions.push(eq(documents.branchId, branchId));
       documentConditions.push(isNotNull(documents.sentAt));
-      // CRITICAL FIX: Also exclude admin-deleted documents for branch users (so they can delete their reports)
-      documentConditions.push(eq(documents.adminDeleted, false));
+      // Admin deletion must not remove a report from the branch.
+      // Branch visibility is controlled only by documents.isDeleted.
     } else {
       documentConditions.push(eq(documents.adminDeleted, false));
     }
