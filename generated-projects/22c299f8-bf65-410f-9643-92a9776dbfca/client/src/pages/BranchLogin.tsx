@@ -133,13 +133,13 @@ export default function BranchLogin() {
     <div 
       className="min-h-screen bg-[#050b2c] flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
     >
-      {/* Final approved electric neon background - replaces the old purple wave background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none bg-[#02061f]">
+      {/* Approved full-page neon background. The cat/device image keeps its own inner glow. */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none bg-[#03062b]">
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 12% 28%, rgba(37,99,235,.34), transparent 30%), radial-gradient(circle at 82% 22%, rgba(168,85,247,.30), transparent 34%), radial-gradient(circle at 48% 58%, rgba(88,28,135,.26), transparent 42%), radial-gradient(circle at 50% 100%, rgba(124,58,237,.42), transparent 34%), linear-gradient(180deg,#06103f 0%,#080c39 48%,#02061f 100%)",
+              "radial-gradient(circle at 8% 30%, rgba(28,83,255,.44), transparent 27%), radial-gradient(circle at 92% 18%, rgba(109,40,217,.48), transparent 32%), radial-gradient(circle at 8% 74%, rgba(83,32,200,.36), transparent 28%), radial-gradient(circle at 92% 72%, rgba(22,64,255,.30), transparent 31%), radial-gradient(circle at 50% 105%, rgba(117,41,255,.50), transparent 31%), linear-gradient(180deg,#061044 0%,#0b0b58 47%,#05062f 100%)",
           }}
         />
         <svg
@@ -149,28 +149,27 @@ export default function BranchLogin() {
           aria-hidden="true"
         >
           <defs>
-            <linearGradient id="approvedWaveHot" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#22d3ee" />
-              <stop offset="34%" stopColor="#2563eb" />
-              <stop offset="64%" stopColor="#d946ef" />
-              <stop offset="100%" stopColor="#ff2da3" />
+            <linearGradient id="approvedBgCyanPink" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#00d9ff" />
+              <stop offset="35%" stopColor="#2288ff" />
+              <stop offset="70%" stopColor="#8b2cff" />
+              <stop offset="100%" stopColor="#ff16d7" />
             </linearGradient>
-            <linearGradient id="approvedWaveCool" x1="100%" y1="0%" x2="0%" y2="0%">
-              <stop offset="0%" stopColor="#22d3ee" />
-              <stop offset="38%" stopColor="#3b82f6" />
-              <stop offset="72%" stopColor="#8b5cf6" />
-              <stop offset="100%" stopColor="#f725d0" />
+            <linearGradient id="approvedBgPinkCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ff20c9" />
+              <stop offset="45%" stopColor="#8c2cff" />
+              <stop offset="100%" stopColor="#00d7ff" />
             </linearGradient>
-            <linearGradient id="approvedWavePink" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#7c3aed" />
-              <stop offset="45%" stopColor="#ec4899" />
-              <stop offset="100%" stopColor="#22d3ee" />
+            <linearGradient id="approvedBgBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#214dff" />
+              <stop offset="50%" stopColor="#18b8ff" />
+              <stop offset="100%" stopColor="#7828ff" />
             </linearGradient>
-            <filter id="approvedWideGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="18" />
+            <filter id="approvedBgWideGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="20" />
             </filter>
-            <filter id="approvedTightGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="5" result="blur" />
+            <filter id="approvedBgTightGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="4.5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -178,54 +177,66 @@ export default function BranchLogin() {
             </filter>
           </defs>
 
-          {/* left/top cyan + magenta sweep */}
-          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225 S 1400 390, 1820 210" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="24" opacity=".28" filter="url(#approvedWideGlow)" />
-          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225 S 1400 390, 1820 210" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="4.2" opacity=".98" filter="url(#approvedTightGlow)" />
-          <path d="M-245 300 C 95 170, 255 410, 520 360 S 840 205, 1090 280 S 1440 440, 1820 265" fill="none" stroke="#8b5cf6" strokeWidth="2.1" opacity=".72" filter="url(#approvedTightGlow)" />
+          {/* Upper-left layered cyan / blue / magenta trails */}
+          <path d="M-170 110 C 95 135, 235 215, 390 335 S 570 465, 710 470" fill="none" stroke="#19d6ff" strokeWidth="28" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M-170 110 C 95 135, 235 215, 390 335 S 570 465, 710 470" fill="none" stroke="#19d6ff" strokeWidth="4.2" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M-190 165 C 65 200, 235 290, 405 420 S 590 515, 730 520" fill="none" stroke="#2878ff" strokeWidth="3.4" opacity=".95" filter="url(#approvedBgTightGlow)" />
+          <path d="M-220 225 C 60 270, 245 390, 430 525 S 610 585, 755 585" fill="none" stroke="#8d2cff" strokeWidth="2.6" opacity=".78" filter="url(#approvedBgTightGlow)" />
+          <path d="M-230 295 C 75 340, 260 475, 455 610 S 620 655, 760 650" fill="none" stroke="#ff28cf" strokeWidth="20" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M-230 295 C 75 340, 260 475, 455 610 S 620 655, 760 650" fill="none" stroke="#ff28cf" strokeWidth="3.7" opacity=".96" filter="url(#approvedBgTightGlow)" />
 
-          {/* high-right pink sweep */}
-          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="22" opacity=".25" filter="url(#approvedWideGlow)" />
-          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="3.8" opacity=".9" filter="url(#approvedTightGlow)" />
+          {/* High-right pink sweep from the approved reference */}
+          <path d="M760 175 C 980 220, 1170 170, 1370 120 S 1595 65, 1770 -80" fill="none" stroke="#ff25d0" strokeWidth="25" opacity=".21" filter="url(#approvedBgWideGlow)" />
+          <path d="M760 175 C 980 220, 1170 170, 1370 120 S 1595 65, 1770 -80" fill="none" stroke="#ff25d0" strokeWidth="3.5" opacity=".93" filter="url(#approvedBgTightGlow)" />
+          <path d="M790 230 C 1030 265, 1230 205, 1450 150 S 1660 95, 1790 15" fill="none" stroke="#7228ff" strokeWidth="2" opacity=".55" />
 
-          {/* middle-right blue/pink sweep */}
-          <path d="M850 535 C 1100 420, 1305 585, 1740 390" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="25" opacity=".30" filter="url(#approvedWideGlow)" />
-          <path d="M850 535 C 1100 420, 1305 585, 1740 390" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="4.5" opacity=".98" filter="url(#approvedTightGlow)" />
-          <path d="M920 590 C 1170 475, 1380 640, 1760 470" fill="none" stroke="#f725d0" strokeWidth="2.4" opacity=".8" filter="url(#approvedTightGlow)" />
+          {/* Right-side bright layered trails */}
+          <path d="M970 410 C 1175 325, 1320 265, 1485 185 S 1630 120, 1780 70" fill="none" stroke="#1bc8ff" strokeWidth="24" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M970 410 C 1175 325, 1320 265, 1485 185 S 1630 120, 1780 70" fill="none" stroke="#20cfff" strokeWidth="3.8" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M930 470 C 1175 380, 1375 335, 1545 255 S 1680 190, 1800 130" fill="none" stroke="#7732ff" strokeWidth="2.5" opacity=".72" filter="url(#approvedBgTightGlow)" />
+          <path d="M900 535 C 1165 445, 1360 425, 1530 360 S 1690 300, 1810 250" fill="none" stroke="#ff22ce" strokeWidth="22" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M900 535 C 1165 445, 1360 425, 1530 360 S 1690 300, 1810 250" fill="none" stroke="#ff22ce" strokeWidth="3.6" opacity=".96" filter="url(#approvedBgTightGlow)" />
 
-          {/* strong bottom-left to bottom-right electric waves */}
-          <path d="M-230 835 C 150 600, 385 940, 720 785 S 1115 615, 1450 770 S 1660 820, 1780 745" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="30" opacity=".34" filter="url(#approvedWideGlow)" />
-          <path d="M-230 835 C 150 600, 385 940, 720 785 S 1115 615, 1450 770 S 1660 820, 1780 745" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="5" opacity="1" filter="url(#approvedTightGlow)" />
-          <path d="M-240 885 C 125 675, 410 985, 760 835 S 1170 675, 1510 820 S 1700 875, 1800 825" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="3.2" opacity=".92" filter="url(#approvedTightGlow)" />
-          <path d="M-180 930 C 145 755, 420 1035, 800 890 S 1220 755, 1600 900" fill="none" stroke="#2563eb" strokeWidth="2" opacity=".55" />
+          {/* Lower-left bundle */}
+          <path d="M-220 805 C 80 760, 250 680, 405 590 S 585 520, 720 530" fill="none" stroke="#ff24d0" strokeWidth="26" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M-220 805 C 80 760, 250 680, 405 590 S 585 520, 720 530" fill="none" stroke="#ff24d0" strokeWidth="4.2" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M-240 855 C 65 805, 250 745, 420 655 S 585 590, 735 595" fill="none" stroke="#15d4ff" strokeWidth="4" opacity=".96" filter="url(#approvedBgTightGlow)" />
+          <path d="M-250 910 C 80 855, 255 815, 440 735 S 600 675, 745 680" fill="none" stroke="#6029ff" strokeWidth="2.4" opacity=".70" filter="url(#approvedBgTightGlow)" />
 
-          {/* subtle orbit glow behind the 3D cube */}
-          <ellipse cx="800" cy="150" rx="150" ry="26" fill="none" stroke="#38bdf8" strokeWidth="3" opacity=".45" filter="url(#approvedTightGlow)" />
-          <ellipse cx="800" cy="150" rx="118" ry="19" fill="none" stroke="#d946ef" strokeWidth="2" opacity=".52" filter="url(#approvedTightGlow)" />
+          {/* Lower-right bundle */}
+          <path d="M855 775 C 1070 660, 1235 620, 1420 655 S 1650 765, 1810 790" fill="none" stroke="#ff25d0" strokeWidth="28" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M855 775 C 1070 660, 1235 620, 1420 655 S 1650 765, 1810 790" fill="none" stroke="#ff25d0" strokeWidth="4.4" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M835 835 C 1060 730, 1240 700, 1435 735 S 1650 830, 1815 855" fill="none" stroke="#17d6ff" strokeWidth="4" opacity=".95" filter="url(#approvedBgTightGlow)" />
+          <path d="M815 895 C 1055 795, 1240 785, 1445 815 S 1640 900, 1810 925" fill="none" stroke="#692bff" strokeWidth="2.4" opacity=".72" />
+
+          {/* Bottom floor glow */}
+          <ellipse cx="800" cy="1030" rx="540" ry="62" fill="none" stroke="#7427ff" strokeWidth="30" opacity=".18" filter="url(#approvedBgWideGlow)" />
+          <ellipse cx="800" cy="1016" rx="445" ry="40" fill="none" stroke="#ff22d0" strokeWidth="3" opacity=".70" filter="url(#approvedBgTightGlow)" />
         </svg>
 
-        {/* colored star particles like the approved reference */}
-        {[...Array(54)].map((_, i) => {
+        {/* Brighter star particles from the approved reference */}
+        {[...Array(76)].map((_, i) => {
           const palette = [
-            "rgba(34,211,238,.95)",
-            "rgba(59,130,246,.95)",
-            "rgba(236,72,153,.95)",
-            "rgba(168,85,247,.92)",
+            "rgba(0,220,255,.98)",
+            "rgba(45,112,255,.96)",
+            "rgba(255,34,210,.98)",
+            "rgba(135,48,255,.96)",
           ];
           const color = palette[i % palette.length];
-          const size = i % 7 === 0 ? 7 : i % 4 === 0 ? 5 : 3;
+          const size = i % 11 === 0 ? 8 : i % 6 === 0 ? 6 : i % 3 === 0 ? 4 : 2.5;
           return (
             <span
               key={i}
               className="absolute rounded-full animate-pulse"
               style={{
-                left: `${(i * 37 + 11) % 97}%`,
-                top: `${(i * 61 + 7) % 96}%`,
+                left: `${(i * 43 + 7) % 98}%`,
+                top: `${(i * 67 + 5) % 97}%`,
                 width: `${size}px`,
                 height: `${size}px`,
                 backgroundColor: color,
-                boxShadow: `0 0 ${size * 3}px ${color}`,
-                animationDelay: `${(i % 9) * 0.24}s`,
-                animationDuration: `${2.1 + (i % 5) * 0.35}s`,
+                boxShadow: `0 0 ${size * 4}px ${color}`,
+                animationDelay: `${(i % 10) * 0.19}s`,
+                animationDuration: `${1.8 + (i % 6) * 0.31}s`,
               }}
             />
           );
