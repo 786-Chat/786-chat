@@ -132,6 +132,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
         await db.execute(sql`
           UPDATE owned_iot_devices
           SET is_online = true,
+              lifecycle_state = 'active',
               last_seen_at = now(),
               last_alarm_at = now(),
               last_event_id = ${eventId},
@@ -144,6 +145,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
         await db.execute(sql`
           UPDATE owned_iot_devices
           SET is_online = true,
+              lifecycle_state = 'active',
               last_seen_at = now(),
               last_alarm_at = NULL,
               last_event_id = ${eventId},
@@ -156,6 +158,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
         await db.execute(sql`
           UPDATE owned_iot_devices
           SET is_online = false,
+              lifecycle_state = CASE WHEN lifecycle_state = 'awaiting_activation' THEN 'active' ELSE lifecycle_state END,
               last_seen_at = now(),
               last_event_id = ${eventId},
               rssi = COALESCE(${rssi}, rssi),
@@ -167,6 +170,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
         await db.execute(sql`
           UPDATE owned_iot_devices
           SET is_online = true,
+              lifecycle_state = 'active',
               last_seen_at = now(),
               last_event_id = ${eventId},
               rssi = COALESCE(${rssi}, rssi),
