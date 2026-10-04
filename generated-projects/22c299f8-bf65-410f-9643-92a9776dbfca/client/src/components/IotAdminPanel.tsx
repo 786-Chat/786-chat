@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, HardDrive, Plus, RefreshCw, ShieldCheck, Trash2, Wifi, Zap } from "lucide-react";
+import { Copy, ExternalLink, HardDrive, Pencil, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,12 @@ export default function IotAdminPanel() {
   const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
   const [gatewayPort, setGatewayPort] = useState("1883");
   const [sendingWifi, setSendingWifi] = useState(false);
+  const [editingDeviceId, setEditingDeviceId] = useState("");
+  const [editDeviceName, setEditDeviceName] = useState("");
+  const [editBranchId, setEditBranchId] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editHardwareModel, setEditHardwareModel] = useState("");
+  const [savingDevice, setSavingDevice] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -160,6 +166,65 @@ export default function IotAdminPanel() {
   const refreshDevice = async (id: string) => {
     await fetch(`/api/iot/devices/${id}/refresh`, { method: "POST", credentials: "include" });
     await loadBase();
+  };
+
+  const beginEditDevice = (device: any) => {
+    setEditingDeviceId(String(device.id));
+    setEditDeviceName(String(device.deviceName || ""));
+    setEditBranchId(String(device.branchId || ""));
+    setEditNotes(String(device.notes || ""));
+    setEditHardwareModel(String(device.hardwareModel || "BK7231N-MOUSE-V1"));
+  };
+
+  const cancelEditDevice = () => {
+    setEditingDeviceId("");
+    setEditDeviceName("");
+    setEditBranchId("");
+    setEditNotes("");
+    setEditHardwareModel("");
+  };
+
+  const saveEditedDevice = async (device: any) => {
+    if (!editDeviceName.trim() || !editBranchId) {
+      toast({
+        title: "Missing information",
+        description: "Enter a device name and choose the correct branch.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSavingDevice(true);
+    try {
+      const response = await fetch(`/api/iot/devices/${device.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          deviceName: editDeviceName.trim(),
+          branchId: editBranchId,
+          notes: editNotes.trim(),
+          hardwareModel: editHardwareModel.trim() || "BK7231N-MOUSE-V1",
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({
+          title: "Could not update device",
+          description: data?.message || "Please try again",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Device updated",
+        description: `${data?.deviceName || editDeviceName} is assigned to ${branchById.get(editBranchId) || "the selected branch"}.`,
+      });
+      cancelEditDevice();
+      await loadBase();
+    } finally {
+      setSavingDevice(false);
+    }
   };
 
   const provisioningPayload = () => ({
@@ -536,6 +601,74 @@ export default function IotAdminPanel() {
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
 
+                  {editingDeviceId === String(device.id) && (
+                    <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-cyan-100">Edit / Reassign this device</p>
+                          <p className="text-[11px] text-slate-400">Device ID stays fixed: {device.deviceId}</p>
+                        </div>
+                        <Button size="sm" variant="ghost" onClick={cancelEditDevice} className="text-slate-300 hover:text-white">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-slate-400">Friendly Device Name</label>
+                          <Input
+                            value={editDeviceName}
+                            onChange={(event) => setEditDeviceName(event.target.value)}
+                            className="border-slate-600 bg-slate-950 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-slate-400">Shop / Branch</label>
+                          <select
+                            value={editBranchId}
+                            onChange={(event) => setEditBranchId(event.target.value)}
+                            className="h-10 w-full rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
+                          >
+                            <option value="">Select customer branch...</option>
+                            {branches.map((branch) => (
+                              <option key={branch.id} value={branch.id}>{branch.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-slate-400">Installation Area</label>
+                          <Input
+                            value={editNotes}
+                            onChange={(event) => setEditNotes(event.target.value)}
+                            placeholder="Kitchen / Wall, Back Door, Storage..."
+                            className="border-slate-600 bg-slate-950 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-medium text-slate-400">Hardware Model</label>
+                          <Input
+                            value={editHardwareModel}
+                            onChange={(event) => setEditHardwareModel(event.target.value)}
+                            className="border-slate-600 bg-slate-950 text-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => saveEditedDevice(device)}
+                          disabled={savingDevice}
+                          className="bg-cyan-600 text-white hover:bg-cyan-500"
+                        >
+                          {savingDevice ? <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                          {savingDevice ? "Saving..." : "Save Device"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={cancelEditDevice} className="border-slate-600 text-slate-200">
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {device.alarmActive && (
                     <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3 text-sm text-red-100">
                       <p className="font-semibold">🐭 Mouse caught</p>
@@ -548,6 +681,10 @@ export default function IotAdminPanel() {
                     <Button size="sm" variant="outline" onClick={() => refreshDevice(device.id)} className="border-slate-600 text-slate-200">
                       <RefreshCw className="mr-1 h-3 w-3" />
                       Refresh
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => beginEditDevice(device)} className="border-cyan-700/60 text-cyan-200">
+                      <Pencil className="mr-1 h-3 w-3" />
+                      Edit / Reassign
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300">
                       <Trash2 className="mr-1 h-3 w-3" />
