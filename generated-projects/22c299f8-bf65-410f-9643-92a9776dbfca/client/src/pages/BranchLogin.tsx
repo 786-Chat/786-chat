@@ -179,9 +179,9 @@ export default function BranchLogin() {
           </defs>
 
           {/* left/top cyan + magenta sweep */}
-          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="24" opacity=".28" filter="url(#approvedWideGlow)" />
-          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="4.2" opacity=".98" filter="url(#approvedTightGlow)" />
-          <path d="M-245 300 C 95 170, 255 410, 520 360 S 840 205, 1090 280" fill="none" stroke="#8b5cf6" strokeWidth="2.1" opacity=".72" filter="url(#approvedTightGlow)" />
+          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225 S 1400 390, 1820 210" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="24" opacity=".28" filter="url(#approvedWideGlow)" />
+          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225 S 1400 390, 1820 210" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="4.2" opacity=".98" filter="url(#approvedTightGlow)" />
+          <path d="M-245 300 C 95 170, 255 410, 520 360 S 840 205, 1090 280 S 1440 440, 1820 265" fill="none" stroke="#8b5cf6" strokeWidth="2.1" opacity=".72" filter="url(#approvedTightGlow)" />
 
           {/* high-right pink sweep */}
           <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="22" opacity=".25" filter="url(#approvedWideGlow)" />
