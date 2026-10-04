@@ -1,0 +1,10 @@
+{
+  "name": "Food Safety Rating - Pest Control",
+  "short_name": "Pest Control",
+  "start_url": "/branch-login",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#02061f",
+  "theme_color": "#7c3aed",
+  "icons": []
+}
