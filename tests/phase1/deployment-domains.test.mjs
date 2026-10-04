@@ -119,3 +119,11 @@ test("786.Chat adopts existing generated-project domains and deploys them throug
   assert.match(deployRoute, /deployGeneratedProjectToProduction/)
   assert.match(deployer, /target: "production"/)
 })
+
+
+test("verified live existing domains are treated as active", async () => {
+  const provider = await read("lib/786-admin/vercel-domains.ts")
+  assert.match(provider, /const httpsReady = verified \? await httpsIsReady\(hostname\) : false/)
+  assert.match(provider, /\(verified && httpsReady\)/)
+  assert.match(provider, /const sslReady = configured && verified && httpsReady/)
+})
