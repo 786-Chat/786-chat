@@ -1,4 +1,4 @@
-name: Pest Control owned IoT gateway persistence
+name: Pest Control owned IoT persistence
 
 on:
   push:
@@ -21,23 +21,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fetch main gateway source
+      - name: Fetch canonical Pest Control repairs from main
         run: git fetch origin main
 
-      - name: Ensure owned IoT gateway survives rebuild
+      - name: Ensure owned IoT gateway and branch UI survive rebuild
         run: node scripts/ensure-pest-owned-iot-gateway.mjs
 
       - name: Commit repair when required
         shell: bash
         run: |
-          if git diff --quiet -- generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/index.ts generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/owned-iot-gateway.ts; then
-            echo "Owned IoT gateway already present."
+          PATHS=(
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/index.ts
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/owned-iot-gateway.ts
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/branch-iot-history-visibility.ts
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/components/BranchSmartDevicesPanel.tsx
+            generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/client/src/components/BranchIotAlertsPanel.tsx
+          )
+
+          if git diff --quiet -- "${PATHS[@]}"; then
+            echo "Pest Control owned IoT gateway and protected branch UI already present."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/index.ts
-          git add generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/server/owned-iot-gateway.ts
-          git commit -m "fix(pest-iot): preserve owned IoT gateway after rebuild"
+          git add "${PATHS[@]}"
+          git commit -m "fix(pest-iot): preserve gateway and branch UI after rebuild"
           git push origin "HEAD:${GITHUB_REF_NAME}"
