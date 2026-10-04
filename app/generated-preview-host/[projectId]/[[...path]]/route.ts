@@ -1,4 +1,6 @@
 import { sql } from "@/lib/786-admin/db"
+import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
+import { findGeneratedPreviewState } from "@/lib/786-admin/preview-reconciliation"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,7 +11,9 @@ type StreamingRequestInit = RequestInit & { duplex?: "half" }
 type PreviewBuild = {
   id: string
   project_id: string
-  deployment_url: string
+  status: string
+  deployment_url: string | null
+  github_commit_sha: string | null
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -40,9 +44,22 @@ function protectionBypassSecret(): string {
   return runnerSecret.length >= 64 ? runnerSecret.slice(32, 64) : ""
 }
 
-async function latestPreviewBuild(projectId: string): Promise<PreviewBuild | null> {
+async function latestProjectBuild(projectId: string): Promise<PreviewBuild | null> {
   const rows = (await sql`
-    SELECT b.id, b.project_id, b.deployment_url
+    SELECT b.id, b.project_id, b.status, b.deployment_url, b.github_commit_sha
+    FROM admin_project_builds b
+    INNER JOIN admin_projects p ON p.id = b.project_id
+    WHERE b.project_id = ${projectId}
+    ORDER BY b.created_at DESC
+    LIMIT 1
+  `) as unknown as PreviewBuild[]
+
+  return rows[0] ?? null
+}
+
+async function latestPassedPreviewBuild(projectId: string): Promise<PreviewBuild | null> {
+  const rows = (await sql`
+    SELECT b.id, b.project_id, b.status, b.deployment_url, b.github_commit_sha
     FROM admin_project_builds b
     INNER JOIN admin_projects p ON p.id = b.project_id
     WHERE b.project_id = ${projectId}
@@ -56,6 +73,42 @@ async function latestPreviewBuild(projectId: string): Promise<PreviewBuild | nul
   return rows[0] ?? null
 }
 
+async function resolvePreviewBuild(projectId: string): Promise<PreviewBuild | null> {
+  const latest = await latestProjectBuild(projectId)
+  if (!latest) return null
+
+  if (latest.status === "passed" && latest.deployment_url) return latest
+
+  // The build callback intentionally hands off slow Vercel publishes after
+  // three minutes. Live Preview must not stay pinned to the previous passed
+  // build just because no authenticated builder tab is currently polling.
+  if (latest.status === "running" && latest.github_commit_sha) {
+    const preview = await findGeneratedPreviewState({
+      projectId,
+      commitSha: latest.github_commit_sha,
+    }).catch(() => null)
+
+    if (preview?.state === "READY" && preview.url) {
+      await completeRunnerBuild({
+        buildId: latest.id,
+        status: "passed",
+        logs: `\n[preview-reconcile] Vercel preview ${preview.id} is READY and healthy.\n[vercel] Preview ${preview.url}.\n`,
+        deploymentUrl: preview.url,
+        errorMessage: null,
+      }).catch(() => false)
+
+      return {
+        ...latest,
+        status: "passed",
+        deployment_url: preview.url,
+      }
+    }
+  }
+
+  // Preserve the last known-good preview while a newer build is still
+  // publishing, failed, or was cancelled.
+  return latestPassedPreviewBuild(projectId)
+}
 function runtimeTarget(runtimeUrl: string, path: string[], requestUrl: string) {
   const target = new URL(runtimeUrl)
   const incoming = new URL(requestUrl)
@@ -144,8 +197,8 @@ async function handle(request: Request, { params }: Ctx) {
   const { projectId, path = [] } = await params
   if (!UUID_PATTERN.test(projectId)) return unavailable()
 
-  const build = await latestPreviewBuild(projectId)
-  if (!build) return unavailable()
+  const build = await resolvePreviewBuild(projectId)
+  if (!build?.deployment_url) return unavailable()
 
   const target = runtimeTarget(build.deployment_url, path, request.url)
   const init: StreamingRequestInit = {
