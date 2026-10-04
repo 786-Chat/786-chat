@@ -158,6 +158,13 @@ registerOwnedIotGatewayRoutes(app);
     throw err;
   });
 
+  // Canonical public entry: always send the bare domain to Branch Login.
+  // This prevents a white page at pestcontrol.cat/ while preserving direct login URLs.
+  app.get("/", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.redirect(302, "/branch-login/");
+  });
+
   // Serve static files from public directory first
   app.use(express.static(path.resolve(import.meta.dirname, '..', 'public'), {
     setHeaders: (res, path) => {
