@@ -133,8 +133,15 @@ export default function BranchLogin() {
     <div 
       className="min-h-screen bg-[#050b2c] flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
     >
-      {/* Approved neon-wave background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Final approved electric neon background - replaces the old purple wave background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none bg-[#02061f]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at 12% 28%, rgba(37,99,235,.34), transparent 30%), radial-gradient(circle at 82% 22%, rgba(168,85,247,.30), transparent 34%), radial-gradient(circle at 48% 58%, rgba(88,28,135,.26), transparent 42%), radial-gradient(circle at 50% 100%, rgba(124,58,237,.42), transparent 34%), linear-gradient(180deg,#06103f 0%,#080c39 48%,#02061f 100%)",
+          }}
+        />
         <svg
           className="absolute inset-0 w-full h-full"
           viewBox="0 0 1600 1000"
@@ -142,53 +149,87 @@ export default function BranchLogin() {
           aria-hidden="true"
         >
           <defs>
-            <radialGradient id="branchBgGlow" cx="50%" cy="42%" r="72%">
-              <stop offset="0%" stopColor="#6d28d9" stopOpacity="0.72" />
-              <stop offset="38%" stopColor="#3b0764" stopOpacity="0.48" />
-              <stop offset="100%" stopColor="#020617" stopOpacity="0.98" />
-            </radialGradient>
-            <linearGradient id="branchNeonA" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient id="approvedWaveHot" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#22d3ee" />
-              <stop offset="48%" stopColor="#d946ef" />
-              <stop offset="100%" stopColor="#38bdf8" />
+              <stop offset="34%" stopColor="#2563eb" />
+              <stop offset="64%" stopColor="#d946ef" />
+              <stop offset="100%" stopColor="#ff2da3" />
             </linearGradient>
-            <linearGradient id="branchNeonB" x1="100%" y1="0%" x2="0%" y2="0%">
-              <stop offset="0%" stopColor="#ec4899" />
-              <stop offset="52%" stopColor="#7c3aed" />
-              <stop offset="100%" stopColor="#0ea5e9" />
+            <linearGradient id="approvedWaveCool" x1="100%" y1="0%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="#22d3ee" />
+              <stop offset="38%" stopColor="#3b82f6" />
+              <stop offset="72%" stopColor="#8b5cf6" />
+              <stop offset="100%" stopColor="#f725d0" />
             </linearGradient>
-            <filter id="branchNeonGlow" x="-40%" y="-40%" width="180%" height="180%">
-              <feGaussianBlur stdDeviation="7" result="blur" />
+            <linearGradient id="approvedWavePink" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#7c3aed" />
+              <stop offset="45%" stopColor="#ec4899" />
+              <stop offset="100%" stopColor="#22d3ee" />
+            </linearGradient>
+            <filter id="approvedWideGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="18" />
+            </filter>
+            <filter id="approvedTightGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
           </defs>
-          <rect width="1600" height="1000" fill="#04091f" />
-          <rect width="1600" height="1000" fill="url(#branchBgGlow)" />
-          <path d="M-180 280 C 170 40, 390 560, 760 330 S 1310 70, 1760 340" fill="none" stroke="url(#branchNeonA)" strokeWidth="4" opacity="0.9" filter="url(#branchNeonGlow)" />
-          <path d="M-220 335 C 150 110, 405 620, 805 390 S 1340 155, 1760 410" fill="none" stroke="url(#branchNeonB)" strokeWidth="2.5" opacity="0.72" filter="url(#branchNeonGlow)" />
-          <path d="M-170 790 C 220 520, 420 930, 810 735 S 1335 520, 1740 775" fill="none" stroke="url(#branchNeonA)" strokeWidth="4" opacity="0.86" filter="url(#branchNeonGlow)" />
-          <path d="M-190 845 C 190 600, 445 985, 840 795 S 1360 605, 1740 840" fill="none" stroke="url(#branchNeonB)" strokeWidth="2.5" opacity="0.7" filter="url(#branchNeonGlow)" />
-          <path d="M-80 535 C 230 375, 390 690, 670 560 S 1050 410, 1270 520 S 1510 690, 1710 560" fill="none" stroke="#7dd3fc" strokeWidth="1.5" opacity="0.35" />
-        </svg>
-      </div>
 
-      {/* Animated Background Particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(60)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 2}s`
-            }}
-          />
-        ))}
+          {/* left/top cyan + magenta sweep */}
+          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="24" opacity=".28" filter="url(#approvedWideGlow)" />
+          <path d="M-220 245 C 80 110, 250 365, 505 315 S 820 150, 1040 225" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="4.2" opacity=".98" filter="url(#approvedTightGlow)" />
+          <path d="M-245 300 C 95 170, 255 410, 520 360 S 840 205, 1090 280" fill="none" stroke="#8b5cf6" strokeWidth="2.1" opacity=".72" filter="url(#approvedTightGlow)" />
+
+          {/* high-right pink sweep */}
+          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="22" opacity=".25" filter="url(#approvedWideGlow)" />
+          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="3.8" opacity=".9" filter="url(#approvedTightGlow)" />
+
+          {/* middle-right blue/pink sweep */}
+          <path d="M850 535 C 1100 420, 1305 585, 1740 390" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="25" opacity=".30" filter="url(#approvedWideGlow)" />
+          <path d="M850 535 C 1100 420, 1305 585, 1740 390" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="4.5" opacity=".98" filter="url(#approvedTightGlow)" />
+          <path d="M920 590 C 1170 475, 1380 640, 1760 470" fill="none" stroke="#f725d0" strokeWidth="2.4" opacity=".8" filter="url(#approvedTightGlow)" />
+
+          {/* strong bottom-left to bottom-right electric waves */}
+          <path d="M-230 835 C 150 600, 385 940, 720 785 S 1115 615, 1450 770 S 1660 820, 1780 745" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="30" opacity=".34" filter="url(#approvedWideGlow)" />
+          <path d="M-230 835 C 150 600, 385 940, 720 785 S 1115 615, 1450 770 S 1660 820, 1780 745" fill="none" stroke="url(#approvedWaveHot)" strokeWidth="5" opacity="1" filter="url(#approvedTightGlow)" />
+          <path d="M-240 885 C 125 675, 410 985, 760 835 S 1170 675, 1510 820 S 1700 875, 1800 825" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="3.2" opacity=".92" filter="url(#approvedTightGlow)" />
+          <path d="M-180 930 C 145 755, 420 1035, 800 890 S 1220 755, 1600 900" fill="none" stroke="#2563eb" strokeWidth="2" opacity=".55" />
+
+          {/* subtle orbit glow behind the 3D cube */}
+          <ellipse cx="800" cy="150" rx="150" ry="26" fill="none" stroke="#38bdf8" strokeWidth="3" opacity=".45" filter="url(#approvedTightGlow)" />
+          <ellipse cx="800" cy="150" rx="118" ry="19" fill="none" stroke="#d946ef" strokeWidth="2" opacity=".52" filter="url(#approvedTightGlow)" />
+        </svg>
+
+        {/* colored star particles like the approved reference */}
+        {[...Array(54)].map((_, i) => {
+          const palette = [
+            "rgba(34,211,238,.95)",
+            "rgba(59,130,246,.95)",
+            "rgba(236,72,153,.95)",
+            "rgba(168,85,247,.92)",
+          ];
+          const color = palette[i % palette.length];
+          const size = i % 7 === 0 ? 7 : i % 4 === 0 ? 5 : 3;
+          return (
+            <span
+              key={i}
+              className="absolute rounded-full animate-pulse"
+              style={{
+                left: `${(i * 37 + 11) % 97}%`,
+                top: `${(i * 61 + 7) % 96}%`,
+                width: `${size}px`,
+                height: `${size}px`,
+                backgroundColor: color,
+                boxShadow: `0 0 ${size * 3}px ${color}`,
+                animationDelay: `${(i % 9) * 0.24}s`,
+                animationDuration: `${2.1 + (i % 5) * 0.35}s`,
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* New isolated 3D cube: branch login only */}
