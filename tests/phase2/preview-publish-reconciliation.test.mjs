@@ -9,6 +9,7 @@ const publisher = readFileSync("lib/786-admin/github-project-publisher.ts", "utf
 const reconciliation = readFileSync("lib/786-admin/preview-reconciliation.ts", "utf8")
 const finalizer = readFileSync("lib/786-admin/imported-runtime-finalizer.ts", "utf8")
 const workflow = readFileSync(".github/workflows/generated-project-build.yml", "utf8")
+const previewHost = readFileSync("app/generated-preview-host/[projectId]/[[...path]]/route.ts", "utf8")
 
 test("publisher checkpoints commit metadata before waiting for Vercel", () => {
   assert.match(callback, /recordRunnerPublishProgress/)
@@ -80,4 +81,15 @@ test("preview publishing cannot remain running forever", () => {
   assert.match(buildRoute, /PREVIEW_PUBLISH_TIMEOUT_MS = 10 \* 60 \* 1000/)
   assert.match(buildRoute, /Preview publishing timed out before Vercel reached a healthy terminal state/)
   assert.match(buildRoute, /Date\.parse\(build\.updated_at\)/)
+})
+
+test("preview host self-heals a healthy READY publish after callback handoff", () => {
+  assert.match(previewHost, /latestProjectBuild/)
+  assert.match(previewHost, /latestPassedPreviewBuild/)
+  assert.match(previewHost, /latest\.status === "running"/)
+  assert.match(previewHost, /findGeneratedPreviewState/)
+  assert.match(previewHost, /preview\?\.state === "READY"/)
+  assert.match(previewHost, /completeRunnerBuild/)
+  assert.match(previewHost, /deploymentUrl: preview\.url/)
+  assert.match(previewHost, /return latestPassedPreviewBuild\(projectId\)/)
 })
