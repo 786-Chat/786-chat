@@ -915,6 +915,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware (this sets up sessions first)
   await setupAuth(app);
 
+  // Enforce Admin branch Active/Inactive status on every authenticated branch request.
+  // If Admin marks a branch inactive, an existing branch session is revoked on
+  // the next request. Reactivating the branch allows a normal login again.
+  app.use(async (req: any, res: any, next: any) => {
+    const session = req.session as any;
+
+    if (!session?.branchId || session?.userType !== 'branch') {
+      return next();
+    }
+
+    if (req.path === '/api/branch/login' || req.path === '/api/auth/branch-login') {
+      return next();
+    }
+
+    try {
+      const branch = await storage.getBranch(String(session.branchId));
+      if (branch && branch.status === 'active') {
+        return next();
+      }
+
+      const code = branch ? 'INACTIVE_BRANCH' : 'BRANCH_NOT_FOUND';
+      const message = branch
+        ? 'Your branch account is inactive.'
+        : 'Your branch account is no longer available.';
+
+      return req.session.destroy((destroyError: any) => {
+        if (destroyError) {
+          console.error('Failed to revoke branch session:', destroyError);
+        }
+        return res.status(401).json({ message, code, inactive: true });
+      });
+    } catch (error) {
+      console.error('Branch activation check failed:', error);
+      return res.status(500).json({
+        message: 'Unable to verify branch account status',
+        code: 'BRANCH_STATUS_CHECK_FAILED'
+      });
+    }
+  });
+
   // 786.Chat: Vercel functions are request-scoped. Database maintenance is not
   // required for route registration and must not block a serverless cold start.
   if (!process.env.VERCEL) {
@@ -4337,9 +4377,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete from appropriate table
       if (isInDocumentsTable) {
-        // For documents table, mark as deleted (adminDeleted=true)
-        await storage.updateDocument(req.params.id, { adminDeleted: true });
-        console.log(`Monthly report ${req.params.id} deleted from documents table (marked as adminDeleted: true)`);
+        // Branch deletion is independent from Admin deletion.
+        await storage.markDocumentDeletedByBranch(req.params.id);
+        console.log(`Monthly report ${req.params.id} deleted by branch from documents table (marked as isDeleted: true)`);
       } else {
         // For monthly_reports table, use existing method
         await storage.deleteMonthlyReportFromBranch(req.params.id);
