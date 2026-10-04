@@ -207,7 +207,9 @@ export default function BranchLogin() {
           height: 100%;
           position: relative;
           transform-style: preserve-3d;
-          animation: branchLoginCubeRotate 12s linear infinite;
+          transform-origin: 50% 50%;
+          will-change: transform;
+          animation: branchLoginCubeRotate 10s linear infinite !important;
         }
         .branch-login-cube-face {
           position: absolute;
@@ -259,7 +261,7 @@ export default function BranchLogin() {
         }
         @media (min-width: 640px) { .branch-login-cube-stage { --cube-size: 90px; margin-bottom: 12px; } }
         @media (min-width: 1024px) { .branch-login-cube-stage { --cube-size: 96px; margin-bottom: 12px; } }
-        @media (prefers-reduced-motion: reduce) { .branch-login-cube { animation: none; transform: rotateX(-14deg) rotateY(-32deg); } }
+        /* Keep the approved 3D logo rotating on every device. */
       `}</style>
 
       {/* Main Content Container */}
