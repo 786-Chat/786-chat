@@ -249,7 +249,7 @@ export default function IotAdminPanel() {
 
   const sendWifiDirect = async () => {
     if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
-      toast({ title: "Wi-Fi details needed", description: "Choose the HP2 device, enter the Wi-Fi name and password, then continue.", variant: "destructive" });
+      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
       return;
     }
 
@@ -264,7 +264,7 @@ export default function IotAdminPanel() {
 
       window.open(base, "_blank", "noopener,noreferrer");
       toast({
-        title: "HP2 Wi-Fi setup prepared",
+        title: "Device Wi-Fi setup prepared",
         description: "The setup details were copied. Connect to the trap's Food Safety setup Wi-Fi and finish on its local page. The password is not stored in 786.Chat.",
       });
     } finally {
@@ -551,7 +551,7 @@ export default function IotAdminPanel() {
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
-          HP2 is ready on the dashboard side. The physical BK7231N must run the Food Safety setup firmware/portal before 192.168.4.1 can accept Wi-Fi details.
+          Select the correct registered device for this shop. The physical BK7231N must run the Food Safety setup firmware/portal before 192.168.4.1 can accept that shop's Wi-Fi details.
         </p>
       </div>
 
