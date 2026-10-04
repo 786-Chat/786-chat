@@ -219,9 +219,13 @@ export async function getGeneratedProjectDomainState(
     .map(recordFromUnknown)
     .filter((record): record is VercelDnsRecord => Boolean(record))
   const records = [...verificationRecords, ...(await configurationRecords(hostname))]
-  const configured = body.configured === true || body.misconfigured === false
   const verified = body.verified === true
-  const sslReady = configured && verified ? await httpsIsReady(hostname) : false
+  const httpsReady = verified ? await httpsIsReady(hostname) : false
+  const configured =
+    body.configured === true ||
+    body.misconfigured === false ||
+    (verified && httpsReady)
+  const sslReady = configured && verified && httpsReady
   return {
     configured,
     verified,
