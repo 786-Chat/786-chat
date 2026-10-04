@@ -131,33 +131,127 @@ export default function BranchLogin() {
 
   return (
     <div 
-      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
+      className="min-h-screen bg-[#050b2c] flex items-center justify-center p-2 sm:p-4 relative overflow-x-hidden overflow-y-auto"
     >
-      {/* Animated Background Particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(60)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 2}s`
-            }}
-          />
-        ))}
+      {/* Approved full-page neon background. The cat/device image keeps its own inner glow. */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none bg-[#03062b]">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(circle at 8% 30%, rgba(28,83,255,.44), transparent 27%), radial-gradient(circle at 92% 18%, rgba(109,40,217,.48), transparent 32%), radial-gradient(circle at 8% 74%, rgba(83,32,200,.36), transparent 28%), radial-gradient(circle at 92% 72%, rgba(22,64,255,.30), transparent 31%), radial-gradient(circle at 50% 105%, rgba(117,41,255,.50), transparent 31%), linear-gradient(180deg,#061044 0%,#0b0b58 47%,#05062f 100%)",
+          }}
+        />
+        <svg
+          className="absolute inset-0 w-full h-full"
+          viewBox="0 0 1600 1000"
+          preserveAspectRatio="xMidYMid slice"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="approvedBgCyanPink" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#00d9ff" />
+              <stop offset="35%" stopColor="#2288ff" />
+              <stop offset="70%" stopColor="#8b2cff" />
+              <stop offset="100%" stopColor="#ff16d7" />
+            </linearGradient>
+            <linearGradient id="approvedBgPinkCyan" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#ff20c9" />
+              <stop offset="45%" stopColor="#8c2cff" />
+              <stop offset="100%" stopColor="#00d7ff" />
+            </linearGradient>
+            <linearGradient id="approvedBgBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#214dff" />
+              <stop offset="50%" stopColor="#18b8ff" />
+              <stop offset="100%" stopColor="#7828ff" />
+            </linearGradient>
+            <filter id="approvedBgWideGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="20" />
+            </filter>
+            <filter id="approvedBgTightGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="4.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Upper-left layered cyan / blue / magenta trails */}
+          <path d="M-170 110 C 95 135, 235 215, 390 335 S 570 465, 710 470" fill="none" stroke="#19d6ff" strokeWidth="28" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M-170 110 C 95 135, 235 215, 390 335 S 570 465, 710 470" fill="none" stroke="#19d6ff" strokeWidth="4.2" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M-190 165 C 65 200, 235 290, 405 420 S 590 515, 730 520" fill="none" stroke="#2878ff" strokeWidth="3.4" opacity=".95" filter="url(#approvedBgTightGlow)" />
+          <path d="M-220 225 C 60 270, 245 390, 430 525 S 610 585, 755 585" fill="none" stroke="#8d2cff" strokeWidth="2.6" opacity=".78" filter="url(#approvedBgTightGlow)" />
+          <path d="M-230 295 C 75 340, 260 475, 455 610 S 620 655, 760 650" fill="none" stroke="#ff28cf" strokeWidth="20" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M-230 295 C 75 340, 260 475, 455 610 S 620 655, 760 650" fill="none" stroke="#ff28cf" strokeWidth="3.7" opacity=".96" filter="url(#approvedBgTightGlow)" />
+
+          {/* High-right pink sweep from the approved reference */}
+          <path d="M760 175 C 980 220, 1170 170, 1370 120 S 1595 65, 1770 -80" fill="none" stroke="#ff25d0" strokeWidth="25" opacity=".21" filter="url(#approvedBgWideGlow)" />
+          <path d="M760 175 C 980 220, 1170 170, 1370 120 S 1595 65, 1770 -80" fill="none" stroke="#ff25d0" strokeWidth="3.5" opacity=".93" filter="url(#approvedBgTightGlow)" />
+          <path d="M790 230 C 1030 265, 1230 205, 1450 150 S 1660 95, 1790 15" fill="none" stroke="#7228ff" strokeWidth="2" opacity=".55" />
+
+          {/* Right-side bright layered trails */}
+          <path d="M970 410 C 1175 325, 1320 265, 1485 185 S 1630 120, 1780 70" fill="none" stroke="#1bc8ff" strokeWidth="24" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M970 410 C 1175 325, 1320 265, 1485 185 S 1630 120, 1780 70" fill="none" stroke="#20cfff" strokeWidth="3.8" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M930 470 C 1175 380, 1375 335, 1545 255 S 1680 190, 1800 130" fill="none" stroke="#7732ff" strokeWidth="2.5" opacity=".72" filter="url(#approvedBgTightGlow)" />
+          <path d="M900 535 C 1165 445, 1360 425, 1530 360 S 1690 300, 1810 250" fill="none" stroke="#ff22ce" strokeWidth="22" opacity=".20" filter="url(#approvedBgWideGlow)" />
+          <path d="M900 535 C 1165 445, 1360 425, 1530 360 S 1690 300, 1810 250" fill="none" stroke="#ff22ce" strokeWidth="3.6" opacity=".96" filter="url(#approvedBgTightGlow)" />
+
+          {/* Lower-left bundle */}
+          <path d="M-220 805 C 80 760, 250 680, 405 590 S 585 520, 720 530" fill="none" stroke="#ff24d0" strokeWidth="26" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M-220 805 C 80 760, 250 680, 405 590 S 585 520, 720 530" fill="none" stroke="#ff24d0" strokeWidth="4.2" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M-240 855 C 65 805, 250 745, 420 655 S 585 590, 735 595" fill="none" stroke="#15d4ff" strokeWidth="4" opacity=".96" filter="url(#approvedBgTightGlow)" />
+          <path d="M-250 910 C 80 855, 255 815, 440 735 S 600 675, 745 680" fill="none" stroke="#6029ff" strokeWidth="2.4" opacity=".70" filter="url(#approvedBgTightGlow)" />
+
+          {/* Lower-right bundle */}
+          <path d="M855 775 C 1070 660, 1235 620, 1420 655 S 1650 765, 1810 790" fill="none" stroke="#ff25d0" strokeWidth="28" opacity=".22" filter="url(#approvedBgWideGlow)" />
+          <path d="M855 775 C 1070 660, 1235 620, 1420 655 S 1650 765, 1810 790" fill="none" stroke="#ff25d0" strokeWidth="4.4" opacity=".98" filter="url(#approvedBgTightGlow)" />
+          <path d="M835 835 C 1060 730, 1240 700, 1435 735 S 1650 830, 1815 855" fill="none" stroke="#17d6ff" strokeWidth="4" opacity=".95" filter="url(#approvedBgTightGlow)" />
+          <path d="M815 895 C 1055 795, 1240 785, 1445 815 S 1640 900, 1810 925" fill="none" stroke="#692bff" strokeWidth="2.4" opacity=".72" />
+
+          {/* Bottom floor glow */}
+          <ellipse cx="800" cy="1030" rx="540" ry="62" fill="none" stroke="#7427ff" strokeWidth="30" opacity=".18" filter="url(#approvedBgWideGlow)" />
+          <ellipse cx="800" cy="1016" rx="445" ry="40" fill="none" stroke="#ff22d0" strokeWidth="3" opacity=".70" filter="url(#approvedBgTightGlow)" />
+        </svg>
+
+        {/* Brighter star particles from the approved reference */}
+        {[...Array(76)].map((_, i) => {
+          const palette = [
+            "rgba(0,220,255,.98)",
+            "rgba(45,112,255,.96)",
+            "rgba(255,34,210,.98)",
+            "rgba(135,48,255,.96)",
+          ];
+          const color = palette[i % palette.length];
+          const size = i % 11 === 0 ? 8 : i % 6 === 0 ? 6 : i % 3 === 0 ? 4 : 2.5;
+          return (
+            <span
+              key={i}
+              className="absolute rounded-full animate-pulse"
+              style={{
+                left: `${(i * 43 + 7) % 98}%`,
+                top: `${(i * 67 + 5) % 97}%`,
+                width: `${size}px`,
+                height: `${size}px`,
+                backgroundColor: color,
+                boxShadow: `0 0 ${size * 4}px ${color}`,
+                animationDelay: `${(i % 10) * 0.19}s`,
+                animationDuration: `${1.8 + (i % 6) * 0.31}s`,
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* New isolated 3D cube: branch login only */}
       <style>{`
         .branch-login-cube-stage {
-          --cube-size: 112px;
+          --cube-size: 84px;
           width: var(--cube-size);
           height: var(--cube-size);
           perspective: 900px;
           position: relative;
-          margin: 4px auto 14px;
+          margin: 4px auto 12px;
           filter: drop-shadow(0 0 24px rgba(34,197,94,.55));
         }
         .branch-login-cube {
@@ -165,7 +259,9 @@ export default function BranchLogin() {
           height: 100%;
           position: relative;
           transform-style: preserve-3d;
-          animation: branchLoginCubeRotate 12s linear infinite;
+          transform-origin: 50% 50%;
+          will-change: transform;
+          animation: branchLoginCubeRotate 10s linear infinite !important;
         }
         .branch-login-cube-face {
           position: absolute;
@@ -215,9 +311,9 @@ export default function BranchLogin() {
           0%,100% { opacity: .55; transform: translateX(-50%) scale(.94); }
           50% { opacity: 1; transform: translateX(-50%) scale(1.03); }
         }
-        @media (min-width: 640px) { .branch-login-cube-stage { --cube-size: 126px; margin-bottom: 16px; } }
-        @media (min-width: 1024px) { .branch-login-cube-stage { --cube-size: 138px; margin-bottom: 18px; } }
-        @media (prefers-reduced-motion: reduce) { .branch-login-cube { animation: none; transform: rotateX(-14deg) rotateY(-32deg); } }
+        @media (min-width: 640px) { .branch-login-cube-stage { --cube-size: 90px; margin-bottom: 12px; } }
+        @media (min-width: 1024px) { .branch-login-cube-stage { --cube-size: 96px; margin-bottom: 12px; } }
+        /* Keep the approved 3D logo rotating on every device. */
       `}</style>
 
       {/* Main Content Container */}
@@ -235,7 +331,7 @@ export default function BranchLogin() {
         </div>
 
         {/* Beautiful Login Form */}
-        <Card className="w-full max-w-sm mx-auto bg-slate-800/60 backdrop-blur-xl border-purple-500/30 shadow-2xl">
+        <Card className="w-full max-w-sm mx-auto bg-slate-950/55 backdrop-blur-xl border-fuchsia-500/55 shadow-[0_24px_70px_rgba(24,7,55,.55),0_0_42px_rgba(168,85,247,.22)]">
           <CardHeader className="text-center space-y-1 p-3 pb-2">
             <div className="flex items-center justify-center space-x-2">
               <Lock className="w-8 h-8 text-purple-400" />
@@ -336,6 +432,23 @@ export default function BranchLogin() {
               </Button>
             </form>
 
+            <div className="branch-login-approved-cat-device w-full max-w-[340px] mx-auto mt-3 flex justify-center" aria-label="Pest control device and cat">
+              <img src="data:image/webp;base64,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" alt="Black pest control device beside a calico cat" className="block w-full h-auto object-contain rounded-xl drop-shadow-2xl" />
+            </div>
+
+            {/* Approved smart-monitoring message */}
+            <div className="mt-3 text-center px-1">
+              <h2 className="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight text-white">
+                <span className="text-yellow-400">Smarter pest control</span> starts
+                <br />
+                with smart monitoring.
+              </h2>
+              <p className="mt-2 text-xs sm:text-sm text-slate-200">
+                Stay informed, act quickly and keep your premises protected.
+              </p>
+              <div className="h-px mt-4 bg-gradient-to-r from-transparent via-fuchsia-400/80 to-transparent" />
+            </div>
+
             {/* Info Section with Pink Background Content */}
             <div className="mt-3 p-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white text-center text-xs">
               <p className="font-medium mb-2">This web app was created by Mujeeb Sardar in 2025.</p>
@@ -347,7 +460,7 @@ export default function BranchLogin() {
             </div>
 
             {/* Demo Section - Moved below toll-free number */}
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-2 p-3 rounded-xl border border-cyan-400/20 bg-slate-950/35 shadow-[0_8px_28px_rgba(14,165,233,.10)]">
               <div className="text-center text-slate-300 text-sm font-medium">
                 ✨ Try Interactive Demo
               </div>
@@ -366,9 +479,6 @@ export default function BranchLogin() {
 
           </CardContent>
         </Card>
-        <div className="branch-login-approved-cat-device w-full max-w-[270px] mx-auto -mt-1 flex justify-center" aria-label="Pest control device and cat">
-          <img src="data:image/webp;base64,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" alt="Black pest control device beside a calico cat" className="block w-full h-auto object-contain drop-shadow-2xl" />
-        </div>
       </div>
 
       {/* Help Button - Top Right */}
