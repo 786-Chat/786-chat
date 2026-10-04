@@ -11,6 +11,7 @@ import {
   refreshProjectDomain,
   removeProjectDomain,
   setPrimaryProjectDomain,
+  syncGeneratedProjectDomains,
   type AdminDomainAddressType,
   type AdminProjectDomain,
 } from "@/lib/786-admin/domains";
@@ -21,6 +22,7 @@ import {
   rollbackProjectDeployment,
   type AdminProjectDeployment,
 } from "@/lib/786-admin/publishing";
+import { deployGeneratedProjectToProduction } from "@/lib/786-admin/vercel-project-deployer";
 import { builderPlanUsage } from "@/lib/786-chat/billing";
 import { recordOperationalEvent } from "@/lib/786-chat/monitoring";
 
@@ -66,8 +68,15 @@ function domainUrl(
 }
 
 async function lifecycle(projectId: string, ownerEmail: string) {
-  const [deployment, domains, history] = await Promise.all([
-    getProjectDeployment(projectId, ownerEmail),
+  const deployment = await getProjectDeployment(projectId, ownerEmail);
+  if (deployment) {
+    await syncGeneratedProjectDomains({
+      projectId,
+      deployment,
+      ownerEmail,
+    });
+  }
+  const [domains, history] = await Promise.all([
     listProjectDomains(projectId, ownerEmail),
     listProjectDeploymentVersions({ projectId, ownerEmail }),
   ]);
@@ -76,6 +85,46 @@ async function lifecycle(projectId: string, ownerEmail: string) {
     domains: domains.map(publicDomain),
     history,
   };
+}
+
+async function publishGeneratedProductionIfConnected(input: {
+  projectId: string;
+  deployment: AdminProjectDeployment;
+  domains: AdminProjectDomain[];
+}) {
+  const hasGeneratedDomain = input.domains.some(
+    (domain) =>
+      domain.provider === "vercel-generated" &&
+      domain.status === "active" &&
+      domain.dns_status === "verified" &&
+      domain.ssl_status === "active",
+  );
+  if (!hasGeneratedDomain) return;
+  if (!input.deployment.build_id) {
+    throw new Error("The current deployment has no verified build to publish.");
+  }
+
+  const rows = (await sql`
+    SELECT github_branch, github_commit_sha
+    FROM admin_project_builds
+    WHERE id = ${input.deployment.build_id}
+      AND project_id = ${input.projectId}
+      AND status = 'passed'
+    LIMIT 1
+  `) as unknown as Array<{
+    github_branch: string | null;
+    github_commit_sha: string | null;
+  }>;
+  const build = rows[0];
+  if (!build?.github_branch || !build.github_commit_sha) {
+    throw new Error("The verified build is missing its generated Git source.");
+  }
+
+  await deployGeneratedProjectToProduction({
+    projectId: input.projectId,
+    branch: build.github_branch,
+    commitSha: build.github_commit_sha,
+  });
 }
 
 async function activateExistingDomain(input: {
@@ -251,7 +300,17 @@ export async function POST(request: Request, { params }: Context) {
         ownerEmail,
         version,
       });
-      const domains = await listProjectDomains(id, ownerEmail);
+      let domains = await syncGeneratedProjectDomains({
+        projectId: id,
+        deployment,
+        ownerEmail,
+      });
+      await publishGeneratedProductionIfConnected({
+        projectId: id,
+        deployment,
+        domains,
+      });
+      domains = await listProjectDomains(id, ownerEmail);
       const domain =
         domains.find((item) => item.is_primary) ||
         domains[0] ||
@@ -286,7 +345,17 @@ export async function POST(request: Request, { params }: Context) {
         ownerEmail,
         action: "redeploy",
       });
-      const domains = await listProjectDomains(id, ownerEmail);
+      let domains = await syncGeneratedProjectDomains({
+        projectId: id,
+        deployment,
+        ownerEmail,
+      });
+      await publishGeneratedProductionIfConnected({
+        projectId: id,
+        deployment,
+        domains,
+      });
+      domains = await listProjectDomains(id, ownerEmail);
       const domain =
         domains.find((item) => item.is_primary) ||
         domains[0] ||

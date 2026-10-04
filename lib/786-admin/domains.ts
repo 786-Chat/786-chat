@@ -4,8 +4,11 @@ import { sql, transaction } from "./db"
 import type { AdminProjectDeployment } from "./publishing"
 import {
   addDomainToVercel,
+  getGeneratedProjectDomainState,
   getVercelDomainState,
+  listGeneratedProjectDomains,
   removeDomainFromVercel,
+  removeGeneratedProjectDomain,
   type VercelDomainState,
 } from "./vercel-domains"
 
@@ -34,6 +37,8 @@ export type AdminProjectDomain = {
   created_at: string
   updated_at: string
 }
+
+const GENERATED_VERCEL_PROVIDER = "vercel-generated"
 
 const RESERVED_SUBDOMAINS = new Set([
   "www", "api", "admin", "app", "mail", "smtp", "imap", "pop", "ftp",
@@ -141,6 +146,115 @@ export async function listAllProjectDomains(ownerEmail: string) {
   `) as unknown as Array<AdminProjectDomain & { project_title: string }>
 }
 
+export async function syncGeneratedProjectDomains(input: {
+  projectId: string
+  deployment: AdminProjectDeployment
+  ownerEmail: string
+}) {
+  let attached
+  try {
+    attached = await listGeneratedProjectDomains(input.projectId)
+  } catch {
+    return listProjectDomains(input.projectId, input.ownerEmail)
+  }
+  if (!attached.length) return listProjectDomains(input.projectId, input.ownerEmail)
+
+  const ownerEmail = input.ownerEmail.toLowerCase().trim()
+  const ordered = [...attached].sort((left, right) => {
+    const leftWww = left.hostname.startsWith("www.")
+    const rightWww = right.hostname.startsWith("www.")
+    if (leftWww !== rightWww) return leftWww ? 1 : -1
+    return left.hostname.localeCompare(right.hostname)
+  })
+
+  for (const providerState of ordered) {
+    await assertHostnameAvailable(providerState.hostname, input.projectId)
+    const state = stateColumns(providerState)
+    const existing = (await sql`
+      SELECT *
+      FROM admin_project_domains
+      WHERE project_id = ${input.projectId}
+        AND LOWER(hostname) = ${providerState.hostname}
+        AND status != 'removed'
+      LIMIT 1
+    `) as unknown as AdminProjectDomain[]
+
+    if (existing[0]) {
+      await sql`
+        UPDATE admin_project_domains
+        SET deployment_id = ${input.deployment.id},
+            owner_email = ${ownerEmail},
+            address_type = 'custom',
+            status = ${providerState.error ? "error" : state.status},
+            dns_status = ${providerState.error ? "error" : state.dnsStatus},
+            ssl_status = ${providerState.error ? "error" : state.sslStatus},
+            provider = ${GENERATED_VERCEL_PROVIDER},
+            provider_domain_id = ${providerState.providerDomainId},
+            dns_records = ${JSON.stringify(providerState.records)}::jsonb,
+            error_message = ${providerState.error},
+            verified_at = CASE
+              WHEN ${state.status === "active"} THEN COALESCE(verified_at, NOW())
+              ELSE verified_at
+            END,
+            updated_at = NOW()
+        WHERE id = ${existing[0].id}
+      `
+      continue
+    }
+
+    await sql`
+      INSERT INTO admin_project_domains
+        (project_id, deployment_id, owner_email, address_type, hostname, is_primary,
+         status, dns_status, ssl_status, provider, provider_domain_id, dns_records,
+         error_message, verified_at)
+      VALUES
+        (${input.projectId}, ${input.deployment.id}, ${ownerEmail}, 'custom',
+         ${providerState.hostname}, FALSE,
+         ${providerState.error ? "error" : state.status},
+         ${providerState.error ? "error" : state.dnsStatus},
+         ${providerState.error ? "error" : state.sslStatus},
+         ${GENERATED_VERCEL_PROVIDER}, ${providerState.providerDomainId},
+         ${JSON.stringify(providerState.records)}::jsonb, ${providerState.error},
+         ${state.status === "active" ? new Date().toISOString() : null})
+    `
+  }
+
+  const domains = await listProjectDomains(input.projectId, input.ownerEmail)
+  const currentPrimary = domains.find((domain) => domain.is_primary)
+  const preferredGenerated = domains.find((domain) =>
+    domain.provider === GENERATED_VERCEL_PROVIDER &&
+    !domain.hostname?.startsWith("www.") &&
+    canBePrimary(domain)
+  ) || domains.find((domain) =>
+    domain.provider === GENERATED_VERCEL_PROVIDER && canBePrimary(domain)
+  )
+
+  if (
+    preferredGenerated &&
+    (!currentPrimary || currentPrimary.address_type === "path")
+  ) {
+    await transaction<AdminProjectDomain>([
+      sql`
+        UPDATE admin_project_domains
+        SET is_primary = FALSE, updated_at = NOW()
+        WHERE project_id = ${input.projectId}
+          AND owner_email = ${ownerEmail}
+          AND status != 'removed'
+      `,
+      sql`
+        UPDATE admin_project_domains
+        SET is_primary = TRUE, updated_at = NOW()
+        WHERE id = ${preferredGenerated.id}
+          AND project_id = ${input.projectId}
+          AND owner_email = ${ownerEmail}
+          AND status != 'removed'
+      `,
+    ])
+  }
+
+  return listProjectDomains(input.projectId, input.ownerEmail)
+}
+
 export async function createPathDomain(input: {
   deployment: AdminProjectDeployment
   ownerEmail: string
@@ -241,7 +355,9 @@ export async function refreshProjectDomain(input: {
   const domain = await ownedProjectDomain(input)
   if (domain.address_type === "path") return domain
 
-  const providerState = await getVercelDomainState(domain.hostname!)
+  const providerState = domain.provider === GENERATED_VERCEL_PROVIDER
+    ? await getGeneratedProjectDomainState(domain.project_id, domain.hostname!)
+    : await getVercelDomainState(domain.hostname!)
   const state = stateColumns(providerState)
   const rows = (await sql`
     UPDATE admin_project_domains
@@ -312,7 +428,9 @@ export async function removeProjectDomain(input: {
     throw new Error("Choose another active domain as primary before removing this address.")
   }
 
-  if (domain.hostname && domain.provider === "vercel") {
+  if (domain.hostname && domain.provider === GENERATED_VERCEL_PROVIDER) {
+    await removeGeneratedProjectDomain(domain.project_id, domain.hostname)
+  } else if (domain.hostname && domain.provider === "vercel") {
     await removeDomainFromVercel(domain.hostname)
   }
 

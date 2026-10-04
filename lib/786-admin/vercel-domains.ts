@@ -1,5 +1,7 @@
 import "server-only"
 
+import { generatedVercelProjectName } from "./vercel-project-deployer"
+
 export type VercelDnsRecord = {
   type: "A" | "AAAA" | "CNAME" | "TXT"
   name: string
@@ -14,6 +16,10 @@ export type VercelDomainState = {
   records: VercelDnsRecord[]
   providerDomainId: string | null
   error: string | null
+}
+
+export type VercelAttachedDomain = VercelDomainState & {
+  hostname: string
 }
 
 const PLATFORM_DOMAIN = "786.chat"
@@ -39,9 +45,9 @@ function endpoint(path: string, teamId: string) {
   return url
 }
 
-async function vercelRequest(path: string, init?: RequestInit) {
+async function vercelRequestForProject(project: string, path: string, init?: RequestInit) {
   const { token, teamId } = configuration()
-  const response = await fetch(endpoint(path, teamId), {
+  const response = await fetch(endpoint(path.replace("{project}", encodeURIComponent(project)), teamId), {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -57,6 +63,12 @@ async function vercelRequest(path: string, init?: RequestInit) {
   }
   return body as Record<string, unknown>
 }
+
+async function vercelRequest(path: string, init?: RequestInit) {
+  const { project } = configuration()
+  return vercelRequestForProject(project, path, init)
+}
+
 
 async function httpsIsReady(hostname: string) {
   const controller = new AbortController()
@@ -182,6 +194,72 @@ export async function removeDomainFromVercel(hostname: string): Promise<void> {
   const { project } = configuration()
   await vercelRequest(
     `/v9/projects/${encodeURIComponent(project)}/domains/${encodeURIComponent(hostname)}`,
+    { method: "DELETE" },
+  )
+}
+
+
+export async function getGeneratedProjectDomainState(
+  projectId: string,
+  hostname: string,
+): Promise<VercelDomainState> {
+  const project = generatedVercelProjectName(projectId)
+  const body = await vercelRequestForProject(
+    project,
+    `/v9/projects/{project}/domains/${encodeURIComponent(hostname)}`,
+  )
+  const verificationRecords = (Array.isArray(body.verification) ? body.verification : [])
+    .map(recordFromUnknown)
+    .filter((record): record is VercelDnsRecord => Boolean(record))
+  const records = [...verificationRecords, ...(await configurationRecords(hostname))]
+  const configured = body.configured === true || body.misconfigured === false
+  const verified = body.verified === true
+  const sslReady = configured && verified ? await httpsIsReady(hostname) : false
+  return {
+    configured,
+    verified,
+    sslReady,
+    records,
+    providerDomainId: typeof body.name === "string" ? body.name : hostname,
+    error: null,
+  }
+}
+
+export async function listGeneratedProjectDomains(
+  projectId: string,
+): Promise<VercelAttachedDomain[]> {
+  const project = generatedVercelProjectName(projectId)
+  const body = await vercelRequestForProject(
+    project,
+    "/v9/projects/{project}/domains?limit=100",
+  )
+  const rawDomains = Array.isArray(body.domains) ? body.domains : []
+  const hostnames = rawDomains
+    .map((item) => {
+      if (!item || typeof item !== "object") return ""
+      return String((item as Record<string, unknown>).name || "").trim().toLowerCase()
+    })
+    .filter((hostname) =>
+      Boolean(hostname) &&
+      !hostname.endsWith(".vercel.app") &&
+      hostname !== "786.chat" &&
+      !hostname.endsWith(".786.chat")
+    )
+
+  return Promise.all(hostnames.map(async (hostname) => ({
+    hostname,
+    ...(await getGeneratedProjectDomainState(projectId, hostname)),
+  })))
+}
+
+export async function removeGeneratedProjectDomain(
+  projectId: string,
+  hostname: string,
+): Promise<void> {
+  const project = generatedVercelProjectName(projectId)
+  await vercelRequestForProject(
+    project,
+    `/v9/projects/{project}/domains/${encodeURIComponent(hostname)}`,
     { method: "DELETE" },
   )
 }
