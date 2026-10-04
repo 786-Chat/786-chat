@@ -22,7 +22,7 @@ jobs:
           PROJECT_NAME: 786-generated-22c299f8bf65
           REPOSITORY_ID: '1250394192'
           TARGET_BRANCH: generated/22c299f8-bf65-410f-9643-92a9776dbfca/126f7171-b6de-4572-8-murdi756-2wxir
-          TARGET_SHA: 9abd906c70807d63ec9128ec768c62ccd3b18a88
+          TARGET_SHA: 5120dd18a4712fa7ef45e022961d47edebfff4ed
           APEX_DOMAIN: pestcontrol.cat
           WWW_DOMAIN: www.pestcontrol.cat
         run: |
