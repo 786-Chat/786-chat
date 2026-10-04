@@ -158,6 +158,13 @@ registerOwnedIotGatewayRoutes(app);
     throw err;
   });
 
+  // Canonical public entry: the bare custom domain should always open Branch Login.
+  // This server-side redirect avoids any stale/root-only SPA state in the browser.
+  app.get("/", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.redirect(302, "/branch-login/");
+  });
+
   // Serve static files from public directory first
   app.use(express.static(path.resolve(import.meta.dirname, '..', 'public'), {
     setHeaders: (res, path) => {
