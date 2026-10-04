@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -51,6 +51,15 @@ function BranchDashboardRedirect() {
 }
 
 function Router() {
+  const [currentPath] = useLocation();
+  const normalizedPath = currentPath.replace(/\/+$/, "") || "/";
+  const directLoginPage =
+    normalizedPath === "/admin-login"
+      ? <AdminLogin />
+      : normalizedPath === "/branch-login" || normalizedPath === "/"
+        ? <BranchLogin />
+        : null;
+
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
@@ -130,11 +139,8 @@ function Router() {
       )}
       
       <GlobalIotAlarmListener />
+      {directLoginPage ?? (
       <Switch>
-      {/* Canonical login routes */}
-      <Route path="/admin-login" component={AdminLogin} />
-      <Route path="/branch-login" component={BranchLogin} />
-
       {/* Legacy login aliases always resolve to the canonical routes */}
       <Route path="/admin" component={AdminLoginRedirect} />
       <Route path="/branch" component={BranchLoginRedirect} />
@@ -165,6 +171,7 @@ function Router() {
       
       <Route component={NotFound} />
     </Switch>
+      )}
     
     {/* Install Prompt for PWA */}
     <InstallPrompt />
