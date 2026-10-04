@@ -184,8 +184,8 @@ export default function BranchLogin() {
           <path d="M-245 300 C 95 170, 255 410, 520 360 S 840 205, 1090 280 S 1440 440, 1820 265" fill="none" stroke="#8b5cf6" strokeWidth="2.1" opacity=".72" filter="url(#approvedTightGlow)" />
 
           {/* high-right pink sweep */}
-          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="22" opacity=".25" filter="url(#approvedWideGlow)" />
-          <path d="M720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="3.8" opacity=".9" filter="url(#approvedTightGlow)" />
+          <path d="M-220 160 C 120 55, 410 230, 720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="22" opacity=".25" filter="url(#approvedWideGlow)" />
+          <path d="M-220 160 C 120 55, 410 230, 720 145 C 1000 20, 1225 155, 1690 20" fill="none" stroke="url(#approvedWavePink)" strokeWidth="3.8" opacity=".9" filter="url(#approvedTightGlow)" />
 
           {/* middle-right blue/pink sweep */}
           <path d="M850 535 C 1100 420, 1305 585, 1740 390" fill="none" stroke="url(#approvedWaveCool)" strokeWidth="25" opacity=".30" filter="url(#approvedWideGlow)" />
