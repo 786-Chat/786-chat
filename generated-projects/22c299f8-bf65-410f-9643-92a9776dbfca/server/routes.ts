@@ -7804,26 +7804,30 @@ Generated: ${new Date().toISOString()}
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
-      return rows.map((row: any) => ({
-        id: row.id,
-        deviceId: row.device_id,
-        deviceName: row.friendly_name || row.device_id,
-        branchId: row.branch_id,
-        notes: row.installation_location || row.hardware_model,
-        isOnline: Boolean(row.is_online),
-        alarmActive: Boolean(row.last_alarm_at),
-        lastAlarmAt: row.last_alarm_at,
-        lastCheckedAt: row.last_seen_at,
-        hardwareModel: row.hardware_model,
-        firmwareVersion: row.firmware_version,
-        provider: "food-safety-owned-mqtt",
-        lastStatus: [
-          { code: "battery_percentage", value: row.battery_pct },
-          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
-          { code: "rssi", value: row.rssi },
-          { code: "shock", value: Boolean(row.last_alarm_at) },
-        ],
-      }));
+      return rows.map((row: any) => {
+        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+        return {
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: row.friendly_name || row.device_id,
+          branchId: row.branch_id,
+          notes: row.installation_location || row.hardware_model,
+          isOnline,
+          reportedOnline: Boolean(row.is_online),
+          alarmActive: Boolean(row.last_alarm_at),
+          lastAlarmAt: row.last_alarm_at,
+          lastCheckedAt: row.last_seen_at,
+          hardwareModel: row.hardware_model,
+          firmwareVersion: row.firmware_version,
+          provider: "food-safety-owned-mqtt",
+          lastStatus: [
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "rssi", value: row.rssi },
+            { code: "shock", value: Boolean(row.last_alarm_at) },
+          ],
+        };
+      });
     } catch (error: any) {
       // Older deployments may not have received the owned-IoT schema yet.
       if (String(error?.message || "").includes("owned_iot_devices")) return [];
@@ -7895,7 +7899,8 @@ Generated: ${new Date().toISOString()}
         deviceId: row.device_id,
         deviceName: row.friendly_name || row.device_id,
         branchId: row.branch_id,
-        isOnline: Boolean(row.is_online),
+        isOnline: ownedIotIsOnline(row.is_online, row.last_seen_at),
+        reportedOnline: Boolean(row.is_online),
         lastCheckedAt: row.last_seen_at,
         alarmActive: false,
         provider: "food-safety-owned-mqtt",
