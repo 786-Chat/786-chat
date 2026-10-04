@@ -61,6 +61,10 @@ function safeProjectName(projectId: string): string {
   return `786-generated-${projectSuffix(projectId)}`
 }
 
+export function generatedVercelProjectName(projectId: string): string {
+  return safeProjectName(projectId)
+}
+
 function safeDatabaseName(projectId: string): string {
   return `generated_${projectSuffix(projectId)}`
 }
@@ -588,6 +592,85 @@ export async function deployGeneratedProjectToVercel(input: {
   }
 
   await allowEmbeddedRuntimePreview({ projectName, token, teamId })
+  return waitForReadyDeployment({
+    id: payload.id,
+    url,
+    commitSha: input.commitSha,
+    projectName,
+    token,
+    teamId,
+  })
+}
+
+
+export async function deployGeneratedProjectToProduction(input: {
+  projectId: string
+  branch: string
+  commitSha: string
+}): Promise<GeneratedProjectDeployment> {
+  const token = requiredEnv("VERCEL_TOKEN")
+  const teamId = process.env.VERCEL_TEAM_ID?.trim()
+  const repositoryId = process.env.VERCEL_GITHUB_REPOSITORY_ID?.trim() || DEFAULT_REPOSITORY_ID
+  const rootDirectory = `generated-projects/${input.projectId}`
+  const projectName = safeProjectName(input.projectId)
+  const endpoint = new URL("https://api.vercel.com/v13/deployments")
+  if (teamId) endpoint.searchParams.set("teamId", teamId)
+
+  let payload: VercelDeploymentPayload | null = null
+
+  for (let attempt = 1; attempt <= GIT_REF_RETRY_ATTEMPTS; attempt += 1) {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: projectName,
+        target: "production",
+        gitSource: {
+          type: "github",
+          repoId: repositoryId,
+          ref: input.branch,
+          sha: input.commitSha,
+        },
+        projectSettings: {
+          framework: "nextjs",
+          rootDirectory,
+        },
+      }),
+      cache: "no-store",
+    })
+
+    payload = (await response.json().catch(() => null)) as VercelDeploymentPayload | null
+    if (
+      response.ok &&
+      payload &&
+      typeof payload.id === "string" &&
+      typeof payload.url === "string"
+    ) {
+      break
+    }
+
+    const detail =
+      payload?.error && typeof payload.error.message === "string"
+        ? payload.error.message
+        : `Vercel production deployment request failed with status ${response.status}`
+    if (attempt === GIT_REF_RETRY_ATTEMPTS || !isTransientGitRefError(detail)) {
+      throw new Error(detail.slice(0, 500))
+    }
+    await wait(GIT_REF_RETRY_DELAY_MS)
+  }
+
+  if (!payload || typeof payload.id !== "string" || typeof payload.url !== "string") {
+    throw new Error("Vercel production deployment request did not return a deployment")
+  }
+
+  const url = payload.url.startsWith("https://") ? payload.url : `https://${payload.url}`
+  if (!url.endsWith(".vercel.app")) {
+    throw new Error("Vercel returned an untrusted production deployment URL")
+  }
+
   return waitForReadyDeployment({
     id: payload.id,
     url,
