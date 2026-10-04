@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -51,6 +51,15 @@ function BranchDashboardRedirect() {
 }
 
 function Router() {
+  const [currentPath] = useLocation();
+  const normalizedPath = currentPath.replace(/\/+$/, "") || "/";
+  const directLoginPage =
+    normalizedPath === "/admin-login"
+      ? <AdminLogin />
+      : normalizedPath === "/branch-login" || normalizedPath === "/"
+        ? <BranchLogin />
+        : null;
+
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
@@ -62,32 +71,28 @@ function Router() {
       setShowInstallPrompt(true);
     };
 
-    // Dynamic favicon based on current section
-    const updateFavicon = () => {
-      const path = window.location.pathname;
-      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      
-      if (path.includes('/admin')) {
-        if (link) link.href = 'https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087864601-135a0bf6-8eca-46a5-9ccf-7315e717be73-admin-icon-7v1NVQASIAgMWcqtZAQFKPpmr28voZ.svg';
-        document.title = 'Admin Portal - Food Safety Rating';
-      } else if (path.includes('/branch')) {
-        if (link) link.href = 'https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087865071-07190d5c-bdf8-46a8-b4f7-2470436ed4c2-branch-icon-J46RXv22SaDZxG9d8dH2xv5S2woqTR.svg';
-        document.title = 'Branch Dashboard - Food Safety Rating';
-      } else {
-        if (link) link.href = 'https://0qshtsle6wr4hqxp.public.blob.vercel-storage.com/imports/1789087863695-14c77f90-85b3-4985-8538-2991e7c9a805-favicon-NGE4aUsITdJLCDZt1qwI76fj0bhsV3.svg';
-        document.title = 'Food Safety Rating - Pest Control Management';
-      }
-    };
-
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('popstate', updateFavicon);
-    updateFavicon();
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('popstate', updateFavicon);
     };
   }, []);
+
+  // Keep one canonical Food Safety favicon from client/index.html.
+  // Only the browser-tab title changes by route.
+  useEffect(() => {
+    if (normalizedPath === "/branch-login" || normalizedPath === "/") {
+      document.title = "Branch Login - Food Safety Rating";
+    } else if (normalizedPath.startsWith("/branch")) {
+      document.title = "Branch Dashboard - Food Safety Rating";
+    } else if (normalizedPath === "/admin-login") {
+      document.title = "Admin Login - Food Safety Rating";
+    } else if (normalizedPath.startsWith("/admin")) {
+      document.title = "Admin Portal - Food Safety Rating";
+    } else {
+      document.title = "Food Safety Rating - Pest Control Management";
+    }
+  }, [normalizedPath]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -130,11 +135,8 @@ function Router() {
       )}
       
       <GlobalIotAlarmListener />
+      {directLoginPage ?? (
       <Switch>
-      {/* Canonical login routes */}
-      <Route path="/admin-login" component={AdminLogin} />
-      <Route path="/branch-login" component={BranchLogin} />
-
       {/* Legacy login aliases always resolve to the canonical routes */}
       <Route path="/admin" component={AdminLoginRedirect} />
       <Route path="/branch" component={BranchLoginRedirect} />
@@ -165,6 +167,7 @@ function Router() {
       
       <Route component={NotFound} />
     </Switch>
+      )}
     
     {/* Install Prompt for PWA */}
     <InstallPrompt />
