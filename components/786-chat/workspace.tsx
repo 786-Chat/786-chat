@@ -195,6 +195,7 @@ export function SevenEightSixWorkspace() {
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
+  const [stablePreview, setStablePreview] = useState<{ projectId: string; url: string } | null>(null)
   const [error, setError] = useState("")
   const [projectsOpen, setProjectsOpen] = useState(false)
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
@@ -232,6 +233,12 @@ export function SevenEightSixWorkspace() {
   const phonePreview = ["mobile", "iphone15", "iphoneSE", "pixel8", "galaxyS24"].includes(device)
   const currentStage = build?.status === "passed" ? 5 : build ? 4 : project ? 3 : busy ? 1 : 0
   const buildProgress = useMemo(() => getBuildProgress(build), [build])
+  const activePreviewUrl =
+    build?.status === "passed" && build.deployment_url
+      ? build.deployment_url
+      : stablePreview?.projectId === project?.id
+        ? stablePreview.url
+        : ""
   const selectedStyle: VisualEditorStyle = visualState.styles[selectedSection] || {}
   const selectedCode = project?.files[selectedFile] || ""
   const orderedSections = useMemo(() => {
@@ -315,6 +322,22 @@ export function SevenEightSixWorkspace() {
   }, [])
 
   useEffect(() => {
+    if (!project?.id) {
+      setStablePreview(null)
+      return
+    }
+    const savedUrl = localStorage.getItem(`786-chat:stable-preview:${project.id}`)
+    setStablePreview(savedUrl ? { projectId: project.id, url: savedUrl } : null)
+  }, [project?.id])
+
+  useEffect(() => {
+    if (!project?.id || build?.status !== "passed" || !build.deployment_url) return
+    const nextStable = { projectId: project.id, url: build.deployment_url }
+    setStablePreview(nextStable)
+    localStorage.setItem(`786-chat:stable-preview:${project.id}`, build.deployment_url)
+  }, [project?.id, build?.status, build?.deployment_url])
+
+  useEffect(() => {
     if (!isLoading && !hasWorkspaceUser) router.replace("/login?next=/786.chat")
   }, [hasWorkspaceUser, isLoading, router])
 
@@ -383,10 +406,10 @@ export function SevenEightSixWorkspace() {
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       const frame = previewIframeRef.current
-      if (!frame || event.source !== frame.contentWindow || !build?.deployment_url) return
+      if (!frame || event.source !== frame.contentWindow || !activePreviewUrl) return
       let expectedOrigin = ""
       try {
-        expectedOrigin = new URL(build.deployment_url).origin
+        expectedOrigin = new URL(activePreviewUrl).origin
       } catch {
         return
       }
@@ -410,21 +433,21 @@ export function SevenEightSixWorkspace() {
     }
     window.addEventListener("message", receive)
     return () => window.removeEventListener("message", receive)
-  }, [build?.deployment_url])
+  }, [activePreviewUrl])
 
   useEffect(() => {
     if (!designOpen) return
     postVisualMessage({ type: "786-editor:enable", enabled: true })
     postVisualMessage({ type: "786-editor:apply", state: visualState })
     return () => postVisualMessage({ type: "786-editor:enable", enabled: false })
-  }, [designOpen, build?.deployment_url])
+  }, [designOpen, activePreviewUrl])
 
   function postVisualMessage(message: Record<string, unknown>) {
-    if (!previewIframeRef.current?.contentWindow || !build?.deployment_url) return
+    if (!previewIframeRef.current?.contentWindow || !activePreviewUrl) return
     try {
       previewIframeRef.current.contentWindow.postMessage(
         message,
-        new URL(build.deployment_url).origin,
+        new URL(activePreviewUrl).origin,
       )
     } catch {
       // The preview may be rebuilding; the iframe load handler will replay state.
@@ -567,6 +590,7 @@ export function SevenEightSixWorkspace() {
     setCodeDraft("")
     setCodeDirty(false)
     setBuild(null)
+    setStablePreview(null)
     setRevisions([])
   }
 
@@ -1286,14 +1310,20 @@ export function SevenEightSixWorkspace() {
                 </div>
               ) : (
                 <div className="flex h-full items-start justify-center overflow-auto rounded-lg border border-[#263550] bg-[#07101d] p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {build?.status === "passed" && build.deployment_url ? (
+                  {activePreviewUrl ? (
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative shrink-0 ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
                       {phonePreview && <span className="pointer-events-none absolute left-1/2 top-2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-black" />}
-                      <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
+                      <iframe ref={previewIframeRef} src={activePreviewUrl} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
                         if (!designOpen) return
                         postVisualMessage({ type: "786-editor:enable", enabled: true })
                         postVisualMessage({ type: "786-editor:apply", state: visualState })
                       }} className={`h-full w-full border-0 bg-white ${phonePreview ? "rounded-[32px]" : "min-h-full rounded-md"}`} />
+                      {build && ["queued", "running"].includes(build.status) && (
+                        <div className="pointer-events-none absolute right-3 top-3 z-30 flex items-center gap-2 rounded-full border border-cyan-300/25 bg-slate-950/90 px-3 py-1.5 text-[12px] font-bold text-cyan-100 shadow-lg">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Rebuilding in background — last working preview stays open
+                        </div>
+                      )}
                       {phonePreview && <span className="pointer-events-none absolute bottom-2 left-1/2 z-20 h-1 w-28 -translate-x-1/2 rounded-full bg-white/80" />}
                     </div>
                   ) : (
