@@ -34,7 +34,7 @@ export default function IotAdminPanel() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [registering, setRegistering] = useState(false);
   const [deviceId, setDeviceId] = useState("");
-  const [deviceName, setDeviceName] = useState("HP2");
+  const [deviceName, setDeviceName] = useState("");
   const [hardwareModel, setHardwareModel] = useState("BK7231N-MOUSE-V1");
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
