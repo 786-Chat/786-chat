@@ -545,22 +545,6 @@ export default function IotAdminPanel() {
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
             {sendingWifi ? "Preparing..." : "Connect Device to Wi-Fi"}
           </Button>
-          <Button
-            onClick={copyWifiSetup}
-            variant="outline"
-            className="border-slate-600 text-slate-200"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            Copy Setup Details
-          </Button>
-          <Button
-            onClick={copyWifiSetup}
-            variant="outline"
-            className="border-slate-600 text-slate-200"
-          >
-            <Wifi className="mr-2 h-4 w-4" />
-            Prepare Setup Here
-          </Button>
         </div>
 
         <p className="mt-3 text-xs text-slate-500">
