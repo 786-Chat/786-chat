@@ -424,6 +424,11 @@ export async function queueBuilderBuild(projectId: string) {
     validation?: unknown
     error?: string
   }
+  if (response.status === 401 && typeof window !== "undefined") {
+    const next = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/login?next=${encodeURIComponent(next)}&error=session-expired`);
+    throw new Error("Your 786.Chat session expired. Sign in again to continue this rebuild.")
+  }
   if (!response.ok || !payload.build) {
     const validation = payload.validation as { errors?: Array<{ message?: string; path?: string }> } | undefined
     const detail = validation?.errors?.length
