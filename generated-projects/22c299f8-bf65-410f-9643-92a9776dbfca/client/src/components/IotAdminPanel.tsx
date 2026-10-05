@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, HardDrive, Pencil, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { HardDrive, Pencil, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -234,18 +234,6 @@ export default function IotAdminPanel() {
     mqttHost: gatewayHost,
     mqttPort: Number(gatewayPort) || 1883,
   });
-
-  const copyWifiSetup = async () => {
-    if (!wifiDeviceId || !wifiSsid || !wifiPassword) {
-      toast({ title: "Wi-Fi details needed", description: "Choose a device and enter the Wi-Fi name and password.", variant: "destructive" });
-      return;
-    }
-    await navigator.clipboard.writeText(JSON.stringify(provisioningPayload(), null, 2));
-    toast({
-      title: "Wi-Fi setup copied",
-      description: "The Wi-Fi password is only in your browser clipboard. It is not stored in 786.Chat or Neon.",
-    });
-  };
 
   const sendWifiDirect = async () => {
     if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
@@ -531,22 +519,6 @@ export default function IotAdminPanel() {
           >
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
             {sendingWifi ? "Preparing..." : "Connect Device to Wi-Fi"}
-          </Button>
-          <Button
-            onClick={copyWifiSetup}
-            variant="outline"
-            className="border-slate-600 text-slate-200"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            Copy Setup Details
-          </Button>
-          <Button
-            onClick={() => window.open(setupAddress.trim() || "http://192.168.4.1", "_blank", "noopener,noreferrer")}
-            variant="outline"
-            className="border-slate-600 text-slate-200"
-          >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Open Device Setup
           </Button>
         </div>
 
