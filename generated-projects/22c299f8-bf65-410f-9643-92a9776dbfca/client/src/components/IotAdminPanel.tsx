@@ -16,19 +16,6 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function formatUkDateTime(value: Date | string | number) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -56,16 +43,21 @@ export default function IotAdminPanel() {
   const [lastCreatedId, setLastCreatedId] = useState("");
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [branchLoadError, setBranchLoadError] = useState("");
+  const [wifiDeviceId, setWifiDeviceId] = useState("");
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
+  const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
+  const [gatewayPort, setGatewayPort] = useState("1883");
+  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
-  const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
-  const [removingDeviceId, setRemovingDeviceId] = useState("");
-  const [ukNow, setUkNow] = useState(() => new Date());
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -131,9 +123,16 @@ export default function IotAdminPanel() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setUkNow(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const current = ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId));
+    if (activeBranchId && current && String(current.branchId) !== String(activeBranchId)) {
+      setWifiDeviceId("");
+      return;
+    }
+    if (!wifiDeviceId) {
+      const first = activeBranchId ? activeBranchDevices[0] : undefined;
+      if (first) setWifiDeviceId(String(first.deviceId || ""));
+    }
+  }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
 
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
@@ -171,6 +170,7 @@ export default function IotAdminPanel() {
 
       const createdId = String(data?.deviceId || "");
       setLastCreatedId(createdId);
+      setWifiDeviceId(createdId);
       toast({
         title: "Food Safety device registered",
         description: `${String(data?.deviceName || deviceName)} is assigned to ${branchById.get(branchId) || "the selected branch"}.`,
@@ -188,20 +188,15 @@ export default function IotAdminPanel() {
   };
 
   const removeDevice = async (id: string, name: string) => {
-    setRemovingDeviceId(id);
-    try {
-      const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
+    if (!window.confirm(`Remove ${name} from this branch? The physical Device ID will stay available so it can be assigned to another shop.`)) return;
+    const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
+    if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({ title: "Could not unassign device", description: data?.message || "Please try again", variant: "destructive" });
-        return;
-      }
-      setPendingRemoveDeviceId("");
-      toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
-      await loadBase();
-    } finally {
-      setRemovingDeviceId("");
+      toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
+      return;
     }
+    toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
+    await loadBase();
   };
 
   const refreshDevice = async (id: string) => {
@@ -268,6 +263,38 @@ export default function IotAdminPanel() {
       await loadBase();
     } finally {
       setSavingDevice(false);
+    }
+  };
+
+  const provisioningPayload = () => ({
+    deviceId: wifiDeviceId,
+    ssid: wifiSsid,
+    password: wifiPassword,
+    mqttHost: gatewayHost,
+    mqttPort: Number(gatewayPort) || 1883,
+  });
+
+  const sendWifiDirect = async () => {
+    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
+      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
+      return;
+    }
+
+    setSendingWifi(true);
+    const base = setupAddress.trim().replace(/\/$/, "");
+    const body = JSON.stringify(provisioningPayload(), null, 2);
+
+    try {
+      try {
+        await navigator.clipboard.writeText(body);
+      } catch (_) {}
+
+      toast({
+        title: "Device Wi-Fi setup ready",
+        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
+      });
+    } finally {
+      setSendingWifi(false);
     }
   };
 
@@ -362,7 +389,7 @@ export default function IotAdminPanel() {
               placeholder="Leave blank to create the next FS-MOUSE ID"
               className="border-slate-600 bg-slate-900 text-white"
             />
-            <p className="mt-1 text-[11px] text-slate-500">Leave blank to create the next ID. If you enter an existing ID, it can only be assigned when it has first been removed from its previous shop.</p>
+            <p className="mt-1 text-[11px] text-slate-500">Leave blank to create the next ID. An existing ID can only be assigned after it has been removed from its previous shop.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Hardware Model</label>
@@ -464,6 +491,8 @@ export default function IotAdminPanel() {
                         setBranchSearch(branch.name);
                         setBranchSearchOpen(false);
                         setBranchId(branch.id);
+                        const first = ownedDevices.find((device: any) => String(device.branchId) === String(branch.id));
+                        setWifiDeviceId(first ? String(first.deviceId || "") : "");
                       }}
                       className="block w-full rounded px-3 py-2 text-left hover:bg-cyan-600/25"
                     >
@@ -489,6 +518,7 @@ export default function IotAdminPanel() {
                   setActiveBranchId("");
                   setBranchSearch("");
                   setBranchId("");
+                  setWifiDeviceId("");
                 }}
                 className="border-slate-600 text-slate-200"
               >
@@ -552,7 +582,6 @@ export default function IotAdminPanel() {
         ) : activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
             <p>No devices are assigned to {activeBranch.name} yet.</p>
-
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -578,15 +607,10 @@ export default function IotAdminPanel() {
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                     <Wifi className="h-3.5 w-3.5" />
-                    <span>Wi-Fi / MQTT</span>
-                    <span>• UK time: {formatUkDateTime(ukNow)}</span>
-                    <span>
-                      {device.lastCheckedAt
-                        ? `• Last seen: ${formatUkDateTime(device.lastCheckedAt)}`
-                        : "• Last seen: Never"}
-                    </span>
+                    Wi-Fi / MQTT
+                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
@@ -668,38 +692,10 @@ export default function IotAdminPanel() {
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {pendingRemoveDeviceId === String(device.id) ? (
-                      <>
-                        <Button
-                          size="sm"
-                          onClick={() => removeDevice(String(device.id), String(device.deviceName || device.deviceId))}
-                          disabled={removingDeviceId === String(device.id)}
-                          className="bg-red-600 text-white hover:bg-red-500"
-                        >
-                          <Trash2 className="mr-1 h-3 w-3" />
-                          {removingDeviceId === String(device.id) ? "Unassigning..." : "Confirm Unassign"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPendingRemoveDeviceId("")}
-                          disabled={removingDeviceId === String(device.id)}
-                          className="border-slate-600 text-slate-200"
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPendingRemoveDeviceId(String(device.id))}
-                        className="border-red-700/60 text-red-300"
-                      >
-                        <Trash2 className="mr-1 h-3 w-3" />
-                        Unassign Device
-                      </Button>
-                    )}
+                    <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300">
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      Remove Device
+                    </Button>
                   </div>
                 </div>
               );
