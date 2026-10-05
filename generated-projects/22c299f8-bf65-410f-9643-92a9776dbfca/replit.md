@@ -67,7 +67,6 @@ Preferred communication style: Simple, everyday language.
 - **Events**: `owned_iot_events` stores trap-triggered, trap-reset and other device events.
 - **Admin Routes**: `GET /api/iot/owned/status`, `GET/POST /api/iot/devices`, `DELETE /api/iot/devices/:id`, `POST /api/iot/devices/:id/refresh`, alarm test/clear routes.
 - **Branch Routes**: `GET /api/branch/iot-devices`, `GET /api/branch/iot-alarms`, and per-device alarm acknowledgement.
-- **Admin UI**: Smart Devices lets admin register a device, assign a branch and view real connection state reported through the Food Safety HP2 MQTT gateway.
-- **Wireless Activation**: The production path is trap firmware → customer 2.4 GHz Wi-Fi → HP2 Mosquitto → application backend. The browser does not claim to program factory Wi-Fi or depend on a `192.168.4.1` setup portal.
-- **Wi-Fi Security**: Customer Wi-Fi credentials are not stored or copied by the application dashboard.
+- **Admin UI**: Smart Devices lets admin register a device, assign a branch and provision customer Wi-Fi directly to the local Food Safety device setup portal.
+- **Wi-Fi Security**: Wi-Fi passwords remain in the browser and are not persisted in the application database.
 - **Alarm Flow**: trap events update the owned device record and appear in Admin Dashboard, Branch Dashboard and Smart Devices; Stop Alarm clears the current caught state.
