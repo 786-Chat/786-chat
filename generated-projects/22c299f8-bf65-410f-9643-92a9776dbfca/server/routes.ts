@@ -7648,6 +7648,26 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  app.delete("/api/iot/devices/by-device-id/:deviceId", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const deviceId = String(req.params.deviceId || "").trim().toUpperCase();
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(deviceId)) {
+        return res.status(400).json({ message: "Invalid Food Safety device ID" });
+      }
+      const result: any = await db.execute(sql`
+        DELETE FROM owned_iot_devices
+        WHERE device_id = ${deviceId}
+        RETURNING id, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned", deviceId: rows[0].device_id });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
+    }
+  });
+
   app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
