@@ -276,10 +276,9 @@ export default function IotAdminPanel() {
         await navigator.clipboard.writeText(body);
       } catch (_) {}
 
-      window.open(base, "_blank", "noopener,noreferrer");
       toast({
-        title: "Device Wi-Fi setup prepared",
-        description: "The setup details were copied. Connect to the trap's Food Safety setup Wi-Fi and finish on its local page. The password is not stored in 786.Chat.",
+        title: "Device Wi-Fi setup ready",
+        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
       });
     } finally {
       setSendingWifi(false);
@@ -555,12 +554,12 @@ export default function IotAdminPanel() {
             Copy Setup Details
           </Button>
           <Button
-            onClick={() => window.open(setupAddress.trim() || "http://192.168.4.1", "_blank", "noopener,noreferrer")}
+            onClick={copyWifiSetup}
             variant="outline"
             className="border-slate-600 text-slate-200"
           >
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Open Device Setup
+            <Wifi className="mr-2 h-4 w-4" />
+            Prepare Setup Here
           </Button>
         </div>
 
