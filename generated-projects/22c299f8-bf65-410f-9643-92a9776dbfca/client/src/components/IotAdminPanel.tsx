@@ -160,7 +160,7 @@ export default function IotAdminPanel() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         toast({
-          title: "Could not register device",
+          title: response.status === 409 ? "Device already assigned" : "Could not register device",
           description: data?.message || "Please try again",
           variant: "destructive",
         });
@@ -200,7 +200,7 @@ export default function IotAdminPanel() {
   };
 
   const removeDevice = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from this branch?`)) return;
+    if (!window.confirm(`Remove ${name} from this branch? After removal, its Device ID can be registered to another shop.`)) return;
     const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
