@@ -296,35 +296,6 @@ export default function IotAdminPanel() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-          <p className="text-xs text-slate-400">Provider</p>
-          <p className="mt-1 font-semibold text-white">Food Safety Owned IoT</p>
-        </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-          <p className="text-xs text-slate-400">System Status</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${systemStatus?.configured ? "bg-emerald-400" : "bg-amber-400"}`} />
-            <span className={systemStatus?.configured ? "text-emerald-300" : "text-amber-300"}>
-              {systemStatus?.configured ? "Ready" : "Checking"}
-            </span>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-          <p className="text-xs text-slate-400">Connection</p>
-          <p className="mt-1 font-medium text-white">Wi-Fi / MQTT</p>
-        </div>
-        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-4">
-          <p className="text-xs text-slate-400">Assigned Devices</p>
-          <p className="mt-1 text-xl font-bold text-white">{assigned.length}</p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Badge className="border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-200">Independent Food Safety IoT</Badge>
-        <Badge className="border-blue-500/40 bg-blue-500/10 px-3 py-2 text-blue-200">Food Safety Gateway + Neon</Badge>
-      </div>
-
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
