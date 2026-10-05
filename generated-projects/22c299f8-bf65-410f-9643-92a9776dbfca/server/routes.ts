@@ -7511,15 +7511,29 @@ Generated: ${new Date().toISOString()}
       }
 
       const existingResult: any = await db.execute(sql`
-        SELECT id, device_id, friendly_name
-        FROM owned_iot_devices
-        WHERE device_id = ${resolvedDeviceId}
+        SELECT
+          d.id,
+          d.device_id,
+          d.friendly_name,
+          d.branch_id,
+          b.name AS branch_name
+        FROM owned_iot_devices d
+        LEFT JOIN branches b ON b.id = d.branch_id
+        WHERE d.device_id = ${resolvedDeviceId}
         LIMIT 1
       `);
       const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
       if (existingRows.length > 0) {
+        const existing = existingRows[0] || {};
+        const existingName = existing.friendly_name || existing.device_id || resolvedDeviceId;
+        const existingBranchName = existing.branch_name || "another branch";
         return res.status(409).json({
-          message: "This Food Safety device ID is already registered as " + (existingRows[0]?.friendly_name || existingRows[0]?.device_id),
+          code: "DEVICE_ALREADY_ASSIGNED",
+          deviceId: resolvedDeviceId,
+          existingDeviceName: existingName,
+          existingBranchId: existing.branch_id || null,
+          existingBranchName,
+          message: `${resolvedDeviceId} is already assigned to ${existingBranchName} as ${existingName}. Remove it or use Edit / Reassign before assigning it to another shop.`,
         });
       }
 
