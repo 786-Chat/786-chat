@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,10 +30,16 @@ export default function LoginPage() {
 
   const { login, user, isLoading: authLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const requestedNext = searchParams.get("next") || "/dashboard"
+  const nextPath = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/dashboard"
+  const sessionExpired = searchParams.get("error") === "session-expired"
 
   useEffect(() => {
-    if (!authLoading && user) router.replace("/dashboard")
-  }, [user, authLoading, router])
+    if (!authLoading && user) router.replace(nextPath)
+  }, [user, authLoading, router, nextPath])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -43,7 +49,7 @@ export default function LoginPage() {
     const result = await login(email.trim().toLowerCase(), password)
 
     if (result.success) {
-      router.replace("/dashboard")
+      router.replace(nextPath)
       router.refresh()
       return
     }
@@ -125,6 +131,13 @@ export default function LoginPage() {
                 <h2 className="text-3xl font-black tracking-[-.035em]">Welcome back</h2>
                 <p className="mt-2 text-[14px] leading-6 text-slate-400">Sign in to continue building with 786.Chat.</p>
               </div>
+
+              {sessionExpired && !error && (
+                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} role="status" className="mt-5 flex items-start gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-[13px] text-amber-100">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Your 786.Chat session expired. Sign in again and you will return to the same workspace.</span>
+                </motion.div>
+              )}
 
               {error && (
                 <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} role="alert" className="mt-5 flex items-start gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 p-4 text-[13px] text-rose-200">
