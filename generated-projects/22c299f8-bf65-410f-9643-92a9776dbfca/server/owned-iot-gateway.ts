@@ -90,7 +90,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
       }
 
       const deviceResult: any = await db.execute(sql`
-        SELECT id, device_id
+        SELECT id, device_id, branch_id, friendly_name, installation_location
         FROM owned_iot_devices
         WHERE device_id = ${deviceId}
         LIMIT 1
@@ -102,6 +102,17 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
           code: "DEVICE_NOT_REGISTERED",
         });
       }
+
+      if (!device.branch_id) {
+        return res.status(409).json({
+          message: `Food Safety device ${deviceId} is not assigned to a branch`,
+          code: "DEVICE_UNASSIGNED",
+        });
+      }
+
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id uuid`);
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS friendly_name text`);
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS installation_location text`);
 
       const suppliedEventId = String(body.eventId || body.event_id || "").trim();
       const eventId = suppliedEventId || randomUUID();
@@ -182,9 +193,9 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
 
       await db.execute(sql`
         INSERT INTO owned_iot_events
-          (event_id, device_id, event_type, event_value, event_at, raw_payload)
+          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
         VALUES
-          (${eventId}, ${deviceId}, ${type}, CAST(${valueJson} AS jsonb), now(), CAST(${rawJson} AS jsonb))
+          (${eventId}, ${deviceId}, ${device.branch_id}::uuid, ${device.friendly_name || null}, ${device.installation_location || null}, ${type}, CAST(${valueJson} AS jsonb), now(), CAST(${rawJson} AS jsonb))
       `);
 
       return res.status(202).json({
