@@ -44,14 +44,20 @@ function snapshot(statusList: any[]) {
 
 export default function BranchSmartDevicesPanel() {
   const [devices, setDevices] = useState<any[]>([]);
+  const [branch, setBranch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     try {
-      const response = await fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" });
-      if (!response.ok) return;
-      const data = await response.json();
-      setDevices(Array.isArray(data) ? data : []);
+      const [deviceResponse, branchResponse] = await Promise.all([
+        fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" }),
+        fetch("/api/branch/current", { credentials: "include", cache: "no-store" }),
+      ]);
+      if (deviceResponse.ok) {
+        const data = await deviceResponse.json();
+        setDevices(Array.isArray(data) ? data : []);
+      }
+      if (branchResponse.ok) setBranch(await branchResponse.json());
     } finally {
       setLoading(false);
     }
@@ -64,6 +70,7 @@ export default function BranchSmartDevicesPanel() {
   }, []);
 
   const activeCatches = devices.filter((device: any) => Boolean(device.alarmActive));
+  const branchMapQuery = [branch?.name, branch?.address, branch?.postCode].filter(Boolean).join(", ");
 
   return (
     <div className="space-y-6 min-h-screen">
@@ -80,6 +87,31 @@ export default function BranchSmartDevicesPanel() {
         <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
       </div>
 
+      {branch && (branch.address || branch.postCode) && (
+        <div className="overflow-hidden rounded-2xl border border-cyan-500/25 bg-slate-800/60">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="p-5">
+              <div className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
+                <div>
+                  <p className="font-semibold text-white">{branch.name || "Branch location"}</p>
+                  <p className="mt-1 text-sm text-slate-300">{[branch.address, branch.postCode].filter(Boolean).join(", ")}</p>
+                  <p className="mt-2 text-xs text-cyan-200">{devices.length} smart device{devices.length === 1 ? "" : "s"} assigned here</p>
+                </div>
+              </div>
+            </div>
+            <div className="h-52 border-t border-slate-700 lg:h-full lg:min-h-[190px] lg:border-l lg:border-t-0">
+              <iframe
+                title={`${branch.name || "Branch"} map`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(branchMapQuery)}&output=embed`}
+                className="h-full w-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {loading ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center text-slate-400">Loading smart devices…</div>
       ) : devices.length === 0 ? (
