@@ -491,15 +491,80 @@ function patchOwnedIotSafeUi(source: string): string {
     if (recoverEnd > recoverStart) next = next.slice(0, recoverStart) + next.slice(recoverEnd + 2)
   }
 
-  next = next.replace(
-    '    if (!window.confirm(\`Remove \${name} from this branch?\`)) return;',
-    '    if (!window.confirm(\`Remove \${name} from this branch? The physical Device ID will stay available so it can be assigned to another shop.\`)) return;',
-  )
+  if (!next.includes("const [pendingRemoveDeviceId")) {
+    next = next.replace(
+      '  const [savingDevice, setSavingDevice] = useState(false);',
+      '  const [savingDevice, setSavingDevice] = useState(false);\n  const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");\n  const [removingDeviceId, setRemovingDeviceId] = useState("");',
+    )
+  }
 
-  next = next.replace(
-    "    await loadBase();\n  };\n\n  const refreshDevice",
-    "    toast({ title: \"Device unassigned\", description: \`\${name} is now available to assign to another shop.\` });\n    await loadBase();\n  };\n\n  const refreshDevice",
-  )
+  const removeStart = next.indexOf("  const removeDevice = async (id: string, name: string) => {")
+  const removeEnd = removeStart >= 0 ? next.indexOf("\n\n  const refreshDevice", removeStart) : -1
+  if (removeStart >= 0 && removeEnd > removeStart) {
+    const replacement = [
+      "  const removeDevice = async (id: string, name: string) => {",
+      "    setRemovingDeviceId(id);",
+      "    try {",
+      '      const response = await fetch(\`/api/iot/devices/\${id}\`, { method: "DELETE", credentials: "include" });',
+      "      const data = await response.json().catch(() => ({}));",
+      "      if (!response.ok) {",
+      '        toast({ title: "Could not unassign device", description: data?.message || "Please try again", variant: "destructive" });',
+      "        return;",
+      "      }",
+      '      setPendingRemoveDeviceId("");',
+      '      toast({ title: "Device unassigned", description: \`\${name} is now available to assign to another shop.\` });',
+      "      await loadBase();",
+      "    } finally {",
+      '      setRemovingDeviceId("");',
+      "    }",
+      "  };",
+    ].join("\n")
+    next = next.slice(0, removeStart) + replacement + next.slice(removeEnd)
+  }
+
+  const oldButton = [
+    '                    <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300">',
+    '                      <Trash2 className="mr-1 h-3 w-3" />',
+    '                      Remove Device',
+    '                    </Button>',
+  ].join("\n")
+
+  const inlineConfirm = [
+    '                    {pendingRemoveDeviceId === String(device.id) ? (',
+    '                      <>',
+    '                        <Button',
+    '                          size="sm"',
+    '                          onClick={() => removeDevice(String(device.id), String(device.deviceName || device.deviceId))}',
+    '                          disabled={removingDeviceId === String(device.id)}',
+    '                          className="bg-red-600 text-white hover:bg-red-500"',
+    '                        >',
+    '                          <Trash2 className="mr-1 h-3 w-3" />',
+    '                          {removingDeviceId === String(device.id) ? "Unassigning..." : "Confirm Unassign"}',
+    '                        </Button>',
+    '                        <Button',
+    '                          size="sm"',
+    '                          variant="outline"',
+    '                          onClick={() => setPendingRemoveDeviceId("")}',
+    '                          disabled={removingDeviceId === String(device.id)}',
+    '                          className="border-slate-600 text-slate-200"',
+    '                        >',
+    '                          Cancel',
+    '                        </Button>',
+    '                      </>',
+    '                    ) : (',
+    '                      <Button',
+    '                        size="sm"',
+    '                        variant="outline"',
+    '                        onClick={() => setPendingRemoveDeviceId(String(device.id))}',
+    '                        className="border-red-700/60 text-red-300"',
+    '                      >',
+    '                        <Trash2 className="mr-1 h-3 w-3" />',
+    '                        Unassign Device',
+    '                      </Button>',
+    '                    )}',
+  ].join("\n")
+
+  next = replaceIfPresent(next, oldButton, inlineConfirm)
 
   next = next.replace(
     "                          <p className=\"text-sm font-semibold text-cyan-100\">Edit / Reassign this device</p>",
