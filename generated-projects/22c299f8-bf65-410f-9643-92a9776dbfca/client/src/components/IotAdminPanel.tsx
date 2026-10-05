@@ -16,19 +16,6 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function formatUkDateTime(value: Date | string | number) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -56,14 +43,21 @@ export default function IotAdminPanel() {
   const [lastCreatedId, setLastCreatedId] = useState("");
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [branchLoadError, setBranchLoadError] = useState("");
+  const [wifiDeviceId, setWifiDeviceId] = useState("");
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
+  const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
+  const [gatewayPort, setGatewayPort] = useState("1883");
+  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
-  const [ukNow, setUkNow] = useState(() => new Date());
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -129,9 +123,16 @@ export default function IotAdminPanel() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setUkNow(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const current = ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId));
+    if (activeBranchId && current && String(current.branchId) !== String(activeBranchId)) {
+      setWifiDeviceId("");
+      return;
+    }
+    if (!wifiDeviceId) {
+      const first = activeBranchId ? activeBranchDevices[0] : undefined;
+      if (first) setWifiDeviceId(String(first.deviceId || ""));
+    }
+  }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
 
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
@@ -169,6 +170,7 @@ export default function IotAdminPanel() {
 
       const createdId = String(data?.deviceId || "");
       setLastCreatedId(createdId);
+      setWifiDeviceId(createdId);
       toast({
         title: "Food Safety device registered",
         description: `${String(data?.deviceName || deviceName)} is assigned to ${branchById.get(branchId) || "the selected branch"}.`,
@@ -274,6 +276,38 @@ export default function IotAdminPanel() {
       await loadBase();
     } finally {
       setSavingDevice(false);
+    }
+  };
+
+  const provisioningPayload = () => ({
+    deviceId: wifiDeviceId,
+    ssid: wifiSsid,
+    password: wifiPassword,
+    mqttHost: gatewayHost,
+    mqttPort: Number(gatewayPort) || 1883,
+  });
+
+  const sendWifiDirect = async () => {
+    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
+      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
+      return;
+    }
+
+    setSendingWifi(true);
+    const base = setupAddress.trim().replace(/\/$/, "");
+    const body = JSON.stringify(provisioningPayload(), null, 2);
+
+    try {
+      try {
+        await navigator.clipboard.writeText(body);
+      } catch (_) {}
+
+      toast({
+        title: "Device Wi-Fi setup ready",
+        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
+      });
+    } finally {
+      setSendingWifi(false);
     }
   };
 
@@ -409,35 +443,111 @@ export default function IotAdminPanel() {
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
+          <h3 className="font-semibold text-white">Connect Device to Wi-Fi</h3>
         </div>
-        <p className="text-sm text-slate-300">
-          Devices use the proven Food Safety path: trap firmware → customer 2.4 GHz Wi-Fi → HP2 Mosquitto → Pest Control.
-          This Admin page registers and assigns devices; it does not pretend to program factory Wi-Fi from the browser.
+        <p className="mb-4 text-sm text-slate-400">
+          Enter the customer Wi-Fi here while the physical trap is in Food Safety setup mode. The password is kept only in this browser and is never saved in Neon.
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">192.168.0.14</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="relative">
+            <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
+            <button
+              type="button"
+              onClick={() => setDeviceMenuOpen((open) => !open)}
+              className="flex w-full items-center justify-between rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-white"
+            >
+              <span className="truncate">
+                {ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))
+                  ? `${ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))?.deviceName} — ${wifiDeviceId}`
+                  : "Select registered device..."}
+              </span>
+              <span className="ml-3 text-slate-400">⌄</span>
+            </button>
+            {deviceMenuOpen && (
+              <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
+                {activeBranchDevices.length ? activeBranchDevices.map((device: any) => (
+                  <button
+                    type="button"
+                    key={device.id}
+                    onClick={() => {
+                      setWifiDeviceId(String(device.deviceId));
+                      setDeviceMenuOpen(false);
+                    }}
+                    className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
+                  >
+                    {device.deviceName} — {device.deviceId}
+                  </button>
+                )) : (
+                  <div className="p-3 text-sm text-slate-400">{activeBranchId ? "No devices registered for this branch yet." : "Select a branch first."}</div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">MQTT Port</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">1883</p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
+            <Input
+              value={wifiSsid}
+              onChange={(event) => setWifiSsid(event.target.value)}
+              placeholder="Customer 2.4 GHz Wi-Fi"
+              className="border-slate-600 bg-slate-900 text-white"
+              autoComplete="off"
+            />
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Password</label>
+            <Input
+              type="password"
+              value={wifiPassword}
+              onChange={(event) => setWifiPassword(event.target.value)}
+              placeholder="Wi-Fi password"
+              className="border-slate-600 bg-slate-900 text-white"
+              autoComplete="new-password"
+            />
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Devices</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Device Setup Address</label>
+            <Input
+              value={setupAddress}
+              onChange={(event) => setSetupAddress(event.target.value)}
+              placeholder="http://192.168.4.1"
+              className="border-slate-600 bg-slate-900 text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Food Safety Gateway / MQTT Host</label>
+            <Input
+              value={gatewayHost}
+              onChange={(event) => setGatewayHost(event.target.value)}
+              placeholder="FOODSAFETY-GW01 or local IP"
+              className="border-slate-600 bg-slate-900 text-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">MQTT Port</label>
+            <Input
+              value={gatewayPort}
+              onChange={(event) => setGatewayPort(event.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="1883"
+              className="border-slate-600 bg-slate-900 text-white"
+              inputMode="numeric"
+            />
           </div>
         </div>
 
-        <p className="mt-3 text-xs text-slate-400">
-          A registered trap changes to Connected automatically after its real wireless gateway event reaches Pest Control.
-          No customer Wi-Fi password is stored or copied by this dashboard.
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            onClick={sendWifiDirect}
+            disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
+            className="bg-cyan-600 text-white hover:bg-cyan-500"
+          >
+            {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
+            {sendingWifi ? "Preparing..." : "Connect Device to Wi-Fi"}
+          </Button>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-500">
+          Select the correct registered device for this shop. The physical BK7231N must run the Food Safety setup firmware/portal before 192.168.4.1 can accept that shop's Wi-Fi details.
         </p>
       </div>
 
@@ -470,6 +580,8 @@ export default function IotAdminPanel() {
                         setBranchSearch(branch.name);
                         setBranchSearchOpen(false);
                         setBranchId(branch.id);
+                        const first = ownedDevices.find((device: any) => String(device.branchId) === String(branch.id));
+                        setWifiDeviceId(first ? String(first.deviceId || "") : "");
                       }}
                       className="block w-full rounded px-3 py-2 text-left hover:bg-cyan-600/25"
                     >
@@ -495,6 +607,7 @@ export default function IotAdminPanel() {
                   setActiveBranchId("");
                   setBranchSearch("");
                   setBranchId("");
+                  setWifiDeviceId("");
                 }}
                 className="border-slate-600 text-slate-200"
               >
@@ -589,15 +702,10 @@ export default function IotAdminPanel() {
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                     <Wifi className="h-3.5 w-3.5" />
-                    <span>Wi-Fi / MQTT</span>
-                    <span>• UK time: {formatUkDateTime(ukNow)}</span>
-                    <span>
-                      {device.lastCheckedAt
-                        ? `• Last seen: ${formatUkDateTime(device.lastCheckedAt)}`
-                        : "• Last seen: Never"}
-                    </span>
+                    Wi-Fi / MQTT
+                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
@@ -694,7 +802,7 @@ export default function IotAdminPanel() {
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-slate-300">
         <div className="flex items-start gap-2">
           <ShieldCheck className="mt-0.5 h-4 w-4 text-cyan-300" />
-          <p>New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.</p>
+          <p>New devices use only your Food Safety device registry and MQTT/Wi-Fi gateway. Customer Wi-Fi passwords are never stored in the platform database.</p>
         </div>
       </div>
     </div>
