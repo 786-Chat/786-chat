@@ -63,6 +63,8 @@ export default function IotAdminPanel() {
   const [editNotes, setEditNotes] = useState("");
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
+  const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
+  const [removingDeviceId, setRemovingDeviceId] = useState("");
   const [ukNow, setUkNow] = useState(() => new Date());
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
@@ -186,15 +188,20 @@ export default function IotAdminPanel() {
   };
 
   const removeDevice = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from this branch? The physical Device ID will stay in your registry and can be assigned to another shop.`)) return;
-    const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
-    if (!response.ok) {
+    setRemovingDeviceId(id);
+    try {
+      const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
       const data = await response.json().catch(() => ({}));
-      toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
-      return;
+      if (!response.ok) {
+        toast({ title: "Could not unassign device", description: data?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      setPendingRemoveDeviceId("");
+      toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
+      await loadBase();
+    } finally {
+      setRemovingDeviceId("");
     }
-    toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
-    await loadBase();
   };
 
   const refreshDevice = async (id: string) => {
@@ -661,10 +668,38 @@ export default function IotAdminPanel() {
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => removeDevice(device.id, device.deviceName)} className="border-red-700/60 text-red-300">
-                      <Trash2 className="mr-1 h-3 w-3" />
-                      Remove Device
-                    </Button>
+                    {pendingRemoveDeviceId === String(device.id) ? (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => removeDevice(String(device.id), String(device.deviceName || device.deviceId))}
+                          disabled={removingDeviceId === String(device.id)}
+                          className="bg-red-600 text-white hover:bg-red-500"
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          {removingDeviceId === String(device.id) ? "Unassigning..." : "Confirm Unassign"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPendingRemoveDeviceId("")}
+                          disabled={removingDeviceId === String(device.id)}
+                          className="border-slate-600 text-slate-200"
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPendingRemoveDeviceId(String(device.id))}
+                        className="border-red-700/60 text-red-300"
+                      >
+                        <Trash2 className="mr-1 h-3 w-3" />
+                        Unassign Device
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
