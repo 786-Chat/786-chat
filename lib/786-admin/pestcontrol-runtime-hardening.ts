@@ -207,6 +207,207 @@ function patchOwnedIotGatewayRoutes(source: string): string {
 }
 
 
+
+function patchOwnedIotAssignmentLifecycle(source: string): string {
+  let next = source
+
+  const branchIndexMarker = '    await db.execute(sql\`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)\`);'
+  if (!next.includes("ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id") && next.includes(branchIndexMarker)) {
+    const snapshotSchema = [
+      "    // 786.Chat: preserve the branch/name/location that applied when an event happened.",
+      "    await db.execute(sql\`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id uuid\`);",
+      "    await db.execute(sql\`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS friendly_name text\`);",
+      "    await db.execute(sql\`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS installation_location text\`);",
+      "    await db.execute(sql\`",
+      "      UPDATE owned_iot_events e",
+      "      SET branch_id = COALESCE(e.branch_id, d.branch_id),",
+      "          friendly_name = COALESCE(e.friendly_name, d.friendly_name),",
+      "          installation_location = COALESCE(e.installation_location, d.installation_location)",
+      "      FROM owned_iot_devices d",
+      "      WHERE e.device_id = d.device_id",
+      "        AND (e.branch_id IS NULL OR e.friendly_name IS NULL OR e.installation_location IS NULL)",
+      "    \`);",
+      "    await db.execute(sql\`CREATE INDEX IF NOT EXISTS owned_iot_events_branch_time_idx ON owned_iot_events(branch_id, event_at DESC)\`);",
+      "",
+    ].join("\n")
+    next = next.replace(branchIndexMarker, snapshotSchema + branchIndexMarker)
+  }
+
+  next = next.replace(
+    '    const ownedBranchFilter = branchId ? sql\`AND d.branch_id::text = \${String(branchId)}\` : sql\`\`;',
+    '    const ownedBranchFilter = branchId ? sql\`AND e.branch_id::text = \${String(branchId)}\` : sql\`\`;'
+  )
+
+  next = next.replace(
+    [
+      "        d.device_id,",
+      "        COALESCE(d.friendly_name, d.device_id) AS device_name,",
+      "        d.branch_id::text AS branch_id,",
+      "        b.name AS branch_name,",
+      "        COALESCE(d.installation_location, d.hardware_model) AS location,",
+    ].join("\n"),
+    [
+      "        e.device_id,",
+      "        COALESCE(e.friendly_name, d.friendly_name, e.device_id) AS device_name,",
+      "        e.branch_id::text AS branch_id,",
+      "        b.name AS branch_name,",
+      "        COALESCE(e.installation_location, d.installation_location, d.hardware_model) AS location,",
+    ].join("\n"),
+  )
+
+  next = next.replace(
+    "      LEFT JOIN branches b ON b.id::text = d.branch_id::text",
+    "      LEFT JOIN branches b ON b.id::text = e.branch_id::text",
+  )
+
+  next = next.replace(
+    [
+      "        SELECT id, device_id, friendly_name",
+      "        FROM owned_iot_devices",
+    ].join("\n"),
+    [
+      "        SELECT id, device_id, friendly_name, branch_id",
+      "        FROM owned_iot_devices",
+    ].join("\n"),
+  )
+
+  const duplicateOld = [
+    "      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);",
+    "      if (existingRows.length > 0) {",
+    "        return res.status(409).json({",
+    '          message: "This Food Safety device ID is already registered as " + (existingRows[0]?.friendly_name || existingRows[0]?.device_id),',
+    "        });",
+    "      }",
+  ].join("\n")
+
+  const duplicateNew = [
+    "      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);",
+    "      const existingDevice: any = existingRows[0];",
+    "      if (existingDevice?.branch_id) {",
+    '        let existingBranchName = "another branch";',
+    "        try {",
+    "          const existingBranch = await storage.getBranch(String(existingDevice.branch_id));",
+    "          if (existingBranch?.name) existingBranchName = existingBranch.name;",
+    "        } catch (_) {}",
+    "        return res.status(409).json({",
+    '          code: "DEVICE_ALREADY_ASSIGNED",',
+    "          message: \`\${resolvedDeviceId} is already assigned to \${existingBranchName}. Remove it from that branch before assigning it here.\`,",
+    "          deviceId: resolvedDeviceId,",
+    "          branchId: String(existingDevice.branch_id),",
+    "          branchName: existingBranchName,",
+    "        });",
+    "      }",
+  ].join("\n")
+
+  next = replaceIfPresent(next, duplicateOld, duplicateNew)
+
+  if (!next.includes("if (existingDevice) {")) {
+    const insertStart = "      const createdResult: any = await db.execute(sql\`\n        INSERT INTO owned_iot_devices ("
+    const start = next.indexOf(insertStart)
+    if (start >= 0) {
+      const endMarker = "      \`);\n\n      const createdRows = Array.isArray(createdResult)"
+      const end = next.indexOf(endMarker, start)
+      if (end > start) {
+        const oldInsert = next.slice(start, end + "      \`);".length)
+        const nestedInsert = oldInsert.replace(
+          "      const createdResult: any = await db.execute(sql\`",
+          "        createdResult = await db.execute(sql\`",
+        )
+        const replacement = [
+          "      let createdResult: any;",
+          "      if (existingDevice) {",
+          "        createdResult = await db.execute(sql\`",
+          "          UPDATE owned_iot_devices",
+          "          SET hardware_model = \${model},",
+          "              branch_id = \${targetBranchId}::uuid,",
+          "              friendly_name = \${friendlyName},",
+          "              installation_location = \${location},",
+          "              lifecycle_state = 'awaiting_activation',",
+          "              is_online = false,",
+          "              last_alarm_at = NULL,",
+          "              updated_at = now()",
+          "          WHERE id = \${existingDevice.id}::uuid",
+          "          RETURNING",
+          "            id, device_id, hardware_model, firmware_version, branch_id,",
+          "            friendly_name, installation_location, lifecycle_state, is_online,",
+          "            battery_pct, rssi, last_seen_at, last_alarm_at",
+          "        \`);",
+          "      } else {",
+          nestedInsert,
+          "      }",
+        ].join("\n")
+        next = next.slice(0, start) + replacement + next.slice(end + "      \`);".length)
+      }
+    }
+  }
+
+  const deleteByIdOld = [
+    "      const result: any = await db.execute(sql\`",
+    "        DELETE FROM owned_iot_devices",
+    "        WHERE id::text = \${String(req.params.id)}",
+    "        RETURNING id",
+    "      \`);",
+  ].join("\n")
+
+  const deleteByIdNew = [
+    "      const result: any = await db.execute(sql\`",
+    "        UPDATE owned_iot_devices",
+    "        SET branch_id = NULL,",
+    "            lifecycle_state = 'unassigned',",
+    "            is_online = false,",
+    "            last_alarm_at = NULL,",
+    "            updated_at = now()",
+    "        WHERE id::text = \${String(req.params.id)}",
+    "        RETURNING id, device_id",
+    "      \`);",
+  ].join("\n")
+
+  next = replaceIfPresent(next, deleteByIdOld, deleteByIdNew)
+
+  const deleteByDeviceOld = [
+    "      const result: any = await db.execute(sql\`",
+    "        DELETE FROM owned_iot_devices",
+    "        WHERE device_id = \${deviceId}",
+    "        RETURNING id, device_id",
+    "      \`);",
+  ].join("\n")
+
+  const deleteByDeviceNew = [
+    "      const result: any = await db.execute(sql\`",
+    "        UPDATE owned_iot_devices",
+    "        SET branch_id = NULL,",
+    "            lifecycle_state = 'unassigned',",
+    "            is_online = false,",
+    "            last_alarm_at = NULL,",
+    "            updated_at = now()",
+    "        WHERE device_id = \${deviceId}",
+    "        RETURNING id, device_id",
+    "      \`);",
+  ].join("\n")
+
+  next = replaceIfPresent(next, deleteByDeviceOld, deleteByDeviceNew)
+
+  const testEventOld = [
+    "        INSERT INTO owned_iot_events",
+    "          (event_id, device_id, event_type, event_value, event_at, raw_payload)",
+    "        VALUES",
+    "          (gen_random_uuid()::text, \${String(row.device_id)}, 'trap_triggered', 'true'::jsonb, now(),",
+    "           jsonb_build_object('source','admin-test-alarm','deviceId',\${String(row.device_id)},'type','trap_triggered','value',true))",
+  ].join("\n")
+
+  const testEventNew = [
+    "        INSERT INTO owned_iot_events",
+    "          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)",
+    "        VALUES",
+    "          (gen_random_uuid()::text, \${String(row.device_id)}, \${row.branch_id}::uuid, \${row.friendly_name || null}, \${row.installation_location || null}, 'trap_triggered', 'true'::jsonb, now(),",
+    "           jsonb_build_object('source','admin-test-alarm','deviceId',\${String(row.device_id)},'type','trap_triggered','value',true))",
+  ].join("\n")
+
+  next = replaceIfPresent(next, testEventOld, testEventNew)
+
+  return next
+}
+
 function patchOwnedIotAdminPanel(source: string): string {
   let next = source
 
@@ -274,6 +475,46 @@ function patchOwnedIotAdminPanel(source: string): string {
   return next
 }
 
+
+function patchOwnedIotSafeUi(source: string): string {
+  let next = source
+
+  const recoverStart = next.indexOf("  const recoverStaleDevice = async () => {")
+  if (recoverStart >= 0) {
+    const recoverEnd = next.indexOf("\n\n  const removeDevice", recoverStart)
+    if (recoverEnd > recoverStart) next = next.slice(0, recoverStart) + next.slice(recoverEnd + 2)
+  }
+
+  next = next.replace(
+    '    if (!window.confirm(\`Remove \${name} from this branch?\`)) return;',
+    '    if (!window.confirm(\`Remove \${name} from this branch? The physical Device ID will stay available so it can be assigned to another shop.\`)) return;',
+  )
+
+  next = next.replace(
+    "    await loadBase();\n  };\n\n  const refreshDevice",
+    "    toast({ title: \"Device unassigned\", description: \`\${name} is now available to assign to another shop.\` });\n    await loadBase();\n  };\n\n  const refreshDevice",
+  )
+
+  next = next.replace(
+    "                          <p className=\"text-sm font-semibold text-cyan-100\">Edit / Reassign this device</p>",
+    "                          <p className=\"text-sm font-semibold text-cyan-100\">Edit this device</p>",
+  )
+
+  next = next.replace(
+    "                          <p className=\"text-[11px] text-slate-400\">Device ID stays fixed: {device.deviceId}</p>",
+    "                          <p className=\"text-[11px] text-slate-400\">Device ID stays fixed: {device.deviceId}. To move shops, remove it first, then register the same ID at the new branch.</p>",
+  )
+
+  next = next.replace(
+    "Leave blank and the system creates a unique ID such as FS-MOUSE-000001.",
+    "Leave blank to create the next ID. An existing ID can only be assigned after it has been removed from its previous shop.",
+  )
+
+  next = next.replace(/\s*\{deviceId\.trim\(\) && \(\s*<Button[\s\S]*?Clear stale \{deviceId\.trim\(\)\.toUpperCase\(\)\}[\s\S]*?<\/Button>\s*\)\}/, "")
+
+  return next
+}
+
 export function hardenPestControlRuntime(
   projectId: string,
   files: Record<string, string>,
@@ -283,12 +524,16 @@ export function hardenPestControlRuntime(
 
   const routesPath = "server/routes.ts"
   if (runtimeFiles[routesPath]) {
-    runtimeFiles[routesPath] = patchOwnedIotGatewayRoutes(runtimeFiles[routesPath])
+    let routes = patchOwnedIotAssignmentLifecycle(runtimeFiles[routesPath])
+    routes = patchOwnedIotGatewayRoutes(routes)
+    runtimeFiles[routesPath] = routes
   }
 
   const iotAdminPanelPath = "client/src/components/IotAdminPanel.tsx"
   if (runtimeFiles[iotAdminPanelPath]) {
-    runtimeFiles[iotAdminPanelPath] = patchOwnedIotAdminPanel(runtimeFiles[iotAdminPanelPath])
+    let adminPanel = patchOwnedIotAdminPanel(runtimeFiles[iotAdminPanelPath])
+    adminPanel = patchOwnedIotSafeUi(adminPanel)
+    runtimeFiles[iotAdminPanelPath] = adminPanel
   }
 
   return runtimeFiles
