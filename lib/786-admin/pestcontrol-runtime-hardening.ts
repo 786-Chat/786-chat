@@ -199,6 +199,74 @@ function patchOwnedIotGatewayRoutes(source: string): string {
   return next.replace(marker, `${gatewayRoutes}${marker}`)
 }
 
+
+function patchOwnedIotAdminPanel(source: string): string {
+  let next = source
+
+  if (next.includes("Food Safety Wireless Activation") && !next.includes("Connect Device to Wi-Fi")) {
+    return next
+  }
+
+  const startMarker = `      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Wifi className="h-4 w-4 text-cyan-300" />
+          <h3 className="font-semibold text-white">Connect Device to Wi-Fi</h3>`
+
+  const endMarker = `      <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
+        <div className="mb-4">`
+
+  const start = next.indexOf(startMarker)
+  if (start < 0) return next
+  const end = next.indexOf(endMarker, start + startMarker.length)
+  if (end < 0) return next
+
+  const replacement = `      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Wifi className="h-4 w-4 text-cyan-300" />
+          <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
+        </div>
+        <p className="text-sm text-slate-300">
+          Devices use the proven Food Safety path: trap firmware → customer 2.4 GHz Wi-Fi → HP2 Mosquitto → Pest Control.
+          This Admin page registers and assigns devices; it does not pretend to program factory Wi-Fi from the browser.
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-white">192.168.0.14</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">MQTT Port</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-white">1883</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
+            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Devices</p>
+            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-slate-400">
+          A registered trap changes to Connected automatically after its real wireless gateway event reaches Pest Control.
+          No customer Wi-Fi password is stored or copied by this dashboard.
+        </p>
+      </div>
+
+`
+
+  next = next.slice(0, start) + replacement + next.slice(end)
+
+  next = next.replace(
+    "New devices use only your Food Safety device registry and MQTT/Wi-Fi gateway. Customer Wi-Fi passwords are never stored in the platform database.",
+    "New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.",
+  )
+
+  return next
+}
+
 export function hardenPestControlRuntime(
   projectId: string,
   files: Record<string, string>,
@@ -209,6 +277,11 @@ export function hardenPestControlRuntime(
   const routesPath = "server/routes.ts"
   if (runtimeFiles[routesPath]) {
     runtimeFiles[routesPath] = patchOwnedIotGatewayRoutes(runtimeFiles[routesPath])
+  }
+
+  const iotAdminPanelPath = "client/src/components/IotAdminPanel.tsx"
+  if (runtimeFiles[iotAdminPanelPath]) {
+    runtimeFiles[iotAdminPanelPath] = patchOwnedIotAdminPanel(runtimeFiles[iotAdminPanelPath])
   }
 
   return runtimeFiles
