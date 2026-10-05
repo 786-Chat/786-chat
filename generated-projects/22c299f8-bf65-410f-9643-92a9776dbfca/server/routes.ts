@@ -7352,7 +7352,6 @@ Generated: ${new Date().toISOString()}
           last_seen_at,
           last_alarm_at
         FROM owned_iot_devices
-        WHERE COALESCE(firmware_version, '') NOT ILIKE '%sim%'
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
