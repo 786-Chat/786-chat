@@ -538,7 +538,7 @@ export default function IotAdminPanel() {
             {assigned.map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
               return (
-                <div key={device.id} className={`rounded-xl border p-4 ${device.alarmActive ? "border-red-500/60 bg-red-950/20" : "border-slate-700 bg-slate-900/60"}`}>
+                <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
@@ -630,14 +630,6 @@ export default function IotAdminPanel() {
                           Cancel
                         </Button>
                       </div>
-                    </div>
-                  )}
-
-                  {device.alarmActive && (
-                    <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/15 p-3 text-sm text-red-100">
-                      <p className="font-semibold">🐭 Mouse caught</p>
-                      <p className="mt-1 text-xs text-red-200">Stop Alarm only stops the sound. This device stays Mouse Caught until the physical trap is reset.</p>
-                      {device.lastAlarmAt && <p className="mt-1 text-xs text-red-200">Caught: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
                     </div>
                   )}
 
