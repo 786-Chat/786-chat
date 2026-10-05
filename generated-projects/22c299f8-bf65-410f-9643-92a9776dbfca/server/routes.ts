@@ -4337,11 +4337,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Delete from appropriate table
       if (isInDocumentsTable) {
-        // For documents table, mark as deleted (adminDeleted=true)
-        await storage.updateDocument(req.params.id, { adminDeleted: true });
-        console.log(`Monthly report ${req.params.id} deleted from documents table (marked as adminDeleted: true)`);
+        // Branch deletion is independent from admin deletion.
+        // Hide the report only from this branch view by setting isDeleted=true.
+        await storage.markDocumentDeletedByBranch(req.params.id);
+        console.log(`Monthly report ${req.params.id} deleted by branch from documents table (marked as isDeleted: true)`);
       } else {
-        // For monthly_reports table, use existing method
+        // For monthly_reports table, branch deletion sets isDeleted=true.
         await storage.deleteMonthlyReportFromBranch(req.params.id);
       }
       res.json({ success: true, message: "Monthly report deleted successfully" });

@@ -1435,7 +1435,8 @@ export class DatabaseStorage implements IStorage {
       let conditions = [
         eq(documents.branchId, branchId),
         sql`${documents.sentAt} IS NOT NULL`, // Only documents sent by admin
-        // No automatic expiration - documents stay for 24 months unless manually deleted
+        eq(documents.isDeleted, false), // Branch keeps it until the branch explicitly deletes it
+        // No automatic expiration. Admin-side deletion is ignored for branch access.
       ];
       
       const result = await db
