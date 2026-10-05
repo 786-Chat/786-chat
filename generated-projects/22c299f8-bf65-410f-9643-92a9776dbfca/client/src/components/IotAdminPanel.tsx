@@ -152,20 +152,6 @@ export default function IotAdminPanel() {
     }
   };
 
-  const recoverStaleDevice = async () => {
-    const staleDeviceId = deviceId.trim().toUpperCase();
-    if (!staleDeviceId) return;
-    if (!window.confirm(`Permanently remove stale registry record ${staleDeviceId}? Use this only when Assigned Devices is empty but registration says the ID already exists.`)) return;
-    const response = await fetch(`/api/iot/devices/by-device-id/${encodeURIComponent(staleDeviceId)}`, { method: "DELETE", credentials: "include" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      toast({ title: "Could not clear stale device", description: data?.message || "Please try again", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Stale device cleared", description: `${staleDeviceId} can now be registered again.` });
-    await loadBase();
-  };
-
   const removeDevice = async (id: string, name: string) => {
     if (!window.confirm(`Remove ${name} from this branch?`)) return;
     const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
@@ -276,9 +262,10 @@ export default function IotAdminPanel() {
         await navigator.clipboard.writeText(body);
       } catch (_) {}
 
+      window.open(base, "_blank", "noopener,noreferrer");
       toast({
-        title: "Device Wi-Fi setup ready",
-        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
+        title: "Device Wi-Fi setup prepared",
+        description: "The setup details were copied. Connect to the trap's Food Safety setup Wi-Fi and finish on its local page. The password is not stored in 786.Chat.",
       });
     } finally {
       setSendingWifi(false);
@@ -554,12 +541,12 @@ export default function IotAdminPanel() {
             Copy Setup Details
           </Button>
           <Button
-            onClick={copyWifiSetup}
+            onClick={() => window.open(setupAddress.trim() || "http://192.168.4.1", "_blank", "noopener,noreferrer")}
             variant="outline"
             className="border-slate-600 text-slate-200"
           >
-            <Wifi className="mr-2 h-4 w-4" />
-            Prepare Setup Here
+            <ExternalLink className="mr-2 h-4 w-4" />
+            Open Device Setup
           </Button>
         </div>
 
@@ -581,15 +568,7 @@ export default function IotAdminPanel() {
         </div>
 
         {assigned.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>No owned devices assigned yet.</p>
-            {deviceId.trim() && (
-              <Button size="sm" variant="outline" onClick={recoverStaleDevice} className="border-amber-600/60 text-amber-200">
-                <Trash2 className="mr-1 h-3 w-3" />
-                Clear stale {deviceId.trim().toUpperCase()}
-              </Button>
-            )}
-          </div>
+          <div className="py-10 text-center text-slate-400">No owned devices assigned yet.</div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {assigned.map((device: any, index: number) => {
