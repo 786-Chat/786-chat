@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, Pencil, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { HardDrive, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 interface BranchOption {
   id: string;
   name: string;
+  address?: string | null;
+  postCode?: string | null;
 }
 
 function normalize(value: unknown) {
@@ -56,12 +58,37 @@ export default function IotAdminPanel() {
   const [editNotes, setEditNotes] = useState("");
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
+  const [activeBranchId, setActiveBranchId] = useState("");
+  const [branchSearch, setBranchSearch] = useState("");
+  const [branchSearchOpen, setBranchSearchOpen] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
     () => assigned.filter((device: any) => device?.provider === "food-safety-owned-mqtt"),
     [assigned],
   );
+
+  const activeBranch = useMemo(
+    () => branches.find((branch) => String(branch.id) === String(activeBranchId)) || null,
+    [branches, activeBranchId],
+  );
+  const activeBranchDevices = useMemo(
+    () => ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)),
+    [ownedDevices, activeBranchId],
+  );
+  const branchSearchResults = useMemo(() => {
+    const query = branchSearch.trim().toLowerCase();
+    if (!query) return branches.slice(0, 12);
+    return branches
+      .filter((branch) => [branch.name, branch.address, branch.postCode]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)))
+      .slice(0, 20);
+  }, [branches, branchSearch]);
+  const activeBranchMapQuery = useMemo(() => {
+    if (!activeBranch) return "";
+    return [activeBranch.name, activeBranch.address, activeBranch.postCode].filter(Boolean).join(", ");
+  }, [activeBranch]);
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes] = await Promise.all([
@@ -96,10 +123,16 @@ export default function IotAdminPanel() {
   }, []);
 
   useEffect(() => {
-    if (!wifiDeviceId && ownedDevices.length > 0) {
-      setWifiDeviceId(String(ownedDevices[0].deviceId || ""));
+    const current = ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId));
+    if (activeBranchId && current && String(current.branchId) !== String(activeBranchId)) {
+      setWifiDeviceId("");
+      return;
     }
-  }, [ownedDevices, wifiDeviceId]);
+    if (!wifiDeviceId) {
+      const first = activeBranchId ? activeBranchDevices[0] : undefined;
+      if (first) setWifiDeviceId(String(first.deviceId || ""));
+    }
+  }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
 
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
@@ -144,6 +177,8 @@ export default function IotAdminPanel() {
       });
       setDeviceId("");
       setDeviceName("");
+      setActiveBranchId(branchId);
+      setBranchSearch(branchById.get(branchId) || "");
       setBranchId("");
       setNotes("");
       await loadBase();
@@ -234,7 +269,10 @@ export default function IotAdminPanel() {
         title: "Device updated",
         description: `${data?.deviceName || editDeviceName} is assigned to ${branchById.get(editBranchId) || "the selected branch"}.`,
       });
+      const nextBranchId = editBranchId;
       cancelEditDevice();
+      setActiveBranchId(nextBranchId);
+      setBranchSearch(branchById.get(nextBranchId) || "");
       await loadBase();
     } finally {
       setSavingDevice(false);
@@ -331,6 +369,8 @@ export default function IotAdminPanel() {
                     key={branch.id}
                     onClick={() => {
                       setBranchId(branch.id);
+                      setActiveBranchId(branch.id);
+                      setBranchSearch(branch.name);
                       setBranchMenuOpen(false);
                     }}
                     className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
@@ -426,7 +466,7 @@ export default function IotAdminPanel() {
             </button>
             {deviceMenuOpen && (
               <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
-                {ownedDevices.length ? ownedDevices.map((device: any) => (
+                {activeBranchDevices.length ? activeBranchDevices.map((device: any) => (
                   <button
                     type="button"
                     key={device.id}
@@ -439,7 +479,7 @@ export default function IotAdminPanel() {
                     {device.deviceName} — {device.deviceId}
                   </button>
                 )) : (
-                  <div className="p-3 text-sm text-slate-400">No registered Food Safety devices yet.</div>
+                  <div className="p-3 text-sm text-slate-400">{activeBranchId ? "No devices registered for this branch yet." : "Select a branch first."}</div>
                 )}
               </div>
             )}
@@ -512,10 +552,111 @@ export default function IotAdminPanel() {
       </div>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
+        <div className="mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="relative w-full max-w-xl">
+              <label className="mb-1 block text-xs font-medium text-slate-400">Search Branch / Shop</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <Input
+                  value={branchSearch}
+                  onFocus={() => setBranchSearchOpen(true)}
+                  onChange={(event) => {
+                    setBranchSearch(event.target.value);
+                    setBranchSearchOpen(true);
+                  }}
+                  placeholder="Type shop name, address or postcode..."
+                  className="border-slate-600 bg-slate-900 pl-9 text-white"
+                />
+              </div>
+              {branchSearchOpen && (
+                <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-72 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
+                  {branchSearchResults.length ? branchSearchResults.map((branch) => (
+                    <button
+                      type="button"
+                      key={branch.id}
+                      onClick={() => {
+                        setActiveBranchId(branch.id);
+                        setBranchSearch(branch.name);
+                        setBranchSearchOpen(false);
+                        setBranchId(branch.id);
+                        const first = ownedDevices.find((device: any) => String(device.branchId) === String(branch.id));
+                        setWifiDeviceId(first ? String(first.deviceId || "") : "");
+                      }}
+                      className="block w-full rounded px-3 py-2 text-left hover:bg-cyan-600/25"
+                    >
+                      <span className="block text-sm font-medium text-white">{branch.name}</span>
+                      {(branch.address || branch.postCode) && (
+                        <span className="mt-0.5 block text-xs text-slate-400">
+                          {[branch.address, branch.postCode].filter(Boolean).join(", ")}
+                        </span>
+                      )}
+                    </button>
+                  )) : (
+                    <div className="p-3 text-sm text-slate-400">No matching branch found.</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {activeBranch && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setActiveBranchId("");
+                  setBranchSearch("");
+                  setBranchId("");
+                  setWifiDeviceId("");
+                }}
+                className="border-slate-600 text-slate-200"
+              >
+                Show another branch
+              </Button>
+            )}
+          </div>
+
+          {activeBranch ? (
+            <div className="mt-4 overflow-hidden rounded-xl border border-cyan-500/25 bg-slate-900/60">
+              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-white">{activeBranch.name}</p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {[activeBranch.address, activeBranch.postCode].filter(Boolean).join(", ") || "No branch address saved yet."}
+                      </p>
+                      <p className="mt-2 text-xs text-cyan-200">
+                        {activeBranchDevices.length} device{activeBranchDevices.length === 1 ? "" : "s"} assigned to this branch
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {activeBranchMapQuery && (activeBranch.address || activeBranch.postCode) && (
+                  <div className="h-48 border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
+                    <iframe
+                      title={`${activeBranch.name} map`}
+                      src={`https://www.google.com/maps?q=${encodeURIComponent(activeBranchMapQuery)}&output=embed`}
+                      className="h-full w-full border-0"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-5 text-sm text-slate-400">
+              Search and select one branch to see only that shop's devices.
+            </div>
+          )}
+        </div>
+
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <HardDrive className="h-4 w-4 text-emerald-300" />
-            Assigned Devices ({assigned.length})
+            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : "Branch Devices"}
           </h3>
           <Button size="sm" variant="outline" onClick={() => loadBase()} className="border-slate-600 text-slate-200">
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
@@ -523,9 +664,13 @@ export default function IotAdminPanel() {
           </Button>
         </div>
 
-        {assigned.length === 0 ? (
+        {!activeBranch ? (
+          <div className="py-8 text-center text-sm text-slate-400">
+            Select a branch above to view its devices.
+          </div>
+        ) : activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>No owned devices assigned yet.</p>
+            <p>No devices are assigned to {activeBranch.name} yet.</p>
             {deviceId.trim() && (
               <Button size="sm" variant="outline" onClick={recoverStaleDevice} className="border-amber-600/60 text-amber-200">
                 <Trash2 className="mr-1 h-3 w-3" />
@@ -535,7 +680,7 @@ export default function IotAdminPanel() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {assigned.map((device: any, index: number) => {
+            {activeBranchDevices.map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
