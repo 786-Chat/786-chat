@@ -7291,6 +7291,20 @@ Generated: ${new Date().toISOString()}
         raw_payload jsonb NOT NULL
       )
     `);
+    // Preserve the assignment that applied when an event happened so a trap can move shops safely.
+    await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id uuid`);
+    await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS friendly_name text`);
+    await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS installation_location text`);
+    await db.execute(sql`
+      UPDATE owned_iot_events e
+      SET branch_id = COALESCE(e.branch_id, d.branch_id),
+          friendly_name = COALESCE(e.friendly_name, d.friendly_name),
+          installation_location = COALESCE(e.installation_location, d.installation_location)
+      FROM owned_iot_devices d
+      WHERE e.device_id = d.device_id
+        AND (e.branch_id IS NULL OR e.friendly_name IS NULL OR e.installation_location IS NULL)
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_branch_time_idx ON owned_iot_events(branch_id, event_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_last_seen_idx ON owned_iot_devices(last_seen_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
@@ -7415,15 +7429,15 @@ Generated: ${new Date().toISOString()}
 
   const loadIotAlarmHistory = async (branchId?: string) => {
     await ensureOwnedIotSchema();
-    const ownedBranchFilter = branchId ? sql`AND d.branch_id::text = ${String(branchId)}` : sql``;
+    const ownedBranchFilter = branchId ? sql`AND e.branch_id::text = ${String(branchId)}` : sql``;
     const result: any = await db.execute(sql`
       SELECT
         ('owned-' || e.id::text) AS id,
-        d.device_id,
-        COALESCE(d.friendly_name, d.device_id) AS device_name,
-        d.branch_id::text AS branch_id,
+        e.device_id,
+        COALESCE(e.friendly_name, d.friendly_name, e.device_id) AS device_name,
+        e.branch_id::text AS branch_id,
         b.name AS branch_name,
-        COALESCE(d.installation_location, d.hardware_model) AS location,
+        COALESCE(e.installation_location, d.installation_location, d.hardware_model) AS location,
         CASE
           WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
           WHEN e.event_type = 'trap_reset' THEN 'Mouse trap reset'
@@ -7436,7 +7450,7 @@ Generated: ${new Date().toISOString()}
         'owned'::text AS source
       FROM owned_iot_events e
       JOIN owned_iot_devices d ON d.device_id = e.device_id
-      LEFT JOIN branches b ON b.id::text = d.branch_id::text
+      LEFT JOIN branches b ON b.id::text = e.branch_id::text
       WHERE COALESCE(d.firmware_version, '') NOT ILIKE '%sim%'
       ${ownedBranchFilter}
       ORDER BY e.event_at DESC
@@ -7511,22 +7525,51 @@ Generated: ${new Date().toISOString()}
       }
 
       const existingResult: any = await db.execute(sql`
-        SELECT id, device_id, friendly_name
+        SELECT id, device_id, friendly_name, branch_id
         FROM owned_iot_devices
         WHERE device_id = ${resolvedDeviceId}
         LIMIT 1
       `);
       const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
-      if (existingRows.length > 0) {
+      const existingDevice: any = existingRows[0];
+      if (existingDevice?.branch_id) {
+        let existingBranchName = "another branch";
+        try {
+          const existingBranch = await storage.getBranch(String(existingDevice.branch_id));
+          if (existingBranch?.name) existingBranchName = existingBranch.name;
+        } catch (_) {}
         return res.status(409).json({
-          message: "This Food Safety device ID is already registered as " + (existingRows[0]?.friendly_name || existingRows[0]?.device_id),
+          code: "DEVICE_ALREADY_ASSIGNED",
+          message: `${resolvedDeviceId} is already assigned to ${existingBranchName}. Remove it from that branch before assigning it here.`,
+          deviceId: resolvedDeviceId,
+          branchId: String(existingDevice.branch_id),
+          branchName: existingBranchName,
         });
       }
 
       const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
       const location = String(notes || "").trim() || null;
 
-      const createdResult: any = await db.execute(sql`
+      let createdResult: any;
+      if (existingDevice) {
+        createdResult = await db.execute(sql`
+          UPDATE owned_iot_devices
+          SET hardware_model = ${model},
+              branch_id = ${targetBranchId}::uuid,
+              friendly_name = ${friendlyName},
+              installation_location = ${location},
+              lifecycle_state = 'awaiting_activation',
+              is_online = false,
+              last_alarm_at = NULL,
+              updated_at = now()
+          WHERE id = ${existingDevice.id}::uuid
+          RETURNING
+            id, device_id, hardware_model, firmware_version, branch_id,
+            friendly_name, installation_location, lifecycle_state, is_online,
+            battery_pct, rssi, last_seen_at, last_alarm_at
+        `);
+      } else {
+        createdResult = await db.execute(sql`
         INSERT INTO owned_iot_devices (
           device_id,
           hardware_model,
@@ -7554,6 +7597,7 @@ Generated: ${new Date().toISOString()}
           friendly_name, installation_location, lifecycle_state, is_online,
           battery_pct, rssi, last_seen_at, last_alarm_at
       `);
+      }
 
       const createdRows = Array.isArray(createdResult) ? createdResult : (createdResult?.rows || []);
       const row: any = createdRows[0];
@@ -7600,6 +7644,22 @@ Generated: ${new Date().toISOString()}
       const branch = await storage.getBranch(targetBranchId);
       if (!branch) {
         return res.status(400).json({ message: "The selected branch does not exist" });
+      }
+
+      const currentResult: any = await db.execute(sql`
+        SELECT device_id, branch_id
+        FROM owned_iot_devices
+        WHERE id::text = ${String(req.params.id)}
+        LIMIT 1
+      `);
+      const currentRows = Array.isArray(currentResult) ? currentResult : (currentResult?.rows || []);
+      const currentDevice: any = currentRows[0];
+      if (!currentDevice) return res.status(404).json({ message: "Device not found" });
+      if (currentDevice.branch_id && String(currentDevice.branch_id) !== targetBranchId) {
+        return res.status(409).json({
+          code: "REMOVE_BEFORE_REASSIGN",
+          message: `${currentDevice.device_id} is assigned to another branch. Remove it first, then assign it to the new branch.`,
+        });
       }
 
       const result: any = await db.execute(sql`
@@ -7656,7 +7716,12 @@ Generated: ${new Date().toISOString()}
         return res.status(400).json({ message: "Invalid Food Safety device ID" });
       }
       const result: any = await db.execute(sql`
-        DELETE FROM owned_iot_devices
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
         WHERE device_id = ${deviceId}
         RETURNING id, device_id
       `);
@@ -7672,9 +7737,14 @@ Generated: ${new Date().toISOString()}
     try {
       await ensureOwnedIotSchema();
       const result: any = await db.execute(sql`
-        DELETE FROM owned_iot_devices
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
         WHERE id::text = ${String(req.params.id)}
-        RETURNING id
+        RETURNING id, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
@@ -7716,9 +7786,9 @@ Generated: ${new Date().toISOString()}
       const row: any = rows[0];
       await db.execute(sql`
         INSERT INTO owned_iot_events
-          (event_id, device_id, event_type, event_value, event_at, raw_payload)
+          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
         VALUES
-          (gen_random_uuid()::text, ${String(row.device_id)}, 'trap_triggered', 'true'::jsonb, now(),
+          (gen_random_uuid()::text, ${String(row.device_id)}, ${row.branch_id}::uuid, ${row.friendly_name || null}, ${row.installation_location || null}, 'trap_triggered', 'true'::jsonb, now(),
            jsonb_build_object('source','admin-test-alarm','deviceId',${String(row.device_id)},'type','trap_triggered','value',true))
       `);
 

@@ -185,28 +185,15 @@ export default function IotAdminPanel() {
     }
   };
 
-  const recoverStaleDevice = async () => {
-    const staleDeviceId = deviceId.trim().toUpperCase();
-    if (!staleDeviceId) return;
-    if (!window.confirm(`Permanently remove stale registry record ${staleDeviceId}? Use this only when Assigned Devices is empty but registration says the ID already exists.`)) return;
-    const response = await fetch(`/api/iot/devices/by-device-id/${encodeURIComponent(staleDeviceId)}`, { method: "DELETE", credentials: "include" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      toast({ title: "Could not clear stale device", description: data?.message || "Please try again", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Stale device cleared", description: `${staleDeviceId} can now be registered again.` });
-    await loadBase();
-  };
-
   const removeDevice = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from this branch?`)) return;
+    if (!window.confirm(`Remove ${name} from this branch? The physical Device ID will stay in your registry and can be assigned to another shop.`)) return;
     const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
       return;
     }
+    toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
     await loadBase();
   };
 
@@ -368,7 +355,7 @@ export default function IotAdminPanel() {
               placeholder="Leave blank to create the next FS-MOUSE ID"
               className="border-slate-600 bg-slate-900 text-white"
             />
-            <p className="mt-1 text-[11px] text-slate-500">Leave blank and the system creates a unique ID such as FS-MOUSE-000001.</p>
+            <p className="mt-1 text-[11px] text-slate-500">Leave blank to create the next ID. If you enter an existing ID, it can only be assigned when it has first been removed from its previous shop.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Hardware Model</label>
@@ -558,12 +545,7 @@ export default function IotAdminPanel() {
         ) : activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
             <p>No devices are assigned to {activeBranch.name} yet.</p>
-            {deviceId.trim() && (
-              <Button size="sm" variant="outline" onClick={recoverStaleDevice} className="border-amber-600/60 text-amber-200">
-                <Trash2 className="mr-1 h-3 w-3" />
-                Clear stale {deviceId.trim().toUpperCase()}
-              </Button>
-            )}
+
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -606,8 +588,8 @@ export default function IotAdminPanel() {
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
                       <div className="mb-3 flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-sm font-semibold text-cyan-100">Edit / Reassign this device</p>
-                          <p className="text-[11px] text-slate-400">Device ID stays fixed: {device.deviceId}</p>
+                          <p className="text-sm font-semibold text-cyan-100">Edit this device</p>
+                          <p className="text-[11px] text-slate-400">Device ID stays fixed: {device.deviceId}. To move shops, remove it first, then register the same ID at the new branch.</p>
                         </div>
                         <Button size="sm" variant="ghost" onClick={cancelEditDevice} className="text-slate-300 hover:text-white">
                           <X className="h-4 w-4" />

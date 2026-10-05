@@ -73,7 +73,7 @@ function patchOwnedIotGatewayRoutes(source: string): string {
       }
 
       const deviceResult: any = await db.execute(sql\`
-        SELECT id, device_id
+        SELECT id, device_id, branch_id, friendly_name, installation_location
         FROM owned_iot_devices
         WHERE device_id = \${deviceId}
         LIMIT 1
@@ -83,6 +83,13 @@ function patchOwnedIotGatewayRoutes(source: string): string {
         return res.status(404).json({
           message: \`Food Safety device \${deviceId} is not registered\`,
           code: "DEVICE_NOT_REGISTERED",
+        });
+      }
+      const device = deviceRows[0];
+      if (!device.branch_id) {
+        return res.status(409).json({
+          message: \`Food Safety device \${deviceId} is not assigned to a branch\`,
+          code: "DEVICE_UNASSIGNED",
         });
       }
 
@@ -173,9 +180,9 @@ function patchOwnedIotGatewayRoutes(source: string): string {
 
       await db.execute(sql\`
         INSERT INTO owned_iot_events
-          (event_id, device_id, event_type, event_value, event_at, raw_payload)
+          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
         VALUES
-          (\${eventId}, \${deviceId}, \${type}, CAST(\${valueJson} AS jsonb), now(), CAST(\${rawJson} AS jsonb))
+          (\${eventId}, \${deviceId}, \${device.branch_id}::uuid, \${device.friendly_name || null}, \${device.installation_location || null}, \${type}, CAST(\${valueJson} AS jsonb), now(), CAST(\${rawJson} AS jsonb))
       \`);
 
       return res.status(202).json({
