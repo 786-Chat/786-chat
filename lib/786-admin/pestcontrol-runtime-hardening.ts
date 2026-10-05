@@ -2,6 +2,12 @@ import { hardenPestControlRuntime as hardenPestControlRuntimeBase } from "./pest
 
 const PEST_CONTROL_PROJECT_ID = "22c299f8-bf65-410f-9643-92a9776dbfca"
 
+function replaceIfPresent(source: string, needle: string, replacement: string): string {
+  if (source.includes(replacement)) return source
+  if (!source.includes(needle)) return source
+  return source.replace(needle, replacement)
+}
+
 function patchOwnedIotGatewayRoutes(source: string): string {
   let next = source
 
