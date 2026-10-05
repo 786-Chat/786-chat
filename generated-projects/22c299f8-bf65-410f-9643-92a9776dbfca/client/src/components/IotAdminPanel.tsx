@@ -16,6 +16,19 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function formatUkDateTime(value: Date | string | number) {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
+
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -58,6 +71,7 @@ export default function IotAdminPanel() {
   const [editNotes, setEditNotes] = useState("");
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
+  const [ukNow, setUkNow] = useState(() => new Date());
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -119,6 +133,11 @@ export default function IotAdminPanel() {
   useEffect(() => {
     loadBase().catch(() => {});
     const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setUkNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -702,10 +721,15 @@ export default function IotAdminPanel() {
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                     <Wifi className="h-3.5 w-3.5" />
-                    Wi-Fi / MQTT
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
+                    <span>Wi-Fi / MQTT</span>
+                    <span>• UK time: {formatUkDateTime(ukNow)}</span>
+                    <span>
+                      {device.lastCheckedAt
+                        ? `• Last seen: ${formatUkDateTime(device.lastCheckedAt)}`
+                        : "• Last seen: Never"}
+                    </span>
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
