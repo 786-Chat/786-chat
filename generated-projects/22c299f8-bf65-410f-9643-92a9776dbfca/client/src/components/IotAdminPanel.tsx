@@ -41,10 +41,11 @@ export default function IotAdminPanel() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
-  const [deviceBackup, setDeviceBackup] = useState<any>(null);
-  const [backingUpDevices, setBackingUpDevices] = useState(false);
-  const [restoringDevices, setRestoringDevices] = useState(false);
-  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
+  const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
+  const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
+  const [backupBusyKey, setBackupBusyKey] = useState("");
+  const [restoreBusyKey, setRestoreBusyKey] = useState("");
+  const [pendingRestore, setPendingRestore] = useState<any>(null);
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
@@ -124,7 +125,7 @@ export default function IotAdminPanel() {
 
   useEffect(() => {
     loadBase().catch(() => {});
-    loadDeviceBackup().catch(() => {});
+    loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
     const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
     return () => window.clearInterval(timer);
   }, []);
@@ -141,53 +142,113 @@ export default function IotAdminPanel() {
     }
   }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
 
-  const loadDeviceBackup = async () => {
-    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
-    if (!response.ok) return;
+  const scopedBackupKey = (scope: "all" | "branch" | "device", scopeId = "") =>
+    `${scope}:${scopeId || "all"}`;
+
+  const loadLatestScopedBackup = async (scope: "all" | "branch" | "device", scopeId = "") => {
+    const params = new URLSearchParams({ scope });
+    if (scope !== "all") params.set("scopeId", scopeId);
+    const response = await fetch(`/api/iot/device-backups/latest?${params.toString()}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
     const data = await response.json().catch(() => ({}));
-    setDeviceBackup(data?.backup || null);
+    return data?.backup || null;
   };
 
-  const backupWorkingDeviceSetup = async () => {
-    setBackingUpDevices(true);
+  const backupScopedDevices = async (
+    scope: "all" | "branch" | "device",
+    scopeId = "",
+    label = "",
+  ) => {
+    const key = scopedBackupKey(scope, scopeId);
+    setBackupBusyKey(key);
     try {
       const response = await fetch("/api/iot/device-backups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ label: "Working device setup" }),
+        body: JSON.stringify({ scope, scopeId, label }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
         return;
       }
-      setDeviceBackup(data?.backup || null);
-      setRestoreBackupConfirm(false);
-      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+
+      if (scope === "all") setAllDeviceBackup(data?.backup || null);
+      if (scope === "branch" && scopeId === activeBranchId) setBranchDeviceBackup(data?.backup || null);
+      setPendingRestore(null);
+      toast({
+        title: scope === "device" ? "Device backup saved" : scope === "branch" ? "Branch backup saved" : "All-device backup saved",
+        description: `${data?.backup?.device_count ?? 0} device${Number(data?.backup?.device_count || 0) === 1 ? "" : "s"} saved. Customer data and live telemetry are not copied or changed.`,
+      });
     } finally {
-      setBackingUpDevices(false);
+      setBackupBusyKey("");
     }
   };
 
-  const restoreWorkingDeviceSetup = async () => {
-    if (!deviceBackup?.id) return;
-    setRestoringDevices(true);
+  const prepareScopedRestore = async (
+    scope: "all" | "branch" | "device",
+    scopeId = "",
+    label = "",
+  ) => {
+    const key = scopedBackupKey(scope, scopeId);
+    const backup = await loadLatestScopedBackup(scope, scopeId);
+    if (!backup?.id) {
+      toast({
+        title: "No backup saved",
+        description: scope === "device"
+          ? "Back up this device first."
+          : scope === "branch"
+            ? "Back up this branch first."
+            : "Create an all-device backup first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPendingRestore({ key, scope, scopeId, label, backup });
+  };
+
+  const confirmScopedRestore = async () => {
+    if (!pendingRestore?.backup?.id) return;
+    const { key, scope, scopeId, backup } = pendingRestore;
+    setRestoreBusyKey(key);
     try {
-      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const response = await fetch(`/api/iot/device-backups/${backup.id}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ scope, scopeId }),
+      });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
         return;
       }
-      setRestoreBackupConfirm(false);
+
+      setPendingRestore(null);
       await loadBase();
-      await loadDeviceBackup();
-      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+      if (scope === "all") setAllDeviceBackup(await loadLatestScopedBackup("all"));
+      if (scope === "branch" && scopeId === activeBranchId) setBranchDeviceBackup(await loadLatestScopedBackup("branch", scopeId));
+      toast({
+        title: scope === "device" ? "Device restored" : scope === "branch" ? "Branch devices restored" : "All devices restored",
+        description: data?.message || "Saved device assignments are back.",
+      });
     } finally {
-      setRestoringDevices(false);
+      setRestoreBusyKey("");
     }
   };
+
+  useEffect(() => {
+    if (!activeBranchId) {
+      setBranchDeviceBackup(null);
+      return;
+    }
+    loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
+  }, [activeBranchId]);
+
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -380,53 +441,53 @@ export default function IotAdminPanel() {
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-emerald-500/30 bg-slate-800/65 p-5">
+      <div className="rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-300" />
-              <h3 className="font-semibold text-white">Device Setup Backup</h3>
+              <ShieldCheck className="h-4 w-4 text-amber-300" />
+              <h3 className="font-semibold text-white">Emergency All-Device Backup</h3>
             </div>
             <p className="mt-2 text-sm text-slate-300">
-              Save the working Device IDs, names and branch assignments before changing Add Device settings.
+              Use this only for a whole-system device setup problem. For one restaurant or one trap, use the safer branch/device buttons below.
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              Restore never fakes Connected, last-seen, alarm, battery or signal data. Those still come only from the real HP2 gateway.
+              This never deletes customer branches, reports, alarm history or event history. Connected, battery and signal data always stay live from HP2.
             </p>
-            {deviceBackup ? (
+            {allDeviceBackup ? (
               <p className="mt-2 text-xs text-emerald-200">
-                Last working backup: {new Date(deviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })} · {deviceBackup.device_count} device(s)
+                Last all-device backup: {new Date(allDeviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })} · {allDeviceBackup.device_count} device(s)
               </p>
             ) : (
-              <p className="mt-2 text-xs text-amber-200">No manual working-device backup saved yet.</p>
+              <p className="mt-2 text-xs text-amber-200">No all-device backup saved yet.</p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              onClick={backupWorkingDeviceSetup}
-              disabled={backingUpDevices || restoringDevices}
+              onClick={() => backupScopedDevices("all", "", "Emergency all-device setup")}
+              disabled={Boolean(backupBusyKey || restoreBusyKey)}
               className="bg-emerald-600 text-white hover:bg-emerald-500"
             >
               <Save className="mr-2 h-4 w-4" />
-              {backingUpDevices ? "Saving Backup..." : "Backup Working Setup"}
+              {backupBusyKey === scopedBackupKey("all") ? "Saving..." : "Backup All Devices"}
             </Button>
-            {restoreBackupConfirm ? (
+            {pendingRestore?.key === scopedBackupKey("all") ? (
               <>
                 <Button
                   type="button"
-                  onClick={restoreWorkingDeviceSetup}
-                  disabled={!deviceBackup?.id || restoringDevices}
-                  className="bg-amber-600 text-white hover:bg-amber-500"
+                  onClick={confirmScopedRestore}
+                  disabled={Boolean(restoreBusyKey)}
+                  className="bg-red-600 text-white hover:bg-red-500"
                 >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${restoringDevices ? "animate-spin" : ""}`} />
-                  {restoringDevices ? "Restoring..." : "Confirm Restore"}
+                  <RefreshCw className={`mr-2 h-4 w-4 ${restoreBusyKey === scopedBackupKey("all") ? "animate-spin" : ""}`} />
+                  {restoreBusyKey === scopedBackupKey("all") ? "Restoring..." : "Confirm Restore ALL Devices"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setRestoreBackupConfirm(false)}
-                  disabled={restoringDevices}
+                  onClick={() => setPendingRestore(null)}
+                  disabled={Boolean(restoreBusyKey)}
                   className="border-slate-600 text-slate-200"
                 >
                   Cancel
@@ -436,12 +497,12 @@ export default function IotAdminPanel() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setRestoreBackupConfirm(true)}
-                disabled={!deviceBackup?.id || backingUpDevices || restoringDevices}
-                className="border-amber-600/70 text-amber-200"
+                onClick={() => prepareScopedRestore("all", "", "all devices")}
+                disabled={Boolean(backupBusyKey || restoreBusyKey)}
+                className="border-red-700/60 text-red-200"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Restore Last Backup
+                Restore All Devices
               </Button>
             )}
           </div>
@@ -667,6 +728,52 @@ export default function IotAdminPanel() {
                       <p className="mt-2 text-xs text-cyan-200">
                         {activeBranchDevices.length} device{activeBranchDevices.length === 1 ? "" : "s"} assigned to this branch
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => backupScopedDevices("branch", activeBranch.id, `${activeBranch.name} device setup`)}
+                          disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
+                          className="bg-emerald-600 text-white hover:bg-emerald-500"
+                        >
+                          <Save className="mr-1 h-3.5 w-3.5" />
+                          {backupBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Saving..." : "Backup This Branch"}
+                        </Button>
+                        {pendingRestore?.key === scopedBackupKey("branch", activeBranch.id) ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={confirmScopedRestore}
+                              disabled={Boolean(restoreBusyKey)}
+                              className="bg-amber-600 text-white hover:bg-amber-500"
+                            >
+                              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "animate-spin" : ""}`} />
+                              {restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Restoring..." : "Confirm Branch Restore"}
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setPendingRestore(null)} className="border-slate-600 text-slate-200">
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => prepareScopedRestore("branch", activeBranch.id, activeBranch.name)}
+                            disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
+                            className="border-amber-700/60 text-amber-200"
+                          >
+                            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                            Restore This Branch
+                          </Button>
+                        )}
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        {branchDeviceBackup
+                          ? `Last branch backup: ${new Date(branchDeviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })}`
+                          : "No backup saved for this branch yet."}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -809,7 +916,52 @@ export default function IotAdminPanel() {
                     </div>
                   )}
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2">
+                    <p className="mb-2 text-[11px] font-medium text-slate-400">Safe backup for this device only</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => backupScopedDevices("device", String(device.deviceId), `${device.deviceName || device.deviceId} device setup`)}
+                        disabled={Boolean(backupBusyKey || restoreBusyKey)}
+                        className="bg-emerald-700 text-white hover:bg-emerald-600"
+                      >
+                        <Save className="mr-1 h-3 w-3" />
+                        {backupBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "Saving..." : "Backup Device"}
+                      </Button>
+                      {pendingRestore?.key === scopedBackupKey("device", String(device.deviceId)) ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={confirmScopedRestore}
+                            disabled={Boolean(restoreBusyKey)}
+                            className="bg-amber-600 text-white hover:bg-amber-500"
+                          >
+                            <RefreshCw className={`mr-1 h-3 w-3 ${restoreBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "animate-spin" : ""}`} />
+                            {restoreBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "Restoring..." : "Confirm Device Restore"}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" onClick={() => setPendingRestore(null)} className="border-slate-600 text-slate-200">
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => prepareScopedRestore("device", String(device.deviceId), String(device.deviceName || device.deviceId))}
+                          disabled={Boolean(backupBusyKey || restoreBusyKey)}
+                          className="border-amber-700/60 text-amber-200"
+                        >
+                          <RefreshCw className="mr-1 h-3 w-3" />
+                          Restore Device
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => refreshDevice(device.id)} className="border-slate-600 text-slate-200">
                       <RefreshCw className="mr-1 h-3 w-3" />
                       Refresh
