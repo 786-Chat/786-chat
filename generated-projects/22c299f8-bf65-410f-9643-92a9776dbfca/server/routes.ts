@@ -745,6 +745,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  const isFoodSafetyGatewayAuthorized = (req: any) => {
+    const expectedToken = String(process.env.FOODSAFETY_IOT_GATEWAY_TOKEN || "").trim();
+    if (!expectedToken) return false;
+    const headerToken = String(req.get("x-foodsafety-gateway-token") || "").trim();
+    const authorization = String(req.get("authorization") || "").trim();
+    const providedToken = headerToken || (/^Bearer\s+/i.test(authorization)
+      ? authorization.replace(/^Bearer\s+/i, "").trim()
+      : "");
+    const providedBuffer = Buffer.from(providedToken);
+    const expectedBuffer = Buffer.from(expectedToken);
+    return providedBuffer.length === expectedBuffer.length &&
+      providedBuffer.length > 0 &&
+      timingSafeEqual(providedBuffer, expectedBuffer);
+  };
+
+  app.post("/api/iot/gateway/discovery", async (req, res) => {
+    try {
+      if (!process.env.FOODSAFETY_IOT_GATEWAY_TOKEN?.trim()) {
+        return res.status(503).json({ message: "Food Safety IoT gateway token is not configured" });
+      }
+      if (!isFoodSafetyGatewayAuthorized(req)) {
+        return res.status(401).json({ message: "Invalid Food Safety IoT gateway token" });
+      }
+
+      await ensureOwnedIotSchema();
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const mqttPrefix = String(body.mqttPrefix || "").trim().slice(0, 100);
+      const hostname = String(body.hostname || "").trim().slice(0, 160) || null;
+      const ipAddress = String(body.ipAddress || "").trim().slice(0, 80) || null;
+      const legacyDeviceId = String(body.legacyDeviceId || "").trim().toUpperCase().slice(0, 100) || null;
+      const rawMac = String(body.macAddress || "").trim().replace(/-/g, ":").toUpperCase();
+      const macAddress = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(rawMac) ? rawMac : null;
+      const connected = Boolean(body.connected);
+      const parsedRssi = Number(body.rssi);
+      const rssi = Number.isFinite(parsedRssi) ? Math.trunc(parsedRssi) : null;
+
+      if (!mqttPrefix && !hostname && !macAddress) {
+        return res.status(400).json({ message: "MQTT prefix, hostname or MAC address is required" });
+      }
+
+      let existingResult: any;
+      if (macAddress) {
+        existingResult = await db.execute(sql`
+          SELECT id, hardware_key, assigned_device_id
+          FROM owned_iot_device_checks
+          WHERE mac_address = ${macAddress}
+             OR (${mqttPrefix} <> '' AND mqtt_prefix = ${mqttPrefix} AND assigned_device_id IS NULL)
+          ORDER BY CASE WHEN mac_address = ${macAddress} THEN 0 ELSE 1 END, last_seen_at DESC
+          LIMIT 1
+        `);
+      } else {
+        existingResult = await db.execute(sql`
+          SELECT id, hardware_key, assigned_device_id
+          FROM owned_iot_device_checks
+          WHERE (${mqttPrefix} <> '' AND mqtt_prefix = ${mqttPrefix})
+             OR (${hostname || ""} <> '' AND hostname = ${hostname || ""})
+          ORDER BY last_seen_at DESC
+          LIMIT 1
+        `);
+      }
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      const existing = existingRows[0];
+      const hardwareKey = macAddress
+        ? "mac:" + macAddress
+        : mqttPrefix
+          ? "mqtt:" + mqttPrefix.toLowerCase()
+          : "host:" + String(hostname || "").toLowerCase();
+
+      let savedResult: any;
+      if (existing?.id) {
+        savedResult = await db.execute(sql`
+          UPDATE owned_iot_device_checks
+          SET hardware_key = ${hardwareKey},
+              mac_address = COALESCE(${macAddress}, mac_address),
+              ip_address = COALESCE(${ipAddress}, ip_address),
+              mqtt_prefix = COALESCE(${mqttPrefix || null}, mqtt_prefix),
+              hostname = COALESCE(${hostname}, hostname),
+              connected = ${connected},
+              rssi = COALESCE(${rssi}, rssi),
+              legacy_device_id = COALESCE(${legacyDeviceId}, legacy_device_id),
+              last_seen_at = now(),
+              updated_at = now()
+          WHERE id = ${existing.id}::uuid
+          RETURNING id::text AS id, assigned_device_id
+        `);
+      } else {
+        savedResult = await db.execute(sql`
+          INSERT INTO owned_iot_device_checks
+            (hardware_key, mac_address, ip_address, mqtt_prefix, hostname, connected, rssi, legacy_device_id, first_seen_at, last_seen_at, updated_at)
+          VALUES
+            (${hardwareKey}, ${macAddress}, ${ipAddress}, ${mqttPrefix || null}, ${hostname}, ${connected}, ${rssi}, ${legacyDeviceId}, now(), now(), now())
+          ON CONFLICT (hardware_key) DO UPDATE SET
+            mac_address = COALESCE(EXCLUDED.mac_address, owned_iot_device_checks.mac_address),
+            ip_address = COALESCE(EXCLUDED.ip_address, owned_iot_device_checks.ip_address),
+            mqtt_prefix = COALESCE(EXCLUDED.mqtt_prefix, owned_iot_device_checks.mqtt_prefix),
+            hostname = COALESCE(EXCLUDED.hostname, owned_iot_device_checks.hostname),
+            connected = EXCLUDED.connected,
+            rssi = COALESCE(EXCLUDED.rssi, owned_iot_device_checks.rssi),
+            legacy_device_id = COALESCE(EXCLUDED.legacy_device_id, owned_iot_device_checks.legacy_device_id),
+            last_seen_at = now(),
+            updated_at = now()
+          RETURNING id::text AS id, assigned_device_id
+        `);
+      }
+
+      const savedRows = Array.isArray(savedResult) ? savedResult : (savedResult?.rows || []);
+      const saved = savedRows[0] || {};
+      return res.json({
+        success: true,
+        id: saved.id || null,
+        assignedDeviceId: saved.assigned_device_id || null,
+      });
+    } catch (error: any) {
+      console.error("Food Safety device discovery failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not save Food Safety device discovery" });
+    }
+  });
+
+  app.get("/api/iot/gateway/resolve-device", async (req, res) => {
+    try {
+      if (!process.env.FOODSAFETY_IOT_GATEWAY_TOKEN?.trim()) {
+        return res.status(503).json({ message: "Food Safety IoT gateway token is not configured" });
+      }
+      if (!isFoodSafetyGatewayAuthorized(req)) {
+        return res.status(401).json({ message: "Invalid Food Safety IoT gateway token" });
+      }
+
+      await ensureOwnedIotSchema();
+      const mqttPrefix = String(req.query?.mqttPrefix || "").trim();
+      const macAddress = String(req.query?.macAddress || "").trim().replace(/-/g, ":").toUpperCase();
+      if (!mqttPrefix && !macAddress) {
+        return res.status(400).json({ message: "mqttPrefix or macAddress is required" });
+      }
+
+      let result: any;
+      if (macAddress) {
+        result = await db.execute(sql`
+          SELECT assigned_device_id
+          FROM owned_iot_device_checks
+          WHERE mac_address = ${macAddress}
+            AND assigned_device_id IS NOT NULL
+          ORDER BY last_seen_at DESC
+          LIMIT 1
+        `);
+      } else {
+        result = await db.execute(sql`
+          SELECT assigned_device_id
+          FROM owned_iot_device_checks
+          WHERE mqtt_prefix = ${mqttPrefix}
+            AND assigned_device_id IS NOT NULL
+          ORDER BY last_seen_at DESC
+          LIMIT 1
+        `);
+      }
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "Physical mouse is not linked yet" });
+      return res.json({ deviceId: rows[0].assigned_device_id });
+    } catch (error: any) {
+      console.error("Food Safety device resolve failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not resolve Food Safety device" });
+    }
+  });
+
   app.post("/api/iot/gateway/events", async (req, res) => {
     try {
       const expectedToken = String(process.env.FOODSAFETY_IOT_GATEWAY_TOKEN || "").trim();
@@ -7511,6 +7674,27 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_backups_scope_idx ON owned_iot_device_backups(scope_type, scope_id, created_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_last_seen_idx ON owned_iot_devices(last_seen_at DESC)`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_device_checks (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        hardware_key text NOT NULL UNIQUE,
+        mac_address text,
+        ip_address text,
+        mqtt_prefix text,
+        hostname text,
+        connected boolean NOT NULL DEFAULT false,
+        rssi integer,
+        legacy_device_id text,
+        assigned_device_id text,
+        first_seen_at timestamptz NOT NULL DEFAULT now(),
+        last_seen_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_seen_idx ON owned_iot_device_checks(last_seen_at DESC)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_ip_idx ON owned_iot_device_checks(ip_address)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
+    await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS owned_iot_device_checks_assigned_idx ON owned_iot_device_checks(assigned_device_id) WHERE assigned_device_id IS NOT NULL`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
@@ -8042,6 +8226,1270 @@ Generated: ${new Date().toISOString()}
       source: "owned",
     }));
   };
+
+  app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        SELECT
+          c.id::text AS id,
+          c.hardware_key,
+          c.mac_address,
+          c.ip_address,
+          c.mqtt_prefix,
+          c.hostname,
+          c.connected,
+          c.rssi,
+          c.legacy_device_id,
+          c.assigned_device_id,
+          c.first_seen_at,
+          c.last_seen_at,
+          d.friendly_name AS assigned_device_name,
+          d.branch_id::text AS assigned_branch_id,
+          d.installation_location AS assigned_location,
+          b.name AS assigned_branch_name
+        FROM owned_iot_device_checks c
+        LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
+        LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        ORDER BY c.last_seen_at DESC
+        LIMIT 200
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return res.json(rows.map((row: any) => ({
+        id: row.id,
+        hardwareKey: row.hardware_key,
+        macAddress: row.mac_address || null,
+        ipAddress: row.ip_address || null,
+        mqttPrefix: row.mqtt_prefix || null,
+        hostname: row.hostname || null,
+        connected: Boolean(row.connected),
+        rssi: row.rssi == null ? null : Number(row.rssi),
+        legacyDeviceId: row.legacy_device_id || null,
+        assignedDeviceId: row.assigned_device_id || null,
+        assignedDeviceName: row.assigned_device_name || null,
+        assignedBranchId: row.assigned_branch_id || null,
+        assignedBranchName: row.assigned_branch_name || null,
+        assignedLocation: row.assigned_location || null,
+        firstSeenAt: row.first_seen_at || null,
+        lastSeenAt: row.last_seen_at || null,
+        isLive: Boolean(row.connected) && Boolean(row.last_seen_at) && (Date.now() - new Date(row.last_seen_at).getTime()) < 90000,
+      })));
+    } catch (error: any) {
+      console.error("Failed to load Device Check:", error?.message || error);
+      return res.status(500).json({ message: "Could not load Device Check" });
+    }
+  });
+
+  app.post("/api/iot/device-check/:id/link-existing", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const checkId = String(req.params.id || "").trim();
+      const deviceId = String(req.body?.deviceId || "").trim().toUpperCase();
+      if (!checkId || !deviceId) return res.status(400).json({ message: "Device Check ID and FS-MOUSE device ID are required" });
+
+      const checkResult: any = await db.execute(sql`
+        SELECT id, assigned_device_id
+        FROM owned_iot_device_checks
+        WHERE id::text = ${checkId}
+        LIMIT 1
+      `);
+      const checkRows = Array.isArray(checkResult) ? checkResult : (checkResult?.rows || []);
+      if (!checkRows.length) return res.status(404).json({ message: "Physical mouse was not found in Device Check" });
+      if (checkRows[0].assigned_device_id && String(checkRows[0].assigned_device_id) !== deviceId) {
+        return res.status(409).json({ message: "This physical mouse is already linked to " + checkRows[0].assigned_device_id });
+      }
+
+      const deviceResult: any = await db.execute(sql`
+        SELECT d.device_id, d.friendly_name, d.branch_id::text AS branch_id, d.installation_location, b.name AS branch_name
+        FROM owned_iot_devices d
+        LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        WHERE d.device_id = ${deviceId}
+        LIMIT 1
+      `);
+      const deviceRows = Array.isArray(deviceResult) ? deviceResult : (deviceResult?.rows || []);
+      if (!deviceRows.length) return res.status(404).json({ message: deviceId + " is not registered in Smart Devices" });
+
+      const otherResult: any = await db.execute(sql`
+        SELECT id::text AS id
+        FROM owned_iot_device_checks
+        WHERE assigned_device_id = ${deviceId}
+          AND id::text <> ${checkId}
+        LIMIT 1
+      `);
+      const otherRows = Array.isArray(otherResult) ? otherResult : (otherResult?.rows || []);
+      if (otherRows.length) {
+        return res.status(409).json({ message: deviceId + " is already linked to a different physical MAC. Check the hardware before continuing." });
+      }
+
+      await db.execute(sql`
+        UPDATE owned_iot_device_checks
+        SET assigned_device_id = ${deviceId}, updated_at = now()
+        WHERE id::text = ${checkId}
+      `);
+
+      const device = deviceRows[0];
+      return res.json({
+        success: true,
+        deviceId: device.device_id,
+        deviceName: device.friendly_name || device.device_id,
+        branchId: device.branch_id || null,
+        branchName: device.branch_name || null,
+        location: device.installation_location || null,
+      });
+    } catch (error: any) {
+      console.error("Failed to link Device Check record:", error?.message || error);
+      return res.status(500).json({ message: "Could not link this physical mouse" });
+    }
+  });
+
+  app.post("/api/iot/device-check/:id/register-assign", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const checkId = String(req.params.id || "").trim();
+      const friendlyName = String(req.body?.deviceName || "").trim();
+      const targetBranchId = String(req.body?.branchId || "").trim();
+      const location = String(req.body?.notes || "").trim() || null;
+      const model = String(req.body?.hardwareModel || "").trim() || "BK7231N-MOUSE-V1";
+      let resolvedDeviceId = String(req.body?.deviceId || "").trim().toUpperCase();
+
+      if (!checkId || !friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Physical mouse, friendly name and branch are required" });
+      }
+
+      const checkResult: any = await db.execute(sql`
+        SELECT id, assigned_device_id
+        FROM owned_iot_device_checks
+        WHERE id::text = ${checkId}
+        LIMIT 1
+      `);
+      const checkRows = Array.isArray(checkResult) ? checkResult : (checkResult?.rows || []);
+      if (!checkRows.length) return res.status(404).json({ message: "Physical mouse was not found in Device Check" });
+      if (checkRows[0].assigned_device_id) {
+        return res.status(409).json({ message: "This physical mouse is already linked to " + checkRows[0].assigned_device_id });
+      }
+
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) return res.status(400).json({ message: "The selected branch does not exist" });
+
+      if (!resolvedDeviceId) {
+        const nextResult: any = await db.execute(sql`
+          SELECT COALESCE(MAX((substring(device_id from '([0-9]{6,})
+    try {
+      res.json(await loadAdminIotDevices());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load assigned devices" });
+    }
+  });
+
+  app.get("/api/iot/alarm-history", isAdminAuthenticated, async (_req, res) => {
+    try {
+      res.json(await loadIotAlarmHistory());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarm history" });
+    }
+  });
+
+  app.post("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Add Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const { deviceId, deviceName, branchId, notes, hardwareModel } = req.body || {};
+      const friendlyName = String(deviceName || "").trim();
+      const targetBranchId = String(branchId || "").trim();
+
+      if (!friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Friendly device name and branch are required" });
+      }
+
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) {
+        return res.status(400).json({ message: "The selected branch does not exist" });
+      }
+
+      let resolvedDeviceId = String(deviceId || "").trim().toUpperCase();
+      if (!resolvedDeviceId) {
+        const nextResult: any = await db.execute(sql`
+          SELECT COALESCE(
+            MAX((substring(device_id from '([0-9]{6,})$'))::bigint),
+            0
+          ) AS max_id
+          FROM owned_iot_devices
+          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
+        `);
+        const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
+        const nextNumber = Number(nextRows?.[0]?.max_id || 0) + 1;
+        resolvedDeviceId = "FS-MOUSE-" + String(nextNumber).padStart(6, "0");
+      }
+
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(resolvedDeviceId)) {
+        return res.status(400).json({ message: "Device ID must use the Food Safety format, for example FS-MOUSE-000001" });
+      }
+
+      const existingResult: any = await db.execute(sql`
+        SELECT id, device_id, friendly_name, branch_id
+        FROM owned_iot_devices
+        WHERE device_id = ${resolvedDeviceId}
+        LIMIT 1
+      `);
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      const existingDevice: any = existingRows[0];
+      if (existingDevice?.branch_id) {
+        let existingBranchName = "another branch";
+        try {
+          const existingBranch = await storage.getBranch(String(existingDevice.branch_id));
+          if (existingBranch?.name) existingBranchName = existingBranch.name;
+        } catch (_) {}
+        return res.status(409).json({
+          code: "DEVICE_ALREADY_ASSIGNED",
+          message: `${resolvedDeviceId} is already assigned to ${existingBranchName}. Remove it from that branch before assigning it here.`,
+          deviceId: resolvedDeviceId,
+          branchId: String(existingDevice.branch_id),
+          branchName: existingBranchName,
+        });
+      }
+
+      const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
+      const location = String(notes || "").trim() || null;
+
+      let createdResult: any;
+      if (existingDevice) {
+        createdResult = await db.execute(sql`
+          UPDATE owned_iot_devices
+          SET hardware_model = ${model},
+              branch_id = ${targetBranchId}::uuid,
+              friendly_name = ${friendlyName},
+              installation_location = ${location},
+              lifecycle_state = 'awaiting_activation',
+              is_online = false,
+              last_alarm_at = NULL,
+              updated_at = now()
+          WHERE id = ${existingDevice.id}::uuid
+          RETURNING
+            id, device_id, hardware_model, firmware_version, branch_id,
+            friendly_name, installation_location, lifecycle_state, is_online,
+            battery_pct, rssi, last_seen_at, last_alarm_at
+        `);
+      } else {
+        createdResult = await db.execute(sql`
+        INSERT INTO owned_iot_devices (
+          device_id,
+          hardware_model,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${resolvedDeviceId},
+          ${model},
+          ${targetBranchId}::uuid,
+          ${friendlyName},
+          ${location},
+          'awaiting_activation',
+          false,
+          now(),
+          now()
+        )
+        RETURNING
+          id, device_id, hardware_model, firmware_version, branch_id,
+          friendly_name, installation_location, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      }
+
+      const createdRows = Array.isArray(createdResult) ? createdResult : (createdResult?.rows || []);
+      const row: any = createdRows[0];
+      if (!row) return res.status(500).json({ message: "Device registration did not return a device" });
+
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || "awaiting_activation" },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to register Food Safety device" });
+    }
+  });
+
+  app.patch("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Edit Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const { deviceName, branchId, notes, hardwareModel } = req.body || {};
+      const friendlyName = String(deviceName || "").trim();
+      const targetBranchId = String(branchId || "").trim();
+      const location = String(notes || "").trim() || null;
+      const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
+
+      if (!friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Friendly device name and branch are required" });
+      }
+
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) {
+        return res.status(400).json({ message: "The selected branch does not exist" });
+      }
+
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET friendly_name = ${friendlyName},
+            branch_id = ${targetBranchId}::uuid,
+            installation_location = ${location},
+            hardware_model = ${model},
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING
+          id, device_id, hardware_model, firmware_version, branch_id,
+          friendly_name, installation_location, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      const row: any = rows[0];
+      if (!row) return res.status(404).json({ message: "Device not found" });
+
+      const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline,
+        reportedOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      }]);
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to update Food Safety device" });
+    }
+  });
+
+  app.delete("/api/iot/devices/by-device-id/:deviceId", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const deviceId = String(req.params.deviceId || "").trim().toUpperCase();
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(deviceId)) {
+        return res.status(400).json({ message: "Invalid Food Safety device ID" });
+      }
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
+        WHERE device_id = ${deviceId}
+        RETURNING id, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned", deviceId: rows[0].device_id });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
+    }
+  });
+
+  app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING id, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned" });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/refresh", isAdminAuthenticated, async (req, res) => {
+    try {
+      const ownedDevices = await ownedIotDevicesForAdmin();
+      const owned = ownedDevices.find((device: any) => String(device.id) === String(req.params.id));
+      if (!owned) return res.status(404).json({ message: "Device not found" });
+      const [enriched] = await enrichIotBranchNames([owned]);
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to refresh device" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/test-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = now(),
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      await db.execute(sql`
+        INSERT INTO owned_iot_events
+          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
+        VALUES
+          (gen_random_uuid()::text, ${String(row.device_id)}, ${row.branch_id}::uuid, ${row.friendly_name || null}, ${row.installation_location || null}, 'trap_triggered', 'true'::jsonb, now(),
+           jsonb_build_object('source','admin-test-alarm','deviceId',${String(row.device_id)},'type','trap_triggered','value',true))
+      `);
+
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: true,
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: true },
+        ],
+      }]);
+      res.json({ ...enriched, testAlarm: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to trigger test alarm" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/clear-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: false,
+        lastAlarmAt: null,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: false },
+        ],
+      }]);
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
+    }
+  });
+
+  app.get("/api/iot/alarms", isAdminAuthenticated, async (req, res) => {
+    try {
+      const devices = await loadAdminIotDevices();
+      res.json(devices.filter((device: any) => device?.alarmActive));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarms" });
+    }
+  });
+
+  const ownedIotDevicesForBranch = async (branchId: string) => {
+    try {
+      const result: any = await db.execute(sql`
+        SELECT
+          id,
+          device_id,
+          hardware_model,
+          firmware_version,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          battery_pct,
+          rssi,
+          last_seen_at,
+          last_alarm_at
+        FROM owned_iot_devices
+        WHERE branch_id::text = ${String(branchId)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        ORDER BY friendly_name NULLS LAST, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return rows.map((row: any) => {
+        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+        return {
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: row.friendly_name || row.device_id,
+          branchId: row.branch_id,
+          notes: row.installation_location || row.hardware_model,
+          isOnline,
+          reportedOnline: Boolean(row.is_online),
+          alarmActive: Boolean(row.last_alarm_at),
+          lastAlarmAt: row.last_alarm_at,
+          lastCheckedAt: row.last_seen_at,
+          hardwareModel: row.hardware_model,
+          firmwareVersion: row.firmware_version,
+          provider: "food-safety-owned-mqtt",
+          lastStatus: [
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "rssi", value: row.rssi },
+            { code: "shock", value: Boolean(row.last_alarm_at) },
+          ],
+        };
+      });
+    } catch (error: any) {
+      // Older deployments may not have received the owned-IoT schema yet.
+      if (String(error?.message || "").includes("owned_iot_devices")) return [];
+      throw error;
+    }
+  };
+
+  app.get("/api/branch/iot-alarm-history", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+      res.json(await loadIotAlarmHistory(String(session.branchId)));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarm history" });
+    }
+  });
+
+  app.get("/api/branch/iot-devices", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(ownedDevices.map((device: any) => ({ ...device, branchName })));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch devices" });
+    }
+  });
+
+  app.get("/api/branch/iot-alarms", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(
+        ownedDevices
+          .filter((device: any) => device.alarmActive)
+          .map((device: any) => ({ ...device, branchName }))
+      );
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarms" });
+    }
+  });
+
+  app.post("/api/branch/iot-devices/:id/clear-alarm", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND branch_id::text = ${String(session.branchId)}
+        RETURNING id, device_id, friendly_name, branch_id, is_online, last_seen_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row = rows[0];
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        isOnline: ownedIotIsOnline(row.is_online, row.last_seen_at),
+        reportedOnline: Boolean(row.is_online),
+        lastCheckedAt: row.last_seen_at,
+        alarmActive: false,
+        provider: "food-safety-owned-mqtt",
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}))::bigint), 0) AS max_id
+          FROM owned_iot_devices
+          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}
+    try {
+      res.json(await loadAdminIotDevices());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load assigned devices" });
+    }
+  });
+
+  app.get("/api/iot/alarm-history", isAdminAuthenticated, async (_req, res) => {
+    try {
+      res.json(await loadIotAlarmHistory());
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarm history" });
+    }
+  });
+
+  app.post("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Add Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const { deviceId, deviceName, branchId, notes, hardwareModel } = req.body || {};
+      const friendlyName = String(deviceName || "").trim();
+      const targetBranchId = String(branchId || "").trim();
+
+      if (!friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Friendly device name and branch are required" });
+      }
+
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) {
+        return res.status(400).json({ message: "The selected branch does not exist" });
+      }
+
+      let resolvedDeviceId = String(deviceId || "").trim().toUpperCase();
+      if (!resolvedDeviceId) {
+        const nextResult: any = await db.execute(sql`
+          SELECT COALESCE(
+            MAX((substring(device_id from '([0-9]{6,})$'))::bigint),
+            0
+          ) AS max_id
+          FROM owned_iot_devices
+          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
+        `);
+        const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
+        const nextNumber = Number(nextRows?.[0]?.max_id || 0) + 1;
+        resolvedDeviceId = "FS-MOUSE-" + String(nextNumber).padStart(6, "0");
+      }
+
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(resolvedDeviceId)) {
+        return res.status(400).json({ message: "Device ID must use the Food Safety format, for example FS-MOUSE-000001" });
+      }
+
+      const existingResult: any = await db.execute(sql`
+        SELECT id, device_id, friendly_name, branch_id
+        FROM owned_iot_devices
+        WHERE device_id = ${resolvedDeviceId}
+        LIMIT 1
+      `);
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      const existingDevice: any = existingRows[0];
+      if (existingDevice?.branch_id) {
+        let existingBranchName = "another branch";
+        try {
+          const existingBranch = await storage.getBranch(String(existingDevice.branch_id));
+          if (existingBranch?.name) existingBranchName = existingBranch.name;
+        } catch (_) {}
+        return res.status(409).json({
+          code: "DEVICE_ALREADY_ASSIGNED",
+          message: `${resolvedDeviceId} is already assigned to ${existingBranchName}. Remove it from that branch before assigning it here.`,
+          deviceId: resolvedDeviceId,
+          branchId: String(existingDevice.branch_id),
+          branchName: existingBranchName,
+        });
+      }
+
+      const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
+      const location = String(notes || "").trim() || null;
+
+      let createdResult: any;
+      if (existingDevice) {
+        createdResult = await db.execute(sql`
+          UPDATE owned_iot_devices
+          SET hardware_model = ${model},
+              branch_id = ${targetBranchId}::uuid,
+              friendly_name = ${friendlyName},
+              installation_location = ${location},
+              lifecycle_state = 'awaiting_activation',
+              is_online = false,
+              last_alarm_at = NULL,
+              updated_at = now()
+          WHERE id = ${existingDevice.id}::uuid
+          RETURNING
+            id, device_id, hardware_model, firmware_version, branch_id,
+            friendly_name, installation_location, lifecycle_state, is_online,
+            battery_pct, rssi, last_seen_at, last_alarm_at
+        `);
+      } else {
+        createdResult = await db.execute(sql`
+        INSERT INTO owned_iot_devices (
+          device_id,
+          hardware_model,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${resolvedDeviceId},
+          ${model},
+          ${targetBranchId}::uuid,
+          ${friendlyName},
+          ${location},
+          'awaiting_activation',
+          false,
+          now(),
+          now()
+        )
+        RETURNING
+          id, device_id, hardware_model, firmware_version, branch_id,
+          friendly_name, installation_location, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      }
+
+      const createdRows = Array.isArray(createdResult) ? createdResult : (createdResult?.rows || []);
+      const row: any = createdRows[0];
+      if (!row) return res.status(500).json({ message: "Device registration did not return a device" });
+
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || "awaiting_activation" },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to register Food Safety device" });
+    }
+  });
+
+  app.patch("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Edit Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const { deviceName, branchId, notes, hardwareModel } = req.body || {};
+      const friendlyName = String(deviceName || "").trim();
+      const targetBranchId = String(branchId || "").trim();
+      const location = String(notes || "").trim() || null;
+      const model = String(hardwareModel || "").trim() || "FOOD-SAFETY-MOUSE-V1";
+
+      if (!friendlyName || !targetBranchId) {
+        return res.status(400).json({ message: "Friendly device name and branch are required" });
+      }
+
+      const branch = await storage.getBranch(targetBranchId);
+      if (!branch) {
+        return res.status(400).json({ message: "The selected branch does not exist" });
+      }
+
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET friendly_name = ${friendlyName},
+            branch_id = ${targetBranchId}::uuid,
+            installation_location = ${location},
+            hardware_model = ${model},
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING
+          id, device_id, hardware_model, firmware_version, branch_id,
+          friendly_name, installation_location, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      const row: any = rows[0];
+      if (!row) return res.status(404).json({ message: "Device not found" });
+
+      const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline,
+        reportedOnline: Boolean(row.is_online),
+        alarmActive: Boolean(row.last_alarm_at),
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: Boolean(row.last_alarm_at) },
+        ],
+      }]);
+
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to update Food Safety device" });
+    }
+  });
+
+  app.delete("/api/iot/devices/by-device-id/:deviceId", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const deviceId = String(req.params.deviceId || "").trim().toUpperCase();
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(deviceId)) {
+        return res.status(400).json({ message: "Invalid Food Safety device ID" });
+      }
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
+        WHERE device_id = ${deviceId}
+        RETURNING id, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned", deviceId: rows[0].device_id });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
+    }
+  });
+
+  app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING id, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned" });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/refresh", isAdminAuthenticated, async (req, res) => {
+    try {
+      const ownedDevices = await ownedIotDevicesForAdmin();
+      const owned = ownedDevices.find((device: any) => String(device.id) === String(req.params.id));
+      if (!owned) return res.status(404).json({ message: "Device not found" });
+      const [enriched] = await enrichIotBranchNames([owned]);
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to refresh device" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/test-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = now(),
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      await db.execute(sql`
+        INSERT INTO owned_iot_events
+          (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
+        VALUES
+          (gen_random_uuid()::text, ${String(row.device_id)}, ${row.branch_id}::uuid, ${row.friendly_name || null}, ${row.installation_location || null}, 'trap_triggered', 'true'::jsonb, now(),
+           jsonb_build_object('source','admin-test-alarm','deviceId',${String(row.device_id)},'type','trap_triggered','value',true))
+      `);
+
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: true,
+        lastAlarmAt: row.last_alarm_at,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: true },
+        ],
+      }]);
+      res.json({ ...enriched, testAlarm: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to trigger test alarm" });
+    }
+  });
+
+  app.post("/api/iot/devices/:id/clear-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING
+          id, device_id, friendly_name, branch_id, installation_location,
+          hardware_model, firmware_version, lifecycle_state, is_online,
+          battery_pct, rssi, last_seen_at, last_alarm_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row: any = rows[0];
+      const [enriched] = await enrichIotBranchNames([{
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        notes: row.installation_location || row.hardware_model,
+        isOnline: Boolean(row.is_online),
+        alarmActive: false,
+        lastAlarmAt: null,
+        lastCheckedAt: row.last_seen_at,
+        hardwareModel: row.hardware_model,
+        firmwareVersion: row.firmware_version,
+        provider: "food-safety-owned-mqtt",
+        lastStatus: [
+          { code: "battery_percentage", value: row.battery_pct },
+          { code: "status", value: row.lifecycle_state || (row.is_online ? "online" : "offline") },
+          { code: "rssi", value: row.rssi },
+          { code: "shock", value: false },
+        ],
+      }]);
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
+    }
+  });
+
+  app.get("/api/iot/alarms", isAdminAuthenticated, async (req, res) => {
+    try {
+      const devices = await loadAdminIotDevices();
+      res.json(devices.filter((device: any) => device?.alarmActive));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load alarms" });
+    }
+  });
+
+  const ownedIotDevicesForBranch = async (branchId: string) => {
+    try {
+      const result: any = await db.execute(sql`
+        SELECT
+          id,
+          device_id,
+          hardware_model,
+          firmware_version,
+          branch_id,
+          friendly_name,
+          installation_location,
+          lifecycle_state,
+          is_online,
+          battery_pct,
+          rssi,
+          last_seen_at,
+          last_alarm_at
+        FROM owned_iot_devices
+        WHERE branch_id::text = ${String(branchId)}
+          AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+        ORDER BY friendly_name NULLS LAST, device_id
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return rows.map((row: any) => {
+        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+        return {
+          id: row.id,
+          deviceId: row.device_id,
+          deviceName: row.friendly_name || row.device_id,
+          branchId: row.branch_id,
+          notes: row.installation_location || row.hardware_model,
+          isOnline,
+          reportedOnline: Boolean(row.is_online),
+          alarmActive: Boolean(row.last_alarm_at),
+          lastAlarmAt: row.last_alarm_at,
+          lastCheckedAt: row.last_seen_at,
+          hardwareModel: row.hardware_model,
+          firmwareVersion: row.firmware_version,
+          provider: "food-safety-owned-mqtt",
+          lastStatus: [
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "rssi", value: row.rssi },
+            { code: "shock", value: Boolean(row.last_alarm_at) },
+          ],
+        };
+      });
+    } catch (error: any) {
+      // Older deployments may not have received the owned-IoT schema yet.
+      if (String(error?.message || "").includes("owned_iot_devices")) return [];
+      throw error;
+    }
+  };
+
+  app.get("/api/branch/iot-alarm-history", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+      res.json(await loadIotAlarmHistory(String(session.branchId)));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarm history" });
+    }
+  });
+
+  app.get("/api/branch/iot-devices", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(ownedDevices.map((device: any) => ({ ...device, branchName })));
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch devices" });
+    }
+  });
+
+  app.get("/api/branch/iot-alarms", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const branch = await storage.getBranch(session.branchId);
+      const branchName = branch?.name || "Current branch";
+      const ownedDevices = await ownedIotDevicesForBranch(session.branchId);
+      res.json(
+        ownedDevices
+          .filter((device: any) => device.alarmActive)
+          .map((device: any) => ({ ...device, branchName }))
+      );
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to load branch alarms" });
+    }
+  });
+
+  app.post("/api/branch/iot-devices/:id/clear-alarm", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
+
+      const result: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+          AND branch_id::text = ${String(session.branchId)}
+        RETURNING id, device_id, friendly_name, branch_id, is_online, last_seen_at
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+
+      const row = rows[0];
+      res.json({
+        id: row.id,
+        deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id,
+        isOnline: ownedIotIsOnline(row.is_online, row.last_seen_at),
+        reportedOnline: Boolean(row.is_online),
+        lastCheckedAt: row.last_seen_at,
+        alarmActive: false,
+        provider: "food-safety-owned-mqtt",
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to acknowledge alarm" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
+        `);
+        const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
+        resolvedDeviceId = "FS-MOUSE-" + String(Number(nextRows?.[0]?.max_id || 0) + 1).padStart(6, "0");
+      }
+
+      if (!/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(resolvedDeviceId)) {
+        return res.status(400).json({ message: "Device ID must use the Food Safety format, for example FS-MOUSE-000001" });
+      }
+
+      const existingResult: any = await db.execute(sql`
+        SELECT id, branch_id
+        FROM owned_iot_devices
+        WHERE device_id = ${resolvedDeviceId}
+        LIMIT 1
+      `);
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      const existing = existingRows[0];
+      if (existing?.branch_id) {
+        return res.status(409).json({ message: resolvedDeviceId + " is already assigned. Use Link Existing after physically checking it." });
+      }
+
+      await createOwnedIotDeviceBackup("auto", "Before Device Check assignment").catch((error: any) =>
+        console.warn("Automatic device backup failed:", error?.message || error),
+      );
+
+      if (existing?.id) {
+        await db.execute(sql`
+          UPDATE owned_iot_devices
+          SET hardware_model = ${model},
+              branch_id = ${targetBranchId}::uuid,
+              friendly_name = ${friendlyName},
+              installation_location = ${location},
+              lifecycle_state = 'awaiting_activation',
+              is_online = false,
+              last_alarm_at = NULL,
+              updated_at = now()
+          WHERE id = ${existing.id}::uuid
+        `);
+      } else {
+        await db.execute(sql`
+          INSERT INTO owned_iot_devices
+            (device_id, hardware_model, branch_id, friendly_name, installation_location, lifecycle_state, is_online, created_at, updated_at)
+          VALUES
+            (${resolvedDeviceId}, ${model}, ${targetBranchId}::uuid, ${friendlyName}, ${location}, 'awaiting_activation', false, now(), now())
+        `);
+      }
+
+      await db.execute(sql`
+        UPDATE owned_iot_device_checks
+        SET assigned_device_id = ${resolvedDeviceId}, updated_at = now()
+        WHERE id::text = ${checkId}
+      `);
+
+      return res.status(201).json({
+        success: true,
+        deviceId: resolvedDeviceId,
+        deviceName: friendlyName,
+        branchId: targetBranchId,
+        branchName: branch.name,
+        location,
+      });
+    } catch (error: any) {
+      console.error("Failed to register Device Check mouse:", error?.message || error);
+      return res.status(500).json({ message: "Could not register and assign this physical mouse" });
+    }
+  });
 
   app.get("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
