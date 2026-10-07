@@ -147,7 +147,7 @@ export default function DeviceCheckPanel() {
 
     setBusy("assign:" + row.id);
     try {
-      const response = await fetch("/api/iot/device-check/" + row.id + "/register-assign", {
+      const registerResponse = await fetch("/api/iot/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -159,14 +159,38 @@ export default function DeviceCheckPanel() {
           hardwareModel: "BK7231N-MOUSE-V1",
         }),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({ title: "Could not assign device", description: data?.message || "Please try again", variant: "destructive" });
+      const registeredData = await registerResponse.json().catch(() => ({}));
+      if (!registerResponse.ok) {
+        toast({ title: "Could not register device", description: registeredData?.message || "Please try again", variant: "destructive" });
         return;
       }
+
+      const permanentDeviceId = String(registeredData?.deviceId || "").trim();
+      if (!permanentDeviceId) {
+        toast({ title: "Registration incomplete", description: "The permanent FS-MOUSE ID was not returned.", variant: "destructive" });
+        return;
+      }
+
+      const linkResponse = await fetch("/api/iot/device-check/" + row.id + "/link-existing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ deviceId: permanentDeviceId }),
+      });
+      const linkedData = await linkResponse.json().catch(() => ({}));
+      if (!linkResponse.ok) {
+        toast({
+          title: "Device registered — link needs attention",
+          description: linkedData?.message || (permanentDeviceId + " was created, but the physical MAC could not be linked. Use Link Existing."),
+          variant: "destructive",
+        });
+        await load();
+        return;
+      }
+
       toast({
         title: "Device registered and assigned",
-        description: (data?.deviceId || "Food Safety device") + " is now tied to this physical mouse and branch.",
+        description: permanentDeviceId + " is now tied to this physical mouse and branch.",
       });
       await load();
     } finally {
