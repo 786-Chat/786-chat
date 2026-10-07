@@ -91,6 +91,14 @@ function patchMonthlyReportSend(source: string): string {
   return source.slice(0, start) + replacement + source.slice(end)
 }
 
+function patchDeviceBackupDateFormatter(source: string): string {
+  if (!source) return source
+  return source.replace(
+    'formatUkDateTime(deviceBackup.created_at)',
+    'new Date(deviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })',
+  )
+}
+
 export function hardenPestControlMonthlyReports(projectId: string, files: Record<string, string>): Record<string, string> {
   if (projectId !== PEST_CONTROL_PROJECT_ID) return files
   const next = { ...files }
@@ -100,5 +108,9 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
   if (next[objectStoragePath]) next[objectStoragePath] = patchObjectStorage(next[objectStoragePath])
   if (next[routesPath]) next[routesPath] = patchMonthlyReportRoutes(next[routesPath])
   if (next[storagePath]) next[storagePath] = patchMonthlyReportSend(next[storagePath])
-  return hardenPestControlDeviceBackups(projectId, next)
+
+  const hardened = hardenPestControlDeviceBackups(projectId, next)
+  const iotAdminPath = "client/src/components/IotAdminPanel.tsx"
+  if (hardened[iotAdminPath]) hardened[iotAdminPath] = patchDeviceBackupDateFormatter(hardened[iotAdminPath])
+  return hardened
 }
