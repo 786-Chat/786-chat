@@ -778,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const deviceId = String(body.deviceId || body.device_id || "").trim();
       const type = String(body.type || body.eventType || body.event_type || "").trim();
-      const allowedTypes = new Set(["trap_triggered", "trap_reset", "heartbeat", "online", "offline"]);
+      const allowedTypes = new Set(["trap_triggered", "trap_reset", "heartbeat", "online", "offline", "low_battery", "hardware_fault"]);
 
       if (!deviceId) {
         return res.status(400).json({ message: "deviceId is required", code: "DEVICE_ID_REQUIRED" });
@@ -7686,14 +7686,75 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  // A device is only "Connected" when it has reported recently.
-  // This prevents an old MQTT event from leaving a device green for days.
+  // Food Safety trap health windows. Battery traps may sleep between heartbeats.
   const OWNED_IOT_ONLINE_WINDOW_MS = 30 * 60 * 1000;
+  const OWNED_IOT_STANDBY_WINDOW_MS = 6 * 60 * 60 * 1000;
+  const OWNED_IOT_ATTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+  const OWNED_IOT_RESET_VISIBLE_MS = 30 * 60 * 1000;
+  const OWNED_IOT_LOW_BATTERY_PCT = 20;
 
   const ownedIotIsOnline = (reportedOnline: unknown, lastSeenAt: unknown) => {
     if (!reportedOnline || !lastSeenAt) return false;
     const lastSeenMs = new Date(String(lastSeenAt)).getTime();
     return Number.isFinite(lastSeenMs) && (Date.now() - lastSeenMs) <= OWNED_IOT_ONLINE_WINDOW_MS;
+  };
+
+  const ownedIotDeviceHealth = (row: any) => {
+    const now = Date.now();
+    const lastSeenMs = row?.last_seen_at ? new Date(String(row.last_seen_at)).getTime() : NaN;
+    const lastEventMs = row?.last_event_at ? new Date(String(row.last_event_at)).getTime() : NaN;
+    const seenAgeMs = Number.isFinite(lastSeenMs) ? Math.max(0, now - lastSeenMs) : null;
+    const eventAgeMs = Number.isFinite(lastEventMs) ? Math.max(0, now - lastEventMs) : null;
+    const latestEventType = String(row?.last_event_type || "").trim().toLowerCase();
+    const batteryPct = row?.battery_pct === null || row?.battery_pct === undefined ? null : Number(row.battery_pct);
+    const lowBattery = latestEventType === "low_battery" || (Number.isFinite(batteryPct) && Number(batteryPct) <= OWNED_IOT_LOW_BATTERY_PCT);
+    const resetReceived = latestEventType === "trap_reset" && eventAgeMs !== null && eventAgeMs <= OWNED_IOT_RESET_VISIBLE_MS;
+    const hardwareFault = latestEventType === "hardware_fault";
+    const explicitlyOffline = latestEventType === "offline" || row?.is_online === false;
+    const branchAssigned = Boolean(row?.branch_id);
+    const isOnline = ownedIotIsOnline(row?.is_online, row?.last_seen_at);
+
+    let connectionStatus = "offline";
+    let connectionLabel = "Offline";
+    let statusMessage = "No recent heartbeat. Check batteries, Wi-Fi and the trap.";
+
+    if (!branchAssigned) {
+      connectionStatus = "available";
+      connectionLabel = "Available / Unassigned";
+      statusMessage = "Registered and available for branch assignment.";
+    } else if (hardwareFault) {
+      connectionStatus = "hardware_fault";
+      connectionLabel = "Hardware Fault";
+      statusMessage = "The trap reported a hardware fault. Check the physical device.";
+    } else if (isOnline) {
+      connectionStatus = "connected";
+      connectionLabel = "Connected";
+      statusMessage = "Heartbeat received recently.";
+    } else if (!explicitlyOffline && seenAgeMs !== null && seenAgeMs <= OWNED_IOT_STANDBY_WINDOW_MS) {
+      connectionStatus = "sleeping";
+      connectionLabel = "Sleeping / Standby";
+      statusMessage = "Battery trap is sleeping between heartbeats.";
+    } else if (!explicitlyOffline && (seenAgeMs === null || seenAgeMs <= OWNED_IOT_ATTENTION_WINDOW_MS)) {
+      connectionStatus = "needs_attention";
+      connectionLabel = "Needs Attention";
+      statusMessage = seenAgeMs === null
+        ? "Waiting for the first heartbeat from this trap."
+        : "Heartbeat is overdue. Check battery, Wi-Fi and device position.";
+    }
+
+    return {
+      isOnline,
+      connectionStatus,
+      connectionLabel,
+      statusMessage,
+      lowBattery,
+      resetReceived,
+      hardwareFault,
+      heartbeatAgeMinutes: seenAgeMs === null ? null : Math.floor(seenAgeMs / 60000),
+      latestEventType: latestEventType || null,
+      latestEventAt: row?.last_event_at || null,
+      batteryPct: Number.isFinite(batteryPct) ? Number(batteryPct) : null,
+    };
   };
 
   const ownedIotDevicesForAdmin = async () => {
@@ -7712,21 +7773,46 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          (
+            SELECT e.event_type
+            FROM owned_iot_events e
+            WHERE e.device_id = owned_iot_devices.device_id
+            ORDER BY e.event_at DESC
+            LIMIT 1
+          ) AS last_event_type,
+          (
+            SELECT e.event_at
+            FROM owned_iot_events e
+            WHERE e.device_id = owned_iot_devices.device_id
+            ORDER BY e.event_at DESC
+            LIMIT 1
+          ) AS last_event_at
         FROM owned_iot_devices
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       return rows.map((row: any) => {
-        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+        const health = ownedIotDeviceHealth(row);
         return {
           id: row.id,
           deviceId: row.device_id,
           deviceName: row.friendly_name || row.device_id,
           branchId: row.branch_id,
           notes: row.installation_location || row.hardware_model,
-          isOnline,
+          isOnline: health.isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionStatus: health.connectionStatus,
+          connectionLabel: health.connectionLabel,
+          statusMessage: health.statusMessage,
+          heartbeatAgeMinutes: health.heartbeatAgeMinutes,
+          lowBattery: health.lowBattery,
+          resetReceived: health.resetReceived,
+          hardwareFault: health.hardwareFault,
+          latestEventType: health.latestEventType,
+          latestEventAt: health.latestEventAt,
+          batteryPct: health.batteryPct,
+          rssi: row.rssi,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -7734,8 +7820,8 @@ Generated: ${new Date().toISOString()}
           firmwareVersion: row.firmware_version,
           provider: "food-safety-owned-mqtt",
           lastStatus: [
-            { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "battery_percentage", value: health.batteryPct },
+            { code: "status", value: health.connectionStatus },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -7790,6 +7876,8 @@ Generated: ${new Date().toISOString()}
           WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
           WHEN e.event_type = 'trap_reset' THEN 'Mouse trap reset'
           WHEN e.event_type = 'low_battery' THEN 'Low battery'
+          WHEN e.event_type = 'hardware_fault' THEN 'Hardware fault reported'
+          WHEN e.event_type = 'heartbeat' THEN 'Heartbeat received'
           ELSE ('Device event: ' || e.event_type)
         END AS message,
         e.event_at,
@@ -8230,7 +8318,21 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          (
+            SELECT e.event_type
+            FROM owned_iot_events e
+            WHERE e.device_id = owned_iot_devices.device_id
+            ORDER BY e.event_at DESC
+            LIMIT 1
+          ) AS last_event_type,
+          (
+            SELECT e.event_at
+            FROM owned_iot_events e
+            WHERE e.device_id = owned_iot_devices.device_id
+            ORDER BY e.event_at DESC
+            LIMIT 1
+          ) AS last_event_at
         FROM owned_iot_devices
         WHERE branch_id::text = ${String(branchId)}
           AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
@@ -8238,15 +8340,26 @@ Generated: ${new Date().toISOString()}
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       return rows.map((row: any) => {
-        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
+        const health = ownedIotDeviceHealth(row);
         return {
           id: row.id,
           deviceId: row.device_id,
           deviceName: row.friendly_name || row.device_id,
           branchId: row.branch_id,
           notes: row.installation_location || row.hardware_model,
-          isOnline,
+          isOnline: health.isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionStatus: health.connectionStatus,
+          connectionLabel: health.connectionLabel,
+          statusMessage: health.statusMessage,
+          heartbeatAgeMinutes: health.heartbeatAgeMinutes,
+          lowBattery: health.lowBattery,
+          resetReceived: health.resetReceived,
+          hardwareFault: health.hardwareFault,
+          latestEventType: health.latestEventType,
+          latestEventAt: health.latestEventAt,
+          batteryPct: health.batteryPct,
+          rssi: row.rssi,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -8254,8 +8367,8 @@ Generated: ${new Date().toISOString()}
           firmwareVersion: row.firmware_version,
           provider: "food-safety-owned-mqtt",
           lastStatus: [
-            { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "battery_percentage", value: health.batteryPct },
+            { code: "status", value: health.connectionStatus },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
