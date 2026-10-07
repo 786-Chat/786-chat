@@ -2,7 +2,7 @@ import { hardenPestControlDeviceBackups } from "./pestcontrol-device-backup-hard
 import { hardenPestControlScopedDeviceBackups } from "./pestcontrol-scoped-device-backup-hardening"
 import { hardenPestControlRestorePin } from "./pestcontrol-restore-pin-hardening"
 import { hardenPestControlBackupPin } from "./pestcontrol-backup-pin-hardening"
-import { hardenPestControlHomeWifiIndoorMap } from "./pestcontrol-home-wifi-indoor-map-hardening"
+import { hardenPestControlHomeWifiIndoorMap } from "./pestcontrol-home-wifi-indoor-map-hardening"\nimport { hardenPestControlDeviceCheck } from "./pestcontrol-device-check-hardening"
 
 const PEST_CONTROL_PROJECT_ID = "22c299f8-bf65-410f-9643-92a9776dbfca"
 
@@ -176,5 +176,5 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
     scoped[adminDashboardPath] = patchAdminDashboardDeviceCards(scoped[adminDashboardPath])
     scoped[adminDashboardPath] = patchAdminSidebarDownloadSource(scoped[adminDashboardPath])
   }
-  return hardenPestControlHomeWifiIndoorMap(projectId, hardenPestControlBackupPin(projectId, hardenPestControlRestorePin(projectId, scoped)))
+  return hardenPestControlDeviceCheck(projectId, hardenPestControlHomeWifiIndoorMap(projectId, hardenPestControlBackupPin(projectId, hardenPestControlRestorePin(projectId, scoped))))
 }
