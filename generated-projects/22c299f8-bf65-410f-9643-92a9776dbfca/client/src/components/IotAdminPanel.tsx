@@ -558,7 +558,7 @@ export default function IotAdminPanel() {
                 disabled={Boolean(backupBusyKey || restoreBusyKey)}
                 className="border-red-700/60 text-red-200"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <LockKeyhole className="mr-2 h-4 w-4" />
                 Restore All Devices
               </Button>
             )}
@@ -821,7 +821,7 @@ export default function IotAdminPanel() {
                             disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
                             className="border-amber-700/60 text-amber-200"
                           >
-                            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                            <LockKeyhole className="mr-1 h-3.5 w-3.5" />
                             Restore This Branch
                           </Button>
                         )}
@@ -1011,7 +1011,7 @@ export default function IotAdminPanel() {
                           disabled={Boolean(backupBusyKey || restoreBusyKey)}
                           className="border-amber-700/60 text-amber-200"
                         >
-                          <RefreshCw className="mr-1 h-3 w-3" />
+                          <LockKeyhole className="mr-1 h-3 w-3" />
                           Restore Device
                         </Button>
                       )}
