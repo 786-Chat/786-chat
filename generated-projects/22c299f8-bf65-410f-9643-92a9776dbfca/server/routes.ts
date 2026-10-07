@@ -8342,38 +8342,7 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  app.post("/api/iot/device-check/:id/register-assign", isAdminAuthenticated, async (req, res) => {
-    try {
-      await ensureOwnedIotSchema();
-      const checkId = String(req.params.id || "").trim();
-      const friendlyName = String(req.body?.deviceName || "").trim();
-      const targetBranchId = String(req.body?.branchId || "").trim();
-      const location = String(req.body?.notes || "").trim() || null;
-      const model = String(req.body?.hardwareModel || "").trim() || "BK7231N-MOUSE-V1";
-      let resolvedDeviceId = String(req.body?.deviceId || "").trim().toUpperCase();
-
-      if (!checkId || !friendlyName || !targetBranchId) {
-        return res.status(400).json({ message: "Physical mouse, friendly name and branch are required" });
-      }
-
-      const checkResult: any = await db.execute(sql`
-        SELECT id, assigned_device_id
-        FROM owned_iot_device_checks
-        WHERE id::text = ${checkId}
-        LIMIT 1
-      `);
-      const checkRows = Array.isArray(checkResult) ? checkResult : (checkResult?.rows || []);
-      if (!checkRows.length) return res.status(404).json({ message: "Physical mouse was not found in Device Check" });
-      if (checkRows[0].assigned_device_id) {
-        return res.status(409).json({ message: "This physical mouse is already linked to " + checkRows[0].assigned_device_id });
-      }
-
-      const branch = await storage.getBranch(targetBranchId);
-      if (!branch) return res.status(400).json({ message: "The selected branch does not exist" });
-
-      if (!resolvedDeviceId) {
-        const nextResult: any = await db.execute(sql`
-          SELECT COALESCE(MAX((substring(device_id from '([0-9]{6,})
+  app.get("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
       res.json(await loadAdminIotDevices());
     } catch (err: any) {
