@@ -7710,7 +7710,7 @@ Generated: ${new Date().toISOString()}
     const lowBattery = latestEventType === "low_battery" || (Number.isFinite(batteryPct) && Number(batteryPct) <= OWNED_IOT_LOW_BATTERY_PCT);
     const resetReceived = latestEventType === "trap_reset" && eventAgeMs !== null && eventAgeMs <= OWNED_IOT_RESET_VISIBLE_MS;
     const hardwareFault = latestEventType === "hardware_fault";
-    const explicitlyOffline = latestEventType === "offline" || row?.is_online === false;
+    const explicitlyOffline = latestEventType === "offline";
     const branchAssigned = Boolean(row?.branch_id);
     const isOnline = ownedIotIsOnline(row?.is_online, row?.last_seen_at);
 
