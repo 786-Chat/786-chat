@@ -94,6 +94,7 @@ import {
   Share2,
   ExternalLink,
   RefreshCw,
+  Radar,
   PlayCircle,
   PauseCircle,
   StopCircle,
@@ -155,6 +156,7 @@ import UsefulLinksSection from "@/components/UsefulLinksSection";
 import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
 import IotAdminPanel from "@/components/IotAdminPanel";
+import DeviceCheckPanel from "@/components/DeviceCheckPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
@@ -2351,6 +2353,7 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
+      { id: "device-check", label: "Device Check", icon: Radar },
       { id: "iot-cloud", label: "Smart Devices", icon: Zap }
     ]},
     
@@ -3955,6 +3958,9 @@ export default function AdminDashboard() {
                 </Card>
               </div>
             )}
+
+            {/* Physical device identification before branch assignment */}
+            {activeTab === "device-check" && <DeviceCheckPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
             {activeTab === "iot-cloud" && <IotAdminPanel />}
