@@ -7634,6 +7634,27 @@ Generated: ${new Date().toISOString()}
         return res.status(400).json({ message: "A branch or device ID is required for this backup." });
       }
 
+      // A manual backup can only run after a successful admin PIN check.
+      // The grant is one-time, scope-bound, session-bound, and expires after 5 minutes.
+      const session = req.session as any;
+      const suppliedGrant = String(req.body?.backupGrant || "");
+      const storedGrant = session?.pestDeviceBackupGrant;
+      const grantValid = Boolean(
+        suppliedGrant &&
+        storedGrant?.token === suppliedGrant &&
+        storedGrant?.scope === scope &&
+        String(storedGrant?.scopeId || "") === String(scopeId || "") &&
+        Number(storedGrant?.expiresAt || 0) > Date.now()
+      );
+
+      if (!grantValid) {
+        return res.status(403).json({
+          message: "Backup PIN verification is required or has expired. Enter the PIN again.",
+        });
+      }
+
+      delete session.pestDeviceBackupGrant;
+
       const defaultLabel = scope === "device"
         ? `Device ${scopeId}`
         : scope === "branch"
@@ -7672,12 +7693,13 @@ Generated: ${new Date().toISOString()}
       }
 
       const pin = String(req.body?.pin || "");
+      const action = String(req.body?.action || "restore").trim().toLowerCase() === "backup" ? "backup" : "restore";
       const scope = normaliseOwnedIotBackupScope(req.body?.scope);
       const scopeId = String(req.body?.scopeId || "").trim();
       const configuredPin = String(process.env.PEST_DEVICE_RESTORE_PIN || "");
 
       if (!configuredPin) {
-        return res.status(503).json({ success: false, message: "Restore PIN security is not configured." });
+        return res.status(503).json({ success: false, message: "Smart Devices PIN security is not configured." });
       }
       if (!pin) {
         return res.status(400).json({ success: false, message: "PIN is required." });
@@ -7695,7 +7717,7 @@ Generated: ${new Date().toISOString()}
           session.pestRestorePinFailures = 0;
           return res.status(429).json({
             success: false,
-            message: "Too many incorrect PIN attempts. Restore is locked for 15 minutes.",
+            message: "Too many incorrect PIN attempts. Smart Devices backup/restore is locked for 15 minutes.",
           });
         }
 
@@ -7708,23 +7730,32 @@ Generated: ${new Date().toISOString()}
       session.pestRestorePinFailures = 0;
       delete session.pestRestorePinLockedUntil;
 
-      const restoreGrant = randomUUID();
-      session.pestDeviceRestoreGrant = {
-        token: restoreGrant,
+      const actionGrant = randomUUID();
+      const grant = {
+        token: actionGrant,
         scope,
         scopeId,
         expiresAt: now + (5 * 60 * 1000),
       };
 
+      if (action === "backup") {
+        session.pestDeviceBackupGrant = grant;
+      } else {
+        session.pestDeviceRestoreGrant = grant;
+      }
+
       return res.json({
         success: true,
-        restoreGrant,
+        restoreGrant: action === "restore" ? actionGrant : undefined,
+        backupGrant: action === "backup" ? actionGrant : undefined,
         expiresInSeconds: 300,
-        message: "PIN verified. Restore confirmation is unlocked for this action only.",
+        message: action === "backup"
+          ? "PIN verified. This backup action is unlocked."
+          : "PIN verified. Restore confirmation is unlocked for this action only.",
       });
     } catch (error: any) {
-      console.error("Failed to verify device restore PIN:", error?.message || error);
-      return res.status(500).json({ success: false, message: "Could not verify restore PIN." });
+      console.error("Failed to verify Smart Devices PIN:", error?.message || error);
+      return res.status(500).json({ success: false, message: "Could not verify Smart Devices PIN." });
     }
   });
 
