@@ -1,5 +1,5 @@
 import { hardenPestControlDeviceBackups } from "./pestcontrol-device-backup-hardening"
-import { hardenPestControlDeviceStatuses } from "./pestcontrol-device-status-hardening"
+import { hardenPestControlScopedDeviceBackups } from "./pestcontrol-scoped-device-backup-hardening"
 
 const PEST_CONTROL_PROJECT_ID = "22c299f8-bf65-410f-9643-92a9776dbfca"
 
@@ -110,11 +110,8 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
   if (next[routesPath]) next[routesPath] = patchMonthlyReportRoutes(next[routesPath])
   if (next[storagePath]) next[storagePath] = patchMonthlyReportSend(next[storagePath])
 
-  const hardened = hardenPestControlDeviceStatuses(
-    projectId,
-    hardenPestControlDeviceBackups(projectId, next),
-  )
+  const hardened = hardenPestControlDeviceBackups(projectId, next)
   const iotAdminPath = "client/src/components/IotAdminPanel.tsx"
   if (hardened[iotAdminPath]) hardened[iotAdminPath] = patchDeviceBackupDateFormatter(hardened[iotAdminPath])
-  return hardened
+  return hardenPestControlScopedDeviceBackups(projectId, hardened)
 }
