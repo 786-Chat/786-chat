@@ -62,7 +62,7 @@ export default function IotAdminPanel() {
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
   const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
-  const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
+  const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
   const [gatewayPort, setGatewayPort] = useState("1883");
   const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
@@ -742,18 +742,103 @@ export default function IotAdminPanel() {
           <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
         </div>
         <p className="text-sm text-slate-300">
-          Devices use the proven Food Safety path: trap firmware → customer 2.4 GHz Wi-Fi → HP2 Mosquitto → Pest Control.
-          This Admin page registers and assigns devices; it does not pretend to program factory Wi-Fi from the browser.
+          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
+          The Wi-Fi password is kept only in this browser session and is never saved in Neon.
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
+            <select
+              value={wifiDeviceId}
+              onChange={(event) => setWifiDeviceId(event.target.value)}
+              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+            >
+              <option value="">Select registered device...</option>
+              {(activeBranch ? activeBranchDevices : ownedDevices).map((device: any) => (
+                <option key={device.id} value={device.deviceId}>
+                  {device.deviceName || device.deviceId} — {device.deviceId}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
+            <Input
+              value={wifiSsid}
+              onChange={(event) => setWifiSsid(event.target.value)}
+              placeholder="Customer / home 2.4 GHz Wi-Fi"
+              autoComplete="off"
+              className="border-slate-600 bg-slate-900 text-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Password</label>
+            <Input
+              type="password"
+              value={wifiPassword}
+              onChange={(event) => setWifiPassword(event.target.value)}
+              placeholder="Enter Wi-Fi password"
+              autoComplete="new-password"
+              className="border-slate-600 bg-slate-900 text-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Device Setup Address</label>
+            <Input
+              value={setupAddress}
+              onChange={(event) => setSetupAddress(event.target.value)}
+              placeholder="http://192.168.4.1"
+              className="border-slate-600 bg-slate-900 font-mono text-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">HP2 / MQTT Host</label>
+            <Input
+              value={gatewayHost}
+              onChange={(event) => setGatewayHost(event.target.value)}
+              className="border-slate-600 bg-slate-900 font-mono text-white"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-400">MQTT Port</label>
+            <Input
+              value={gatewayPort}
+              onChange={(event) => setGatewayPort(event.target.value.replace(/[^0-9]/g, ""))}
+              inputMode="numeric"
+              className="border-slate-600 bg-slate-900 font-mono text-white"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            onClick={sendWifiDirect}
+            disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
+            className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
+            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
+          </Button>
+          <p className="text-xs text-slate-400">
+            No new tab opens. This prepares the details for the physical trap setup; it does not fake a Connected status.
+          </p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">192.168.0.14</p>
+            <p className="mt-1 break-all font-mono text-sm font-semibold text-white">{gatewayHost || "192.168.0.14"}</p>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">MQTT Port</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">1883</p>
+            <p className="mt-1 font-mono text-sm font-semibold text-white">{gatewayPort || "1883"}</p>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
@@ -764,11 +849,6 @@ export default function IotAdminPanel() {
             <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
           </div>
         </div>
-
-        <p className="mt-3 text-xs text-slate-400">
-          A registered trap changes to Connected automatically after its real wireless gateway event reaches Pest Control.
-          No customer Wi-Fi password is stored or copied by this dashboard.
-        </p>
       </div>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
@@ -900,7 +980,7 @@ export default function IotAdminPanel() {
                   </div>
                 </div>
                 {activeBranchMapQuery && (activeBranch.address || activeBranch.postCode) && (
-                  <div className="h-48 border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
+                  <div className="relative h-48 overflow-hidden border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
                     <iframe
                       title={`${activeBranch.name} map`}
                       src={`https://www.google.com/maps?q=${encodeURIComponent(activeBranchMapQuery)}&output=embed`}
@@ -908,6 +988,23 @@ export default function IotAdminPanel() {
                       loading="lazy"
                       referrerPolicy="no-referrer-when-downgrade"
                     />
+                    {activeBranchDevices.length > 0 && (
+                      <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex flex-wrap gap-1.5">
+                        {activeBranchDevices.slice(0, 4).map((device: any, index: number) => (
+                          <div
+                            key={device.id}
+                            className="flex max-w-full items-center gap-1.5 rounded-full border border-slate-600/80 bg-slate-950/90 px-2.5 py-1 text-[11px] text-white shadow-lg backdrop-blur"
+                          >
+                            <span aria-hidden="true">🐭</span>
+                            <span className="font-semibold">Device {index + 1}</span>
+                            <span className={device.isOnline ? "text-emerald-300" : "text-slate-400"}>
+                              {device.isOnline ? "● Connected" : "● Offline"}
+                            </span>
+                            <span className="truncate text-cyan-200">• {device.notes || "Installation area not set"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
