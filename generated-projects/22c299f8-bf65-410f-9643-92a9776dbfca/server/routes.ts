@@ -778,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const deviceId = String(body.deviceId || body.device_id || "").trim();
       const type = String(body.type || body.eventType || body.event_type || "").trim();
-      const allowedTypes = new Set(["trap_triggered", "trap_reset", "heartbeat", "online", "offline", "low_battery", "hardware_fault"]);
+      const allowedTypes = new Set(["trap_triggered", "trap_reset", "heartbeat", "online", "offline"]);
 
       if (!deviceId) {
         return res.status(400).json({ message: "deviceId is required", code: "DEVICE_ID_REQUIRED" });
@@ -7506,6 +7506,9 @@ Generated: ${new Date().toISOString()}
       )
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_backups_created_idx ON owned_iot_device_backups(created_at DESC)`);
+    await db.execute(sql`ALTER TABLE owned_iot_device_backups ADD COLUMN IF NOT EXISTS scope_type text NOT NULL DEFAULT 'all'`);
+    await db.execute(sql`ALTER TABLE owned_iot_device_backups ADD COLUMN IF NOT EXISTS scope_id text`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_backups_scope_idx ON owned_iot_device_backups(scope_type, scope_id, created_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_last_seen_idx ON owned_iot_devices(last_seen_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
@@ -7514,123 +7517,215 @@ Generated: ${new Date().toISOString()}
   // 786.Chat: register Food Safety Owned IoT routes before any Neon call.
   // Each authenticated handler ensures the schema lazily.
   // 786.Chat: backup only durable device identity + branch assignment fields.
-  // Online/offline, last-seen, alarm, RSSI and battery remain gateway-owned truth.
-  const createOwnedIotDeviceBackup = async (backupType = 'manual', label = '') => {
+  // Live telemetry is deliberately excluded so restore can never fake a connected trap.
+  type OwnedIotBackupScope = "all" | "branch" | "device";
+
+  const normaliseOwnedIotBackupScope = (value: unknown): OwnedIotBackupScope => {
+    const scope = String(value || "all").trim().toLowerCase();
+    return scope === "branch" || scope === "device" ? scope : "all";
+  };
+
+  const selectOwnedIotBackupRows = async (scope: OwnedIotBackupScope, scopeId = "") => {
+    let result: any;
+    if (scope === "device") {
+      result = await db.execute(sql`
+        SELECT
+          device_id, hardware_model, firmware_version, branch_id::text AS branch_id,
+          friendly_name, installation_location, lifecycle_state
+        FROM owned_iot_devices
+        WHERE device_id = ${scopeId}
+        ORDER BY device_id
+      `);
+    } else if (scope === "branch") {
+      result = await db.execute(sql`
+        SELECT
+          device_id, hardware_model, firmware_version, branch_id::text AS branch_id,
+          friendly_name, installation_location, lifecycle_state
+        FROM owned_iot_devices
+        WHERE branch_id::text = ${scopeId}
+        ORDER BY device_id
+      `);
+    } else {
+      result = await db.execute(sql`
+        SELECT
+          device_id, hardware_model, firmware_version, branch_id::text AS branch_id,
+          friendly_name, installation_location, lifecycle_state
+        FROM owned_iot_devices
+        ORDER BY device_id
+      `);
+    }
+    return Array.isArray(result) ? result : (result?.rows || []);
+  };
+
+  const createOwnedIotDeviceBackup = async (
+    backupType = "manual",
+    label = "",
+    scope: OwnedIotBackupScope = "all",
+    scopeId = "",
+  ) => {
     await ensureOwnedIotSchema();
-    const devicesResult: any = await db.execute(sql`
-      SELECT
-        device_id, hardware_model, firmware_version, branch_id::text AS branch_id,
-        friendly_name, installation_location, lifecycle_state
-      FROM owned_iot_devices
-      WHERE branch_id IS NOT NULL
-      ORDER BY device_id
-    `);
-    const deviceRows = Array.isArray(devicesResult) ? devicesResult : (devicesResult?.rows || []);
+    const deviceRows = await selectOwnedIotBackupRows(scope, scopeId);
     if (!deviceRows.length) return null;
+
     const snapshot = deviceRows.map((row: any) => ({
-      deviceId: String(row.device_id || ''),
+      deviceId: String(row.device_id || ""),
       hardwareModel: row.hardware_model || null,
       firmwareVersion: row.firmware_version || null,
       branchId: row.branch_id ? String(row.branch_id) : null,
       friendlyName: row.friendly_name || null,
       installationLocation: row.installation_location || null,
-      lifecycleState: row.lifecycle_state || 'awaiting_activation',
+      lifecycleState: row.lifecycle_state || "awaiting_activation",
     }));
     const snapshotJson = JSON.stringify(snapshot);
+    const storedScopeId = scope === "all" ? null : scopeId;
+
     const createdResult: any = await db.execute(sql`
-      INSERT INTO owned_iot_device_backups (backup_type, label, device_count, snapshot)
-      VALUES (${backupType}, ${label || null}, ${snapshot.length}, CAST(${snapshotJson} AS jsonb))
-      RETURNING id::text AS id, backup_type, label, device_count, created_at
+      INSERT INTO owned_iot_device_backups
+        (backup_type, label, device_count, snapshot, scope_type, scope_id)
+      VALUES
+        (${backupType}, ${label || null}, ${snapshot.length}, CAST(${snapshotJson} AS jsonb), ${scope}, ${storedScopeId})
+      RETURNING id::text AS id, backup_type, label, device_count, scope_type, scope_id, created_at
     `);
     const createdRows = Array.isArray(createdResult) ? createdResult : (createdResult?.rows || []);
     return createdRows[0] || null;
   };
 
-  app.get("/api/iot/device-backups/latest", isAdminAuthenticated, async (_req, res) => {
+  app.get("/api/iot/device-backups/latest", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
-      const result: any = await db.execute(sql`
-        SELECT id::text AS id, backup_type, label, device_count, created_at
-        FROM owned_iot_device_backups
-        WHERE backup_type = 'manual'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `);
+      const scope = normaliseOwnedIotBackupScope(req.query?.scope);
+      const scopeId = String(req.query?.scopeId || "").trim();
+
+      if (scope !== "all" && !scopeId) {
+        return res.status(400).json({ message: "A branch or device ID is required for this backup." });
+      }
+
+      let result: any;
+      if (scope === "all") {
+        result = await db.execute(sql`
+          SELECT id::text AS id, backup_type, label, device_count, scope_type, scope_id, created_at
+          FROM owned_iot_device_backups
+          WHERE backup_type = 'manual' AND scope_type = 'all'
+          ORDER BY created_at DESC
+          LIMIT 1
+        `);
+      } else {
+        result = await db.execute(sql`
+          SELECT id::text AS id, backup_type, label, device_count, scope_type, scope_id, created_at
+          FROM owned_iot_device_backups
+          WHERE backup_type = 'manual' AND scope_type = ${scope} AND scope_id = ${scopeId}
+          ORDER BY created_at DESC
+          LIMIT 1
+        `);
+      }
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       return res.json({ backup: rows[0] || null });
     } catch (error: any) {
-      console.error('Failed to load latest device backup:', error?.message || error);
-      return res.status(500).json({ message: 'Could not load device backup' });
+      console.error("Failed to load latest device backup:", error?.message || error);
+      return res.status(500).json({ message: "Could not load device backup" });
     }
   });
 
   app.post("/api/iot/device-backups", isAdminAuthenticated, async (req, res) => {
     try {
-      const label = String(req.body?.label || 'Working device setup').trim().slice(0, 200);
-      const backup = await createOwnedIotDeviceBackup('manual', label);
+      const scope = normaliseOwnedIotBackupScope(req.body?.scope);
+      const scopeId = String(req.body?.scopeId || "").trim();
+      if (scope !== "all" && !scopeId) {
+        return res.status(400).json({ message: "A branch or device ID is required for this backup." });
+      }
+
+      const defaultLabel = scope === "device"
+        ? `Device ${scopeId}`
+        : scope === "branch"
+          ? "Branch device setup"
+          : "Emergency all-device setup";
+      const label = String(req.body?.label || defaultLabel).trim().slice(0, 200);
+      const backup = await createOwnedIotDeviceBackup("manual", label, scope, scopeId);
       if (!backup) {
-        return res.status(409).json({ message: 'There are no assigned Food Safety devices to back up.' });
+        return res.status(409).json({
+          message: scope === "all"
+            ? "There are no Food Safety devices to back up."
+            : scope === "branch"
+              ? "This branch has no Food Safety devices to back up."
+              : "This Food Safety device was not found.",
+        });
       }
       return res.status(201).json({ success: true, backup });
     } catch (error: any) {
-      console.error('Failed to create device backup:', error?.message || error);
-      return res.status(500).json({ message: 'Could not create device backup' });
+      console.error("Failed to create device backup:", error?.message || error);
+      return res.status(500).json({ message: "Could not create device backup" });
     }
   });
 
   app.post("/api/iot/device-backups/:id/restore", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
-      const backupId = String(req.params.id || '').trim();
+      const backupId = String(req.params.id || "").trim();
       const backupResult: any = await db.execute(sql`
-        SELECT id::text AS id, label, snapshot, created_at
+        SELECT id::text AS id, label, snapshot, scope_type, scope_id, created_at
         FROM owned_iot_device_backups
         WHERE id::text = ${backupId}
         LIMIT 1
       `);
       const backupRows = Array.isArray(backupResult) ? backupResult : (backupResult?.rows || []);
-      if (!backupRows.length) return res.status(404).json({ message: 'Device backup was not found.' });
+      if (!backupRows.length) return res.status(404).json({ message: "Device backup was not found." });
 
-      const rawSnapshot = backupRows[0]?.snapshot;
-      const snapshot = Array.isArray(rawSnapshot)
-        ? rawSnapshot
-        : (() => { try { return JSON.parse(String(rawSnapshot || '[]')); } catch { return []; } })();
-      if (!Array.isArray(snapshot) || !snapshot.length) {
-        return res.status(409).json({ message: 'This device backup is empty.' });
+      const backupRow = backupRows[0];
+      const scope = normaliseOwnedIotBackupScope(backupRow?.scope_type);
+      const scopeId = String(backupRow?.scope_id || "").trim();
+      const expectedScope = req.body?.scope ? normaliseOwnedIotBackupScope(req.body.scope) : scope;
+      const expectedScopeId = String(req.body?.scopeId || "").trim();
+
+      if (expectedScope !== scope || (scope !== "all" && expectedScopeId && expectedScopeId !== scopeId)) {
+        return res.status(409).json({ message: "Backup scope does not match the requested restore." });
       }
 
-      // Safety net: keep the current assignment map before restoring an older one.
-      await createOwnedIotDeviceBackup('auto', `Before restore ${backupId}`).catch((error: any) =>
-        console.warn('Pre-restore device snapshot failed:', error?.message || error),
-      );
+      const rawSnapshot = backupRow?.snapshot;
+      const snapshot = Array.isArray(rawSnapshot)
+        ? rawSnapshot
+        : (() => { try { return JSON.parse(String(rawSnapshot || "[]")); } catch { return []; } })();
+      if (!Array.isArray(snapshot) || !snapshot.length) {
+        return res.status(409).json({ message: "This device backup is empty." });
+      }
+
+      // Safety net: snapshot only the same scope before restoring.
+      await createOwnedIotDeviceBackup(
+        "auto",
+        `Before restore ${backupId}`,
+        scope,
+        scopeId,
+      ).catch((error: any) => console.warn("Pre-restore device snapshot failed:", error?.message || error));
 
       let restored = 0;
       let skipped = 0;
       for (const saved of snapshot) {
-        const deviceId = String(saved?.deviceId || '').trim();
-        const branchId = String(saved?.branchId || '').trim();
-        if (!deviceId || !branchId) { skipped += 1; continue; }
+        const deviceId = String(saved?.deviceId || "").trim();
+        const branchId = saved?.branchId ? String(saved.branchId).trim() : "";
+        if (!deviceId) { skipped += 1; continue; }
 
-        let branchExists = false;
-        try { branchExists = Boolean(await storage.getBranch(branchId)); } catch (_) {}
-        if (!branchExists) { skipped += 1; continue; }
+        if (branchId) {
+          let branchExists = false;
+          try { branchExists = Boolean(await storage.getBranch(branchId)); } catch (_) {}
+          if (!branchExists) { skipped += 1; continue; }
+        }
 
         const existingResult: any = await db.execute(sql`
           SELECT id FROM owned_iot_devices WHERE device_id = ${deviceId} LIMIT 1
         `);
         const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
-        const hardwareModel = String(saved?.hardwareModel || 'BK7231N-MOUSE-V1').trim() || 'BK7231N-MOUSE-V1';
+        const hardwareModel = String(saved?.hardwareModel || "BK7231N-MOUSE-V1").trim() || "BK7231N-MOUSE-V1";
         const firmwareVersion = saved?.firmwareVersion ? String(saved.firmwareVersion) : null;
         const friendlyName = saved?.friendlyName ? String(saved.friendlyName) : deviceId;
         const location = saved?.installationLocation ? String(saved.installationLocation) : null;
-        const lifecycleState = saved?.lifecycleState ? String(saved.lifecycleState) : 'awaiting_activation';
+        const lifecycleState = saved?.lifecycleState ? String(saved.lifecycleState) : "awaiting_activation";
+        const restoredBranchId = branchId || null;
 
         if (existingRows.length) {
           await db.execute(sql`
             UPDATE owned_iot_devices
             SET hardware_model = ${hardwareModel},
                 firmware_version = ${firmwareVersion},
-                branch_id = ${branchId}::uuid,
+                branch_id = ${restoredBranchId}::uuid,
                 friendly_name = ${friendlyName},
                 installation_location = ${location},
                 lifecycle_state = ${lifecycleState},
@@ -7642,24 +7737,28 @@ Generated: ${new Date().toISOString()}
             INSERT INTO owned_iot_devices
               (device_id, hardware_model, firmware_version, branch_id, friendly_name, installation_location, lifecycle_state, is_online)
             VALUES
-              (${deviceId}, ${hardwareModel}, ${firmwareVersion}, ${branchId}::uuid, ${friendlyName}, ${location}, ${lifecycleState}, false)
+              (${deviceId}, ${hardwareModel}, ${firmwareVersion}, ${restoredBranchId}::uuid, ${friendlyName}, ${location}, ${lifecycleState}, false)
           `);
         }
         restored += 1;
       }
 
+      const scopeLabel = scope === "device" ? "device" : scope === "branch" ? "branch" : "all-device";
       return res.json({
         success: true,
         backupId,
+        scope,
+        scopeId: scopeId || null,
         restored,
         skipped,
-        message: `Restored ${restored} device assignment${restored === 1 ? '' : 's'}. Live online status will update only from real HP2 gateway events.`,
+        message: `Restored ${restored} ${scopeLabel} device assignment${restored === 1 ? "" : "s"}. Other shops were not changed. Live status still comes only from real HP2 gateway events.`,
       });
     } catch (error: any) {
-      console.error('Failed to restore device backup:', error?.message || error);
-      return res.status(500).json({ message: 'Could not restore device backup' });
+      console.error("Failed to restore device backup:", error?.message || error);
+      return res.status(500).json({ message: "Could not restore device backup" });
     }
   });
+
   app.get("/api/iot/owned/status", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -7686,75 +7785,14 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  // Food Safety trap health windows. Battery traps may sleep between heartbeats.
+  // A device is only "Connected" when it has reported recently.
+  // This prevents an old MQTT event from leaving a device green for days.
   const OWNED_IOT_ONLINE_WINDOW_MS = 30 * 60 * 1000;
-  const OWNED_IOT_STANDBY_WINDOW_MS = 6 * 60 * 60 * 1000;
-  const OWNED_IOT_ATTENTION_WINDOW_MS = 24 * 60 * 60 * 1000;
-  const OWNED_IOT_RESET_VISIBLE_MS = 30 * 60 * 1000;
-  const OWNED_IOT_LOW_BATTERY_PCT = 20;
 
   const ownedIotIsOnline = (reportedOnline: unknown, lastSeenAt: unknown) => {
     if (!reportedOnline || !lastSeenAt) return false;
     const lastSeenMs = new Date(String(lastSeenAt)).getTime();
     return Number.isFinite(lastSeenMs) && (Date.now() - lastSeenMs) <= OWNED_IOT_ONLINE_WINDOW_MS;
-  };
-
-  const ownedIotDeviceHealth = (row: any) => {
-    const now = Date.now();
-    const lastSeenMs = row?.last_seen_at ? new Date(String(row.last_seen_at)).getTime() : NaN;
-    const lastEventMs = row?.last_event_at ? new Date(String(row.last_event_at)).getTime() : NaN;
-    const seenAgeMs = Number.isFinite(lastSeenMs) ? Math.max(0, now - lastSeenMs) : null;
-    const eventAgeMs = Number.isFinite(lastEventMs) ? Math.max(0, now - lastEventMs) : null;
-    const latestEventType = String(row?.last_event_type || "").trim().toLowerCase();
-    const batteryPct = row?.battery_pct === null || row?.battery_pct === undefined ? null : Number(row.battery_pct);
-    const lowBattery = latestEventType === "low_battery" || (Number.isFinite(batteryPct) && Number(batteryPct) <= OWNED_IOT_LOW_BATTERY_PCT);
-    const resetReceived = latestEventType === "trap_reset" && eventAgeMs !== null && eventAgeMs <= OWNED_IOT_RESET_VISIBLE_MS;
-    const hardwareFault = latestEventType === "hardware_fault";
-    const explicitlyOffline = latestEventType === "offline";
-    const branchAssigned = Boolean(row?.branch_id);
-    const isOnline = ownedIotIsOnline(row?.is_online, row?.last_seen_at);
-
-    let connectionStatus = "offline";
-    let connectionLabel = "Offline";
-    let statusMessage = "No recent heartbeat. Check batteries, Wi-Fi and the trap.";
-
-    if (!branchAssigned) {
-      connectionStatus = "available";
-      connectionLabel = "Available / Unassigned";
-      statusMessage = "Registered and available for branch assignment.";
-    } else if (hardwareFault) {
-      connectionStatus = "hardware_fault";
-      connectionLabel = "Hardware Fault";
-      statusMessage = "The trap reported a hardware fault. Check the physical device.";
-    } else if (isOnline) {
-      connectionStatus = "connected";
-      connectionLabel = "Connected";
-      statusMessage = "Heartbeat received recently.";
-    } else if (!explicitlyOffline && seenAgeMs !== null && seenAgeMs <= OWNED_IOT_STANDBY_WINDOW_MS) {
-      connectionStatus = "sleeping";
-      connectionLabel = "Sleeping / Standby";
-      statusMessage = "Battery trap is sleeping between heartbeats.";
-    } else if (!explicitlyOffline && (seenAgeMs === null || seenAgeMs <= OWNED_IOT_ATTENTION_WINDOW_MS)) {
-      connectionStatus = "needs_attention";
-      connectionLabel = "Needs Attention";
-      statusMessage = seenAgeMs === null
-        ? "Waiting for the first heartbeat from this trap."
-        : "Heartbeat is overdue. Check battery, Wi-Fi and device position.";
-    }
-
-    return {
-      isOnline,
-      connectionStatus,
-      connectionLabel,
-      statusMessage,
-      lowBattery,
-      resetReceived,
-      hardwareFault,
-      heartbeatAgeMinutes: seenAgeMs === null ? null : Math.floor(seenAgeMs / 60000),
-      latestEventType: latestEventType || null,
-      latestEventAt: row?.last_event_at || null,
-      batteryPct: Number.isFinite(batteryPct) ? Number(batteryPct) : null,
-    };
   };
 
   const ownedIotDevicesForAdmin = async () => {
@@ -7773,46 +7811,21 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at,
-          (
-            SELECT e.event_type
-            FROM owned_iot_events e
-            WHERE e.device_id = owned_iot_devices.device_id
-            ORDER BY e.event_at DESC
-            LIMIT 1
-          ) AS last_event_type,
-          (
-            SELECT e.event_at
-            FROM owned_iot_events e
-            WHERE e.device_id = owned_iot_devices.device_id
-            ORDER BY e.event_at DESC
-            LIMIT 1
-          ) AS last_event_at
+          last_alarm_at
         FROM owned_iot_devices
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       return rows.map((row: any) => {
-        const health = ownedIotDeviceHealth(row);
+        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
         return {
           id: row.id,
           deviceId: row.device_id,
           deviceName: row.friendly_name || row.device_id,
           branchId: row.branch_id,
           notes: row.installation_location || row.hardware_model,
-          isOnline: health.isOnline,
+          isOnline,
           reportedOnline: Boolean(row.is_online),
-          connectionStatus: health.connectionStatus,
-          connectionLabel: health.connectionLabel,
-          statusMessage: health.statusMessage,
-          heartbeatAgeMinutes: health.heartbeatAgeMinutes,
-          lowBattery: health.lowBattery,
-          resetReceived: health.resetReceived,
-          hardwareFault: health.hardwareFault,
-          latestEventType: health.latestEventType,
-          latestEventAt: health.latestEventAt,
-          batteryPct: health.batteryPct,
-          rssi: row.rssi,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -7820,8 +7833,8 @@ Generated: ${new Date().toISOString()}
           firmwareVersion: row.firmware_version,
           provider: "food-safety-owned-mqtt",
           lastStatus: [
-            { code: "battery_percentage", value: health.batteryPct },
-            { code: "status", value: health.connectionStatus },
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -7876,8 +7889,6 @@ Generated: ${new Date().toISOString()}
           WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
           WHEN e.event_type = 'trap_reset' THEN 'Mouse trap reset'
           WHEN e.event_type = 'low_battery' THEN 'Low battery'
-          WHEN e.event_type = 'hardware_fault' THEN 'Hardware fault reported'
-          WHEN e.event_type = 'heartbeat' THEN 'Heartbeat received'
           ELSE ('Device event: ' || e.event_type)
         END AS message,
         e.event_at,
@@ -8318,21 +8329,7 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at,
-          (
-            SELECT e.event_type
-            FROM owned_iot_events e
-            WHERE e.device_id = owned_iot_devices.device_id
-            ORDER BY e.event_at DESC
-            LIMIT 1
-          ) AS last_event_type,
-          (
-            SELECT e.event_at
-            FROM owned_iot_events e
-            WHERE e.device_id = owned_iot_devices.device_id
-            ORDER BY e.event_at DESC
-            LIMIT 1
-          ) AS last_event_at
+          last_alarm_at
         FROM owned_iot_devices
         WHERE branch_id::text = ${String(branchId)}
           AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
@@ -8340,26 +8337,15 @@ Generated: ${new Date().toISOString()}
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       return rows.map((row: any) => {
-        const health = ownedIotDeviceHealth(row);
+        const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
         return {
           id: row.id,
           deviceId: row.device_id,
           deviceName: row.friendly_name || row.device_id,
           branchId: row.branch_id,
           notes: row.installation_location || row.hardware_model,
-          isOnline: health.isOnline,
+          isOnline,
           reportedOnline: Boolean(row.is_online),
-          connectionStatus: health.connectionStatus,
-          connectionLabel: health.connectionLabel,
-          statusMessage: health.statusMessage,
-          heartbeatAgeMinutes: health.heartbeatAgeMinutes,
-          lowBattery: health.lowBattery,
-          resetReceived: health.resetReceived,
-          hardwareFault: health.hardwareFault,
-          latestEventType: health.latestEventType,
-          latestEventAt: health.latestEventAt,
-          batteryPct: health.batteryPct,
-          rssi: row.rssi,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -8367,8 +8353,8 @@ Generated: ${new Date().toISOString()}
           firmwareVersion: row.firmware_version,
           provider: "food-safety-owned-mqtt",
           lastStatus: [
-            { code: "battery_percentage", value: health.batteryPct },
-            { code: "status", value: health.connectionStatus },
+            { code: "battery_percentage", value: row.battery_pct },
+            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
