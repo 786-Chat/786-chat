@@ -1,6 +1,7 @@
 import { hardenPestControlDeviceBackups } from "./pestcontrol-device-backup-hardening"
 import { hardenPestControlScopedDeviceBackups } from "./pestcontrol-scoped-device-backup-hardening"
 import { hardenPestControlRestorePin } from "./pestcontrol-restore-pin-hardening"
+import { hardenPestControlBackupPin } from "./pestcontrol-backup-pin-hardening"
 
 const PEST_CONTROL_PROJECT_ID = "22c299f8-bf65-410f-9643-92a9776dbfca"
 
@@ -126,6 +127,34 @@ function patchAdminDashboardDeviceCards(source: string): string {
   return source
 }
 
+function patchAdminSidebarDownloadSource(source: string): string {
+  if (!source) return source
+  let next = source
+
+  next = next.replace(
+    '      { id: "iot-cloud", label: "Smart Devices", icon: Zap },\n      { id: "download-source", label: "Download Source Code", icon: Download }',
+    '      { id: "iot-cloud", label: "Smart Devices", icon: Zap }',
+  )
+
+  const handler = `                          } else if (item.id === "download-source") {
+                            // Download source code as zip file
+                            console.log("🔥 Downloading complete source code...");
+                            const link = document.createElement('a');
+                            link.href = '/api/download-source-code';
+                            link.download = 'pest-control-source-code.zip';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            toast({
+                              title: "Source Code Download",
+                              description: "Complete source code is being downloaded as a ZIP file.",
+                            });
+`
+  if (next.includes(handler)) next = next.replace(handler, "")
+
+  return next
+}
+
 export function hardenPestControlMonthlyReports(projectId: string, files: Record<string, string>): Record<string, string> {
   if (projectId !== PEST_CONTROL_PROJECT_ID) return files
   const next = { ...files }
@@ -142,6 +171,9 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
 
   const scoped = hardenPestControlScopedDeviceBackups(projectId, hardened)
   const adminDashboardPath = "client/src/pages/AdminDashboard.tsx"
-  if (scoped[adminDashboardPath]) scoped[adminDashboardPath] = patchAdminDashboardDeviceCards(scoped[adminDashboardPath])
-  return hardenPestControlRestorePin(projectId, scoped)
+  if (scoped[adminDashboardPath]) {
+    scoped[adminDashboardPath] = patchAdminDashboardDeviceCards(scoped[adminDashboardPath])
+    scoped[adminDashboardPath] = patchAdminSidebarDownloadSource(scoped[adminDashboardPath])
+  }
+  return hardenPestControlBackupPin(projectId, hardenPestControlRestorePin(projectId, scoped))
 }

@@ -50,6 +50,10 @@ export default function IotAdminPanel() {
   const [restorePin, setRestorePin] = useState("");
   const [restorePinError, setRestorePinError] = useState("");
   const [verifyingRestorePin, setVerifyingRestorePin] = useState(false);
+  const [backupPinRequest, setBackupPinRequest] = useState<any>(null);
+  const [backupPin, setBackupPin] = useState("");
+  const [backupPinError, setBackupPinError] = useState("");
+  const [verifyingBackupPin, setVerifyingBackupPin] = useState(false);
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
@@ -165,6 +169,7 @@ export default function IotAdminPanel() {
     scope: "all" | "branch" | "device",
     scopeId = "",
     label = "",
+    backupGrant = "",
   ) => {
     const key = scopedBackupKey(scope, scopeId);
     setBackupBusyKey(key);
@@ -173,7 +178,7 @@ export default function IotAdminPanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ scope, scopeId, label }),
+        body: JSON.stringify({ scope, scopeId, label, backupGrant }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -190,6 +195,65 @@ export default function IotAdminPanel() {
       });
     } finally {
       setBackupBusyKey("");
+    }
+  };
+
+  const prepareScopedBackup = (
+    scope: "all" | "branch" | "device",
+    scopeId = "",
+    label = "",
+  ) => {
+    const key = scopedBackupKey(scope, scopeId);
+    setBackupPin("");
+    setBackupPinError("");
+    setBackupPinRequest({ key, scope, scopeId, label });
+  };
+
+  const cancelBackupPin = () => {
+    if (verifyingBackupPin) return;
+    setBackupPinRequest(null);
+    setBackupPin("");
+    setBackupPinError("");
+  };
+
+  const verifyBackupPin = async () => {
+    if (!backupPinRequest || !backupPin.trim()) {
+      setBackupPinError("Enter the backup PIN.");
+      return;
+    }
+
+    setVerifyingBackupPin(true);
+    setBackupPinError("");
+    try {
+      const response = await fetch("/api/iot/device-backups/verify-restore-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          action: "backup",
+          pin: backupPin,
+          scope: backupPinRequest.scope,
+          scopeId: backupPinRequest.scopeId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.backupGrant) {
+        setBackupPinError(data?.message || "Incorrect PIN.");
+        return;
+      }
+
+      const request = backupPinRequest;
+      setBackupPinRequest(null);
+      setBackupPin("");
+      setBackupPinError("");
+      await backupScopedDevices(
+        request.scope,
+        request.scopeId,
+        request.label,
+        String(data.backupGrant),
+      );
+    } finally {
+      setVerifyingBackupPin(false);
     }
   };
 
@@ -240,6 +304,7 @@ export default function IotAdminPanel() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
+          action: "restore",
           pin: restorePin,
           scope: restorePinRequest.scope,
           scopeId: restorePinRequest.scopeId,
@@ -522,11 +587,11 @@ export default function IotAdminPanel() {
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
-              onClick={() => backupScopedDevices("all", "", "Emergency all-device setup")}
+              onClick={() => prepareScopedBackup("all", "", "Emergency all-device setup")}
               disabled={Boolean(backupBusyKey || restoreBusyKey)}
               className="bg-emerald-600 text-white hover:bg-emerald-500"
             >
-              <Save className="mr-2 h-4 w-4" />
+              <LockKeyhole className="mr-2 h-4 w-4" />
               {backupBusyKey === scopedBackupKey("all") ? "Saving..." : "Backup All Devices"}
             </Button>
             {pendingRestore?.key === scopedBackupKey("all") ? (
@@ -789,11 +854,11 @@ export default function IotAdminPanel() {
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => backupScopedDevices("branch", activeBranch.id, `${activeBranch.name} device setup`)}
+                          onClick={() => prepareScopedBackup("branch", activeBranch.id, `${activeBranch.name} device setup`)}
                           disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
                           className="bg-emerald-600 text-white hover:bg-emerald-500"
                         >
-                          <Save className="mr-1 h-3.5 w-3.5" />
+                          <LockKeyhole className="mr-1 h-3.5 w-3.5" />
                           {backupBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Saving..." : "Backup This Branch"}
                         </Button>
                         {pendingRestore?.key === scopedBackupKey("branch", activeBranch.id) ? (
@@ -979,11 +1044,11 @@ export default function IotAdminPanel() {
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => backupScopedDevices("device", String(device.deviceId), `${device.deviceName || device.deviceId} device setup`)}
+                        onClick={() => prepareScopedBackup("device", String(device.deviceId), `${device.deviceName || device.deviceId} device setup`)}
                         disabled={Boolean(backupBusyKey || restoreBusyKey)}
                         className="bg-emerald-700 text-white hover:bg-emerald-600"
                       >
-                        <Save className="mr-1 h-3 w-3" />
+                        <LockKeyhole className="mr-1 h-3 w-3" />
                         {backupBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "Saving..." : "Backup Device"}
                       </Button>
                       {pendingRestore?.key === scopedBackupKey("device", String(device.deviceId)) ? (
@@ -1073,6 +1138,78 @@ export default function IotAdminPanel() {
           <p>New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.</p>
         </div>
       </div>
+
+      {backupPinRequest && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <LockKeyhole className="h-5 w-5 text-emerald-300" />
+                <h3 className="text-lg font-semibold text-white">Smart Devices Backup Security</h3>
+              </div>
+              <button
+                type="button"
+                onClick={cancelBackupPin}
+                disabled={verifyingBackupPin}
+                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                aria-label="Close backup PIN"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-slate-300">
+              Enter the admin PIN to create this {backupPinRequest.scope === "device" ? "device" : backupPinRequest.scope === "branch" ? "branch" : "all-device"} backup.
+            </p>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">PIN</label>
+            <Input
+              type="password"
+              value={backupPin}
+              onChange={(event) => {
+                setBackupPin(event.target.value);
+                if (backupPinError) setBackupPinError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !verifyingBackupPin) verifyBackupPin();
+              }}
+              autoFocus
+              autoComplete="off"
+              placeholder="Enter your PIN"
+              className="border-slate-600 bg-slate-800 text-white"
+            />
+
+            {backupPinError && (
+              <p className="mt-2 text-sm text-red-300">{backupPinError}</p>
+            )}
+
+            <p className="mt-2 text-xs text-slate-500">
+              The server checks the same protected PIN before the backup is created.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelBackupPin}
+                disabled={verifyingBackupPin}
+                className="border-slate-600 text-slate-200"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={verifyBackupPin}
+                disabled={verifyingBackupPin || !backupPin.trim()}
+                className="bg-emerald-600 text-white hover:bg-emerald-500"
+              >
+                <LockKeyhole className="mr-2 h-4 w-4" />
+                {verifyingBackupPin ? "Checking PIN..." : "Unlock & Backup"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {restorePinRequest && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">

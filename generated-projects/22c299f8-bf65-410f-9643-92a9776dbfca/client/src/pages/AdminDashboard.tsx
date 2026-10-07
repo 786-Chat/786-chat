@@ -2351,8 +2351,7 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
-      { id: "iot-cloud", label: "Smart Devices", icon: Zap },
-      { id: "download-source", label: "Download Source Code", icon: Download }
+      { id: "iot-cloud", label: "Smart Devices", icon: Zap }
     ]},
     
     // ACCOUNT
@@ -2518,19 +2517,6 @@ export default function AdminDashboard() {
                         onClick={() => {
                           if (item.id === "logout") {
                             void handleAdminLogout();
-                          } else if (item.id === "download-source") {
-                            // Download source code as zip file
-                            console.log("🔥 Downloading complete source code...");
-                            const link = document.createElement('a');
-                            link.href = '/api/download-source-code';
-                            link.download = 'pest-control-source-code.zip';
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                            toast({
-                              title: "Source Code Download",
-                              description: "Complete source code is being downloaded as a ZIP file.",
-                            });
                           } else if (item.id === "site-settings") {
                             if (!siteSettingsUnlocked) {
                               setShowSiteSettingsPinDialog(true);
