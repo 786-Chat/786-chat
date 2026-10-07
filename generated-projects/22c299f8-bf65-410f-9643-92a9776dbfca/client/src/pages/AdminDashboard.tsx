@@ -2626,6 +2626,7 @@ export default function AdminDashboard() {
           <div className="h-full overflow-y-auto p-4 lg:p-6 pt-16 lg:pt-6 scroll-ios">
             
             
+            
             {/* Dashboard Section */}
             {activeTab === "dashboard" && (
               <div className="space-y-8">
@@ -3143,7 +3144,7 @@ export default function AdminDashboard() {
                   </div>
                   
                   {branchPagination && branchPagination.totalPages > 1 && (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
                       <Button
                         variant="outline"
                         size="sm"
@@ -4502,7 +4503,7 @@ export default function AdminDashboard() {
                         {/* Visitor Counter */}
                         <div className="space-y-4">
                           <h4 className="text-white font-semibold">Visitor Counter</h4>
-                          <div className="flex items-center space-x-3">
+                          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                             <Input
                               type="number"
                               value={visitorCount}
@@ -7562,7 +7563,7 @@ export default function AdminDashboard() {
                             link.download = selectedReport.filename;
                             link.click();
                           }}
-                          className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                          className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 w-full sm:w-auto whitespace-normal"
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Download
@@ -8325,7 +8326,7 @@ export default function AdminDashboard() {
               Logout
             </Button>
             
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button 
                 variant="outline" 
                 onClick={() => {

@@ -16,19 +16,6 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function formatUkDateTime(value: Date | string | number) {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(new Date(value));
-}
-
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -54,9 +41,21 @@ export default function IotAdminPanel() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [branchLoadError, setBranchLoadError] = useState("");
+  const [wifiDeviceId, setWifiDeviceId] = useState("");
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
+  const [gatewayHost, setGatewayHost] = useState("FOODSAFETY-GW01");
+  const [gatewayPort, setGatewayPort] = useState("1883");
+  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
@@ -65,7 +64,6 @@ export default function IotAdminPanel() {
   const [savingDevice, setSavingDevice] = useState(false);
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
-  const [ukNow, setUkNow] = useState(() => new Date());
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -126,15 +124,70 @@ export default function IotAdminPanel() {
 
   useEffect(() => {
     loadBase().catch(() => {});
+    loadDeviceBackup().catch(() => {});
     const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
     return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setUkNow(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    const current = ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId));
+    if (activeBranchId && current && String(current.branchId) !== String(activeBranchId)) {
+      setWifiDeviceId("");
+      return;
+    }
+    if (!wifiDeviceId) {
+      const first = activeBranchId ? activeBranchDevices[0] : undefined;
+      if (first) setWifiDeviceId(String(first.deviceId || ""));
+    }
+  }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -171,6 +224,7 @@ export default function IotAdminPanel() {
 
       const createdId = String(data?.deviceId || "");
       setLastCreatedId(createdId);
+      setWifiDeviceId(createdId);
       toast({
         title: "Food Safety device registered",
         description: `${String(data?.deviceName || deviceName)} is assigned to ${branchById.get(branchId) || "the selected branch"}.`,
@@ -271,6 +325,38 @@ export default function IotAdminPanel() {
     }
   };
 
+  const provisioningPayload = () => ({
+    deviceId: wifiDeviceId,
+    ssid: wifiSsid,
+    password: wifiPassword,
+    mqttHost: gatewayHost,
+    mqttPort: Number(gatewayPort) || 1883,
+  });
+
+  const sendWifiDirect = async () => {
+    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
+      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
+      return;
+    }
+
+    setSendingWifi(true);
+    const base = setupAddress.trim().replace(/\/$/, "");
+    const body = JSON.stringify(provisioningPayload(), null, 2);
+
+    try {
+      try {
+        await navigator.clipboard.writeText(body);
+      } catch (_) {}
+
+      toast({
+        title: "Device Wi-Fi setup ready",
+        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
+      });
+    } finally {
+      setSendingWifi(false);
+    }
+  };
+
   const canRegister = Boolean(deviceName.trim() && branchId);
 
   return (
@@ -294,6 +380,73 @@ export default function IotAdminPanel() {
         </Button>
       </div>
 
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-800/65 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              <h3 className="font-semibold text-white">Device Setup Backup</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-300">
+              Save the working Device IDs, names and branch assignments before changing Add Device settings.
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Restore never fakes Connected, last-seen, alarm, battery or signal data. Those still come only from the real HP2 gateway.
+            </p>
+            {deviceBackup ? (
+              <p className="mt-2 text-xs text-emerald-200">
+                Last working backup: {formatUkDateTime(deviceBackup.created_at)} · {deviceBackup.device_count} device(s)
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-amber-200">No manual working-device backup saved yet.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={backupWorkingDeviceSetup}
+              disabled={backingUpDevices || restoringDevices}
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {backingUpDevices ? "Saving Backup..." : "Backup Working Setup"}
+            </Button>
+            {restoreBackupConfirm ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={restoreWorkingDeviceSetup}
+                  disabled={!deviceBackup?.id || restoringDevices}
+                  className="bg-amber-600 text-white hover:bg-amber-500"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${restoringDevices ? "animate-spin" : ""}`} />
+                  {restoringDevices ? "Restoring..." : "Confirm Restore"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRestoreBackupConfirm(false)}
+                  disabled={restoringDevices}
+                  className="border-slate-600 text-slate-200"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRestoreBackupConfirm(true)}
+                disabled={!deviceBackup?.id || backingUpDevices || restoringDevices}
+                className="border-amber-600/70 text-amber-200"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Restore Last Backup
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
@@ -362,7 +515,7 @@ export default function IotAdminPanel() {
               placeholder="Leave blank to create the next FS-MOUSE ID"
               className="border-slate-600 bg-slate-900 text-white"
             />
-            <p className="mt-1 text-[11px] text-slate-500">Leave blank to create the next ID. If you enter an existing ID, it can only be assigned when it has first been removed from its previous shop.</p>
+            <p className="mt-1 text-[11px] text-slate-500">Leave blank to create the next ID. An existing ID can only be assigned after it has been removed from its previous shop.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Hardware Model</label>
@@ -464,6 +617,8 @@ export default function IotAdminPanel() {
                         setBranchSearch(branch.name);
                         setBranchSearchOpen(false);
                         setBranchId(branch.id);
+                        const first = ownedDevices.find((device: any) => String(device.branchId) === String(branch.id));
+                        setWifiDeviceId(first ? String(first.deviceId || "") : "");
                       }}
                       className="block w-full rounded px-3 py-2 text-left hover:bg-cyan-600/25"
                     >
@@ -489,6 +644,7 @@ export default function IotAdminPanel() {
                   setActiveBranchId("");
                   setBranchSearch("");
                   setBranchId("");
+                  setWifiDeviceId("");
                 }}
                 className="border-slate-600 text-slate-200"
               >
@@ -552,7 +708,6 @@ export default function IotAdminPanel() {
         ) : activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
             <p>No devices are assigned to {activeBranch.name} yet.</p>
-
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -578,15 +733,10 @@ export default function IotAdminPanel() {
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                     <Wifi className="h-3.5 w-3.5" />
-                    <span>Wi-Fi / MQTT</span>
-                    <span>• UK time: {formatUkDateTime(ukNow)}</span>
-                    <span>
-                      {device.lastCheckedAt
-                        ? `• Last seen: ${formatUkDateTime(device.lastCheckedAt)}`
-                        : "• Last seen: Never"}
-                    </span>
+                    Wi-Fi / MQTT
+                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
