@@ -100,6 +100,17 @@ function patchDeviceBackupDateFormatter(source: string): string {
   )
 }
 
+function patchAdminDashboardDeviceCards(source: string): string {
+  if (!source) return source
+  const startMarker = '                {/* Live Food Safety Device Monitoring & Alarm Card */}'
+  const endMarker = '                {/* Additional Dashboard Widgets */}'
+  const start = source.indexOf(startMarker)
+  if (start < 0) return source
+  const end = source.indexOf(endMarker, start)
+  if (end < 0) return source
+  return source.slice(0, start) + source.slice(end)
+}
+
 export function hardenPestControlMonthlyReports(projectId: string, files: Record<string, string>): Record<string, string> {
   if (projectId !== PEST_CONTROL_PROJECT_ID) return files
   const next = { ...files }
@@ -113,5 +124,9 @@ export function hardenPestControlMonthlyReports(projectId: string, files: Record
   const hardened = hardenPestControlDeviceBackups(projectId, next)
   const iotAdminPath = "client/src/components/IotAdminPanel.tsx"
   if (hardened[iotAdminPath]) hardened[iotAdminPath] = patchDeviceBackupDateFormatter(hardened[iotAdminPath])
-  return hardenPestControlScopedDeviceBackups(projectId, hardened)
+
+  const scoped = hardenPestControlScopedDeviceBackups(projectId, hardened)
+  const adminDashboardPath = "client/src/pages/AdminDashboard.tsx"
+  if (scoped[adminDashboardPath]) scoped[adminDashboardPath] = patchAdminDashboardDeviceCards(scoped[adminDashboardPath])
+  return scoped
 }
