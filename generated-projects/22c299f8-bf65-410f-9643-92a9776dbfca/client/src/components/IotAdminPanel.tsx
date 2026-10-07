@@ -29,6 +29,46 @@ function deviceSnapshot(statusList: any[]) {
   return { battery, state };
 }
 
+function connectionBadgeClass(status: string) {
+  switch (status) {
+    case "connected": return "bg-emerald-500/15 text-emerald-200 border border-emerald-400/30";
+    case "sleeping": return "bg-yellow-500/15 text-yellow-200 border border-yellow-400/30";
+    case "available": return "bg-blue-500/15 text-blue-200 border border-blue-400/30";
+    case "needs_attention": return "bg-orange-500/15 text-orange-200 border border-orange-400/30";
+    case "hardware_fault": return "bg-red-500/20 text-red-100 border border-red-400/40";
+    default: return "bg-red-500/15 text-red-200 border border-red-400/30";
+  }
+}
+
+function DeviceStatusLights({ device }: { device: any }) {
+  const status = String(device?.connectionStatus || (device?.isOnline ? "connected" : "offline"));
+  const items = [
+    { key: "connected", label: "Connected", active: status === "connected", on: "bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.95)]" },
+    { key: "sleeping", label: "Sleeping / Standby", active: status === "sleeping", on: "bg-yellow-300 shadow-[0_0_9px_rgba(253,224,71,0.95)]" },
+    { key: "available", label: "Available / Unassigned", active: status === "available", on: "bg-blue-400 shadow-[0_0_9px_rgba(96,165,250,0.95)]" },
+    { key: "attention", label: "Needs Attention", active: status === "needs_attention", on: "bg-orange-400 shadow-[0_0_9px_rgba(251,146,60,0.95)]" },
+    { key: "offline", label: "Offline", active: status === "offline", on: "bg-red-500 shadow-[0_0_9px_rgba(239,68,68,0.95)]" },
+    { key: "battery", label: "Low Battery", active: Boolean(device?.lowBattery), on: "bg-amber-400 shadow-[0_0_9px_rgba(251,191,36,0.95)]" },
+    { key: "caught", label: "Mouse Caught", active: Boolean(device?.alarmActive), on: "bg-red-400 shadow-[0_0_10px_rgba(248,113,113,1)]", pulse: true },
+    { key: "reset", label: "Reset Received", active: Boolean(device?.resetReceived), on: "bg-green-400 shadow-[0_0_9px_rgba(74,222,128,0.95)]" },
+    { key: "fault", label: "Hardware Fault", active: Boolean(device?.hardwareFault), on: "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,1)]", pulse: true },
+  ];
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 rounded-lg border border-slate-700/70 bg-slate-950/50 px-3 py-2">
+      {items.map((item) => (
+        <div key={item.key} className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ring-1 ring-white/20 ${item.active ? item.on : "bg-slate-700 shadow-none"} ${item.active && item.pulse ? "animate-pulse" : ""}`}
+            aria-hidden="true"
+          />
+          <span className={item.active ? "font-semibold text-slate-100" : "text-slate-500"}>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function IotAdminPanel() {
   const { toast } = useToast();
   const [systemStatus, setSystemStatus] = useState<any>(null);
@@ -721,23 +761,27 @@ export default function IotAdminPanel() {
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
-                    <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
-                      {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
+                    <Badge className={connectionBadgeClass(String(device.connectionStatus || (device.isOnline ? "connected" : "offline")))}>
+                      {device.connectionLabel || (device.isOnline ? "Connected" : "Offline")}
                     </Badge>
                   </div>
 
+                  <DeviceStatusLights device={device} />
+
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                    <div className={`rounded-lg p-2 ${device.lowBattery ? "bg-amber-500/15" : "bg-slate-800"}`}><span className="block text-slate-500">Battery</span><span className={device.lowBattery ? "font-semibold text-amber-200" : "text-white"}>{snap.battery || "—"}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionLabel || snap.state || (device.isOnline ? "Connected" : "Offline")}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : device.resetReceived ? "bg-green-500/15" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : device.resetReceived ? "font-semibold text-green-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.resetReceived ? "Reset Received" : "Ready"}</span></div>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                     <Wifi className="h-3.5 w-3.5" />
                     Wi-Fi / MQTT
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
+                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : " • Waiting for first heartbeat"}
+                    {device.heartbeatAgeMinutes !== null && device.heartbeatAgeMinutes !== undefined ? ` • Heartbeat ${device.heartbeatAgeMinutes} min ago` : ""}
                   </div>
+                  {device.statusMessage && <p className="mt-1 text-[11px] text-slate-400">{device.statusMessage}</p>}
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
 
