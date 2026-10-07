@@ -2801,6 +2801,91 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Food Safety device summary only — detailed device cards stay in Smart Devices */}
+                <div className="grid grid-cols-1 gap-6">
+                  <div className="group">
+                    <div className="relative h-full transform transition-all duration-300 group-hover:scale-[1.01]">
+                      <div className={`absolute inset-0 rounded-2xl blur-xl ${iotAlarmDevices.length ? "bg-red-500/20" : "bg-blue-500/20"}`}></div>
+                      <Card className="relative h-full rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-xl">
+                        <CardHeader className="pb-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <CardTitle className="flex items-center space-x-3 text-lg font-bold text-white">
+                                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iotAlarmDevices.length ? "bg-red-500" : "bg-gradient-to-br from-blue-500 to-cyan-500"}`}>
+                                  {iotAlarmDevices.length ? <Bell className="h-5 w-5 text-white" /> : <Globe className="h-5 w-5 text-white" />}
+                                </div>
+                                <span>Device Monitoring & Alerts</span>
+                              </CardTitle>
+                              <CardDescription className="mt-1 text-slate-400">
+                                Admin overview only. Open Smart Devices and select a branch to view individual device cards.
+                              </CardDescription>
+                            </div>
+                            <Button onClick={() => setActiveTab("iot-cloud")} variant="outline" className="border-slate-600 text-slate-200">
+                              Open Smart Devices
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
+                              <p className="text-2xl font-bold text-blue-200">{iotDevices.length}</p>
+                              <p className="text-xs text-blue-200/80">Assigned</p>
+                            </div>
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
+                              <p className="text-2xl font-bold text-emerald-300">{iotOnlineCount}</p>
+                              <p className="text-xs text-emerald-200">Online</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-center">
+                              <p className="text-2xl font-bold text-slate-200">{iotOfflineCount}</p>
+                              <p className="text-xs text-slate-400">Offline</p>
+                            </div>
+                            <div className={`rounded-xl border p-3 text-center ${iotAlarmDevices.length ? "border-red-500/40 bg-red-500/15" : "border-emerald-500/20 bg-emerald-500/10"}`}>
+                              <p className={`text-2xl font-bold ${iotAlarmDevices.length ? "text-red-300" : "text-emerald-300"}`}>{iotAlarmDevices.length}</p>
+                              <p className={`text-xs ${iotAlarmDevices.length ? "text-red-200" : "text-emerald-200"}`}>Active Alerts</p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+                            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <div>
+                                <h3 className="font-semibold text-white">Alarm / Catch History</h3>
+                                <p className="text-xs text-slate-400">Recent catches remain visible after Stop/Acknowledge.</p>
+                              </div>
+                              <span className="text-xs text-slate-500">{iotAlarmHistory.length} recorded event{iotAlarmHistory.length === 1 ? "" : "s"}</span>
+                            </div>
+                            {iotAlarmHistory.length === 0 ? (
+                              <p className="rounded-lg bg-slate-800/60 p-3 text-sm text-slate-400">No recorded trap alarms yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {iotAlarmHistory.slice(0, 5).map((event: any) => (
+                                  <div key={event.id} className="rounded-lg border border-slate-700/70 bg-slate-800/60 p-3">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-semibold text-white">{event.deviceName || "Food Safety Smart Device"}</span>
+                                          {event.isTest && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">TEST</span>}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-300">
+                                          Branch: {event.branchName || "Unknown branch"}
+                                          {event.location ? " • Location: " + event.location : ""}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-400">{event.message}</p>
+                                      </div>
+                                      <div className="flex-shrink-0 text-xs font-medium text-slate-300">
+                                        {event.eventAt ? new Date(event.eventAt).toLocaleString("en-GB") : "Unknown time"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Additional Dashboard Widgets */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* Recent Activity Widget */}
