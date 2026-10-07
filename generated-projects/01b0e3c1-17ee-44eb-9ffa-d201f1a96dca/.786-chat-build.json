@@ -1,0 +1,12 @@
+{
+  "projectId": "01b0e3c1-17ee-44eb-9ffa-d201f1a96dca",
+  "buildId": "34d779bc-4bcd-46eb-b157-e55d9fba61f1",
+  "title": "FoodSafetyMenu-Migrated",
+  "sourceVersion": "7195d43b60a5976d3a75b0a5a12e4510166e0052e2d2d86e43c5859f07254be4",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-09-06T16:23:25.919Z"
+}
