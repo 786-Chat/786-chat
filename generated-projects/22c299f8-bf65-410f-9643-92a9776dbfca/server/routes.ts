@@ -7657,6 +7657,77 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  app.post("/api/iot/device-backups/verify-restore-pin", isAdminAuthenticated, async (req, res) => {
+    try {
+      const session = req.session as any;
+      const now = Date.now();
+      const lockedUntil = Number(session?.pestRestorePinLockedUntil || 0);
+
+      if (lockedUntil > now) {
+        const seconds = Math.max(1, Math.ceil((lockedUntil - now) / 1000));
+        return res.status(429).json({
+          success: false,
+          message: `Too many incorrect PIN attempts. Try again in ${seconds} seconds.`,
+        });
+      }
+
+      const pin = String(req.body?.pin || "");
+      const scope = normaliseOwnedIotBackupScope(req.body?.scope);
+      const scopeId = String(req.body?.scopeId || "").trim();
+      const configuredPin = String(process.env.PEST_DEVICE_RESTORE_PIN || "");
+
+      if (!configuredPin) {
+        return res.status(503).json({ success: false, message: "Restore PIN security is not configured." });
+      }
+      if (!pin) {
+        return res.status(400).json({ success: false, message: "PIN is required." });
+      }
+      if (scope !== "all" && !scopeId) {
+        return res.status(400).json({ success: false, message: "A branch or device ID is required." });
+      }
+
+      if (pin !== configuredPin) {
+        const failures = Number(session?.pestRestorePinFailures || 0) + 1;
+        session.pestRestorePinFailures = failures;
+
+        if (failures >= 5) {
+          session.pestRestorePinLockedUntil = now + (15 * 60 * 1000);
+          session.pestRestorePinFailures = 0;
+          return res.status(429).json({
+            success: false,
+            message: "Too many incorrect PIN attempts. Restore is locked for 15 minutes.",
+          });
+        }
+
+        return res.status(401).json({
+          success: false,
+          message: `Incorrect PIN. ${5 - failures} attempt${5 - failures === 1 ? "" : "s"} remaining.`,
+        });
+      }
+
+      session.pestRestorePinFailures = 0;
+      delete session.pestRestorePinLockedUntil;
+
+      const restoreGrant = randomUUID();
+      session.pestDeviceRestoreGrant = {
+        token: restoreGrant,
+        scope,
+        scopeId,
+        expiresAt: now + (5 * 60 * 1000),
+      };
+
+      return res.json({
+        success: true,
+        restoreGrant,
+        expiresInSeconds: 300,
+        message: "PIN verified. Restore confirmation is unlocked for this action only.",
+      });
+    } catch (error: any) {
+      console.error("Failed to verify device restore PIN:", error?.message || error);
+      return res.status(500).json({ success: false, message: "Could not verify restore PIN." });
+    }
+  });
+
   app.post("/api/iot/device-backups/:id/restore", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -7679,6 +7750,27 @@ Generated: ${new Date().toISOString()}
       if (expectedScope !== scope || (scope !== "all" && expectedScopeId && expectedScopeId !== scopeId)) {
         return res.status(409).json({ message: "Backup scope does not match the requested restore." });
       }
+
+      // A restore can only run after a successful admin PIN check.
+      // The grant is one-time, scope-bound, session-bound, and expires after 5 minutes.
+      const session = req.session as any;
+      const suppliedGrant = String(req.body?.restoreGrant || "");
+      const storedGrant = session?.pestDeviceRestoreGrant;
+      const grantValid = Boolean(
+        suppliedGrant &&
+        storedGrant?.token === suppliedGrant &&
+        storedGrant?.scope === scope &&
+        String(storedGrant?.scopeId || "") === String(scopeId || "") &&
+        Number(storedGrant?.expiresAt || 0) > Date.now()
+      );
+
+      if (!grantValid) {
+        return res.status(403).json({
+          message: "Restore PIN verification is required or has expired. Enter the PIN again.",
+        });
+      }
+
+      delete session.pestDeviceRestoreGrant;
 
       const rawSnapshot = backupRow?.snapshot;
       const snapshot = Array.isArray(rawSnapshot)

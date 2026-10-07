@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,10 @@ export default function IotAdminPanel() {
   const [backupBusyKey, setBackupBusyKey] = useState("");
   const [restoreBusyKey, setRestoreBusyKey] = useState("");
   const [pendingRestore, setPendingRestore] = useState<any>(null);
+  const [restorePinRequest, setRestorePinRequest] = useState<any>(null);
+  const [restorePin, setRestorePin] = useState("");
+  const [restorePinError, setRestorePinError] = useState("");
+  const [verifyingRestorePin, setVerifyingRestorePin] = useState(false);
 
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
@@ -208,23 +212,76 @@ export default function IotAdminPanel() {
       });
       return;
     }
-    setPendingRestore({ key, scope, scopeId, label, backup });
+
+    setPendingRestore(null);
+    setRestorePin("");
+    setRestorePinError("");
+    setRestorePinRequest({ key, scope, scopeId, label, backup });
+  };
+
+  const cancelRestorePin = () => {
+    if (verifyingRestorePin) return;
+    setRestorePinRequest(null);
+    setRestorePin("");
+    setRestorePinError("");
+  };
+
+  const verifyRestorePin = async () => {
+    if (!restorePinRequest || !restorePin.trim()) {
+      setRestorePinError("Enter the restore PIN.");
+      return;
+    }
+
+    setVerifyingRestorePin(true);
+    setRestorePinError("");
+    try {
+      const response = await fetch("/api/iot/device-backups/verify-restore-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          pin: restorePin,
+          scope: restorePinRequest.scope,
+          scopeId: restorePinRequest.scopeId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.restoreGrant) {
+        setRestorePinError(data?.message || "Incorrect PIN.");
+        return;
+      }
+
+      setPendingRestore({
+        ...restorePinRequest,
+        restoreGrant: String(data.restoreGrant),
+      });
+      setRestorePinRequest(null);
+      setRestorePin("");
+      setRestorePinError("");
+    } finally {
+      setVerifyingRestorePin(false);
+    }
   };
 
   const confirmScopedRestore = async () => {
-    if (!pendingRestore?.backup?.id) return;
-    const { key, scope, scopeId, backup } = pendingRestore;
+    if (!pendingRestore?.backup?.id || !pendingRestore?.restoreGrant) return;
+    const { key, scope, scopeId, backup, restoreGrant } = pendingRestore;
     setRestoreBusyKey(key);
     try {
       const response = await fetch(`/api/iot/device-backups/${backup.id}/restore`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ scope, scopeId }),
+        body: JSON.stringify({ scope, scopeId, restoreGrant }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        setPendingRestore(null);
+        toast({
+          title: "Restore failed",
+          description: data?.message || "Could not restore device setup",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -1016,6 +1073,78 @@ export default function IotAdminPanel() {
           <p>New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.</p>
         </div>
       </div>
+
+      {restorePinRequest && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <LockKeyhole className="h-5 w-5 text-amber-300" />
+                <h3 className="text-lg font-semibold text-white">Smart Devices Restore Security</h3>
+              </div>
+              <button
+                type="button"
+                onClick={cancelRestorePin}
+                disabled={verifyingRestorePin}
+                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                aria-label="Close restore PIN"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="mb-4 text-sm text-slate-300">
+              Enter the admin restore PIN to unlock this {restorePinRequest.scope === "device" ? "device" : restorePinRequest.scope === "branch" ? "branch" : "all-device"} restore.
+            </p>
+
+            <label className="mb-1 block text-xs font-medium text-slate-400">PIN</label>
+            <Input
+              type="password"
+              value={restorePin}
+              onChange={(event) => {
+                setRestorePin(event.target.value);
+                if (restorePinError) setRestorePinError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !verifyingRestorePin) verifyRestorePin();
+              }}
+              autoFocus
+              autoComplete="off"
+              placeholder="Enter your PIN"
+              className="border-slate-600 bg-slate-800 text-white"
+            />
+
+            {restorePinError && (
+              <p className="mt-2 text-sm text-red-300">{restorePinError}</p>
+            )}
+
+            <p className="mt-2 text-xs text-slate-500">
+              The PIN unlocks only this restore action. The server checks it again before any device assignment is changed.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelRestorePin}
+                disabled={verifyingRestorePin}
+                className="border-slate-600 text-slate-200"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={verifyRestorePin}
+                disabled={verifyingRestorePin || !restorePin.trim()}
+                className="bg-amber-600 text-white hover:bg-amber-500"
+              >
+                <LockKeyhole className="mr-2 h-4 w-4" />
+                {verifyingRestorePin ? "Checking PIN..." : "Unlock Restore"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
