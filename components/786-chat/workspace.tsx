@@ -193,6 +193,11 @@ export function SevenEightSixWorkspace() {
   const [utilityPanel, setUtilityPanel] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [agentWidth, setAgentWidth] = useState(760)
+  const [navWidth, setNavWidth] = useState(216)
+  const [stageWidth, setStageWidth] = useState(260)
+  const [bottomHeight, setBottomHeight] = useState(184)
+  const [bottomLeftPercent, setBottomLeftPercent] = useState(43)
+  const [panelPreferencesLoaded, setPanelPreferencesLoaded] = useState(false)
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
@@ -219,7 +224,7 @@ export function SevenEightSixWorkspace() {
   const [redoStack, setRedoStack] = useState<VisualEditorState[]>([])
   const [visualDirty, setVisualDirty] = useState(false)
   const [editorSaving, setEditorSaving] = useState(false)
-  const drag = useRef<{ x: number; width: number } | null>(null)
+  const drag = useRef<{ kind: "agent" | "nav" | "stage" | "bottom" | "bottom-split"; x: number; y: number; initial: number; containerWidth?: number } | null>(null)
   const sectionDrag = useRef<string | null>(null)
   const previewIframeRef = useRef<HTMLIFrameElement | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
@@ -341,11 +346,48 @@ export function SevenEightSixWorkspace() {
   }, [hasWorkspaceUser])
 
   useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("786chat_workspace_panel_sizes_v1") || "{}")
+      if (Number.isFinite(saved.nav)) setNavWidth(Math.max(170, Math.min(350, saved.nav)))
+      if (Number.isFinite(saved.stage)) setStageWidth(Math.max(180, Math.min(400, saved.stage)))
+      if (Number.isFinite(saved.agent)) setAgentWidth(Math.max(560, Math.min(1050, saved.agent)))
+      if (Number.isFinite(saved.bottom)) setBottomHeight(Math.max(140, Math.min(520, saved.bottom)))
+      if (Number.isFinite(saved.split)) setBottomLeftPercent(Math.max(25, Math.min(75, saved.split)))
+    } catch { /* Ignore invalid local preference. */ }
+    setPanelPreferencesLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!panelPreferencesLoaded) return
+    localStorage.setItem("786chat_workspace_panel_sizes_v1", JSON.stringify({
+      nav: navWidth, stage: stageWidth, agent: agentWidth, bottom: bottomHeight, split: bottomLeftPercent,
+    }))
+  }, [panelPreferencesLoaded, navWidth, stageWidth, agentWidth, bottomHeight, bottomLeftPercent])
+
+  const startPanelDrag = (kind: NonNullable<typeof drag.current>["kind"], event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    const splitWidth = event.currentTarget.parentElement?.getBoundingClientRect().width || 1
+    drag.current = {
+      kind, x: event.clientX, y: event.clientY, containerWidth: splitWidth,
+      initial: kind === "nav" ? navWidth : kind === "stage" ? stageWidth :
+        kind === "agent" ? agentWidth : kind === "bottom" ? bottomHeight : bottomLeftPercent,
+    }
+    document.body.style.cursor = kind === "bottom" ? "row-resize" : "col-resize"
+    document.body.style.userSelect = "none"
+  }
+
+  useEffect(() => {
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
     const move = (event: PointerEvent) => {
-      if (!drag.current) return
-      const minimum = 660
-      const max = Math.max(minimum, window.innerWidth - 520)
-      setAgentWidth(Math.max(minimum, Math.min(max, drag.current.width + event.clientX - drag.current.x)))
+      const d = drag.current
+      if (!d) return
+      const delta = event.clientX - d.x
+      if (d.kind === "nav") setNavWidth(clamp(d.initial + delta, 170, 350))
+      else if (d.kind === "stage") setStageWidth(clamp(d.initial + delta, 180, Math.min(400, agentWidth - 240)))
+      else if (d.kind === "agent") setAgentWidth(clamp(d.initial + delta, stageWidth + 280, Math.max(stageWidth + 280, window.innerWidth - navWidth - 350)))
+      else if (d.kind === "bottom") setBottomHeight(clamp(d.initial + d.y - event.clientY, 140, Math.max(180, window.innerHeight - 260)))
+      else if (d.kind === "bottom-split") setBottomLeftPercent(clamp(d.initial + delta / (d.containerWidth || 1) * 100, 25, 75))
     }
     const stop = () => {
       drag.current = null
@@ -354,11 +396,13 @@ export function SevenEightSixWorkspace() {
     }
     window.addEventListener("pointermove", move)
     window.addEventListener("pointerup", stop)
+    window.addEventListener("pointercancel", stop)
     return () => {
       window.removeEventListener("pointermove", move)
       window.removeEventListener("pointerup", stop)
+      window.removeEventListener("pointercancel", stop)
     }
-  }, [])
+  }, [agentWidth, stageWidth, navWidth])
 
   useEffect(() => {
     if (!project?.id || !build) return
@@ -1031,7 +1075,7 @@ export function SevenEightSixWorkspace() {
         </div>
       )}
 
-      <aside className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl transition-[width] xl:flex ${styles.sidebar} ${sidebarCollapsed ? "w-[72px]" : "w-[216px]"}`}>
+      <aside style={{ width: sidebarCollapsed ? 72 : navWidth }} className={`relative z-20 hidden shrink-0 flex-col border-r border-[#1b2940] bg-[#070c18]/88 backdrop-blur-xl xl:flex ${styles.sidebar}`}>
         <div className="flex h-[64px] items-center gap-3 border-b border-[#1b2940] px-4">
           <button
             type="button"
@@ -1091,6 +1135,7 @@ export function SevenEightSixWorkspace() {
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-500/25 text-sm font-bold text-violet-200">78</span>
           {!sidebarCollapsed && <span><b className="block text-[16px]">New project</b><span className="text-[14px] text-slate-500">Start clean workspace</span></span>}
         </button>
+        {!sidebarCollapsed && <button type="button" aria-label="Resize navigation sidebar" onPointerDown={(event) => startPanelDrag("nav", event)} className="absolute -right-[4px] top-0 z-40 h-full w-[7px] cursor-col-resize bg-transparent hover:bg-cyan-400/30" />}
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
@@ -1145,7 +1190,7 @@ export function SevenEightSixWorkspace() {
 
         <div className="flex min-h-0 flex-1 gap-2 p-2">
           <section style={{ width: agentWidth }} className={`relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-[#1b2940] bg-[#080e1c]/78 backdrop-blur-xl max-xl:!w-full ${styles.agentShell} ${mobileView === "agent" ? "flex" : "hidden"} xl:flex`}>
-            <div className={`hidden min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex ${styles.stagePanel}`}>
+            <div style={{ width: stageWidth }} className={`relative hidden min-h-0 shrink-0 flex-col overflow-hidden border-r border-[#1b2940] bg-[#071020]/72 px-4 py-4 backdrop-blur-lg sm:flex ${styles.stagePanel}`}>
               <p className="mb-4 flex shrink-0 items-center gap-2 text-[16px] font-bold text-violet-200"><Sparkles className="h-4 w-4" /> AI Agent</p>
               <div className="min-h-0 flex-1 overflow-hidden pr-1 pb-3">
                 <div className="relative grid h-full min-h-0 grid-rows-5 gap-1 py-2">
@@ -1178,6 +1223,7 @@ export function SevenEightSixWorkspace() {
                   })}
                 </div>
               </div>
+              <button type="button" aria-label="Resize AI Agent stages" onPointerDown={(event) => startPanelDrag("stage", event)} className="absolute -right-[4px] top-0 z-40 h-full w-[7px] cursor-col-resize bg-transparent hover:bg-cyan-400/30" />
             </div>
 
             <div className={`flex min-w-0 flex-1 flex-col ${styles.agentPanel}`}>
@@ -1237,7 +1283,7 @@ export function SevenEightSixWorkspace() {
               </div>
             </div>
 
-            <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => { drag.current = { x: event.clientX, width: agentWidth }; document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none" }} className="absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize hover:bg-cyan-300/25" />
+            <button type="button" aria-label="Resize AI panel" onPointerDown={(event) => startPanelDrag("agent", event)} className="absolute -right-[5px] top-0 z-40 h-full w-[9px] cursor-col-resize bg-transparent hover:bg-cyan-300/30" />
           </section>
 
           <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#1b2940] bg-[#060b16]/78 backdrop-blur-xl ${styles.previewPanel} ${mobileView === "preview" ? "flex" : "hidden"} xl:flex`}>
@@ -1423,9 +1469,11 @@ export function SevenEightSixWorkspace() {
           </aside>
         )}
 
-        <section className={`relative hidden shrink-0 border-t border-[#1b2940] bg-[#070c18] transition-[height] md:block ${bottomCollapsed ? "h-0 overflow-visible" : "h-[184px]"}`}>
+        <section style={{ height: bottomCollapsed ? 0 : bottomHeight }} className={`relative hidden shrink-0 border-t border-[#1b2940] bg-[#070c18] md:block ${bottomCollapsed ? "overflow-visible" : ""}`}>
           {!bottomCollapsed && (
-            <div className="grid h-full grid-cols-[.86fr_1.14fr] gap-2 p-2">
+            <>
+            <button type="button" aria-label="Resize bottom diagnostics and revisions height" onPointerDown={(event) => startPanelDrag("bottom", event)} className="absolute -top-[5px] left-0 z-40 h-[9px] w-full cursor-row-resize bg-transparent hover:bg-cyan-300/30" />
+            <div style={{ gridTemplateColumns: `${bottomLeftPercent}% minmax(0,1fr)` }} className="relative grid h-full gap-2 p-2">
               <article className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center">
                   <b className="text-[14px]">Build sandbox</b>
@@ -1450,6 +1498,7 @@ export function SevenEightSixWorkspace() {
                   </div>
                 </div>
               </article>
+              <button type="button" aria-label="Resize build sandbox and revisions width" onPointerDown={(event) => startPanelDrag("bottom-split", event)} style={{ left: `${bottomLeftPercent}%` }} className="absolute -ml-1 top-0 z-40 h-full w-[9px] cursor-col-resize bg-transparent hover:bg-cyan-300/30" />
               <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[#263550] bg-[#0a1120] p-3">
                 <div className="flex items-center gap-2">
                   <b className="text-[14px]">Revisions</b>
@@ -1492,6 +1541,7 @@ export function SevenEightSixWorkspace() {
                 </div>
               </article>
             </div>
+            </>
           )}
           <button type="button" onClick={() => setBottomCollapsed((value) => !value)} className="absolute bottom-1 left-1/2 z-40 hidden -translate-x-1/2 rounded-full border border-blue-300/30 bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-1.5 text-[14px] font-bold shadow-[0_0_24px_rgba(59,130,246,.32)] md:block">
             {bottomCollapsed ? "Show bottom panel" : "Hide bottom panel"}
