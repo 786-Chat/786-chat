@@ -201,6 +201,7 @@ export function SevenEightSixWorkspace() {
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
   const [revisions, setRevisions] = useState<BuilderRevision[]>([])
+  const [showAllRevisions, setShowAllRevisions] = useState(false)
   const [revisionAction, setRevisionAction] = useState<"saving" | string | null>(null)
   const [actionNotice, setActionNotice] = useState("")
   const [panelBusy, setPanelBusy] = useState(false)
@@ -1472,7 +1473,7 @@ export function SevenEightSixWorkspace() {
                       <div><b className="text-[14px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[14px] text-slate-500">Manual checkpoints and automatic repair snapshots appear here.</p></div>
                     </div>
                   ) : (
-                    [...revisions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10).map((revision) => (
+                    [...revisions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, showAllRevisions ? undefined : 10).map((revision) => (
                       <div key={revision.id} className="flex items-center gap-3 border-b border-[#1d2a41] px-3 py-2 last:border-0">
                         <History className="h-3.5 w-3.5 text-violet-300" />
                         <span className="min-w-0 flex-1">
@@ -1487,6 +1488,7 @@ export function SevenEightSixWorkspace() {
                       </div>
                     ))
                   )}
+                  {revisions.length > 10 && <button type="button" onClick={() => setShowAllRevisions((value) => !value)} className="w-full border-t border-[#263550] px-3 py-2 text-[14px] font-bold text-cyan-200">{showAllRevisions ? "Show newest 10" : `Show all ${revisions.length} revisions to manage older checkpoints`}</button>}
                 </div>
               </article>
             </div>
