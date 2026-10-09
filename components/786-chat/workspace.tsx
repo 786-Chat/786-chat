@@ -197,6 +197,7 @@ export function SevenEightSixWorkspace() {
   const [stageWidth, setStageWidth] = useState(260)
   const [bottomHeight, setBottomHeight] = useState(184)
   const [bottomLeftPercent, setBottomLeftPercent] = useState(43)
+  const [panelPreferencesLoaded, setPanelPreferencesLoaded] = useState(false)
   const [bottomCollapsed, setBottomCollapsed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [build, setBuild] = useState<BuilderBuild | null>(null)
@@ -353,13 +354,15 @@ export function SevenEightSixWorkspace() {
       if (Number.isFinite(saved.bottom)) setBottomHeight(Math.max(140, Math.min(520, saved.bottom)))
       if (Number.isFinite(saved.split)) setBottomLeftPercent(Math.max(25, Math.min(75, saved.split)))
     } catch { /* Ignore invalid local preference. */ }
+    setPanelPreferencesLoaded(true)
   }, [])
 
   useEffect(() => {
+    if (!panelPreferencesLoaded) return
     localStorage.setItem("786chat_workspace_panel_sizes_v1", JSON.stringify({
       nav: navWidth, stage: stageWidth, agent: agentWidth, bottom: bottomHeight, split: bottomLeftPercent,
     }))
-  }, [navWidth, stageWidth, agentWidth, bottomHeight, bottomLeftPercent])
+  }, [panelPreferencesLoaded, navWidth, stageWidth, agentWidth, bottomHeight, bottomLeftPercent])
 
   const startPanelDrag = (kind: NonNullable<typeof drag.current>["kind"], event: React.PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return
