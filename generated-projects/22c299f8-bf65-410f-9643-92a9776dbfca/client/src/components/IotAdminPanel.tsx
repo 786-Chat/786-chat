@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { HardDrive, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -591,7 +591,7 @@ export default function IotAdminPanel() {
               disabled={Boolean(backupBusyKey || restoreBusyKey)}
               className="bg-emerald-600 text-white hover:bg-emerald-500"
             >
-              <LockKeyhole className="mr-2 h-4 w-4" />
+              <Save className="mr-2 h-4 w-4" />
               {backupBusyKey === scopedBackupKey("all") ? "Saving..." : "Backup All Devices"}
             </Button>
             {pendingRestore?.key === scopedBackupKey("all") ? (
@@ -938,7 +938,7 @@ export default function IotAdminPanel() {
                           disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
                           className="bg-emerald-600 text-white hover:bg-emerald-500"
                         >
-                          <LockKeyhole className="mr-1 h-3.5 w-3.5" />
+                          <Save className="mr-1 h-3.5 w-3.5" />
                           {backupBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Saving..." : "Backup This Branch"}
                         </Button>
                         {pendingRestore?.key === scopedBackupKey("branch", activeBranch.id) ? (
@@ -1005,8 +1005,6 @@ export default function IotAdminPanel() {
                         ))}
                       </div>
                     )}
-                  </div>
-                )}
               </div>
             </div>
           ) : (
@@ -1145,7 +1143,7 @@ export default function IotAdminPanel() {
                         disabled={Boolean(backupBusyKey || restoreBusyKey)}
                         className="bg-emerald-700 text-white hover:bg-emerald-600"
                       >
-                        <LockKeyhole className="mr-1 h-3 w-3" />
+                        <Save className="mr-1 h-3 w-3" />
                         {backupBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "Saving..." : "Backup Device"}
                       </Button>
                       {pendingRestore?.key === scopedBackupKey("device", String(device.deviceId)) ? (
