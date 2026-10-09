@@ -504,6 +504,12 @@ export async function createBuilderRevision(projectId: string, label = "Manual c
   return payload.revision
 }
 
+export async function deleteBuilderRevision(projectId: string, revisionId: string) {
+  const response = await fetch(`/api/786-chat/projects/${projectId}/revisions/${revisionId}`, { method: "DELETE" })
+  const payload = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string }
+  if (!response.ok || !payload.success) throw new Error(payload.error || "Revision could not be deleted.")
+}
+
 export async function restoreBuilderRevision(projectId: string, revisionId: string) {
   const response = await fetch(
     `/api/786-chat/projects/${projectId}/revisions/${revisionId}/restore`,
