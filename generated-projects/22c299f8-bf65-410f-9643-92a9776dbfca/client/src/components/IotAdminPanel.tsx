@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { HardDrive, Pencil, Plus, RefreshCw, Save, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 interface BranchOption {
   id: string;
   name: string;
-  address?: string | null;
-  postCode?: string | null;
 }
 
 function normalize(value: unknown) {
@@ -73,37 +71,12 @@ export default function IotAdminPanel() {
   const [savingDevice, setSavingDevice] = useState(false);
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
-  const [activeBranchId, setActiveBranchId] = useState("");
-  const [branchSearch, setBranchSearch] = useState("");
-  const [branchSearchOpen, setBranchSearchOpen] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
     () => assigned.filter((device: any) => device?.provider === "food-safety-owned-mqtt"),
     [assigned],
   );
-
-  const activeBranch = useMemo(
-    () => branches.find((branch) => String(branch.id) === String(activeBranchId)) || null,
-    [branches, activeBranchId],
-  );
-  const activeBranchDevices = useMemo(
-    () => ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)),
-    [ownedDevices, activeBranchId],
-  );
-  const branchSearchResults = useMemo(() => {
-    const query = branchSearch.trim().toLowerCase();
-    if (!query) return branches.slice(0, 12);
-    return branches
-      .filter((branch) => [branch.name, branch.address, branch.postCode]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)))
-      .slice(0, 20);
-  }, [branches, branchSearch]);
-  const activeBranchMapQuery = useMemo(() => {
-    if (!activeBranch) return "";
-    return [activeBranch.name, activeBranch.address, activeBranch.postCode].filter(Boolean).join(", ");
-  }, [activeBranch]);
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes] = await Promise.all([
@@ -139,16 +112,10 @@ export default function IotAdminPanel() {
   }, []);
 
   useEffect(() => {
-    const current = ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId));
-    if (activeBranchId && current && String(current.branchId) !== String(activeBranchId)) {
-      setWifiDeviceId("");
-      return;
+    if (!wifiDeviceId && ownedDevices.length > 0) {
+      setWifiDeviceId(String(ownedDevices[0].deviceId || ""));
     }
-    if (!wifiDeviceId) {
-      const first = activeBranchId ? activeBranchDevices[0] : undefined;
-      if (first) setWifiDeviceId(String(first.deviceId || ""));
-    }
-  }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
+  }, [ownedDevices, wifiDeviceId]);
 
   const scopedBackupKey = (scope: "all" | "branch" | "device", scopeId = "") =>
     `${scope}:${scopeId || "all"}`;
@@ -414,8 +381,6 @@ export default function IotAdminPanel() {
       });
       setDeviceId("");
       setDeviceName("");
-      setActiveBranchId(branchId);
-      setBranchSearch(branchById.get(branchId) || "");
       setBranchId("");
       setNotes("");
       await loadBase();
@@ -498,10 +463,7 @@ export default function IotAdminPanel() {
         title: "Device updated",
         description: `${data?.deviceName || editDeviceName} is assigned to ${branchById.get(editBranchId) || "the selected branch"}.`,
       });
-      const nextBranchId = editBranchId;
       cancelEditDevice();
-      setActiveBranchId(nextBranchId);
-      setBranchSearch(branchById.get(nextBranchId) || "");
       await loadBase();
     } finally {
       setSavingDevice(false);
@@ -591,7 +553,7 @@ export default function IotAdminPanel() {
               disabled={Boolean(backupBusyKey || restoreBusyKey)}
               className="bg-emerald-600 text-white hover:bg-emerald-500"
             >
-              <LockKeyhole className="mr-2 h-4 w-4" />
+              <Save className="mr-2 h-4 w-4" />
               {backupBusyKey === scopedBackupKey("all") ? "Saving..." : "Backup All Devices"}
             </Button>
             {pendingRestore?.key === scopedBackupKey("all") ? (
@@ -665,8 +627,6 @@ export default function IotAdminPanel() {
                     key={branch.id}
                     onClick={() => {
                       setBranchId(branch.id);
-                      setActiveBranchId(branch.id);
-                      setBranchSearch(branch.name);
                       setBranchMenuOpen(false);
                     }}
                     className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
@@ -739,287 +699,119 @@ export default function IotAdminPanel() {
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
+          <h3 className="font-semibold text-white">Connect Device to Wi-Fi</h3>
         </div>
-        <p className="text-sm text-slate-300">
-          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
-          The Wi-Fi password is kept only in this browser session and is never saved in Neon.
+        <p className="mb-4 text-sm text-slate-400">
+          Enter the customer Wi-Fi here while the physical trap is in Food Safety setup mode. The password is kept only in this browser and is never saved in Neon.
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="relative">
             <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
-            <select
-              value={wifiDeviceId}
-              onChange={(event) => setWifiDeviceId(event.target.value)}
-              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+            <button
+              type="button"
+              onClick={() => setDeviceMenuOpen((open) => !open)}
+              className="flex w-full items-center justify-between rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-white"
             >
-              <option value="">Select registered device...</option>
-              {(activeBranch ? activeBranchDevices : ownedDevices).map((device: any) => (
-                <option key={device.id} value={device.deviceId}>
-                  {device.deviceName || device.deviceId} — {device.deviceId}
-                </option>
-              ))}
-            </select>
+              <span className="truncate">
+                {ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))
+                  ? `${ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId))?.deviceName} — ${wifiDeviceId}`
+                  : "Select registered device..."}
+              </span>
+              <span className="ml-3 text-slate-400">⌄</span>
+            </button>
+            {deviceMenuOpen && (
+              <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-64 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
+                {ownedDevices.length ? ownedDevices.map((device: any) => (
+                  <button
+                    type="button"
+                    key={device.id}
+                    onClick={() => {
+                      setWifiDeviceId(String(device.deviceId));
+                      setDeviceMenuOpen(false);
+                    }}
+                    className="block w-full rounded px-3 py-2 text-left text-sm text-white hover:bg-cyan-600/30 focus:bg-cyan-600/30"
+                  >
+                    {device.deviceName} — {device.deviceId}
+                  </button>
+                )) : (
+                  <div className="p-3 text-sm text-slate-400">No registered Food Safety devices yet.</div>
+                )}
+              </div>
+            )}
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
             <Input
               value={wifiSsid}
               onChange={(event) => setWifiSsid(event.target.value)}
-              placeholder="Customer / home 2.4 GHz Wi-Fi"
-              autoComplete="off"
+              placeholder="Customer 2.4 GHz Wi-Fi"
               className="border-slate-600 bg-slate-900 text-white"
+              autoComplete="off"
             />
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Password</label>
             <Input
               type="password"
               value={wifiPassword}
               onChange={(event) => setWifiPassword(event.target.value)}
-              placeholder="Enter Wi-Fi password"
-              autoComplete="new-password"
+              placeholder="Wi-Fi password"
               className="border-slate-600 bg-slate-900 text-white"
+              autoComplete="new-password"
             />
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">Device Setup Address</label>
             <Input
               value={setupAddress}
               onChange={(event) => setSetupAddress(event.target.value)}
               placeholder="http://192.168.4.1"
-              className="border-slate-600 bg-slate-900 font-mono text-white"
+              className="border-slate-600 bg-slate-900 text-white"
             />
           </div>
-
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">HP2 / MQTT Host</label>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Food Safety Gateway / MQTT Host</label>
             <Input
               value={gatewayHost}
               onChange={(event) => setGatewayHost(event.target.value)}
-              className="border-slate-600 bg-slate-900 font-mono text-white"
+              placeholder="FOODSAFETY-GW01 or local IP"
+              className="border-slate-600 bg-slate-900 text-white"
             />
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-400">MQTT Port</label>
             <Input
               value={gatewayPort}
               onChange={(event) => setGatewayPort(event.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="1883"
+              className="border-slate-600 bg-slate-900 text-white"
               inputMode="numeric"
-              className="border-slate-600 bg-slate-900 font-mono text-white"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap gap-2">
           <Button
-            type="button"
             onClick={sendWifiDirect}
             disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
-            className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-cyan-600 text-white hover:bg-cyan-500"
           >
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
+            {sendingWifi ? "Preparing..." : "Connect Device to Wi-Fi"}
           </Button>
-          <p className="text-xs text-slate-400">
-            No new tab opens. This prepares the details for the physical trap setup; it does not fake a Connected status.
-          </p>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
-            <p className="mt-1 break-all font-mono text-sm font-semibold text-white">{gatewayHost || "192.168.0.14"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">MQTT Port</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">{gatewayPort || "1883"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Devices</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
-          </div>
-        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          Select the correct registered device for this shop. The physical BK7231N must run the Food Safety setup firmware/portal before 192.168.4.1 can accept that shop's Wi-Fi details.
+        </p>
       </div>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
-        <div className="mb-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="relative w-full max-w-xl">
-              <label className="mb-1 block text-xs font-medium text-slate-400">Search Branch / Shop</label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <Input
-                  value={branchSearch}
-                  onFocus={() => setBranchSearchOpen(true)}
-                  onChange={(event) => {
-                    setBranchSearch(event.target.value);
-                    setBranchSearchOpen(true);
-                  }}
-                  placeholder="Type shop name, address or postcode..."
-                  className="border-slate-600 bg-slate-900 pl-9 text-white"
-                />
-              </div>
-              {branchSearchOpen && (
-                <div className="absolute left-0 right-0 top-full z-[9999] mt-1 max-h-72 overflow-y-auto rounded-md border border-slate-600 bg-slate-950 p-1 shadow-2xl">
-                  {branchSearchResults.length ? branchSearchResults.map((branch) => (
-                    <button
-                      type="button"
-                      key={branch.id}
-                      onClick={() => {
-                        setActiveBranchId(branch.id);
-                        setBranchSearch(branch.name);
-                        setBranchSearchOpen(false);
-                        setBranchId(branch.id);
-                        const first = ownedDevices.find((device: any) => String(device.branchId) === String(branch.id));
-                        setWifiDeviceId(first ? String(first.deviceId || "") : "");
-                      }}
-                      className="block w-full rounded px-3 py-2 text-left hover:bg-cyan-600/25"
-                    >
-                      <span className="block text-sm font-medium text-white">{branch.name}</span>
-                      {(branch.address || branch.postCode) && (
-                        <span className="mt-0.5 block text-xs text-slate-400">
-                          {[branch.address, branch.postCode].filter(Boolean).join(", ")}
-                        </span>
-                      )}
-                    </button>
-                  )) : (
-                    <div className="p-3 text-sm text-slate-400">No matching branch found.</div>
-                  )}
-                </div>
-              )}
-            </div>
-            {activeBranch && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setActiveBranchId("");
-                  setBranchSearch("");
-                  setBranchId("");
-                  setWifiDeviceId("");
-                }}
-                className="border-slate-600 text-slate-200"
-              >
-                Show another branch
-              </Button>
-            )}
-          </div>
-
-          {activeBranch ? (
-            <div className="mt-4 overflow-hidden rounded-xl border border-cyan-500/25 bg-slate-900/60">
-              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="p-4">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
-                    <div className="min-w-0">
-                      <p className="text-base font-semibold text-white">{activeBranch.name}</p>
-                      <p className="mt-1 text-sm text-slate-400">
-                        {[activeBranch.address, activeBranch.postCode].filter(Boolean).join(", ") || "No branch address saved yet."}
-                      </p>
-                      <p className="mt-2 text-xs text-cyan-200">
-                        {activeBranchDevices.length} device{activeBranchDevices.length === 1 ? "" : "s"} assigned to this branch
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => prepareScopedBackup("branch", activeBranch.id, `${activeBranch.name} device setup`)}
-                          disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
-                          className="bg-emerald-600 text-white hover:bg-emerald-500"
-                        >
-                          <LockKeyhole className="mr-1 h-3.5 w-3.5" />
-                          {backupBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Saving..." : "Backup This Branch"}
-                        </Button>
-                        {pendingRestore?.key === scopedBackupKey("branch", activeBranch.id) ? (
-                          <>
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={confirmScopedRestore}
-                              disabled={Boolean(restoreBusyKey)}
-                              className="bg-amber-600 text-white hover:bg-amber-500"
-                            >
-                              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "animate-spin" : ""}`} />
-                              {restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Restoring..." : "Confirm Branch Restore"}
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setPendingRestore(null)} className="border-slate-600 text-slate-200">
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => prepareScopedRestore("branch", activeBranch.id, activeBranch.name)}
-                            disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
-                            className="border-amber-700/60 text-amber-200"
-                          >
-                            <LockKeyhole className="mr-1 h-3.5 w-3.5" />
-                            Restore This Branch
-                          </Button>
-                        )}
-                      </div>
-                      <p className="mt-2 text-[11px] text-slate-500">
-                        {branchDeviceBackup
-                          ? `Last branch backup: ${new Date(branchDeviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })}`
-                          : "No backup saved for this branch yet."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {activeBranchMapQuery && (activeBranch.address || activeBranch.postCode) && (
-                  <div className="relative h-48 overflow-hidden border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
-                    <iframe
-                      title={`${activeBranch.name} map`}
-                      src={`https://www.google.com/maps?q=${encodeURIComponent(activeBranchMapQuery)}&output=embed`}
-                      className="h-full w-full border-0"
-                      loading="lazy"
-                      referrerPolicy="no-referrer-when-downgrade"
-                    />
-                    {activeBranchDevices.length > 0 && (
-                      <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex flex-wrap gap-1.5">
-                        {activeBranchDevices.slice(0, 4).map((device: any, index: number) => (
-                          <div
-                            key={device.id}
-                            className="flex max-w-full items-center gap-1.5 rounded-full border border-slate-600/80 bg-slate-950/90 px-2.5 py-1 text-[11px] text-white shadow-lg backdrop-blur"
-                          >
-                            <span aria-hidden="true">🐭</span>
-                            <span className="font-semibold">Device {index + 1}</span>
-                            <span className={device.isOnline ? "text-emerald-300" : "text-slate-400"}>
-                              {device.isOnline ? "● Connected" : "● Offline"}
-                            </span>
-                            <span className="truncate text-cyan-200">• {device.notes || "Installation area not set"}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-5 text-sm text-slate-400">
-              Search and select one branch to see only that shop's devices.
-            </div>
-          )}
-        </div>
-
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <HardDrive className="h-4 w-4 text-emerald-300" />
-            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : "Branch Devices"}
+            Assigned Devices ({assigned.length})
           </h3>
           <Button size="sm" variant="outline" onClick={() => loadBase()} className="border-slate-600 text-slate-200">
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
@@ -1027,17 +819,13 @@ export default function IotAdminPanel() {
           </Button>
         </div>
 
-        {!activeBranch ? (
-          <div className="py-8 text-center text-sm text-slate-400">
-            Select a branch above to view its devices.
-          </div>
-        ) : activeBranchDevices.length === 0 ? (
+        {assigned.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>No devices are assigned to {activeBranch.name} yet.</p>
+            <p>No owned devices assigned yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {activeBranchDevices.map((device: any, index: number) => {
+            {assigned.map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
@@ -1145,7 +933,7 @@ export default function IotAdminPanel() {
                         disabled={Boolean(backupBusyKey || restoreBusyKey)}
                         className="bg-emerald-700 text-white hover:bg-emerald-600"
                       >
-                        <LockKeyhole className="mr-1 h-3 w-3" />
+                        <Save className="mr-1 h-3 w-3" />
                         {backupBusyKey === scopedBackupKey("device", String(device.deviceId)) ? "Saving..." : "Backup Device"}
                       </Button>
                       {pendingRestore?.key === scopedBackupKey("device", String(device.deviceId)) ? (
@@ -1232,153 +1020,9 @@ export default function IotAdminPanel() {
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-slate-300">
         <div className="flex items-start gap-2">
           <ShieldCheck className="mt-0.5 h-4 w-4 text-cyan-300" />
-          <p>New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.</p>
+          <p>New devices use only your Food Safety device registry and MQTT/Wi-Fi gateway. Customer Wi-Fi passwords are never stored in the platform database.</p>
         </div>
       </div>
-
-      {backupPinRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 p-5 shadow-2xl">
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <LockKeyhole className="h-5 w-5 text-emerald-300" />
-                <h3 className="text-lg font-semibold text-white">Smart Devices Backup Security</h3>
-              </div>
-              <button
-                type="button"
-                onClick={cancelBackupPin}
-                disabled={verifyingBackupPin}
-                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                aria-label="Close backup PIN"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="mb-4 text-sm text-slate-300">
-              Enter the admin PIN to create this {backupPinRequest.scope === "device" ? "device" : backupPinRequest.scope === "branch" ? "branch" : "all-device"} backup.
-            </p>
-
-            <label className="mb-1 block text-xs font-medium text-slate-400">PIN</label>
-            <Input
-              type="password"
-              value={backupPin}
-              onChange={(event) => {
-                setBackupPin(event.target.value);
-                if (backupPinError) setBackupPinError("");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !verifyingBackupPin) verifyBackupPin();
-              }}
-              autoFocus
-              autoComplete="off"
-              placeholder="Enter your PIN"
-              className="border-slate-600 bg-slate-800 text-white"
-            />
-
-            {backupPinError && (
-              <p className="mt-2 text-sm text-red-300">{backupPinError}</p>
-            )}
-
-            <p className="mt-2 text-xs text-slate-500">
-              The server checks the same protected PIN before the backup is created.
-            </p>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={cancelBackupPin}
-                disabled={verifyingBackupPin}
-                className="border-slate-600 text-slate-200"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={verifyBackupPin}
-                disabled={verifyingBackupPin || !backupPin.trim()}
-                className="bg-emerald-600 text-white hover:bg-emerald-500"
-              >
-                <LockKeyhole className="mr-2 h-4 w-4" />
-                {verifyingBackupPin ? "Checking PIN..." : "Unlock & Backup"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {restorePinRequest && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900 p-5 shadow-2xl">
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <LockKeyhole className="h-5 w-5 text-amber-300" />
-                <h3 className="text-lg font-semibold text-white">Smart Devices Restore Security</h3>
-              </div>
-              <button
-                type="button"
-                onClick={cancelRestorePin}
-                disabled={verifyingRestorePin}
-                className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                aria-label="Close restore PIN"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="mb-4 text-sm text-slate-300">
-              Enter the admin restore PIN to unlock this {restorePinRequest.scope === "device" ? "device" : restorePinRequest.scope === "branch" ? "branch" : "all-device"} restore.
-            </p>
-
-            <label className="mb-1 block text-xs font-medium text-slate-400">PIN</label>
-            <Input
-              type="password"
-              value={restorePin}
-              onChange={(event) => {
-                setRestorePin(event.target.value);
-                if (restorePinError) setRestorePinError("");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !verifyingRestorePin) verifyRestorePin();
-              }}
-              autoFocus
-              autoComplete="off"
-              placeholder="Enter your PIN"
-              className="border-slate-600 bg-slate-800 text-white"
-            />
-
-            {restorePinError && (
-              <p className="mt-2 text-sm text-red-300">{restorePinError}</p>
-            )}
-
-            <p className="mt-2 text-xs text-slate-500">
-              The PIN unlocks only this restore action. The server checks it again before any device assignment is changed.
-            </p>
-
-            <div className="mt-5 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={cancelRestorePin}
-                disabled={verifyingRestorePin}
-                className="border-slate-600 text-slate-200"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={verifyRestorePin}
-                disabled={verifyingRestorePin || !restorePin.trim()}
-                className="bg-amber-600 text-white hover:bg-amber-500"
-              >
-                <LockKeyhole className="mr-2 h-4 w-4" />
-                {verifyingRestorePin ? "Checking PIN..." : "Unlock Restore"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
