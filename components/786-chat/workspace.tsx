@@ -200,6 +200,7 @@ export function SevenEightSixWorkspace() {
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
   const [revisions, setRevisions] = useState<BuilderRevision[]>([])
+  const [previewRefreshNonce, setPreviewRefreshNonce] = useState(0)
   const [revisionAction, setRevisionAction] = useState<"saving" | string | null>(null)
   const [actionNotice, setActionNotice] = useState("")
   const [panelBusy, setPanelBusy] = useState(false)
@@ -1248,7 +1249,7 @@ export function SevenEightSixWorkspace() {
                   </div>
                 )}
               </div>
-              <button type="button" className="ml-2 text-slate-500"><RotateCw className="h-3 w-3" /></button>
+              <button type="button" onClick={() => setPreviewRefreshNonce((current) => current + 1)} disabled={!build?.deployment_url} aria-label="Refresh compiled preview" title="Refresh the current compiled preview (does not rebuild or restore)" className="ml-2 text-slate-500 hover:text-cyan-200 disabled:opacity-40"><RotateCw className="h-3 w-3" /></button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -1289,7 +1290,7 @@ export function SevenEightSixWorkspace() {
                   {build?.status === "passed" && build.deployment_url ? (
                     <div style={{ width: deviceSpec.width || "100%", height: deviceSpec.height || "100%", maxWidth: "100%" }} className={`relative shrink-0 ${phonePreview ? "overflow-hidden rounded-[42px] border-[8px] border-[#02040a] bg-black shadow-[0_24px_70px_rgba(0,0,0,.65)]" : ""}`}>
                       {phonePreview && <span className="pointer-events-none absolute left-1/2 top-2 z-20 h-5 w-24 -translate-x-1/2 rounded-full bg-black" />}
-                      <iframe ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
+                      <iframe key={`${build.deployment_url}-${previewRefreshNonce}`} ref={previewIframeRef} src={build.deployment_url} title={`${project?.title || "Project"} compiled preview`} sandbox="allow-scripts allow-forms allow-popups allow-same-origin" onLoad={() => {
                         if (!designOpen) return
                         postVisualMessage({ type: "786-editor:enable", enabled: true })
                         postVisualMessage({ type: "786-editor:apply", state: visualState })
@@ -1453,7 +1454,7 @@ export function SevenEightSixWorkspace() {
                       <div><b className="text-[14px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[14px] text-slate-500">Manual checkpoints and automatic repair snapshots appear here.</p></div>
                     </div>
                   ) : (
-                    revisions.map((revision) => (
+                    [...revisions].sort((a, b) => (a.source === "published-recovery" ? 1 : 0) - (b.source === "published-recovery" ? 1 : 0) || Date.parse(b.created_at || "") - Date.parse(a.created_at || "")).map((revision) => (
                       <div key={revision.id} className="flex items-center gap-3 border-b border-[#1d2a41] px-3 py-2 last:border-0">
                         <History className="h-3.5 w-3.5 text-violet-300" />
                         <span className="min-w-0 flex-1">
