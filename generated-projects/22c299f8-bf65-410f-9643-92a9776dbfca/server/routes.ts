@@ -7987,6 +7987,7 @@ Generated: ${new Date().toISOString()}
 
       delete session.pestDeviceRestoreGrant;
 
+
       const rawSnapshot = backupRow?.snapshot;
       const snapshot = Array.isArray(rawSnapshot)
         ? rawSnapshot
@@ -8341,6 +8342,7 @@ Generated: ${new Date().toISOString()}
       return res.status(500).json({ message: "Could not link this physical mouse" });
     }
   });
+
 
   app.get("/api/iot/devices", isAdminAuthenticated, async (req, res) => {
     try {
