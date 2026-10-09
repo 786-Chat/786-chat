@@ -1005,6 +1005,8 @@ export default function IotAdminPanel() {
                         ))}
                       </div>
                     )}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
