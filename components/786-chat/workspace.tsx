@@ -52,6 +52,7 @@ import {
   generateBuilderProject,
   createBuilderRevision,
   deleteBuilderProject,
+  deleteBuilderRevision,
   deployBuilderProject,
   loadBuilderBuild,
   loadBuilderDeploymentLifecycle,
@@ -200,6 +201,7 @@ export function SevenEightSixWorkspace() {
   const [projects, setProjects] = useState<BuilderProjectSummary[]>([])
   const [projectToDelete, setProjectToDelete] = useState<BuilderProjectSummary | null>(null)
   const [revisions, setRevisions] = useState<BuilderRevision[]>([])
+  const [showAllRevisions, setShowAllRevisions] = useState(false)
   const [revisionAction, setRevisionAction] = useState<"saving" | string | null>(null)
   const [actionNotice, setActionNotice] = useState("")
   const [panelBusy, setPanelBusy] = useState(false)
@@ -669,6 +671,24 @@ export function SevenEightSixWorkspace() {
     } finally {
       setRevisionAction(null)
       setPanelBusy(false)
+    }
+  }
+
+  async function deleteCheckpoint(revision: BuilderRevision) {
+    if (!project || panelBusy || revision.id === "last-successful-published") return
+    if (!window.confirm(`Permanently delete checkpoint "${revision.label}" from ${new Date(revision.created_at).toLocaleString()}? This cannot be undone.`)) return
+    setPanelBusy(true)
+    setRevisionAction(`delete:${revision.id}`)
+    setError("")
+    try {
+      await deleteBuilderRevision(project.id, revision.id)
+      setRevisions(await listBuilderRevisions(project.id))
+      setActionNotice("Checkpoint deleted. Project source and live preview were not changed.")
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Checkpoint could not be deleted.")
+    } finally {
+      setPanelBusy(false)
+      setRevisionAction(null)
     }
   }
 
@@ -1434,7 +1454,7 @@ export function SevenEightSixWorkspace() {
                 <div className="flex items-center gap-2">
                   <b className="text-[14px]">Revisions</b>
                   <span className="rounded bg-white/[.04] px-2 py-1 text-[14px] text-slate-500">
-                    {project ? `${revisions.length} saved` : "No project"}
+                    {project ? `${Math.min(revisions.length, 10)} shown · ${revisions.length} saved` : "No project"}
                   </span>
                   <button
                     type="button"
@@ -1453,7 +1473,7 @@ export function SevenEightSixWorkspace() {
                       <div><b className="text-[14px]">{project ? "No saved revisions" : "Create a project first"}</b><p className="mt-1 text-[14px] text-slate-500">Manual checkpoints and automatic repair snapshots appear here.</p></div>
                     </div>
                   ) : (
-                    revisions.map((revision) => (
+                    [...revisions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, showAllRevisions ? undefined : 10).map((revision) => (
                       <div key={revision.id} className="flex items-center gap-3 border-b border-[#1d2a41] px-3 py-2 last:border-0">
                         <History className="h-3.5 w-3.5 text-violet-300" />
                         <span className="min-w-0 flex-1">
@@ -1464,9 +1484,11 @@ export function SevenEightSixWorkspace() {
                           {revisionAction === revision.id && <Loader2 className="h-3 w-3 animate-spin" />}
                           {revisionAction === revision.id ? "Restoring…" : "Restore"}
                         </button>
+                        <button type="button" onClick={() => void deleteCheckpoint(revision)} disabled={panelBusy || revision.id === "last-successful-published" || revision.id === revisions.find((item) => item.source === "manual")?.id} title={revision.id === "last-successful-published" ? "Published recovery is protected" : "Delete this checkpoint"} className="inline-flex items-center justify-center gap-1 rounded border border-rose-700/50 px-2 py-1 text-[14px] text-rose-200 disabled:cursor-not-allowed disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
                       </div>
                     ))
                   )}
+                  {revisions.length > 10 && <button type="button" onClick={() => setShowAllRevisions((value) => !value)} className="w-full border-t border-[#263550] px-3 py-2 text-[14px] font-bold text-cyan-200">{showAllRevisions ? "Show newest 10" : `Show all ${revisions.length} revisions to manage older checkpoints`}</button>}
                 </div>
               </article>
             </div>

@@ -32,9 +32,8 @@ export async function GET(request: Request, { params }: Ctx) {
   const recoveryRevision = recoveryBuild ? lastSuccessfulPublishedRevision(recoveryBuild) : null
 
   return NextResponse.json({
-    revisions: recoveryRevision
-      ? [recoveryRevision, ...revisions.filter((revision) => revision.id !== recoveryRevision.id)]
-      : revisions,
+    revisions: [...revisions, ...(recoveryRevision ? [recoveryRevision] : [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
   })
 }
 
