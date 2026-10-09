@@ -41,6 +41,10 @@ export default function IotAdminPanel() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -371,6 +375,53 @@ export default function IotAdminPanel() {
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -625,6 +676,73 @@ export default function IotAdminPanel() {
               >
                 <LockKeyhole className="mr-2 h-4 w-4" />
                 Restore All Devices
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-800/65 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              <h3 className="font-semibold text-white">Device Setup Backup</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-300">
+              Save the working Device IDs, names and branch assignments before changing Add Device settings.
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Restore never fakes Connected, last-seen, alarm, battery or signal data. Those still come only from the real HP2 gateway.
+            </p>
+            {deviceBackup ? (
+              <p className="mt-2 text-xs text-emerald-200">
+                Last working backup: {new Date(deviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })} · {deviceBackup.device_count} device(s)
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-amber-200">No manual working-device backup saved yet.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={backupWorkingDeviceSetup}
+              disabled={backingUpDevices || restoringDevices}
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {backingUpDevices ? "Saving Backup..." : "Backup Working Setup"}
+            </Button>
+            {restoreBackupConfirm ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={restoreWorkingDeviceSetup}
+                  disabled={!deviceBackup?.id || restoringDevices}
+                  className="bg-amber-600 text-white hover:bg-amber-500"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${restoringDevices ? "animate-spin" : ""}`} />
+                  {restoringDevices ? "Restoring..." : "Confirm Restore"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRestoreBackupConfirm(false)}
+                  disabled={restoringDevices}
+                  className="border-slate-600 text-slate-200"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRestoreBackupConfirm(true)}
+                disabled={!deviceBackup?.id || backingUpDevices || restoringDevices}
+                className="border-amber-600/70 text-amber-200"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Restore Last Backup
               </Button>
             )}
           </div>
