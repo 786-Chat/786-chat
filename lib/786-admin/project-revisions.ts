@@ -253,3 +253,25 @@ export async function undoLatestProjectChange(input: {
   if (!restoredProject) throw new Error("Undo completed but project could not be read back")
   return { project: restoredProject, restoredRevision: target }
 }
+
+/** Delete a single historical revision; never delete the latest manual checkpoint. */
+export async function deleteProjectRevision(input: { projectId: string; revisionId: string; ownerEmail: string }) {
+  await ensureProjectRevisionSchema()
+  const owner = normalizeEmail(input.ownerEmail)
+  const project = await getProjectWithData(input.projectId, owner)
+  if (!project) throw new Error("Project not found")
+  const revisions = await listProjectRevisionSummaries(input.projectId, owner, 100)
+  const target = revisions.find((revision) => revision.id === input.revisionId)
+  if (!target) throw new Error("Revision not found")
+  const mostRecentManual = revisions.find((revision) => revision.source === "manual")
+  if (target.id === mostRecentManual?.id) throw new Error("The latest manual checkpoint is protected. Save a newer checkpoint before deleting this one.")
+  const result = await sql`
+    DELETE FROM admin_project_revisions
+    WHERE id = ${input.revisionId}
+      AND project_id = ${input.projectId}
+      AND owner_email = ${owner}
+    RETURNING id
+  ` as unknown as Array<{ id: string }>
+  if (!result.length) throw new Error("Revision not found")
+  return { deleted: true }
+}
