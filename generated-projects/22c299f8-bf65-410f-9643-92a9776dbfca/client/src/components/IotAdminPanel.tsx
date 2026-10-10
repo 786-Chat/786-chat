@@ -64,7 +64,6 @@ export default function IotAdminPanel() {
   const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
   const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
   const [gatewayPort, setGatewayPort] = useState("1883");
-  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
@@ -508,31 +507,6 @@ export default function IotAdminPanel() {
     }
   };
 
-  const provisioningPayload = () => ({
-    deviceId: wifiDeviceId,
-    ssid: wifiSsid,
-    password: wifiPassword,
-    mqttHost: gatewayHost,
-    mqttPort: Number(gatewayPort) || 1883,
-  });
-
-  const sendWifiDirect = async () => {
-    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
-      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
-      return;
-    }
-
-    setSendingWifi(true);
-    try {
-      toast({
-        title: "Wi-Fi details entered — not yet connected",
-        description: `Details for ${wifiDeviceId} are ready locally. The mouse must be provisioned and report to MQTT before it shows Connected.`,
-      });
-    } finally {
-      setSendingWifi(false);
-    }
-  };
-
   const canRegister = Boolean(deviceName.trim() && branchId);
 
   return (
@@ -814,18 +788,21 @@ export default function IotAdminPanel() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={sendWifiDirect}
-            disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
-            className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Details"}
-          </Button>
-          <p className="text-xs text-slate-400">
-            Entering Wi-Fi details does not send them to the physical mouse or connect it automatically. Supported local provisioning and a real MQTT report are required before showing Connected. Nearby Wi-Fi cannot be scanned from this browser.
+        <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200" role="status">
+          <p className="font-semibold text-amber-200">Physical Wi-Fi activation unavailable for BMAX W003</p>
+          <p className="mt-2">
+            This form cannot send network credentials to an unmodified BMAX W003 trap. The previous
+            Prepare Wi-Fi Details button did not provision the mouse and has been removed.
+            Registration and branch assignment do not connect a device.
+          </p>
+          <p className="mt-2">
+            The trap must first run verified Food Safety-compatible firmware with a documented,
+            authenticated provisioning method. Then an activation service can be connected here.
+            Until a real MQTT report is received, the device remains Disconnected.
+          </p>
+          <p className="mt-2 text-slate-400">
+            Do not use the HP2 private address 192.168.0.14 at a different shop without a secure
+            site-to-gateway connection. Shop Wi-Fi passwords remain in this browser; this page does not transmit or save them.
           </p>
         </div>
 
