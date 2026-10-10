@@ -68,7 +68,6 @@ export default function IotAdminPanel() {
   const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
   const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
   const [gatewayPort, setGatewayPort] = useState("1883");
-  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
@@ -559,38 +558,6 @@ export default function IotAdminPanel() {
     }
   };
 
-  const provisioningPayload = () => ({
-    deviceId: wifiDeviceId,
-    ssid: wifiSsid,
-    password: wifiPassword,
-    mqttHost: gatewayHost,
-    mqttPort: Number(gatewayPort) || 1883,
-  });
-
-  const sendWifiDirect = async () => {
-    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
-      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
-      return;
-    }
-
-    setSendingWifi(true);
-    const base = setupAddress.trim().replace(/\/$/, "");
-    const body = JSON.stringify(provisioningPayload(), null, 2);
-
-    try {
-      try {
-        await navigator.clipboard.writeText(body);
-      } catch (_) {}
-
-      toast({
-        title: "Device Wi-Fi setup ready",
-        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
-      });
-    } finally {
-      setSendingWifi(false);
-    }
-  };
-
   const canRegister = Boolean(deviceName.trim() && branchId);
 
   return (
@@ -934,18 +901,21 @@ export default function IotAdminPanel() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={sendWifiDirect}
-            disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
-            className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
-          </Button>
-          <p className="text-xs text-slate-400">
-            No new tab opens. This prepares the details for the physical trap setup; it does not fake a Connected status.
+        <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200" role="status">
+          <p className="font-semibold text-amber-200">Physical Wi-Fi activation unavailable for BMAX W003</p>
+          <p className="mt-2">
+            This form cannot send Wi-Fi credentials to an unmodified BMAX W003 mouse trap.
+            The former Prepare Wi-Fi Setup button did not activate the device and has been removed.
+            Registration and branch assignment do not connect a device.
+          </p>
+          <p className="mt-2">
+            Verified Food Safety-compatible firmware and an authenticated provisioning method
+            are needed before activation can be enabled. The device will remain Disconnected
+            until a genuine MQTT message reaches the gateway.
+          </p>
+          <p className="mt-2 text-slate-400">
+            A shop on another network cannot use HP2's private LAN address 192.168.0.14
+            without secure connectivity. Wi-Fi credentials are not transmitted or saved by this page.
           </p>
         </div>
 
