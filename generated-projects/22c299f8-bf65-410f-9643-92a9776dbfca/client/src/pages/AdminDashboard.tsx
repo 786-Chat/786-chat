@@ -2616,6 +2616,7 @@ export default function AdminDashboard() {
             
             
             
+            
             {/* Dashboard Section */}
             {activeTab === "dashboard" && (
               <div className="space-y-8">
@@ -3097,7 +3098,7 @@ export default function AdminDashboard() {
                 {/* Performance indicator for large datasets */}
                 {branchPagination?.totalCount > 1000 && (
                   <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
                       <Activity className="h-4 w-4 text-blue-400" />
                       <span className="text-blue-300 text-sm">
                         High-performance mode: Managing {branchPagination.totalCount} branches with optimized pagination
@@ -4813,7 +4814,7 @@ export default function AdminDashboard() {
                     <Card className="bg-slate-800/50 border-slate-700/50 backdrop-blur-sm">
                       <CardHeader>
                         <CardTitle className="text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div className="flex items-center space-x-3">
+                          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
                               <Settings className="h-5 w-5 text-white" />
                             </div>
@@ -8374,7 +8375,7 @@ export default function AdminDashboard() {
                     setNewSidebarPin("");
                     setConfirmSidebarPin("");
                   }}
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 w-full sm:w-auto whitespace-normal"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Save Changes
