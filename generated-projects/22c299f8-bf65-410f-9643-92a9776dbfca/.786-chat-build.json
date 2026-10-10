@@ -1,12 +1,12 @@
 {
   "projectId": "22c299f8-bf65-410f-9643-92a9776dbfca",
-  "buildId": "5d7c7aa3-24f0-4e21-b633-fcec7b5e791a",
+  "buildId": "18a89e92-448d-4edb-9748-5524fc45305e",
   "title": "Pest Control",
-  "sourceVersion": "0e7f8b618249ee9eed2b22ae50140e06ee61d5b067c9849462ad68647ab0a13b",
+  "sourceVersion": "9d2a42cc6a7aaa9f93aaa14f9f7d276d3b35ab592f7049566c0cb0fe814d6ddb",
   "generatedBy": "786.chat",
   "providers": [
     "DeepSeek",
     "Gemini"
   ],
-  "createdAt": "2026-10-07T02:56:01.000Z"
+  "createdAt": "2026-10-10T22:07:46.631Z"
 }
