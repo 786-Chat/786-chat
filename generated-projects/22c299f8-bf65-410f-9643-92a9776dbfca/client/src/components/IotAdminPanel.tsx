@@ -68,7 +68,6 @@ export default function IotAdminPanel() {
   const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
   const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
   const [gatewayPort, setGatewayPort] = useState("1883");
-  const [sendingWifi, setSendingWifi] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
@@ -92,7 +91,7 @@ export default function IotAdminPanel() {
     [branches, activeBranchId],
   );
   const activeBranchDevices = useMemo(
-    () => ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)),
+    () => activeBranchId ? ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)) : ownedDevices,
     [ownedDevices, activeBranchId],
   );
   const branchSearchResults = useMemo(() => {
@@ -559,38 +558,6 @@ export default function IotAdminPanel() {
     }
   };
 
-  const provisioningPayload = () => ({
-    deviceId: wifiDeviceId,
-    ssid: wifiSsid,
-    password: wifiPassword,
-    mqttHost: gatewayHost,
-    mqttPort: Number(gatewayPort) || 1883,
-  });
-
-  const sendWifiDirect = async () => {
-    if (!wifiDeviceId || !wifiSsid || !wifiPassword || !setupAddress.trim()) {
-      toast({ title: "Wi-Fi details needed", description: "Choose the registered device, enter this shop\'s 2.4 GHz Wi-Fi name and password, then continue.", variant: "destructive" });
-      return;
-    }
-
-    setSendingWifi(true);
-    const base = setupAddress.trim().replace(/\/$/, "");
-    const body = JSON.stringify(provisioningPayload(), null, 2);
-
-    try {
-      try {
-        await navigator.clipboard.writeText(body);
-      } catch (_) {}
-
-      toast({
-        title: "Device Wi-Fi setup ready",
-        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
-      });
-    } finally {
-      setSendingWifi(false);
-    }
-  };
-
   const canRegister = Boolean(deviceName.trim() && branchId);
 
   return (
@@ -610,11 +577,11 @@ export default function IotAdminPanel() {
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Register New Device
+          Add Mouse Device
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
+      <div className="hidden" aria-hidden="true">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -681,7 +648,7 @@ export default function IotAdminPanel() {
           </div>
         </div>
       </div>
-      <div className="rounded-2xl border border-emerald-500/30 bg-slate-800/65 p-5">
+      <div className="hidden" aria-hidden="true">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -934,18 +901,21 @@ export default function IotAdminPanel() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={sendWifiDirect}
-            disabled={sendingWifi || !wifiDeviceId || !wifiSsid || !wifiPassword}
-            className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
-          </Button>
-          <p className="text-xs text-slate-400">
-            No new tab opens. This prepares the details for the physical trap setup; it does not fake a Connected status.
+        <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200" role="status">
+          <p className="font-semibold text-amber-200">Physical Wi-Fi activation unavailable for BMAX W003</p>
+          <p className="mt-2">
+            This form cannot send Wi-Fi credentials to an unmodified BMAX W003 mouse trap.
+            The former Prepare Wi-Fi Setup button did not activate the device and has been removed.
+            Registration and branch assignment do not connect a device.
+          </p>
+          <p className="mt-2">
+            Verified Food Safety-compatible firmware and an authenticated provisioning method
+            are needed before activation can be enabled. The device will remain Disconnected
+            until a genuine MQTT message reaches the gateway.
+          </p>
+          <p className="mt-2 text-slate-400">
+            A shop on another network cannot use HP2's private LAN address 192.168.0.14
+            without secure connectivity. Wi-Fi credentials are not transmitted or saved by this page.
           </p>
         </div>
 
@@ -1048,7 +1018,7 @@ export default function IotAdminPanel() {
                       <p className="mt-2 text-xs text-cyan-200">
                         {activeBranchDevices.length} device{activeBranchDevices.length === 1 ? "" : "s"} assigned to this branch
                       </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="hidden">
                         <Button
                           type="button"
                           size="sm"
@@ -1098,7 +1068,7 @@ export default function IotAdminPanel() {
                   </div>
                 </div>
                 {activeBranchMapQuery && (activeBranch.address || activeBranch.postCode) && (
-                  <div className="relative h-48 overflow-hidden border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
+                  <div className="hidden" aria-hidden="true">
                     <iframe
                       title={`${activeBranch.name} map`}
                       src={`https://www.google.com/maps?q=${encodeURIComponent(activeBranchMapQuery)}&output=embed`}
@@ -1129,7 +1099,7 @@ export default function IotAdminPanel() {
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-5 text-sm text-slate-400">
-              Search and select one branch to see only that shop's devices.
+              All registered devices are shown below. Select a branch to filter by shop.
             </div>
           )}
         </div>
@@ -1137,7 +1107,7 @@ export default function IotAdminPanel() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <HardDrive className="h-4 w-4 text-emerald-300" />
-            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : "Branch Devices"}
+            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : `All Registered Devices (${ownedDevices.length})`}
           </h3>
           <Button size="sm" variant="outline" onClick={() => loadBase()} className="border-slate-600 text-slate-200">
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
@@ -1145,13 +1115,9 @@ export default function IotAdminPanel() {
           </Button>
         </div>
 
-        {!activeBranch ? (
-          <div className="py-8 text-center text-sm text-slate-400">
-            Select a branch above to view its devices.
-          </div>
-        ) : activeBranchDevices.length === 0 ? (
+        {activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>No devices are assigned to {activeBranch.name} yet.</p>
+            <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1253,7 +1219,7 @@ export default function IotAdminPanel() {
                     </div>
                   )}
 
-                  <div className="mt-4 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2">
+                  <div className="hidden" aria-hidden="true">
                     <p className="mb-2 text-[11px] font-medium text-slate-400">Safe backup for this device only</p>
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1307,7 +1273,7 @@ export default function IotAdminPanel() {
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {pendingRemoveDeviceId === String(device.id) ? (
+                    {false && (pendingRemoveDeviceId === String(device.id) ? (
                       <>
                         <Button
                           size="sm"
@@ -1338,7 +1304,7 @@ export default function IotAdminPanel() {
                         <Trash2 className="mr-1 h-3 w-3" />
                         Unassign Device
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
               );
