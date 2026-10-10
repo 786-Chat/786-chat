@@ -41,6 +41,10 @@ export default function IotAdminPanel() {
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -76,9 +80,6 @@ export default function IotAdminPanel() {
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
-  const [advancedDeviceId, setAdvancedDeviceId] = useState("");
-  const [showEmergencyTools, setShowEmergencyTools] = useState(false);
-  const [showRegisterForm, setShowRegisterForm] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -91,7 +92,7 @@ export default function IotAdminPanel() {
     [branches, activeBranchId],
   );
   const activeBranchDevices = useMemo(
-    () => activeBranchId ? ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)) : ownedDevices,
+    () => ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)),
     [ownedDevices, activeBranchId],
   );
   const branchSearchResults = useMemo(() => {
@@ -103,7 +104,10 @@ export default function IotAdminPanel() {
         .some((value) => String(value).toLowerCase().includes(query)))
       .slice(0, 20);
   }, [branches, branchSearch]);
-
+  const activeBranchMapQuery = useMemo(() => {
+    if (!activeBranch) return "";
+    return [activeBranch.name, activeBranch.address, activeBranch.postCode].filter(Boolean).join(", ");
+  }, [activeBranch]);
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes] = await Promise.all([
@@ -371,6 +375,53 @@ export default function IotAdminPanel() {
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -416,7 +467,7 @@ export default function IotAdminPanel() {
       setDeviceName("");
       setActiveBranchId(branchId);
       setBranchSearch(branchById.get(branchId) || "");
-      setBranchId(branchId);
+      setBranchId("");
       setNotes("");
       await loadBase();
     } finally {
@@ -523,10 +574,17 @@ export default function IotAdminPanel() {
     }
 
     setSendingWifi(true);
+    const base = setupAddress.trim().replace(/\/$/, "");
+    const body = JSON.stringify(provisioningPayload(), null, 2);
+
     try {
+      try {
+        await navigator.clipboard.writeText(body);
+      } catch (_) {}
+
       toast({
-        title: "Wi-Fi details entered — not yet connected",
-        description: `Details for ${wifiDeviceId} are ready locally. The mouse must be provisioned and report to MQTT before it shows Connected.`,
+        title: "Device Wi-Fi setup ready",
+        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
       });
     } finally {
       setSendingWifi(false);
@@ -548,17 +606,15 @@ export default function IotAdminPanel() {
           </div>
         </div>
         <Button
-          onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
+          onClick={() => document.getElementById("owned-device-name")?.focus()}
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add Mouse Device
+          Register New Device
         </Button>
       </div>
 
-      <div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setShowEmergencyTools(!showEmergencyTools)} className="text-xs text-slate-400 hover:text-white">{showEmergencyTools ? "Hide Emergency Backup Tools" : "Emergency Backup Tools (Advanced)"}</Button>
-        {showEmergencyTools && <div className="mt-2 rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
+      <div className="rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -625,12 +681,77 @@ export default function IotAdminPanel() {
           </div>
         </div>
       </div>
-      </div>}
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-800/65 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-300" />
+              <h3 className="font-semibold text-white">Device Setup Backup</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-300">
+              Save the working Device IDs, names and branch assignments before changing Add Device settings.
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Restore never fakes Connected, last-seen, alarm, battery or signal data. Those still come only from the real HP2 gateway.
+            </p>
+            {deviceBackup ? (
+              <p className="mt-2 text-xs text-emerald-200">
+                Last working backup: {new Date(deviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })} · {deviceBackup.device_count} device(s)
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-amber-200">No manual working-device backup saved yet.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={backupWorkingDeviceSetup}
+              disabled={backingUpDevices || restoringDevices}
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {backingUpDevices ? "Saving Backup..." : "Backup Working Setup"}
+            </Button>
+            {restoreBackupConfirm ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={restoreWorkingDeviceSetup}
+                  disabled={!deviceBackup?.id || restoringDevices}
+                  className="bg-amber-600 text-white hover:bg-amber-500"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${restoringDevices ? "animate-spin" : ""}`} />
+                  {restoringDevices ? "Restoring..." : "Confirm Restore"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRestoreBackupConfirm(false)}
+                  disabled={restoringDevices}
+                  className="border-slate-600 text-slate-200"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRestoreBackupConfirm(true)}
+                disabled={!deviceBackup?.id || backingUpDevices || restoringDevices}
+                className="border-amber-600/70 text-amber-200"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Restore Last Backup
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
-      {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
+      <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
-          <h3 className="font-semibold text-white">Add Mouse Device — Register & Assign to Branch</h3>
+          <h3 className="font-semibold text-white">Add Device → Name → Branch → Assign → Activate</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -733,11 +854,10 @@ export default function IotAdminPanel() {
         )}
       </div>
 
-      </div>}
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Step 2 — Enter Shop Wi-Fi Details</h3>
+          <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
         </div>
         <p className="text-sm text-slate-300">
           Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
@@ -762,7 +882,7 @@ export default function IotAdminPanel() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID) — manually enter the shop’s 2.4 GHz network</label>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID)</label>
             <Input
               value={wifiSsid}
               onChange={(event) => setWifiSsid(event.target.value)}
@@ -822,10 +942,10 @@ export default function IotAdminPanel() {
             className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Details"}
+            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
           </Button>
           <p className="text-xs text-slate-400">
-            Entering Wi-Fi details does not send them to the physical mouse or connect it automatically. Supported local provisioning and a real MQTT report are required before showing Connected. Nearby Wi-Fi cannot be scanned from this browser.
+            No new tab opens. This prepares the details for the physical trap setup; it does not fake a Connected status.
           </p>
         </div>
 
@@ -916,7 +1036,7 @@ export default function IotAdminPanel() {
 
           {activeBranch ? (
             <div className="mt-4 overflow-hidden rounded-xl border border-cyan-500/25 bg-slate-900/60">
-              <div className="grid gap-0">
+              <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
@@ -928,7 +1048,48 @@ export default function IotAdminPanel() {
                       <p className="mt-2 text-xs text-cyan-200">
                         {activeBranchDevices.length} device{activeBranchDevices.length === 1 ? "" : "s"} assigned to this branch
                       </p>
-                      <p className="hidden">
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => prepareScopedBackup("branch", activeBranch.id, `${activeBranch.name} device setup`)}
+                          disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
+                          className="bg-emerald-600 text-white hover:bg-emerald-500"
+                        >
+                          <LockKeyhole className="mr-1 h-3.5 w-3.5" />
+                          {backupBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Saving..." : "Backup This Branch"}
+                        </Button>
+                        {pendingRestore?.key === scopedBackupKey("branch", activeBranch.id) ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={confirmScopedRestore}
+                              disabled={Boolean(restoreBusyKey)}
+                              className="bg-amber-600 text-white hover:bg-amber-500"
+                            >
+                              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "animate-spin" : ""}`} />
+                              {restoreBusyKey === scopedBackupKey("branch", activeBranch.id) ? "Restoring..." : "Confirm Branch Restore"}
+                            </Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setPendingRestore(null)} className="border-slate-600 text-slate-200">
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => prepareScopedRestore("branch", activeBranch.id, activeBranch.name)}
+                            disabled={!activeBranchDevices.length || Boolean(backupBusyKey || restoreBusyKey)}
+                            className="border-amber-700/60 text-amber-200"
+                          >
+                            <LockKeyhole className="mr-1 h-3.5 w-3.5" />
+                            Restore This Branch
+                          </Button>
+                        )}
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-500">
                         {branchDeviceBackup
                           ? `Last branch backup: ${new Date(branchDeviceBackup.created_at).toLocaleString("en-GB", { timeZone: "Europe/London" })}`
                           : "No backup saved for this branch yet."}
@@ -936,12 +1097,39 @@ export default function IotAdminPanel() {
                     </div>
                   </div>
                 </div>
-
+                {activeBranchMapQuery && (activeBranch.address || activeBranch.postCode) && (
+                  <div className="relative h-48 overflow-hidden border-t border-slate-700 lg:h-full lg:min-h-[180px] lg:border-l lg:border-t-0">
+                    <iframe
+                      title={`${activeBranch.name} map`}
+                      src={`https://www.google.com/maps?q=${encodeURIComponent(activeBranchMapQuery)}&output=embed`}
+                      className="h-full w-full border-0"
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                    />
+                    {activeBranchDevices.length > 0 && (
+                      <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex flex-wrap gap-1.5">
+                        {activeBranchDevices.slice(0, 4).map((device: any, index: number) => (
+                          <div
+                            key={device.id}
+                            className="flex max-w-full items-center gap-1.5 rounded-full border border-slate-600/80 bg-slate-950/90 px-2.5 py-1 text-[11px] text-white shadow-lg backdrop-blur"
+                          >
+                            <span aria-hidden="true">🐭</span>
+                            <span className="font-semibold">Device {index + 1}</span>
+                            <span className={device.isOnline ? "text-emerald-300" : "text-slate-400"}>
+                              {device.isOnline ? "● Connected" : "● Offline"}
+                            </span>
+                            <span className="truncate text-cyan-200">• {device.notes || "Installation area not set"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-5 text-sm text-slate-400">
-              All registered devices are shown below. Search and select a branch to filter by shop.
+              Search and select one branch to see only that shop's devices.
             </div>
           )}
         </div>
@@ -949,24 +1137,21 @@ export default function IotAdminPanel() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <HardDrive className="h-4 w-4 text-emerald-300" />
-            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : `All Registered Devices (${ownedDevices.length})`}
+            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : "Branch Devices"}
           </h3>
-          <div className="flex flex-wrap gap-2">
-            {activeBranch && (
-              <Button size="sm" onClick={() => { setBranchId(activeBranch.id); setShowRegisterForm(true); window.setTimeout(() => document.getElementById("pest-add-device")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} className="bg-blue-600 text-white hover:bg-blue-500">
-                <Plus className="mr-1 h-4 w-4" /> Add Mouse Device
-              </Button>
-            )}
           <Button size="sm" variant="outline" onClick={() => loadBase()} className="border-slate-600 text-slate-200">
             <RefreshCw className="mr-1 h-3.5 w-3.5" />
             Refresh
           </Button>
-          </div>
         </div>
 
-        {activeBranchDevices.length === 0 ? (
+        {!activeBranch ? (
+          <div className="py-8 text-center text-sm text-slate-400">
+            Select a branch above to view its devices.
+          </div>
+        ) : activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+            <p>No devices are assigned to {activeBranch.name} yet.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1068,11 +1253,8 @@ export default function IotAdminPanel() {
                     </div>
                   )}
 
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setAdvancedDeviceId(advancedDeviceId === String(device.id) ? "" : String(device.id))} className="mt-3 text-xs text-slate-400 hover:text-white">
-                    {advancedDeviceId === String(device.id) ? "Hide Advanced Settings" : "Advanced Settings"}
-                  </Button>
-                  {advancedDeviceId === String(device.id) && <div className="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2">
-                    <p className="mb-2 text-[11px] font-medium text-slate-400">Advanced device backup and restore</p>
+                  <div className="mt-4 rounded-lg border border-slate-700/70 bg-slate-950/35 p-2">
+                    <p className="mb-2 text-[11px] font-medium text-slate-400">Safe backup for this device only</p>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
@@ -1114,7 +1296,7 @@ export default function IotAdminPanel() {
                         </Button>
                       )}
                     </div>
-                  </div>}
+                  </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => refreshDevice(device.id)} className="border-slate-600 text-slate-200">
@@ -1125,7 +1307,7 @@ export default function IotAdminPanel() {
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {advancedDeviceId === String(device.id) && (pendingRemoveDeviceId === String(device.id) ? (
+                    {pendingRemoveDeviceId === String(device.id) ? (
                       <>
                         <Button
                           size="sm"
@@ -1156,7 +1338,7 @@ export default function IotAdminPanel() {
                         <Trash2 className="mr-1 h-3 w-3" />
                         Unassign Device
                       </Button>
-                    ))}
+                    )}
                   </div>
                 </div>
               );
