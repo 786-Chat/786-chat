@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/auth"
+import { isAdminUser } from "@/lib/admin-config"
 import { appendBuildLog, createBuildJob, getLatestBuildJob } from "@/lib/786-admin/build-jobs"
 import { completeRunnerBuild } from "@/lib/786-admin/build-runner-store"
 import { dispatchGeneratedProjectBuild } from "@/lib/786-admin/build-runner"
@@ -105,6 +106,9 @@ export async function GET(_request: Request, { params }: Ctx) {
   const email = await requireOwnerEmail()
   if (!email) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+  }
+  if (process.env.CUSTOMER_ACCESS_ENABLED !== "true" && !isAdminUser(email)) {
+    return NextResponse.json({ success: false, error: "786.Chat builds are owner-only before launch." }, { status: 403 })
   }
 
   const { id } = await params
