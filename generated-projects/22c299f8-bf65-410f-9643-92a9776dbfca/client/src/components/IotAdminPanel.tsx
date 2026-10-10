@@ -77,6 +77,7 @@ export default function IotAdminPanel() {
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
+  const [showEmergencyTools, setShowEmergencyTools] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -524,17 +525,10 @@ export default function IotAdminPanel() {
     }
 
     setSendingWifi(true);
-    const base = setupAddress.trim().replace(/\/$/, "");
-    const body = JSON.stringify(provisioningPayload(), null, 2);
-
     try {
-      try {
-        await navigator.clipboard.writeText(body);
-      } catch (_) {}
-
       toast({
-        title: "Device Wi-Fi setup ready",
-        description: `Wi-Fi details are ready for ${wifiDeviceId}. No new window was opened. Keep this page open while the physical trap is in Food Safety setup mode.`,
+        title: "Wi-Fi details entered — not yet connected",
+        description: `Details for ${wifiDeviceId} are ready locally. The mouse must be provisioned and report to MQTT before it shows Connected.`,
       });
     } finally {
       setSendingWifi(false);
@@ -564,7 +558,9 @@ export default function IotAdminPanel() {
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
+      <div>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setShowEmergencyTools(!showEmergencyTools)} className="text-xs text-slate-400 hover:text-white">{showEmergencyTools ? "Hide Emergency Backup Tools" : "Emergency Backup Tools (Advanced)"}</Button>
+        {showEmergencyTools && <div className="mt-2 rounded-2xl border border-amber-500/30 bg-slate-800/65 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -631,10 +627,12 @@ export default function IotAdminPanel() {
           </div>
         </div>
       </div>
+      </div>}
+      </div>
       <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
-          <h3 className="font-semibold text-white">Add Device → Name → Branch → Assign → Activate</h3>
+          <h3 className="font-semibold text-white">Add Mouse Device — Register & Assign to Branch</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -740,7 +738,7 @@ export default function IotAdminPanel() {
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Food Safety Wireless Activation</h3>
+          <h3 className="font-semibold text-white">Step 2 — Enter Shop Wi-Fi Details</h3>
         </div>
         <p className="text-sm text-slate-300">
           Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
@@ -825,10 +823,10 @@ export default function IotAdminPanel() {
             className="bg-cyan-600 text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sendingWifi ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Wifi className="mr-2 h-4 w-4" />}
-            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Setup"}
+            {sendingWifi ? "Preparing..." : "Prepare Wi-Fi Details"}
           </Button>
           <p className="text-xs text-slate-400">
-            Wi-Fi setup preparation does not activate the physical mouse. Connected appears only after a real device report. Shop networks cannot be scanned by this browser.
+            Entering Wi-Fi details does not send them to the physical mouse or connect it automatically. Supported local provisioning and a real MQTT report are required before showing Connected. Nearby Wi-Fi cannot be scanned from this browser.
           </p>
         </div>
 
