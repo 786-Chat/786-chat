@@ -157,6 +157,31 @@ export class ObjectStorageService {
       const pathname = decodeURIComponent(objectPath.slice("/objects/vercel/".length));
       return { __vercelBlobPath: pathname } as unknown as File;
     }
+
+    // Legacy Replit public-object URLs can remain in imported database rows.
+    // On Vercel there is no Replit sidecar or PRIVATE_OBJECT_DIR. Try the
+    // compatible Vercel Blob locations first and return normal not-found if the
+    // old binary was never migrated, instead of crashing the request with 500.
+    if (process.env.VERCEL && objectPath.startsWith("/objects/public/")) {
+      const filename = decodeURIComponent(objectPath.slice("/objects/public/".length));
+      if (!filename || filename.includes("..")) {
+        throw new ObjectNotFoundError();
+      }
+      const { get } = await import("@vercel/blob");
+      const candidates = [`uploads/${filename}`, `public/${filename}`, filename];
+      for (const pathname of candidates) {
+        try {
+          const result = await get(pathname, { access: "private" });
+          if (result?.statusCode === 200) {
+            return { __vercelBlobPath: pathname } as unknown as File;
+          }
+        } catch {
+          // Continue through compatibility candidates.
+        }
+      }
+      throw new ObjectNotFoundError();
+    }
+
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
