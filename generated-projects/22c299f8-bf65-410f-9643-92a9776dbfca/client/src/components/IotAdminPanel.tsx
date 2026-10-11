@@ -598,7 +598,6 @@ export default function IotAdminPanel() {
             )}
           </div>
         </div>
-      </div>
       </div>}
       </div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
@@ -705,8 +704,6 @@ export default function IotAdminPanel() {
             Device created: <span className="font-mono font-semibold">{lastCreatedId}</span>. It becomes Connected when the physical trap connects to your Food Safety gateway using this ID.
           </div>
         )}
-      </div>
-
       </div>}
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
