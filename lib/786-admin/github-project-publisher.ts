@@ -1,3 +1,5 @@
+import { githubRepositoryToken } from "./github-repository-token"
+
 const DEFAULT_REPOSITORY = "786-Chat/786-chat"
 const DEFAULT_BASE_BRANCH = "main"
 const GITHUB_REQUEST_ATTEMPTS = 4
@@ -18,12 +20,6 @@ export type PublishedGeneratedProject = {
   pullRequestUrl: string
   pullRequestNumber: number
   directory: string
-}
-
-function requiredToken(): string {
-  const value = process.env.GITHUB_BUILD_TOKEN?.trim()
-  if (!value) throw new Error("GITHUB_BUILD_TOKEN is not configured")
-  return value
 }
 
 function cleanSegment(value: string): string {
@@ -93,7 +89,7 @@ async function githubRequest<T>(
       ...init,
       headers: {
         Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${requiredToken()}`,
+        Authorization: `Bearer ${await githubRepositoryToken(repository)}`,
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
         ...(init.headers || {}),
