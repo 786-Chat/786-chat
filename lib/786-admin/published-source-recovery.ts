@@ -1,3 +1,5 @@
+import { githubRepositoryToken } from "./github-repository-token"
+
 import type { AdminProjectBuild } from "./build-jobs"
 import { ensureBuildJobsSchema } from "./build-jobs"
 import { sql, transaction } from "./db"
@@ -42,12 +44,6 @@ function normalizeEmail(email: string) {
   return email.toLowerCase().trim()
 }
 
-function githubToken(): string {
-  const token = process.env.GITHUB_BUILD_TOKEN?.trim()
-  if (!token) throw new Error("GITHUB_BUILD_TOKEN is not configured")
-  return token
-}
-
 function repository(): string {
   return process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
 }
@@ -68,7 +64,7 @@ async function githubJson<T>(path: string): Promise<T> {
   const response = await fetch(`https://api.github.com/repos/${repository()}${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${githubToken()}`,
+      Authorization: `Bearer ${await githubRepositoryToken(repository())}`,
       "X-GitHub-Api-Version": "2022-11-28",
     },
     cache: "no-store",
