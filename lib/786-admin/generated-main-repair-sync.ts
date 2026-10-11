@@ -1,3 +1,4 @@
+import { githubRepositoryToken } from "./github-repository-token"
 import type { AdminProjectBuild } from "./build-jobs"
 
 const DEFAULT_REPOSITORY = "786-Chat/786-chat"
@@ -32,8 +33,11 @@ export type MergedGeneratedRepairDelta = {
   reason: string
 }
 
-function token(): string | null {
-  return process.env.GITHUB_BUILD_TOKEN?.trim() || null
+function tokenConfigured(): boolean {
+  return Boolean(
+    (process.env.GITHUB_APP_ID?.trim() && process.env.GITHUB_APP_PRIVATE_KEY?.trim()) ||
+    process.env.GITHUB_BUILD_TOKEN?.trim(),
+  )
 }
 
 function repository(): string {
@@ -53,8 +57,7 @@ function cleanProjectSegment(value: string): string {
 }
 
 async function githubJson<T>(path: string): Promise<T> {
-  const auth = token()
-  if (!auth) throw new Error("GITHUB_BUILD_TOKEN is not configured")
+  const auth = await githubRepositoryToken(repository())
 
   const response = await fetch(`https://api.github.com/repos/${repository()}${path}`, {
     headers: {
@@ -132,8 +135,8 @@ export async function mergedGeneratedRepairDelta(input: {
     }
   }
 
-  if (!token()) {
-    return { checked: false, updates: {}, deletes: [], reason: "GitHub build token is unavailable." }
+  if (!tokenConfigured()) {
+    return { checked: false, updates: {}, deletes: [], reason: "GitHub authorization is unavailable." }
   }
 
   try {
