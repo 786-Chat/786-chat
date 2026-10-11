@@ -599,7 +599,7 @@ export default function IotAdminPanel() {
           </div>
         </div>
       </div>
-      </div>}
+      }
       </div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
@@ -707,7 +707,7 @@ export default function IotAdminPanel() {
         )}
       </div>
 
-      </div>}
+      }
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
