@@ -30,6 +30,7 @@ test("same build callback retries reuse checkpointed publish metadata", () => {
 test("identical source retries can reuse prior GitHub publish metadata", () => {
   assert.match(store, /getReusableRunnerPublish/)
   assert.match(store, /source_version = \$\{input\.sourceVersion\}/)
+  assert.match(store, /AND status = 'passed'/)
   assert.match(store, /id <> \$\{input\.excludeBuildId\}/)
   assert.match(callback, /getReusableRunnerPublish/)
   assert.match(callback, /reusablePublish \?\? await publishGeneratedProjectToGitHub/)
