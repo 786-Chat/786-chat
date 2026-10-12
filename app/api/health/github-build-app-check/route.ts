@@ -24,6 +24,10 @@ export async function GET() {
           : privateKey.startsWith("{")
             ? "json_object"
             : "other"
+  const keySize = privateKey.length < 32 ? "tiny" : privateKey.length < 256 ? "short" : "large"
+  const keyHasPemMarker = privateKey.includes("BEGIN") && privateKey.includes("KEY")
+  const keyHasEscapes = privateKey.includes("\\\\n") || privateKey.includes("\\r")
+  const keyBase64UrlCandidate = /^[a-zA-Z0-9_-]+$/.test(privateKey) && privateKey.length > 128
   const alternate = process.env.GITHUB_TOKEN?.trim()
   const oldToken = process.env.GITHUB_BUILD_TOKEN?.trim()
   const check = async (token: string | undefined) => {
@@ -44,7 +48,7 @@ export async function GET() {
       cache: "no-store",
     })
     return NextResponse.json(
-      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status, alternateStatus, oldBuildStatus, keyFormat },
+      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status, alternateStatus, oldBuildStatus, keyFormat, keySize, keyHasPemMarker, keyHasEscapes, keyBase64UrlCandidate },
       { status: response.ok ? 200 : 503 },
     )
   } catch (error: unknown) {
@@ -66,6 +70,6 @@ export async function GET() {
                   : /GITHUB_APP_ID|GITHUB_APP_PRIVATE_KEY|GitHub App/i.test(message)
                     ? "app_authentication_failed"
                     : "access_check_failed"
-    return NextResponse.json({ ok: false, reason, alternateStatus, oldBuildStatus, keyFormat }, { status: 503 })
+    return NextResponse.json({ ok: false, reason, alternateStatus, oldBuildStatus, keyFormat, keySize, keyHasPemMarker, keyHasEscapes, keyBase64UrlCandidate }, { status: 503 })
   }
 }
