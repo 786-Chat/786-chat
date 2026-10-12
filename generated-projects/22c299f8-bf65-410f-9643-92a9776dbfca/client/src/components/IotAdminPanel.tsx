@@ -490,6 +490,35 @@ export default function IotAdminPanel() {
     }
   };
 
+  const checkRealDeviceConnection = async () => {
+    if (!selectedWifiDevice) return;
+    const checkedId = String(selectedWifiDevice.deviceId);
+    setConnectionChecking(true);
+    setConnectionResult(null);
+    try {
+      // This refresh is read-only: it never provisions Wi-Fi or simulates a catch.
+      const response = await fetch(`/api/iot/devices/${encodeURIComponent(String(selectedWifiDevice.id))}/refresh`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.provider !== "food-safety-owned-mqtt" || String(data?.deviceId) !== checkedId) {
+        throw new Error(data?.message || "Could not verify this physical device");
+      }
+      setConnectionResult({
+        deviceId: checkedId,
+        online: data.isOnline === true,
+        lastSeenAt: data.lastCheckedAt ? String(data.lastCheckedAt) : null,
+      });
+      await loadBase();
+    } catch (error: any) {
+      toast({ title: "Connection check failed", description: error?.message || "Try again after signing in.", variant: "destructive" });
+    } finally {
+      setConnectionChecking(false);
+    }
+  };
+
   const refreshDevice = async (id: string) => {
     await fetch(`/api/iot/devices/${id}/refresh`, { method: "POST", credentials: "include" });
     await loadBase();
