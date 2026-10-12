@@ -122,6 +122,7 @@ export async function getReusableRunnerPublish(input: {
     FROM admin_project_builds
     WHERE project_id = ${input.projectId}
       AND source_version = ${input.sourceVersion}
+      AND status = 'passed'
       AND id <> ${input.excludeBuildId}
       AND github_branch IS NOT NULL
       AND github_branch <> ''

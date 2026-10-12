@@ -499,8 +499,10 @@ function patchOwnedIotSafeUi(source: string): string {
   }
 
   const removeStart = next.indexOf("  const removeDevice = async (id: string, name: string) => {")
-  const removeEnd = removeStart >= 0 ? next.indexOf("\n\n  const refreshDevice", removeStart) : -1
-  if (removeStart >= 0 && removeEnd > removeStart) {
+  // Limit the rewrite to removeDevice itself. New handlers may sit between it and refreshDevice.
+  const removeEnd = removeStart >= 0 ? next.indexOf("\n  };", removeStart) : -1
+  const refreshStart = removeStart >= 0 ? next.indexOf("\n\n  const refreshDevice", removeStart) : -1
+  if (removeStart >= 0 && removeEnd > removeStart && refreshStart > removeEnd) {
     const replacement = [
       "  const removeDevice = async (id: string, name: string) => {",
       "    setRemovingDeviceId(id);",
@@ -519,7 +521,7 @@ function patchOwnedIotSafeUi(source: string): string {
       "    }",
       "  };",
     ].join("\n")
-    next = next.slice(0, removeStart) + replacement + next.slice(removeEnd)
+    next = next.slice(0, removeStart) + replacement + next.slice(removeEnd + "\n  };".length)
   }
 
   const oldButton = [
