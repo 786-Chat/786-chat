@@ -1317,6 +1317,17 @@ export default function AdminDashboard() {
       return response.json();
     },
     onSuccess: (newReport) => {
+      // Show the persisted report immediately, as Pest Control Docs does.
+      if (newReport?.id) {
+        queryClient.setQueryData<MonthlyReport[]>(["/api/monthly-reports"], (current = []) =>
+          [newReport, ...current.filter((report) => report.id !== newReport.id)]
+        );
+      }
+      // Clear hidden filters so a successful upload displays its card.
+      setSelectedBranchFilter("all");
+      setMonthlyReportsSearchTerm("");
+      setBranchSearchTerm("");
+      setMonthlyReportsCurrentPage(1);
       // Refresh both Monthly Reports and My Docs (auto-save enabled)
       queryClient.invalidateQueries({ queryKey: ["/api/monthly-reports"] });
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
