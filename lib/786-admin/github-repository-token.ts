@@ -29,7 +29,15 @@ function appJwt(id: string, privateKey: string): string {
   const body = encode({ iat: now - 60, exp: now + 540, iss: id })
   const unsigned = `${header}.${body}`
   const pem = privateKey.replace(/\\n/g, "\n")
-  const signature = sign("RSA-SHA256", Buffer.from(unsigned), pem).toString("base64url")
+  if (!pem.includes("-----BEGIN") || !pem.includes("PRIVATE KEY-----")) {
+    throw new Error("GITHUB_APP_PRIVATE_KEY is not a PEM private key. Generate a new GitHub App private key and replace the Vercel environment setting.")
+  }
+  let signature: string
+  try {
+    signature = sign("RSA-SHA256", Buffer.from(unsigned), pem).toString("base64url")
+  } catch {
+    throw new Error("GITHUB_APP_PRIVATE_KEY is unusable. Regenerate it in GitHub App settings and update the Vercel environment setting.")
+  }
   return `${unsigned}.${signature}`
 }
 
