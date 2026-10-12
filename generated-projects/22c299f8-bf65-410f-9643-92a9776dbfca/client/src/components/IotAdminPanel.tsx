@@ -380,6 +380,17 @@ export default function IotAdminPanel() {
       return;
     }
 
+    // Prevent AI-generated descriptive text from being stored as physical hardware identity.
+    const model = hardwareModel.trim() || "BK7231N-MOUSE-V1";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$/.test(model)) {
+      toast({
+        title: "Invalid hardware model",
+        description: "Use the device's actual model identifier, for example BK7231N-MOUSE-V1.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setRegistering(true);
     try {
       const response = await fetch("/api/iot/devices", {
@@ -391,7 +402,7 @@ export default function IotAdminPanel() {
           deviceName: deviceName.trim(),
           branchId,
           notes: notes.trim(),
-          hardwareModel: hardwareModel.trim() || "FOOD-SAFETY-MOUSE-V1",
+          hardwareModel: model,
         }),
       });
       const data = await response.json().catch(() => ({}));
