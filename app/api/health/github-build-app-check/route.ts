@@ -26,9 +26,21 @@ export async function GET() {
     const message = error instanceof Error ? error.message : ""
     const reason = /not installed/i.test(message)
       ? "app_not_installed"
-      : /GITHUB_APP_ID|GITHUB_APP_PRIVATE_KEY|GitHub App/i.test(message)
-        ? "app_authentication_failed"
-        : "access_check_failed"
+      : /Could not create a GitHub App installation token \(401\)/.test(message)
+        ? "installation_token_http_401"
+        : /Could not create a GitHub App installation token \(403\)/.test(message)
+          ? "installation_token_http_403"
+          : /Could not authenticate configured GitHub App \(401\)/.test(message)
+            ? "app_identity_http_401"
+            : /Could not authenticate configured GitHub App \(403\)/.test(message)
+              ? "app_identity_http_403"
+              : /no installation token|no valid ID|invalid expiration/i.test(message)
+                ? "installation_response_invalid"
+                : /DECODER|private key|PEM|openssl|RSA|sign one-shot|unsupported/i.test(message)
+                  ? "private_key_unusable"
+                  : /GITHUB_APP_ID|GITHUB_APP_PRIVATE_KEY|GitHub App/i.test(message)
+                    ? "app_authentication_failed"
+                    : "access_check_failed"
     return NextResponse.json({ ok: false, reason }, { status: 503 })
   }
 }
