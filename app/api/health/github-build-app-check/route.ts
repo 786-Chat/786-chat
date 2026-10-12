@@ -12,6 +12,18 @@ export async function GET() {
     return NextResponse.json({ ok: false, reason: "app_configuration_missing" }, { status: 503 })
   }
   const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || "786-Chat/786-chat"
+  const privateKey = process.env.GITHUB_APP_PRIVATE_KEY?.trim() || ""
+  const keyFormat = privateKey.startsWith("-----BEGIN")
+    ? "pem"
+    : privateKey.startsWith('"-----BEGIN')
+      ? "json_pem"
+      : privateKey.includes("\\n") && privateKey.includes("-----BEGIN")
+        ? "escaped_pem"
+        : /^[a-zA-Z0-9+/=]+$/.test(privateKey) && privateKey.length > 64
+          ? "base64_candidate"
+          : privateKey.startsWith("{")
+            ? "json_object"
+            : "other"
   const alternate = process.env.GITHUB_TOKEN?.trim()
   const oldToken = process.env.GITHUB_BUILD_TOKEN?.trim()
   const check = async (token: string | undefined) => {
@@ -32,7 +44,7 @@ export async function GET() {
       cache: "no-store",
     })
     return NextResponse.json(
-      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status, alternateStatus, oldBuildStatus },
+      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status, alternateStatus, oldBuildStatus, keyFormat },
       { status: response.ok ? 200 : 503 },
     )
   } catch (error: unknown) {
@@ -54,6 +66,6 @@ export async function GET() {
                   : /GITHUB_APP_ID|GITHUB_APP_PRIVATE_KEY|GitHub App/i.test(message)
                     ? "app_authentication_failed"
                     : "access_check_failed"
-    return NextResponse.json({ ok: false, reason, alternateStatus, oldBuildStatus }, { status: 503 })
+    return NextResponse.json({ ok: false, reason, alternateStatus, oldBuildStatus, keyFormat }, { status: 503 })
   }
 }
