@@ -11,15 +11,28 @@ export async function GET() {
   if (!process.env.GITHUB_APP_ID || !process.env.GITHUB_APP_PRIVATE_KEY) {
     return NextResponse.json({ ok: false, reason: "app_configuration_missing" }, { status: 503 })
   }
+  const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || "786-Chat/786-chat"
+  const alternate = process.env.GITHUB_TOKEN?.trim()
+  const oldToken = process.env.GITHUB_BUILD_TOKEN?.trim()
+  const check = async (token: string | undefined) => {
+    if (!token) return "missing"
+    try {
+      const result = await fetch(`https://api.github.com/repos/${repository}/actions/permissions`, {
+        headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      return String(result.status)
+    } catch { return "network_error" }
+  }
+  const [alternateStatus, oldBuildStatus] = await Promise.all([check(alternate), check(oldToken)])
   try {
-    const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || "786-Chat/786-chat"
     const token = await githubRepositoryToken(repository)
     const response = await fetch(`https://api.github.com/repos/${repository}/actions/permissions`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
       cache: "no-store",
     })
     return NextResponse.json(
-      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status },
+      { ok: response.ok, appTokenIssued: true, actionsReadStatus: response.status, alternateStatus, oldBuildStatus },
       { status: response.ok ? 200 : 503 },
     )
   } catch (error: unknown) {
@@ -41,6 +54,6 @@ export async function GET() {
                   : /GITHUB_APP_ID|GITHUB_APP_PRIVATE_KEY|GitHub App/i.test(message)
                     ? "app_authentication_failed"
                     : "access_check_failed"
-    return NextResponse.json({ ok: false, reason }, { status: 503 })
+    return NextResponse.json({ ok: false, reason, alternateStatus, oldBuildStatus }, { status: 503 })
   }
 }
