@@ -61,6 +61,8 @@ export default function IotAdminPanel() {
   const [wifiDeviceId, setWifiDeviceId] = useState("");
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
+  const [connectionCheckedAt, setConnectionCheckedAt] = useState<number | null>(null);
+  const [connectionCheckError, setConnectionCheckError] = useState("");
   const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
   const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
   const [gatewayPort, setGatewayPort] = useState("1883");
@@ -83,6 +85,11 @@ export default function IotAdminPanel() {
   const ownedDevices = useMemo(
     () => assigned.filter((device: any) => device?.provider === "food-safety-owned-mqtt"),
     [assigned],
+  );
+
+  const selectedWifiDevice = useMemo(
+    () => ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId)) || null,
+    [ownedDevices, wifiDeviceId],
   );
 
   const activeBranch = useMemo(
@@ -148,6 +155,41 @@ export default function IotAdminPanel() {
       if (first) setWifiDeviceId(String(first.deviceId || ""));
     }
   }, [ownedDevices, activeBranchDevices, activeBranchId, wifiDeviceId]);
+
+  // Verify physical MQTT status from the authenticated registry; never infer it from Wi-Fi form input.
+  // The request is read-only: it neither provisions the factory trap nor mutates any customer record.
+  useEffect(() => {
+    if (!wifiDeviceId) {
+      setConnectionCheckedAt(null);
+      setConnectionCheckError("");
+      return;
+    }
+    let alive = true;
+    let inFlight = false;
+    setConnectionCheckedAt(null);
+    setConnectionCheckError("");
+    const verify = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch("/api/iot/devices", { credentials: "include", cache: "no-store" });
+        if (!response.ok) throw new Error(`Device status request failed (${response.status})`);
+        const devices = await response.json();
+        if (!Array.isArray(devices)) throw new Error("Invalid device status response");
+        if (!alive) return;
+        setAssigned(devices);
+        setConnectionCheckedAt(Date.now());
+        setConnectionCheckError("");
+      } catch (error: any) {
+        if (alive) setConnectionCheckError(error?.message || "Could not verify the physical connection");
+      } finally {
+        inFlight = false;
+      }
+    };
+    void verify();
+    const timer = window.setInterval(() => { void verify(); }, 10000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [wifiDeviceId]);
 
   const scopedBackupKey = (scope: "all" | "branch" | "device", scopeId = "") =>
     `${scope}:${scopeId || "all"}`;
@@ -610,7 +652,7 @@ export default function IotAdminPanel() {
           </div>
         </div>
       </div>
-      </div>}
+      }
       </div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
@@ -718,7 +760,7 @@ export default function IotAdminPanel() {
         )}
       </div>
 
-      </div>}
+      }
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
@@ -797,6 +839,22 @@ export default function IotAdminPanel() {
               className="border-slate-600 bg-slate-900 font-mono text-white"
             />
           </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-cyan-500/30 bg-slate-900/70 p-4 text-sm text-slate-200" aria-live="polite">
+          <p className="font-semibold text-white">Automatic physical connection verification</p>
+          <p className="mt-1 text-slate-300">
+            {!wifiDeviceId
+              ? "Select a registered mouse to check its actual gateway reports."
+              : connectionCheckError
+                ? `Connection check unavailable: ${connectionCheckError}`
+                : !connectionCheckedAt
+                  ? "Checking the registered device for a real MQTT report..."
+                  : selectedWifiDevice?.isOnline
+                    ? `Connected — verified by the Food Safety gateway${selectedWifiDevice.lastCheckedAt ? `; last report ${new Date(selectedWifiDevice.lastCheckedAt).toLocaleString("en-GB")}` : ""}.`
+                    : `Awaiting genuine device telemetry${selectedWifiDevice?.lastCheckedAt ? `; last report ${new Date(selectedWifiDevice.lastCheckedAt).toLocaleString("en-GB")}` : ""}.`}
+          </p>
+          {wifiDeviceId && <p className="mt-2 text-xs text-slate-400">Rechecks automatically every 10 seconds. Entering Wi-Fi details does not activate factory firmware or change the stored device state.</p>}
         </div>
 
         <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200" role="status">

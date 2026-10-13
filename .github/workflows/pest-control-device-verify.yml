@@ -1,0 +1,35 @@
+name: Pest Control isolated verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/**'
+      - '.github/workflows/pest-control-device-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pest-control-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/package-lock.json
+      - name: Install Pest Control dependencies
+        # Existing generated lockfile is behind package.json. Resolve only in ephemeral CI; do not alter source lockfile.
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Type-check Pest Control
+        run: npm run check
+      - name: Build Pest Control client and server
+        if: always()
+        run: npm run build
