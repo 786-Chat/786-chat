@@ -26,7 +26,8 @@ jobs:
           cache: npm
           cache-dependency-path: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/package-lock.json
       - name: Install Pest Control dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        # Existing generated lockfile is behind package.json. Resolve only in ephemeral CI; do not alter source lockfile.
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server
