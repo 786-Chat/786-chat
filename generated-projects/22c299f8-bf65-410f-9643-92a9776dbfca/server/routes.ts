@@ -7691,6 +7691,8 @@ Generated: ${new Date().toISOString()}
         updated_at timestamptz NOT NULL DEFAULT now()
       )
     `);
+    await db.execute(sql`ALTER TABLE owned_iot_device_checks ADD COLUMN IF NOT EXISTS wifi_signal_percent integer`);
+    await db.execute(sql`ALTER TABLE owned_iot_device_checks ADD COLUMN IF NOT EXISTS wifi_observation_source text`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_seen_idx ON owned_iot_device_checks(last_seen_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_ip_idx ON owned_iot_device_checks(ip_address)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
@@ -8227,6 +8229,86 @@ Generated: ${new Date().toISOString()}
     }));
   };
 
+  // Factory Wi-Fi/AP observations MUST remain distinct from genuine MQTT telemetry.
+  // The AP BSSID identifies a radio during pairing, not necessarily its MQTT station MAC.
+  const saveHp2WifiObservation = async (value: any, source: "admin-entry" | "hp2-wifi-scan") => {
+    const ssid = String(value?.ssid || "").trim();
+    const macAddress = String(value?.macAddress || "").trim().replace(/-/g, ":").toUpperCase();
+    const ipAddress = String(value?.ipAddress || "").trim();
+    const rawSignal = value?.signalPercent;
+    const signalPercent = rawSignal === "" || rawSignal == null ? null : Number(rawSignal);
+    if (!ssid || ssid.length > 64 || /[^\x20-\x7E]/.test(ssid) ||
+        !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress)) {
+      return { status: 400, message: "Valid observed SSID and Wi-Fi BSSID are required." };
+    }
+    if (ipAddress && (ipAddress.split(".").length !== 4 ||
+        ipAddress.split(".").some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255))) {
+      return { status: 400, message: "Enter a valid IPv4 gateway address or leave it blank." };
+    }
+    if (signalPercent !== null && (!Number.isInteger(signalPercent) || signalPercent < 0 || signalPercent > 100)) {
+      return { status: 400, message: "Wi-Fi signal strength must be between 0 and 100%." };
+    }
+    if (source === "hp2-wifi-scan" && !/^SmartLife-|^OpenBK/i.test(ssid)) {
+      return { status: 400, message: "Only Food Safety pairing networks are accepted from the HP2 scanner." };
+    }
+    const hardwareKey = "wifi-ap:" + macAddress;
+    const existing: any = await db.execute(sql`
+      SELECT id FROM owned_iot_device_checks
+      WHERE mac_address = ${macAddress} AND hardware_key <> ${hardwareKey}
+      LIMIT 1
+    `);
+    if ((Array.isArray(existing) ? existing : existing?.rows || []).length) {
+      return { status: 409, message: "This MAC already has a device telemetry record. Check the physical identity before recording it separately." };
+    }
+    const saved: any = await db.execute(sql`
+      INSERT INTO owned_iot_device_checks
+        (hardware_key, mac_address, ip_address, hostname, connected, wifi_signal_percent, wifi_observation_source, first_seen_at, last_seen_at, updated_at)
+      VALUES
+        (${hardwareKey}, ${macAddress}, ${ipAddress || null}, ${ssid}, false, ${signalPercent}, ${source}, now(), now(), now())
+      ON CONFLICT (hardware_key) DO UPDATE SET
+        hostname = EXCLUDED.hostname,
+        ip_address = COALESCE(EXCLUDED.ip_address, owned_iot_device_checks.ip_address),
+        wifi_signal_percent = COALESCE(EXCLUDED.wifi_signal_percent, owned_iot_device_checks.wifi_signal_percent),
+        wifi_observation_source = EXCLUDED.wifi_observation_source,
+        connected = false,
+        last_seen_at = now(),
+        updated_at = now()
+      RETURNING id::text AS id
+    `);
+    const rows = Array.isArray(saved) ? saved : (saved?.rows || []);
+    return { status: 200, id: rows[0]?.id || null, message: "Wi-Fi observed; MQTT not connected." };
+  };
+
+  app.post("/api/iot/device-check/wifi-observation", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const saved = await saveHp2WifiObservation(req.body, "admin-entry");
+      return res.status(saved.status).json({ success: saved.status === 200, ...saved });
+    } catch (error: any) {
+      console.error("HP2 Wi-Fi observation error:", error?.message || error);
+      return res.status(500).json({ message: "Could not save Wi-Fi observation." });
+    }
+  });
+
+  // Optional local HP2 scanner agent; uses the SAME protected credential as
+  // existing gateway discovery. The browser cannot scan nearby Wi-Fi itself.
+  app.post("/api/iot/gateway/wifi-observation", async (req, res) => {
+    try {
+      if (!process.env.FOODSAFETY_IOT_GATEWAY_TOKEN?.trim()) {
+        return res.status(503).json({ message: "Gateway authentication not configured." });
+      }
+      if (!isFoodSafetyGatewayAuthorized(req)) {
+        return res.status(401).json({ message: "Unauthorized HP2 scanner." });
+      }
+      await ensureOwnedIotSchema();
+      const saved = await saveHp2WifiObservation(req.body, "hp2-wifi-scan");
+      return res.status(saved.status).json({ success: saved.status === 200, ...saved });
+    } catch (error: any) {
+      console.error("Authenticated HP2 Wi-Fi scan error:", error?.message || error);
+      return res.status(500).json({ message: "Could not accept HP2 Wi-Fi scan." });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -8240,6 +8322,8 @@ Generated: ${new Date().toISOString()}
           c.hostname,
           c.connected,
           c.rssi,
+          c.wifi_signal_percent,
+          c.wifi_observation_source,
           c.legacy_device_id,
           c.assigned_device_id,
           c.first_seen_at,
@@ -8264,6 +8348,11 @@ Generated: ${new Date().toISOString()}
         hostname: row.hostname || null,
         connected: Boolean(row.connected),
         rssi: row.rssi == null ? null : Number(row.rssi),
+        wifiSignalPercent: row.wifi_signal_percent == null ? null : Number(row.wifi_signal_percent),
+        wifiObservationSource: row.wifi_observation_source || null,
+        isWifiRecentlySeen: String(row.hardware_key || "").startsWith("wifi-ap:") &&
+          row.wifi_observation_source === "hp2-wifi-scan" && Boolean(row.last_seen_at) &&
+          (Date.now() - new Date(row.last_seen_at).getTime()) < 75000,
         legacyDeviceId: row.legacy_device_id || null,
         assignedDeviceId: row.assigned_device_id || null,
         assignedDeviceName: row.assigned_device_name || null,

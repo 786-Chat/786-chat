@@ -1481,7 +1481,7 @@ export default function AdminDashboard() {
       ctx.clearRect(0, 0, canvas2.width, canvas2.height);
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas2.width, canvas2.height);
-      await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+      await page.render({ canvas: canvas2, canvasContext: ctx, viewport: scaledViewport }).promise;
 
       setGenPdfDims({ w: viewport.width, h: viewport.height });
       setGenCanvasDims({ w: scaledViewport.width, h: scaledViewport.height });
@@ -1510,7 +1510,7 @@ export default function AdminDashboard() {
           if (ctx2) {
             ctx2.fillStyle = '#ffffff';
             ctx2.fillRect(0, 0, vp2.width, vp2.height);
-            await page2.render({ canvasContext: ctx2, viewport: vp2 }).promise;
+            await page2.render({ canvas: canvas2El, canvasContext: ctx2, viewport: vp2 }).promise;
             setGenPdfDims2({ w: vp2Raw.width, h: vp2Raw.height });
             setGenCanvas2Dims({ w: vp2.width, h: vp2.height });
             setGenPage2Loaded(true);
@@ -3974,7 +3974,7 @@ export default function AdminDashboard() {
             {activeTab === "device-check" && <DeviceCheckPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {activeTab === "iot-cloud" && <IotAdminPanel />}
+            {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (

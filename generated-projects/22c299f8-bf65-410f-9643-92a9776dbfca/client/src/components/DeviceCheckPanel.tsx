@@ -13,6 +13,9 @@ interface DeviceCheckRow {
   hostname?: string | null;
   connected: boolean;
   rssi?: number | null;
+  wifiSignalPercent?: number | null;
+  wifiObservationSource?: string | null;
+  isWifiRecentlySeen?: boolean;
   legacyDeviceId?: string | null;
   assignedDeviceId?: string | null;
   assignedDeviceName?: string | null;
@@ -53,6 +56,8 @@ export default function DeviceCheckPanel() {
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [busy, setBusy] = useState("");
+  const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
+
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
@@ -77,6 +82,32 @@ export default function DeviceCheckPanel() {
     }
   };
 
+
+  // An admin-entered HP2 scan is a historic Wi-Fi sighting, never MQTT telemetry.
+  const recordWifiObservation = async () => {
+    setBusy("wifi-observation");
+    try {
+      const response = await fetch("/api/iot/device-check/wifi-observation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(wifiObservation),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Wi-Fi sighting not recorded", description: data?.message || "Please try again.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "HP2 Wi-Fi sighting recorded", description: "Recorded as factory Wi-Fi observed, not MQTT connected." });
+      setWifiObservation({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
+      await load();
+    } catch {
+      toast({ title: "Connection error", description: "Could not save the HP2 Wi-Fi sighting.", variant: "destructive" });
+    } finally {
+      setBusy("");
+    }
+  };
+
   useEffect(() => {
     load().catch(() => {});
     const timer = window.setInterval(() => load().catch(() => {}), 5000);
@@ -84,8 +115,9 @@ export default function DeviceCheckPanel() {
   }, []);
 
   const counts = useMemo(() => ({
-    live: rows.filter((row) => row.isLive).length,
-    unassigned: rows.filter((row) => !row.assignedDeviceId).length,
+    live: rows.filter((row) => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
+    wifiSeen: rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).length,
+    unassigned: rows.filter((row) => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:")).length,
     linked: rows.filter((row) => Boolean(row.assignedDeviceId)).length,
   }), [rows]);
 
@@ -207,12 +239,12 @@ export default function DeviceCheckPanel() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Device Check</h2>
-            <p className="text-sm text-slate-400">Identify a physical mouse before assigning it to any branch</p>
+            <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
           </div>
         </div>
         <Button type="button" onClick={() => load().catch(() => {})} className="bg-slate-800 text-white hover:bg-slate-700">
           <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
+          Check latest HP2 reports
         </Button>
       </div>
 
@@ -222,15 +254,18 @@ export default function DeviceCheckPanel() {
           <div>
             <h3 className="font-semibold text-white">Safe physical identification</h3>
             <p className="mt-1 text-sm text-slate-300">
-              Turn on only one mouse at a time. HP2 records its live MQTT name, IP address and Wi-Fi MAC. The MAC is the permanent fingerprint; the IP can change.
-              Nothing on this page belongs to a customer branch until you explicitly link or assign it.
+              HP2 can report MQTT-connected mice and, with the optional Ubuntu scanner, observed factory SmartLife Wi-Fi access points. An AP BSSID may differ from the MQTT device MAC. Pairing LEDs may stop flashing automatically; a saved sighting does not mean the trap is currently online. No branch assignment happens automatically.
             </p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-emerald-300">{counts.live}</p>
-            <p className="text-xs text-emerald-200">Live now</p>
+            <p className="text-xs text-emerald-200">MQTT live now</p>
+          </div>
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-center">
+            <p className="text-2xl font-bold text-cyan-300">{counts.wifiSeen}</p>
+            <p className="text-xs text-cyan-200">Wi-Fi AP sightings</p>
           </div>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-amber-300">{counts.unassigned}</p>
@@ -243,17 +278,46 @@ export default function DeviceCheckPanel() {
         </div>
       </div>
 
+
+      <div className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
+        <h3 className="font-semibold text-white">Check / record HP2 Wi-Fi signal</h3>
+        <p className="mt-1 text-sm text-slate-300">
+          Press “Check latest HP2 reports” above to load the most recent automatic scanner reports. Automatic scanning requires the separate HP2 Ubuntu agent to be running; this website cannot scan local Wi-Fi by itself. You can also record a real terminal scan below, even after the green pairing light times out. A sighting is not MQTT connectivity.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <Input aria-label="Observed Wi-Fi name" value={wifiObservation.ssid}
+            onChange={(event) => setWifiObservation((current) => ({ ...current, ssid: event.target.value }))}
+            placeholder="Wi-Fi name, e.g. SmartLife-AB12" className="border-slate-600 bg-slate-950 text-white" />
+          <Input aria-label="Observed Wi-Fi BSSID" value={wifiObservation.macAddress}
+            onChange={(event) => setWifiObservation((current) => ({ ...current, macAddress: event.target.value }))}
+            placeholder="Wi-Fi BSSID / MAC" className="border-slate-600 bg-slate-950 text-white" />
+          <Input aria-label="Observed AP gateway address" value={wifiObservation.ipAddress}
+            onChange={(event) => setWifiObservation((current) => ({ ...current, ipAddress: event.target.value }))}
+            placeholder="AP gateway IP (optional)" className="border-slate-600 bg-slate-950 text-white" />
+          <Input aria-label="Observed signal percentage" value={wifiObservation.signalPercent}
+            onChange={(event) => setWifiObservation((current) => ({ ...current, signalPercent: event.target.value.replace(/[^0-9]/g, "").slice(0, 3) }))}
+            inputMode="numeric" placeholder="Signal % e.g. 75" className="border-slate-600 bg-slate-950 text-white" />
+        </div>
+        <Button type="button" onClick={recordWifiObservation}
+          disabled={busy === "wifi-observation" || !wifiObservation.ssid.trim() || !wifiObservation.macAddress.trim()}
+          className="mt-3 bg-amber-600 text-white hover:bg-amber-500">
+          <Wifi className="mr-2 h-4 w-4" />
+          {busy === "wifi-observation" ? "Recording..." : "Save HP2 Wi-Fi sighting (not MQTT)"}
+        </Button>
+      </div>
+
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
           <Wifi className="mx-auto h-9 w-9 text-slate-500" />
           <h3 className="mt-3 font-semibold text-white">No physical mouse detected yet</h3>
-          <p className="mt-1 text-sm text-slate-400">After the HP2 bridge update, turn on one mouse. It will appear here automatically.</p>
+          <p className="mt-1 text-sm text-slate-400">No gateway devices or saved HP2 Wi-Fi observations. Factory SmartLife access points do not automatically send MQTT telemetry.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {rows.map((row) => {
+            const wifiOnly = row.hardwareKey.startsWith("wifi-ap:");
             const duplicates = row.ipAddress ? (duplicateIpMap.get(row.ipAddress) || []) : [];
-            const hasIpConflict = duplicates.length > 1;
+            const hasIpConflict = !wifiOnly && duplicates.length > 1;
             const draft = drafts[row.id] || emptyDraft();
 
             return (
@@ -263,14 +327,14 @@ export default function DeviceCheckPanel() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-white">{row.hostname || row.mqttPrefix || "Food Safety Mouse"}</h3>
                       <span className={"rounded-full px-2 py-0.5 text-xs font-semibold " + (row.isLive ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300")}>
-                        {row.isLive ? "LIVE" : "Last seen"}
+                        {wifiOnly ? (row.isWifiRecentlySeen ? "Wi-Fi seen recently (not MQTT)" : "Wi-Fi sighting saved (not live)") : row.isLive ? "MQTT LIVE" : "Last seen"}
                       </span>
                       {row.assignedDeviceId && (
                         <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-300">IDENTIFIED</span>
                       )}
                     </div>
                     <p className="mt-1 text-xs text-slate-500">
-                      Last seen: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}
+                      {wifiOnly ? (row.wifiObservationSource === "hp2-wifi-scan" ? "Last HP2 scanner observation" : "Observation recorded") : "Last seen"}: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}
                     </p>
                   </div>
                   {row.connected && <CheckCircle2 className="h-5 w-5 text-emerald-300" />}
@@ -283,15 +347,15 @@ export default function DeviceCheckPanel() {
                   </div>
                   <div className="rounded-lg bg-slate-900/70 p-3">
                     <p className="text-[11px] uppercase text-slate-500">Current IP</p>
-                    <p className="mt-1 font-mono text-sm font-semibold text-white">{row.ipAddress || "Waiting for IP"}</p>
+                    <p className="mt-1 font-mono text-sm font-semibold text-white">{row.ipAddress || (wifiOnly ? "AP IP not recorded" : "Waiting for IP")}</p>
                   </div>
                   <div className="rounded-lg bg-slate-900/70 p-3">
                     <p className="text-[11px] uppercase text-slate-500">MQTT device name</p>
-                    <p className="mt-1 font-mono text-sm font-semibold text-white">{row.mqttPrefix || "Unknown"}</p>
+                    <p className="mt-1 font-mono text-sm font-semibold text-white">{wifiOnly ? "Not connected to MQTT" : row.mqttPrefix || "Unknown"}</p>
                   </div>
                   <div className="rounded-lg bg-slate-900/70 p-3">
                     <p className="text-[11px] uppercase text-slate-500">Signal</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{row.rssi == null ? "Waiting" : row.rssi + " dBm"}</p>
+                    <p className="mt-1 text-sm font-semibold text-white">{wifiOnly ? (row.wifiSignalPercent == null ? "Not recorded" : row.wifiSignalPercent + "% (last Wi-Fi scan)") : row.rssi == null ? "Waiting" : row.rssi + " dBm"}</p>
                   </div>
                 </div>
 
@@ -307,7 +371,13 @@ export default function DeviceCheckPanel() {
                   </div>
                 )}
 
-                {row.assignedDeviceId ? (
+                {wifiOnly ? (
+                  <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+                    Wi-Fi access point detected, but no MQTT device identity or trap events have been verified.
+                    To protect existing shop assignments, this observation cannot be linked or assigned until physical MQTT identity is established.
+                    When green pairing flashing times out, the last recorded signal remains visible as historic information.
+                  </div>
+                ) : row.assignedDeviceId ? (
                   <div className="mt-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4">
                     <div className="flex items-start gap-2">
                       <Link2 className="mt-0.5 h-4 w-4 text-blue-300" />
