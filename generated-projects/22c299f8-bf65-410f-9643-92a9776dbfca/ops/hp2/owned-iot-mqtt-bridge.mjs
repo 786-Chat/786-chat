@@ -14,14 +14,12 @@ const required = (name) => {
 
 const apiBase = required('PEST_CONTROL_BASE_URL').replace(/\/+$/, '');
 const gatewayToken = required('FOODSAFETY_IOT_GATEWAY_TOKEN');
-const legacyDeviceId = String(process.env.FOODSAFETY_DEVICE_ID || '').trim();
 
 const mqttHost = String(process.env.MQTT_HOST || '127.0.0.1').trim();
 const mqttPort = String(process.env.MQTT_PORT || '1883').trim();
 const legacyEventTopic = String(process.env.MQTT_EVENT_TOPIC || 'DEVICE4/trap').trim();
 const mqttUsername = String(process.env.MQTT_USERNAME || '').trim();
 const mqttPassword = String(process.env.MQTT_PASSWORD || '').trim();
-const legacyPrefix = legacyEventTopic.split('/')[0] || '';
 
 const states = new Map();
 const resolvedDeviceCache = new Map();
@@ -78,7 +76,8 @@ async function resolveAssignedDevice(prefix) {
     console.error('[bridge] resolve failed for ' + prefix + ': ' + error.message);
   }
 
-  if (legacyDeviceId && prefix === legacyPrefix) return legacyDeviceId;
+  // Safety: never route MQTT events to a default device ID. A device must be
+  // explicitly linked through Device Check before real alerts can be posted.
   return '';
 }
 
@@ -127,7 +126,7 @@ async function postDiscovery(prefix) {
       macAddress: macAddress || null,
       connected: Boolean(state.connected),
       rssi: Number.isFinite(state.rssi) ? state.rssi : null,
-      legacyDeviceId: prefix === legacyPrefix ? legacyDeviceId || null : null,
+      legacyDeviceId: null,
     }),
   });
 
@@ -168,7 +167,7 @@ if (mqttUsername) args.push('-u', mqttUsername);
 if (mqttPassword) args.push('-P', mqttPassword);
 
 console.log('[bridge] MQTT ' + mqttHost + ':' + mqttPort + ' topics=' + topics.join(','));
-console.log('[bridge] API ' + apiBase + (legacyDeviceId ? ' legacy=' + legacyDeviceId : ''));
+console.log('[bridge] API ' + apiBase + ' (explicit device mapping required)');
 
 const sub = spawn('mosquitto_sub', args, {
   stdio: ['ignore', 'pipe', 'inherit'],
