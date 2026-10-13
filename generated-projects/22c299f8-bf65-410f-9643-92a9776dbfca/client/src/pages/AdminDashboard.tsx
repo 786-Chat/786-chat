@@ -3974,7 +3974,7 @@ export default function AdminDashboard() {
             {activeTab === "device-check" && <DeviceCheckPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {activeTab === "iot-cloud" && <IotAdminPanel />}
+            {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
