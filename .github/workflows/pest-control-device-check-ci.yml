@@ -1,0 +1,34 @@
+name: Pest Control Device Check CI
+
+on:
+  pull_request:
+    paths:
+      - 'generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/**'
+      - '.github/workflows/pest-control-device-check-ci.yml'
+  push:
+    branches:
+      - 'fix/pest-device-check-wifi-ap-observation-20261013'
+    paths:
+      - 'generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca/**'
+      - '.github/workflows/pest-control-device-check-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  pest-control-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Pest Control dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
+      - name: Type-check Pest Control
+        run: npm run check
+      - name: Build Pest Control client and server
+        run: npm run build
