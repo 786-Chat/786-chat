@@ -31,4 +31,5 @@ jobs:
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server
+        if: always()
         run: npm run build
