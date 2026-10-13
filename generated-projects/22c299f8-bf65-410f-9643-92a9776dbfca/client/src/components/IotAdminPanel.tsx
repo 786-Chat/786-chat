@@ -20,13 +20,15 @@ function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
   let state: string | null = null;
+  let mqttRssi: number | null = null;
   for (const item of list) {
     const code = normalize(item?.code || item?.name || item?.dpId);
     const raw = item?.value;
     if (code.includes("battery")) battery = typeof raw === "number" ? `${raw}%` : String(raw ?? "");
     if (code === "status" || code.includes("switch")) state = String(raw ?? "");
+    if (code === "rssi" && raw !== null && raw !== undefined && Number.isFinite(Number(raw))) mqttRssi = Number(raw);
   }
-  return { battery, state };
+  return { battery, state, mqttRssi };
 }
 
 export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck?: () => void }) {
