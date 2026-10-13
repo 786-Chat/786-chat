@@ -4133,6 +4133,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
       }
 
+      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
+        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
+      }
+
       console.log(`✅ Monthly report uploaded to Object Storage: ${filepath}`);
 
       const reportData = {
@@ -8250,7 +8254,7 @@ Generated: ${new Date().toISOString()}
           b.name AS assigned_branch_name
         FROM owned_iot_device_checks c
         LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
-        LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        LEFT JOIN branches b ON b.id::text = e.branch_id::text
         ORDER BY c.last_seen_at DESC
         LIMIT 200
       `);
