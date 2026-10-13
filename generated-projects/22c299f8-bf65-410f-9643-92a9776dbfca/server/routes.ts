@@ -8227,6 +8227,55 @@ Generated: ${new Date().toISOString()}
     }));
   };
 
+  // 786.Chat: A factory SmartLife AP observation is NOT an MQTT connection.
+  // Allow authenticated admins to record genuinely observed HP2 scans without a
+  // gateway token; use a distinct hardware key so live telemetry is never faked.
+  app.post("/api/iot/device-check/wifi-observation", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const ssid = String(req.body?.ssid || "").trim();
+      const macAddress = String(req.body?.macAddress || "").trim().replace(/-/g, ":").toUpperCase();
+      const ipAddress = String(req.body?.ipAddress || "").trim();
+      if (!ssid || ssid.length > 64 || /[^\x20-\x7E]/.test(ssid) ||
+          !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress)) {
+        return res.status(400).json({ message: "Enter the actual Wi-Fi name and BSSID/MAC from the HP2 scan." });
+      }
+      if (ipAddress) {
+        const octets = ipAddress.split(".");
+        if (octets.length !== 4 || octets.some((part) => !/^\d{1,3}$/.test(part) || Number(part) > 255)) {
+          return res.status(400).json({ message: "Enter a valid IPv4 access-point address or leave it blank." });
+        }
+      }
+      const hardwareKey = "wifi-ap:" + macAddress;
+      // Do not create a duplicate or change a physical identity already reported
+      // through MQTT. A factory AP BSSID may also differ from its station MAC.
+      const prior: any = await db.execute(sql`
+        SELECT id FROM owned_iot_device_checks
+        WHERE mac_address = ${macAddress} AND hardware_key <> ${hardwareKey}
+        LIMIT 1
+      `);
+      if ((Array.isArray(prior) ? prior : prior?.rows || []).length) {
+        return res.status(409).json({ message: "This MAC already has a Device Check record; verify the physical identity before recording another." });
+      }
+      const saved: any = await db.execute(sql`
+        INSERT INTO owned_iot_device_checks
+          (hardware_key, mac_address, ip_address, hostname, connected, first_seen_at, last_seen_at, updated_at)
+        VALUES (${hardwareKey}, ${macAddress}, ${ipAddress || null}, ${ssid}, false, now(), now(), now())
+        ON CONFLICT (hardware_key) DO UPDATE SET
+          hostname = EXCLUDED.hostname,
+          ip_address = EXCLUDED.ip_address,
+          last_seen_at = now(),
+          updated_at = now()
+        RETURNING id::text AS id
+      `);
+      const rows = Array.isArray(saved) ? saved : (saved?.rows || []);
+      return res.json({ success: true, id: rows[0]?.id || null, status: "wifi_observed_not_mqtt" });
+    } catch (error: any) {
+      console.error("Failed to record HP2 Wi-Fi observation:", error?.message || error);
+      return res.status(500).json({ message: "Could not record Wi-Fi observation" });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
