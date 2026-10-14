@@ -1,0 +1,29 @@
+name: Pest Control Preview Source Preservation
+
+on:
+  pull_request:
+    paths:
+      - 'lib/786-admin/pestcontrol-device-check-hardening.ts'
+      - 'tests/phase2/pestcontrol-device-check-preview-sync.test.mjs'
+      - '.github/workflows/pest-preview-source-preservation.yml'
+  push:
+    branches:
+      - 'fix/pest-preview-preserve-synced-device-check-20261014'
+    paths:
+      - 'lib/786-admin/pestcontrol-device-check-hardening.ts'
+      - 'tests/phase2/pestcontrol-device-check-preview-sync.test.mjs'
+      - '.github/workflows/pest-preview-source-preservation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pest-preview-preservation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Device Check preview preservation
+        run: node --test tests/phase2/pestcontrol-device-check-preview-sync.test.mjs
