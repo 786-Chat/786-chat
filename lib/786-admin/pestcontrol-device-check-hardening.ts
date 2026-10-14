@@ -57,7 +57,13 @@ export function hardenPestControlDeviceCheck(projectId: string, files: Record<st
 
   if (next[routesPath]) next[routesPath] = patchRoutes(next[routesPath])
   if (next[adminPath]) next[adminPath] = patchAdminDashboard(next[adminPath])
-  next[panelPath] = DEVICE_CHECK_PANEL_SOURCE
+  // Preserve a valid editor-owned Device Check component. The original
+  // fallback template is only needed if the imported project lacks the panel.
+  // Unconditionally replacing it silently discarded newer Wi-Fi scan UI in
+  // the 786.Chat preview even though the approved source had been saved.
+  if (!next[panelPath]?.includes("export default function DeviceCheckPanel()")) {
+    next[panelPath] = DEVICE_CHECK_PANEL_SOURCE
+  }
   next[bridgePath] = HP2_BRIDGE_SOURCE
   next[publicBridgePath] = HP2_BRIDGE_SOURCE
   return next
