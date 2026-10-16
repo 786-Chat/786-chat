@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { BellRing, HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -75,6 +79,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [savingDevice, setSavingDevice] = useState(false);
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
+  const [pushingManualAlarmId, setPushingManualAlarmId] = useState("");
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -378,6 +383,53 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -456,6 +508,36 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       await loadBase();
     } finally {
       setRemovingDeviceId("");
+    }
+  };
+
+  const pushManualAlarm = async (device: any) => {
+    const branchName = branchById.get(String(device.branchId || "")) || String(device.branchName || "");
+    if (!device.branchId || !branchName) {
+      toast({ title: "Assign this device to a branch first", variant: "destructive" });
+      return;
+    }
+    const location = String(device.notes || "Not specified");
+    const confirmed = window.confirm(
+      `Report a mouse caught MANUALLY?\n\nDevice: ${device.deviceName || device.deviceId}\nDevice ID: ${device.deviceId}\nRestaurant: ${branchName}\nArea: ${location}\n\nOnly continue if Smart Life notified you of a real catch. This will send an alarm to the restaurant until they stop it.`
+    );
+    if (!confirmed) return;
+    setPushingManualAlarmId(String(device.id));
+    try {
+      const response = await fetch(`/api/iot/devices/${encodeURIComponent(String(device.id))}/manual-alarm`, {
+        method: "POST", credentials: "include",
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Alarm was not sent", description: result?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Manual alarm sent", description: `${branchName}: ${device.deviceName || device.deviceId}. The restaurant can stop this alarm.` });
+      await loadBase();
+    } catch (_) {
+      toast({ title: "Alarm was not sent", description: "Check the connection before trying again.", variant: "destructive" });
+    } finally {
+      setPushingManualAlarmId("");
     }
   };
 
@@ -1043,6 +1125,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
+                  {device.alarmActive && device.alarmSource === "admin-manual-report" && (
+                    <p className="mt-2 text-xs font-semibold text-amber-200">
+                      Manual Smart Life report — restaurant must acknowledge with Stop Alarm.
+                    </p>
+                  )}
 
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
@@ -1164,6 +1251,17 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                     <Button size="sm" variant="outline" onClick={() => refreshDevice(device.id)} className="border-slate-600 text-slate-200">
                       <RefreshCw className="mr-1 h-3 w-3" />
                       Refresh
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!device.branchId || Boolean(device.alarmActive) || Boolean(pushingManualAlarmId)}
+                      onClick={() => void pushManualAlarm(device)}
+                      className="bg-red-600 text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-300"
+                      title="For genuine Smart Life notifications while Food Safety MQTT installation is pending"
+                    >
+                      <BellRing className="mr-1 h-3 w-3" />
+                      {pushingManualAlarmId === String(device.id) ? "Sending..." : device.alarmActive ? "Alarm Active" : "Push Alarm"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => beginEditDevice(device)} className="border-cyan-700/60 text-cyan-200">
                       <Pencil className="mr-1 h-3 w-3" />

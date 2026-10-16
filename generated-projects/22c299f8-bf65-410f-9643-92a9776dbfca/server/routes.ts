@@ -4133,6 +4133,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
       }
 
+      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
+        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
+      }
+
       console.log(`✅ Monthly report uploaded to Object Storage: ${filepath}`);
 
       const reportData = {
@@ -8120,8 +8124,12 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
-        FROM owned_iot_devices
+          last_alarm_at,
+          (SELECT e.raw_payload->>'source' FROM owned_iot_events e
+           WHERE e.device_id = d.device_id AND e.event_at = d.last_alarm_at
+             AND e.event_type = 'trap_triggered'
+           ORDER BY e.id DESC LIMIT 1) AS alarm_source
+        FROM owned_iot_devices d
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
@@ -8136,6 +8144,7 @@ Generated: ${new Date().toISOString()}
           isOnline,
           reportedOnline: Boolean(row.is_online),
           alarmActive: Boolean(row.last_alarm_at),
+          alarmSource: row.alarm_source === 'admin-manual-report' ? 'admin-manual-report' : 'hardware',
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
           hardwareModel: row.hardware_model,
@@ -8195,6 +8204,9 @@ Generated: ${new Date().toISOString()}
         b.name AS branch_name,
         COALESCE(e.installation_location, d.installation_location, d.hardware_model) AS location,
         CASE
+          WHEN e.event_type = 'trap_triggered' AND e.raw_payload->>'source' = 'admin-manual-report'
+            THEN 'Mouse caught — manually reported by admin (Smart Life)'
+          WHEN e.event_type = 'alarm_acknowledged' THEN 'Alarm acknowledged by restaurant'
           WHEN e.event_type = 'trap_triggered' THEN 'Mouse / pest trap triggered'
           WHEN e.event_type = 'trap_reset' THEN 'Mouse trap reset'
           WHEN e.event_type = 'low_battery' THEN 'Low battery'
@@ -8203,7 +8215,7 @@ Generated: ${new Date().toISOString()}
         e.event_at,
         (e.event_type = 'trap_triggered') AS is_alarm,
         false AS is_test,
-        'owned'::text AS source
+        COALESCE(e.raw_payload->>'source', 'owned') AS source
       FROM owned_iot_events e
       JOIN owned_iot_devices d ON d.device_id = e.device_id
       LEFT JOIN branches b ON b.id::text = e.branch_id::text
@@ -8225,7 +8237,7 @@ Generated: ${new Date().toISOString()}
       eventAt: row.event_at,
       isAlarm: Boolean(row.is_alarm),
       isTest: false,
-      source: "owned",
+      source: row.source || "owned",
     }));
   };
 
@@ -8334,7 +8346,7 @@ Generated: ${new Date().toISOString()}
           b.name AS assigned_branch_name
         FROM owned_iot_device_checks c
         LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
-        LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        LEFT JOIN branches b ON b.id::text = e.branch_id::text
         ORDER BY c.last_seen_at DESC
         LIMIT 200
       `);
@@ -8720,6 +8732,52 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+
+  // Smart Life temporary workflow: manually reported events are never hardware telemetry.
+  app.post("/api/iot/devices/:id/manual-alarm", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const requestedId = String(req.params.id || "");
+      const result: any = await db.execute(sql`
+        WITH updated AS (
+          UPDATE owned_iot_devices
+          SET last_alarm_at = now(), updated_at = now()
+          WHERE id::text = ${requestedId}
+            AND branch_id IS NOT NULL
+            AND last_alarm_at IS NULL
+            AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
+          RETURNING id, device_id, friendly_name, branch_id, installation_location, last_alarm_at
+        ),
+        recorded AS (
+          INSERT INTO owned_iot_events
+            (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
+          SELECT gen_random_uuid()::text, device_id, branch_id, friendly_name, installation_location,
+            'trap_triggered', 'true'::jsonb, last_alarm_at,
+            jsonb_build_object('source','admin-manual-report','reportedVia','Smart Life notification',
+              'reportedBy','admin','deviceId',device_id,'type','trap_triggered','value',true)
+          FROM updated
+          RETURNING device_id
+        )
+        SELECT updated.*, (SELECT count(*) FROM recorded) AS recorded_count FROM updated
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) {
+        return res.status(409).json({
+          message: "Device not found, unassigned, or already has an active alarm. Refresh Smart Devices.",
+        });
+      }
+      const row: any = rows[0];
+      res.json({
+        success: true, manual: true, deviceId: row.device_id,
+        deviceName: row.friendly_name || row.device_id,
+        branchId: row.branch_id, location: row.installation_location,
+        lastAlarmAt: row.last_alarm_at,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err?.message || "Unable to report manual alarm" });
+    }
+  });
+
   app.post("/api/iot/devices/:id/test-alarm", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -8840,8 +8898,12 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
-        FROM owned_iot_devices
+          last_alarm_at,
+          (SELECT e.raw_payload->>'source' FROM owned_iot_events e
+           WHERE e.device_id = d.device_id AND e.event_at = d.last_alarm_at
+             AND e.event_type = 'trap_triggered'
+           ORDER BY e.id DESC LIMIT 1) AS alarm_source
+        FROM owned_iot_devices d
         WHERE branch_id::text = ${String(branchId)}
           AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
         ORDER BY friendly_name NULLS LAST, device_id
@@ -8858,6 +8920,7 @@ Generated: ${new Date().toISOString()}
           isOnline,
           reportedOnline: Boolean(row.is_online),
           alarmActive: Boolean(row.last_alarm_at),
+          alarmSource: row.alarm_source === 'admin-manual-report' ? 'admin-manual-report' : 'hardware',
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
           hardwareModel: row.hardware_model,
@@ -8925,13 +8988,26 @@ Generated: ${new Date().toISOString()}
       const session = req.session as any;
       if (!session.branchId || session.userType !== "branch") return res.status(401).json({ message: "Not authenticated" });
 
+      await ensureOwnedIotSchema();
       const result: any = await db.execute(sql`
-        UPDATE owned_iot_devices
-        SET last_alarm_at = NULL,
-            updated_at = now()
-        WHERE id::text = ${String(req.params.id)}
-          AND branch_id::text = ${String(session.branchId)}
-        RETURNING id, device_id, friendly_name, branch_id, is_online, last_seen_at
+        WITH cleared AS (
+          UPDATE owned_iot_devices
+          SET last_alarm_at = NULL, updated_at = now()
+          WHERE id::text = ${String(req.params.id)}
+            AND branch_id::text = ${String(session.branchId)}
+            AND last_alarm_at IS NOT NULL
+          RETURNING id, device_id, friendly_name, branch_id, installation_location, is_online, last_seen_at
+        ),
+        recorded AS (
+          INSERT INTO owned_iot_events
+            (event_id, device_id, branch_id, friendly_name, installation_location, event_type, event_value, event_at, raw_payload)
+          SELECT gen_random_uuid()::text, device_id, branch_id, friendly_name, installation_location,
+            'alarm_acknowledged', 'true'::jsonb, now(),
+            jsonb_build_object('source','branch-acknowledgement','deviceId',device_id,'type','alarm_acknowledged')
+          FROM cleared
+          RETURNING device_id
+        )
+        SELECT cleared.*, (SELECT count(*) FROM recorded) AS recorded_count FROM cleared
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
       if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
