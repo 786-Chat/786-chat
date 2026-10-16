@@ -11,6 +11,7 @@ interface AlarmDevice {
   notes?: string;
   alarmActive?: boolean;
   lastAlarmAt?: string;
+  alarmSource?: string;
 }
 
 const ACK_STORAGE_KEY = "food-safety-iot-acknowledged-alarms-v1";
@@ -63,6 +64,8 @@ export default function GlobalIotAlarmListener() {
 
   const [alarms, setAlarms] = useState<AlarmDevice[]>([]);
   const [soundMuted, setSoundMuted] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState("");
   const [audioReady, setAudioReady] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const acknowledgedRef = useRef<Set<string>>(new Set());
@@ -168,7 +171,33 @@ export default function GlobalIotAlarmListener() {
 
   if (!mode || alarms.length === 0) return null;
 
-  const stopAlarm = () => {
+  const stopAlarm = async () => {
+    if (stopping) return;
+    setStopError("");
+    if (mode === "branch") {
+      // This must acknowledge the alert server-side for every screen at the restaurant.
+      setStopping(true);
+      try {
+        const results = await Promise.all(alarms.map(async (device) => {
+          const res = await fetch(`/api/branch/iot-devices/${encodeURIComponent(String(device.id))}/clear-alarm`, {
+            method: "POST", credentials: "include",
+          });
+          return { device, ok: res.ok };
+        }));
+        const acknowledged = acknowledgedRef.current;
+        for (const item of results.filter((result) => result.ok)) acknowledged.add(alarmKey(item.device));
+        try { window.localStorage.setItem(ACK_STORAGE_KEY, JSON.stringify([...acknowledged])); } catch (_) {}
+        setAlarms(results.filter((item) => !item.ok).map((item) => item.device));
+        if (results.some((item) => item.ok)) window.dispatchEvent(new CustomEvent("food-safety-alarm-stopped"));
+        if (results.some((item) => !item.ok)) setStopError("Some alarms could not be stopped. Please try again.");
+      } catch (_) {
+        setStopError("Could not stop the alarm. Check your connection and try again.");
+      } finally {
+        setStopping(false);
+      }
+      return;
+    }
+    // Admin acknowledgement silences only the admin browser; restaurant must stop the alarm.
     const acknowledged = acknowledgedRef.current;
     for (const device of alarms) acknowledged.add(alarmKey(device));
     try {
@@ -190,20 +219,33 @@ export default function GlobalIotAlarmListener() {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-bold text-white sm:text-lg">Mouse caught</h3>
             <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-200">CAUGHT</span>
+            {primary.alarmSource === "admin-manual-report" && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-200">
+                MANUALLY REPORTED BY ADMIN
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-200">
-            {primary.deviceName || "Smart mouse device"} has reported a catch.
+            {primary.alarmSource === "admin-manual-report"
+              ? `${primary.deviceName || "Smart mouse device"}: catch manually reported by Food Safety admin after a Smart Life notification.`
+              : `${primary.deviceName || "Smart mouse device"} has reported a catch.`}
             {alarms.length > 1 ? ` ${alarms.length} devices currently show a catch.` : ""}
           </p>
           {primary.branchName && <p className="mt-1 text-xs text-slate-300">Branch: <span className="font-semibold text-white">{primary.branchName}</span></p>}
           {primary.notes && <p className="mt-1 text-xs text-slate-400">Location: {primary.notes}</p>}
-          <p className="mt-2 text-xs text-slate-400">Stop the alarm here. The device remains marked Mouse Caught until the trap is physically reset and becomes Ready again.</p>
+          <p className="mt-2 text-xs text-slate-400">
+            {mode === "branch"
+              ? "Inspect the trap. Stop Alarm acknowledges it for the restaurant and saves the catch in history."
+              : "The restaurant must acknowledge this alarm. Stopping it here only silences your admin browser."}
+          </p>
+          {stopError && <p role="alert" className="mt-2 text-sm text-red-200">{stopError}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
-              onClick={stopAlarm}
+              onClick={() => void stopAlarm()}
+              disabled={stopping}
               className="inline-flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-400"
             >
-              <VolumeX className="h-4 w-4" /> Stop Alarm
+              <VolumeX className="h-4 w-4" /> {stopping ? "Stopping..." : "Stop Alarm"}
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent("food-safety-open-smart-devices"))}
