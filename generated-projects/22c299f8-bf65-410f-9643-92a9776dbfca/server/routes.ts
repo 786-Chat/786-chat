@@ -27,7 +27,7 @@ import {
   type Branch
 } from "../shared/schema.js";
 import { z } from "zod";
-import { db } from "./db.js";
+import { db, pool } from "./db.js";
 import { sql } from "drizzle-orm";
 
 // Parameter validation schemas
@@ -1842,6 +1842,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/test-pin', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'test-pin.html'));
   });
+
+  // Membership certificate verification. Public response deliberately excludes private credentials.
+  const createMembershipTable = async () => pool.query(`
+    CREATE TABLE IF NOT EXISTS pest_membership_certificates (
+      id BIGSERIAL PRIMARY KEY,
+      business_name VARCHAR(160) NOT NULL,
+      postcode VARCHAR(20) NOT NULL,
+      membership_number VARCHAR(64) NOT NULL UNIQUE,
+      certificate_number VARCHAR(64) NOT NULL UNIQUE,
+      issued_date DATE NOT NULL,
+      start_date DATE NOT NULL,
+      expiry_date DATE NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
+  const membershipInput = z.object({
+    businessName:z.string().trim().min(2).max(160),
+    postcode:z.string().trim().min(2).max(20),
+    membershipNumber:z.string().trim().min(3).max(64),
+    certificateNumber:z.string().trim().min(3).max(64),
+    issuedDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    startDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    expiryDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).refine(x=>x.expiryDate>=x.startDate,{message:"Expiry must not precede contract start"});
+  app.get("/api/memberships/verify",async(req,res)=>{
+    res.setHeader("Cache-Control","no-store");
+    const parsed=z.object({businessName:z.string().trim().min(2).max(160),certificateNumber:z.string().trim().min(3).max(64)}).safeParse(req.query);
+    if(!parsed.success)return res.status(400).json({message:"Enter a valid business name and certificate number"});
+    try{
+      const r=await pool.query(`SELECT business_name,postcode,membership_number,certificate_number,
+        issued_date::text,start_date::text,expiry_date::text,revoked_at,
+        CASE WHEN revoked_at IS NOT NULL THEN 'REVOKED'
+             WHEN CURRENT_DATE < start_date THEN 'NOT_STARTED'
+             WHEN CURRENT_DATE > expiry_date THEN 'EXPIRED' ELSE 'ACTIVE' END AS status
+        FROM pest_membership_certificates WHERE lower(btrim(business_name))=lower(btrim($1))
+        AND upper(btrim(certificate_number))=upper(btrim($2)) LIMIT 1`,[parsed.data.businessName,parsed.data.certificateNumber]);
+      if(!r.rowCount)return res.status(404).json({message:"No matching certificate found"});
+      const a=r.rows[0];return res.json({businessName:a.business_name,postcode:a.postcode,membershipNumber:a.membership_number,certificateNumber:a.certificate_number,issuedDate:a.issued_date,startDate:a.start_date,expiryDate:a.expiry_date,status:a.status});
+    }catch(err){console.error("Membership verification unavailable",err);return res.status(503).json({message:"Verification is temporarily unavailable"});}
+  });
+  app.get("/api/admin/memberships",isAdminAuthenticated,async(_req,res)=>{
+    try{await createMembershipTable();const r=await pool.query(`SELECT id,business_name AS "businessName",postcode,membership_number AS "membershipNumber",certificate_number AS "certificateNumber",issued_date::text AS "issuedDate",start_date::text AS "startDate",expiry_date::text AS "expiryDate",CASE WHEN revoked_at IS NOT NULL THEN 'REVOKED' WHEN CURRENT_DATE < start_date THEN 'NOT_STARTED' WHEN CURRENT_DATE > expiry_date THEN 'EXPIRED' ELSE 'ACTIVE' END AS status FROM pest_membership_certificates ORDER BY created_at DESC LIMIT 500`);return res.json(r.rows)}catch(e){console.error(e);return res.status(503).json({message:"Unable to load certificate records"})}
+  });
+  app.post("/api/admin/memberships",isAdminAuthenticated,async(req,res)=>{
+    const parsed=membershipInput.safeParse(req.body);if(!parsed.success)return res.status(400).json({message:parsed.error.issues[0]?.message||"Invalid certificate details"});
+    const v=parsed.data;
+    try{await createMembershipTable();const r=await pool.query(`INSERT INTO pest_membership_certificates (business_name,postcode,membership_number,certificate_number,issued_date,start_date,expiry_date) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,[v.businessName,v.postcode,v.membershipNumber,v.certificateNumber,v.issuedDate,v.startDate,v.expiryDate]);return res.status(201).json({id:r.rows[0].id})}catch(e:any){if(e.code==="23505")return res.status(409).json({message:"This certificate or membership number already exists"});console.error(e);return res.status(503).json({message:"Could not register certificate"})}
+  });
+  app.post("/api/admin/memberships/:id/revoke",isAdminAuthenticated,async(req,res)=>{
+    if(!/^\d+$/.test(req.params.id))return res.status(400).json({message:"Invalid ID"});
+    try{const r=await pool.query("UPDATE pest_membership_certificates SET revoked_at=NOW() WHERE id=$1 RETURNING id",[req.params.id]);if(!r.rowCount)return res.status(404).json({message:"Not found"});return res.json({revoked:true})}catch(e){console.error(e);return res.status(503).json({message:"Unable to revoke certificate"})}
+  });
+
 
   // Branch Authentication Routes
   app.post('/api/branch/login', async (req, res) => {

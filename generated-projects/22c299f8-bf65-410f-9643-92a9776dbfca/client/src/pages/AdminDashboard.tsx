@@ -157,6 +157,7 @@ import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
 import IotAdminPanel from "@/components/IotAdminPanel";
 import DeviceCheckPanel from "@/components/DeviceCheckPanel";
+import MembershipCertificatesPanel from "@/components/MembershipCertificatesPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
@@ -2364,6 +2365,7 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
+      { id: "membership-certificates", label: "Membership Certificates", icon: FileText },
       { id: "device-check", label: "Device Check", icon: Radar },
       { id: "iot-cloud", label: "Smart Devices", icon: Zap }
     ]},
@@ -3972,6 +3974,7 @@ export default function AdminDashboard() {
 
             {/* Physical device identification before branch assignment */}
             {activeTab === "device-check" && <DeviceCheckPanel />}
+            {activeTab === "membership-certificates" && <MembershipCertificatesPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
             {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}

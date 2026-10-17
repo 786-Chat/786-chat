@@ -21,6 +21,7 @@ import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
 import GlobalIotAlarmListener from "@/components/GlobalIotAlarmListener";
 import InstallGuide from "@/pages/InstallGuide";
+import VerifyMembership from "@/pages/VerifyMembership";
 
 function AdminLoginRedirect() {
   useEffect(() => {
@@ -146,6 +147,7 @@ function Router() {
       <Route path="/branch-charts" component={BranchChartPage} />
       <Route path="/chart" component={BranchChartPage} />
       <Route path="/install" component={InstallGuide} />
+      <Route path="/verify" component={VerifyMembership} />
       
       {/* Main route */}
       <Route path="/" component={BranchLogin} />
