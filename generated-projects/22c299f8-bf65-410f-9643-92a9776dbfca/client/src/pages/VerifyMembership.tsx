@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-type Result = {businessName:string;postcode:string;membershipNumber:string;certificateNumber:string;issuedDate:string;startDate:string;expiryDate:string;status:"ACTIVE"|"EXPIRED"|"REVOKED"};
+type Result = {businessName:string;postcode:string;membershipNumber:string;certificateNumber:string;issuedDate:string;startDate:string;expiryDate:string;status:"ACTIVE"|"EXPIRED"|"REVOKED"|"NOT_STARTED"};
 export default function VerifyMembership(){
  const [businessName,setBusinessName]=useState(""); const [certificateNumber,setCertificateNumber]=useState(""); const [result,setResult]=useState<Result|null>(null);const [error,setError]=useState("");const [loading,setLoading]=useState(false);
  async function submit(e:React.FormEvent){e.preventDefault();setLoading(true);setError("");setResult(null);try{
@@ -15,7 +15,7 @@ export default function VerifyMembership(){
  <div><label htmlFor="certificate" className="block font-semibold mb-2">Certificate Number</label><input id="certificate" required maxLength={64} value={certificateNumber} onChange={e=>setCertificateNumber(e.target.value)} placeholder="e.g. CERT-000001" className="w-full border border-slate-300 rounded-lg p-3"/></div>
  <button type="submit" disabled={loading} className="w-full rounded-lg bg-emerald-800 disabled:opacity-60 text-white p-4 font-semibold">{loading?"Checking certificate…":"Verify Membership"}</button></form>
  {error&&<p role="alert" className="mt-5 bg-red-50 text-red-800 p-3 rounded-lg">{error}</p>}
- {result&&<div aria-live="polite" className="mt-6 border-t-2 border-amber-400 pt-5"><h3 className="font-serif text-xl font-bold">Certificate Record Found</h3><p className={"font-bold my-3 "+(result.status==="ACTIVE"?"text-emerald-700":"text-red-700")}>{result.status==="ACTIVE"?"Active Membership":result.status==="EXPIRED"?"Expired Membership":"Revoked Certificate"}</p>
+ {result&&<div aria-live="polite" className="mt-6 border-t-2 border-amber-400 pt-5"><h3 className="font-serif text-xl font-bold">Certificate Record Found</h3><p className={"font-bold my-3 "+(result.status==="ACTIVE"?"text-emerald-700":"text-red-700")}>{result.status==="ACTIVE"?"Active Membership":result.status==="EXPIRED"?"Expired Membership":result.status==="NOT_STARTED"?"Contract Not Yet Started":"Revoked Certificate"}</p>
  <dl className="grid grid-cols-2 gap-y-3 text-sm">{([["Business",result.businessName],["Postcode",result.postcode],["Certificate",result.certificateNumber],["Membership",result.membershipNumber],["Issued",result.issuedDate],["Contract Start",result.startDate],["Contract Expiry",result.expiryDate]] as const).map(([k,v])=><div className="col-span-2 sm:col-span-1" key={k}><dt className="text-slate-500">{k}</dt><dd className="font-medium break-words">{v||"Not provided"}</dd></div>)}</dl><p className="mt-4 text-xs text-slate-600">This record confirms certificate registration and contract status, not the absence of pest activity.</p></div>}
  </div><div className="mt-9 text-center text-sm text-emerald-100"><p>Restaurants • Cafés • Pizza Shops • Homes</p><p className="mt-2">Freephone: 0800 4714 726 · WhatsApp: +44 7427 070000</p><a href="https://pestcontrol.cat" className="underline mt-2 inline-block">pestcontrol.cat</a></div></main></div>
 }
