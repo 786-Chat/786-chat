@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
+import { BellRing, HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -75,6 +79,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [savingDevice, setSavingDevice] = useState(false);
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
+  const [pushingManualAlarmId, setPushingManualAlarmId] = useState("");
+  const [savingManualBatteryId, setSavingManualBatteryId] = useState("");
+  const [manualCatchDraft, setManualCatchDraft] = useState<Record<string, string>>({});
+  const [manualBatteryDraft, setManualBatteryDraft] = useState<Record<string, string>>({});
+  const [manualReplaceBatteryDraft, setManualReplaceBatteryDraft] = useState<Record<string, boolean>>({});
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -378,6 +387,53 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -457,6 +513,70 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     } finally {
       setRemovingDeviceId("");
     }
+  };
+
+  const pushManualAlarm = async (device: any) => {
+    const quantity = Number(manualCatchDraft[String(device.id)] ?? "1");
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+      toast({ title: "Enter 1–20 mice for this manual report", variant: "destructive" });
+      return;
+    }
+    const branchName = branchById.get(String(device.branchId || "")) || String(device.branchName || "");
+    if (!device.branchId || !branchName) {
+      toast({ title: "Assign this device to a branch first", variant: "destructive" });
+      return;
+    }
+    const location = String(device.notes || "Not specified");
+    const confirmed = window.confirm(
+      `Report ${quantity} mouse catch(es) MANUALLY?\n\nDevice: ${device.deviceName || device.deviceId}\nDevice ID: ${device.deviceId}\nRestaurant: ${branchName}\nArea: ${location}\n\nOnly continue for a genuine catch reported in Smart Life. Every click creates a NEW alarm, even if the previous one is still active.`
+    );
+    if (!confirmed) return;
+    setPushingManualAlarmId(String(device.id));
+    try {
+      const response = await fetch(`/api/iot/devices/${encodeURIComponent(String(device.id))}/manual-alarm`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include", body: JSON.stringify({ quantity }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Alarm was not sent", description: result?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Manual alarm sent", description: `${branchName}: ${result.caughtCount} mice caught in total for this device.` });
+      await loadBase();
+    } catch (_) {
+      toast({ title: "Alarm was not sent", description: "Check the connection before trying again.", variant: "destructive" });
+    } finally {
+      setPushingManualAlarmId("");
+    }
+  };
+
+
+  const saveManualBattery = async (device: any) => {
+    const key = String(device.id);
+    const raw = manualBatteryDraft[key] ?? (device.manualBatteryPercent == null ? "" : String(device.manualBatteryPercent));
+    const batteryPercent = raw.trim() === "" ? null : Number(raw);
+    if (batteryPercent !== null && (!Number.isInteger(batteryPercent) || batteryPercent < 0 || batteryPercent > 100)) {
+      toast({ title: "Enter battery 0–100%", variant: "destructive" });
+      return;
+    }
+    const batteryChangeRequired = manualReplaceBatteryDraft[key] ?? Boolean(device.manualBatteryChangeRequired);
+    setSavingManualBatteryId(key);
+    try {
+      const response = await fetch(`/api/iot/devices/${encodeURIComponent(key)}/manual-battery`, {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batteryPercent, batteryChangeRequired }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Battery update failed", description: result?.message || "Please try again", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Manual battery update saved", description: "The restaurant card will refresh." });
+      await loadBase();
+    } catch (_) {
+      toast({ title: "Battery update failed", variant: "destructive" });
+    } finally { setSavingManualBatteryId(""); }
   };
 
   const refreshDevice = async (id: string) => {
@@ -1015,34 +1135,70 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {activeBranchDevices.map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
+              // Same genuine registry record; temporary presentation only until first HP2 gateway report.
+              const manualSmartLife = false; // Original hardware card is always visible to admin.
               return (
-                <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+                <div key={device.id} className="space-y-3">
+                  <div className="rounded-xl border border-cyan-500/40 bg-slate-900/60 p-4">
+                    <p className="mb-3 text-xs font-bold uppercase tracking-wide text-cyan-300">Real IoT Card · Admin Only · Genuine hardware information</p>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
-                    <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
-                      {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
-                    </Badge>
+                    {manualSmartLife ? (
+                      <Badge className="bg-amber-500/15 text-amber-200">Smart Life · Manual</Badge>
+                    ) : (
+                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
+                        {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
+                      </Badge>
+                    )}
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                    <Wifi className="h-3.5 w-3.5" />
-                    Wi-Fi / MQTT
-                    {snap.mqttRssi == null ? " · Gateway signal not yet reported" : " · Last MQTT signal " + snap.mqttRssi + " dBm"}
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
-                  </div>
+                  {manualSmartLife ? (
+                    <>
+                      <p className="mt-3 text-xs font-medium text-amber-200">
+                        Temporary manual-monitoring card · Admin reports catches received separately in Smart Life.
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Monitoring</span><span className="text-white">Smart Life · Manual</span></div>
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">—</span></div>
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Wi-Fi</span><span className="text-white">Food Safety not verified</span></div>
+                        <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}>
+                          <span className="block text-slate-500">Trap</span>
+                          <span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>
+                            {device.alarmActive ? "Mouse Caught" : "No catch reported"}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-3 text-xs text-slate-400">
+                        The original live-IoT card is hidden, not deleted. It returns after the first genuine HP2 gateway report.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
+                        <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
+                        <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                        <Wifi className="h-3.5 w-3.5" />
+                        Wi-Fi / MQTT
+                        {snap.mqttRssi == null ? " · Gateway signal not yet reported" : " · Last MQTT signal " + snap.mqttRssi + " dBm"}
+                        {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
+                      </div>
+                    </>
+                  )}
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
+                  {device.alarmActive && device.alarmSource === "admin-manual-report" && (
+                    <p className="mt-2 text-xs font-semibold text-amber-200">
+                      Manual Smart Life report — restaurant must acknowledge with Stop Alarm.
+                    </p>
+                  )}
 
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
@@ -1202,6 +1358,72 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       </Button>
                     ))}
                   </div>
+                  </div>
+
+                  {device.monitoringMode === "manual" && (
+                  <div className="rounded-xl border border-amber-500/40 bg-slate-900/60 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-amber-200">
+                      Temporary Smart Life Card · Manual · Shown to the Restaurant
+                    </p>
+                    <p className="mt-1 font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                    <p className="text-xs text-slate-400">{branchById.get(String(device.branchId || "")) || device.branchName} · {device.deviceId}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                      <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-400">Mice caught</span><span className="text-lg font-bold text-white">{Number(device.manualCaughtCount || 0)}</span></div>
+                      <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-400">New alerts</span><span className="text-lg font-bold text-white">{Number(device.manualPendingCount || 0)}</span></div>
+                      <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-400">Battery · Admin entry</span><span className="text-white">{device.manualBatteryPercent == null ? "—" : `${device.manualBatteryPercent}%`}</span></div>
+                      <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-400">Trap</span><span className="text-white">{Number(device.manualCaughtCount || 0)} reported caught</span></div>
+                    </div>
+                    {device.manualBatteryChangeRequired && (
+                      <p className="mt-3 rounded-lg border border-red-500 bg-red-950/40 p-3 text-sm font-bold text-red-200">
+                        Change batteries — Admin requested battery replacement
+                      </p>
+                    )}
+                    {device.monitoringMode !== "manual" ? (
+                      <p className="mt-3 text-xs text-cyan-200">A real gateway report exists. Manual reporting is disabled.</p>
+                    ) : (
+                      <>
+                        <div className="mt-4 flex flex-wrap items-end gap-3">
+                          <label className="text-xs text-slate-200">
+                            Mice caught in this report
+                            <Input type="number" min={1} max={20} inputMode="numeric"
+                              value={manualCatchDraft[String(device.id)] ?? "1"}
+                              onChange={(event) => setManualCatchDraft((v) => ({ ...v, [String(device.id)]: event.target.value }))}
+                              className="mt-1 w-32 bg-slate-950 text-white" />
+                          </label>
+                          <Button type="button" disabled={!device.branchId || Boolean(pushingManualAlarmId)}
+                            onClick={() => void pushManualAlarm(device)}
+                            className="bg-red-600 text-white hover:bg-red-500 disabled:bg-slate-700">
+                            <BellRing className="mr-1 h-4 w-4" />
+                            {pushingManualAlarmId === String(device.id) ? "Sending..." : "Push Alarm"}
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-xs text-amber-200">Each press is a separate manual report, not a real MQTT reading.</p>
+                        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-700 pt-4">
+                          <label className="text-xs text-slate-200">
+                            Battery percentage (manual)
+                            <Input type="number" min={0} max={100} placeholder="0–100"
+                              value={manualBatteryDraft[String(device.id)] ??
+                                (device.manualBatteryPercent == null ? "" : String(device.manualBatteryPercent))}
+                              onChange={(event) => setManualBatteryDraft((v) => ({ ...v, [String(device.id)]: event.target.value }))}
+                              className="mt-1 w-32 bg-slate-950 text-white" />
+                          </label>
+                          <label className="flex items-center gap-2 pb-2 text-xs text-red-200">
+                            <input type="checkbox"
+                              checked={manualReplaceBatteryDraft[String(device.id)] ?? Boolean(device.manualBatteryChangeRequired)}
+                              onChange={(event) => setManualReplaceBatteryDraft((v) => ({ ...v, [String(device.id)]: event.target.checked }))}
+                            /> Change batteries (red warning)
+                          </label>
+                          <Button type="button" variant="outline"
+                            disabled={savingManualBatteryId === String(device.id)}
+                            onClick={() => void saveManualBattery(device)}
+                            className="border-amber-500/50 text-amber-100">
+                            {savingManualBatteryId === String(device.id) ? "Saving..." : "Save Battery"}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  )}
                 </div>
               );
             })}

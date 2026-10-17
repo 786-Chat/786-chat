@@ -10,7 +10,7 @@ interface BranchIotAlertsPanelProps {
 const ACK_STORAGE_KEY = "food-safety-iot-acknowledged-alarms-v1";
 
 function alarmKey(device: any) {
-  return `${device.id}:${device.lastAlarmAt || "active"}`;
+  return `${device.id}:${device.alarmSource === "admin-manual-report" ? device.manualAlarmSequence : (device.lastAlarmAt || "active")}`;
 }
 
 function readAcknowledgedKeys() {
@@ -31,6 +31,8 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
   const [stoppedKeys, setStoppedKeys] = useState<Set<string>>(new Set());
   const [deleteArmedId, setDeleteArmedId] = useState<string | number | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
+  const [stoppingAlarmId, setStoppingAlarmId] = useState<string | null>(null);
+  const [alarmStopError, setAlarmStopError] = useState("");
 
   const load = async () => {
     try {
@@ -70,19 +72,38 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   const onlineCount = useMemo(() => devices.filter((device) => device?.isOnline).length, [devices]);
   const offlineCount = devices.length - onlineCount;
+  const totalCatches = devices.reduce((sum, device) => sum +
+    (device.monitoringMode === "manual" ? Number(device.manualCaughtCount || 0) : Number(Boolean(device.alarmActive))), 0);
+  const totalPendingReports = alarms.reduce((sum, device) => sum +
+    (device.monitoringMode === "manual" ? Number(device.manualPendingCount || 0) : 1), 0);
   const visibleHistory = useMemo(
     () => history.filter((event) => !hiddenHistoryIds.has(String(event.id))),
     [history, hiddenHistoryIds],
   );
 
-  const stopAlarm = (device: any) => {
-    const next = readAcknowledgedKeys();
-    next.add(alarmKey(device));
+  const stopAlarm = async (device: any) => {
+    if (stoppingAlarmId) return;
+    setStoppingAlarmId(String(device.id));
+    setAlarmStopError("");
     try {
-      window.localStorage.setItem(ACK_STORAGE_KEY, JSON.stringify([...next]));
-    } catch (_) {}
-    setStoppedKeys(next);
-    window.dispatchEvent(new CustomEvent("food-safety-alarm-stopped"));
+      const response = await fetch(`/api/branch/iot-devices/${encodeURIComponent(String(device.id))}/clear-alarm`, {
+        method: "POST", credentials: "include",
+      });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(details.message || "Could not stop the alarm. Please try again.");
+      }
+      const next = readAcknowledgedKeys();
+      next.add(alarmKey(device));
+      try { window.localStorage.setItem(ACK_STORAGE_KEY, JSON.stringify([...next])); } catch (_) {}
+      setStoppedKeys(next);
+      window.dispatchEvent(new CustomEvent("food-safety-alarm-stopped"));
+      await load();
+    } catch (error: any) {
+      setAlarmStopError(error?.message || "Could not stop the alarm.");
+    } finally {
+      setStoppingAlarmId(null);
+    }
   };
 
   const armDelete = (eventId: string | number) => {
@@ -127,7 +148,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Device Alerts</h2>
-            <p className="text-sm text-slate-400">Live Food Safety pest-device alarms for this branch</p>
+            <p className="text-sm text-slate-400">Device alerts, including admin-reported Smart Life catches</p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200">
@@ -146,10 +167,21 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
         </div>
         <div className={`rounded-xl border p-4 ${alarms.length ? "border-red-500/40 bg-red-500/15" : "border-slate-700 bg-slate-800/70"}`}>
           <p className={`text-xs uppercase tracking-wide ${alarms.length ? "text-red-300" : "text-slate-500"}`}>Mouse Caught</p>
-          <p className={`mt-1 text-2xl font-bold ${alarms.length ? "text-red-200" : "text-white"}`}>{alarms.length}</p>
+          <p className={`mt-1 text-2xl font-bold ${alarms.length ? "text-red-200" : "text-white"}`}>{totalCatches}</p>
         </div>
       </div>
 
+      {alarmStopError && (
+        <p role="alert" className="rounded-lg border border-red-500/50 bg-red-950/30 p-3 text-sm text-red-200">
+          {alarmStopError}
+        </p>
+      )}
+
+      {totalPendingReports > 1 && (
+        <p className="rounded-lg border border-red-500/40 bg-red-950/20 p-3 text-sm text-red-200">
+          {totalPendingReports} new manual catch report(s) awaiting acknowledgement for this restaurant.
+        </p>
+      )}
       {loading ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center text-slate-400">Checking device alarms…</div>
       ) : alarms.length === 0 ? (
@@ -160,7 +192,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
               <h3 className="font-bold text-emerald-100">Ready</h3>
               <p className="mt-1 text-sm text-emerald-200/80">
                 {devices.length
-                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
+                  ? `No new alarms awaiting acknowledgement. ${totalCatches} mouse catch(es) recorded. ${offlineCount} device(s) not currently connected to Food Safety IoT; manual reports do not verify the physical device.`
                   : "No smart devices are assigned to this branch yet."}
               </p>
             </div>
@@ -177,17 +209,33 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-bold text-white">{device.deviceName || "Food Safety Smart Device"}</h3>
                       <Badge className="bg-red-500/20 text-red-200">MOUSE CAUGHT</Badge>
+                      {device.alarmSource === "admin-manual-report" && (
+                        <>
+                          <Badge className="bg-amber-500/15 text-amber-200">MANUALLY REPORTED BY ADMIN</Badge>
+                          <Badge className="bg-red-500/20 text-red-200">{Number(device.manualCaughtCount || 0)} MICE CAUGHT</Badge>
+                        </>
+                      )}
                       {stopped && <Badge className="bg-slate-700 text-slate-200">ALARM STOPPED</Badge>}
                     </div>
                     <p className="mt-1 break-all text-xs text-slate-500">{device.deviceId}</p>
                     {device.branchName && <p className="mt-2 text-sm text-slate-300">Branch: <span className="font-semibold text-white">{device.branchName}</span></p>}
                     {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-red-300" />{device.notes}</p>}
-                    <p className="mt-2 text-sm font-semibold text-red-200">Mouse caught. The device returns to Ready only after the trap is physically reset.</p>
+                    <p className="mt-2 text-sm font-semibold text-red-200">
+                      {device.alarmSource === "admin-manual-report"
+                        ? "Your Food Safety admin reported a catch after a Smart Life notification. Please check the trap and use Stop Alarm to acknowledge the report."
+                        : "Mouse caught. Check the physical trap before acknowledging this alarm."}
+                    </p>
+                    {device.alarmSource === "admin-manual-report" && (
+                      <p className="mt-1 text-xs text-red-300">
+                        {Number(device.manualPendingCount || 0)} new alarm report(s) awaiting Stop Alarm.
+                        The catch total remains saved after acknowledgement.
+                      </p>
+                    )}
                     {device.lastAlarmAt && <p className="mt-1 text-xs text-red-300">Caught: {new Date(device.lastAlarmAt).toLocaleString("en-GB")}</p>}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button disabled={stopped} onClick={() => stopAlarm(device)} className="bg-red-600 text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-300">
-                      <VolumeX className="mr-1 h-4 w-4" />{stopped ? "Alarm Stopped" : "Stop Alarm"}
+                    <Button disabled={stopped || Boolean(stoppingAlarmId)} onClick={() => void stopAlarm(device)} className="bg-red-600 text-white hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-300">
+                      <VolumeX className="mr-1 h-4 w-4" />{stopped ? "Alarm Stopped" : stoppingAlarmId === String(device.id) ? "Stopping..." : "Stop Alarm"}
                     </Button>
                     <Button variant="outline" onClick={onOpenDevices} className="border-slate-600 text-slate-200"><Wifi className="mr-1 h-4 w-4" />Smart Devices</Button>
                   </div>
@@ -225,6 +273,9 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-white">{event.deviceName || "Food Safety Smart Device"}</p>
                       {event.isTest && <Badge className="bg-amber-500/15 text-amber-300">TEST</Badge>}
+                      {event.source === "admin-manual-report" && (
+                        <Badge className="bg-amber-500/15 text-amber-200">MANUALLY REPORTED BY ADMIN</Badge>
+                      )}
                     </div>
                     {event.location && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{event.location}</p>}
                     <p className="mt-1 text-xs text-slate-400">{event.message}</p>
