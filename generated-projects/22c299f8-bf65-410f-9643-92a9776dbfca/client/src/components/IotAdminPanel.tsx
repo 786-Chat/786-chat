@@ -62,11 +62,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [branchLoadError, setBranchLoadError] = useState("");
   const [wifiDeviceId, setWifiDeviceId] = useState("");
-  const [wifiSsid, setWifiSsid] = useState("");
-  const [wifiPassword, setWifiPassword] = useState("");
-  const [setupAddress, setSetupAddress] = useState("http://192.168.4.1");
-  const [gatewayHost, setGatewayHost] = useState("192.168.0.14");
-  const [gatewayPort, setGatewayPort] = useState("1883");
+  const [connectionChecking, setConnectionChecking] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<{ deviceId: string; online: boolean; lastSeenAt: string | null } | null>(null);
   const [editingDeviceId, setEditingDeviceId] = useState("");
   const [editDeviceName, setEditDeviceName] = useState("");
   const [editBranchId, setEditBranchId] = useState("");
@@ -87,6 +84,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     () => assigned.filter((device: any) => device?.provider === "food-safety-owned-mqtt"),
     [assigned],
   );
+
+  const selectedWifiDevice = useMemo(() => ownedDevices.find((item: any) => String(item.deviceId) === wifiDeviceId) || null, [ownedDevices, wifiDeviceId]);
 
   const activeBranch = useMemo(
     () => branches.find((branch) => String(branch.id) === String(activeBranchId)) || null,
@@ -459,6 +458,35 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     }
   };
 
+  const checkRealDeviceConnection = async () => {
+    if (!selectedWifiDevice) return;
+    const checkedId = String(selectedWifiDevice.deviceId);
+    setConnectionChecking(true);
+    setConnectionResult(null);
+    try {
+      // This refresh is read-only: it never provisions Wi-Fi or simulates a catch.
+      const response = await fetch(`/api/iot/devices/${encodeURIComponent(String(selectedWifiDevice.id))}/refresh`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.provider !== "food-safety-owned-mqtt" || String(data?.deviceId) !== checkedId) {
+        throw new Error(data?.message || "Could not verify this physical device");
+      }
+      setConnectionResult({
+        deviceId: checkedId,
+        online: data.isOnline === true,
+        lastSeenAt: data.lastCheckedAt ? String(data.lastCheckedAt) : null,
+      });
+      await loadBase();
+    } catch (error: any) {
+      toast({ title: "Connection check failed", description: error?.message || "Try again after signing in.", variant: "destructive" });
+    } finally {
+      setConnectionChecking(false);
+    }
+  };
+
   const refreshDevice = async (id: string) => {
     await fetch(`/api/iot/devices/${id}/refresh`, { method: "POST", credentials: "include" });
     await loadBase();
@@ -775,24 +803,23 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
       }
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
-        <div className="mb-4 flex items-center gap-2">
+        <div className="mb-3 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Step 2 — Enter Shop Wi-Fi Details</h3>
+          <h3 className="font-semibold text-white">Food Safety Mouse Connection Check</h3>
         </div>
         <p className="text-sm text-slate-300">
-          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
-          The Wi-Fi password is kept only in this browser session and is never saved in Neon.
+          Select an existing device to check whether HP2 has received a real recent MQTT report.
+          A customer switching the trap ON does not by itself activate Wi-Fi or confirm a connection.
         </p>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">Device</label>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-xs font-medium text-slate-400">Registered mouse device</label>
             <select
               value={wifiDeviceId}
-              onChange={(event) => setWifiDeviceId(event.target.value)}
+              onChange={(event) => { setWifiDeviceId(event.target.value); setConnectionResult(null); }}
               className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
             >
-              <option value="">Select registered device...</option>
+              <option value="">Select device...</option>
               {(activeBranch ? activeBranchDevices : ownedDevices).map((device: any) => (
                 <option key={device.id} value={device.deviceId}>
                   {device.deviceName || device.deviceId} — {device.deviceId}
@@ -800,95 +827,41 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
               ))}
             </select>
           </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Name (SSID) — manually enter the shop’s 2.4 GHz network</label>
-            <Input
-              value={wifiSsid}
-              onChange={(event) => setWifiSsid(event.target.value)}
-              placeholder="Customer / home 2.4 GHz Wi-Fi"
-              autoComplete="off"
-              className="border-slate-600 bg-slate-900 text-white"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">Wi-Fi Password</label>
-            <Input
-              type="password"
-              value={wifiPassword}
-              onChange={(event) => setWifiPassword(event.target.value)}
-              placeholder="Enter Wi-Fi password"
-              autoComplete="new-password"
-              className="border-slate-600 bg-slate-900 text-white"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">Device Setup Address</label>
-            <Input
-              value={setupAddress}
-              onChange={(event) => setSetupAddress(event.target.value)}
-              placeholder="http://192.168.4.1"
-              className="border-slate-600 bg-slate-900 font-mono text-white"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">HP2 / MQTT Host</label>
-            <Input
-              value={gatewayHost}
-              onChange={(event) => setGatewayHost(event.target.value)}
-              className="border-slate-600 bg-slate-900 font-mono text-white"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">MQTT Port</label>
-            <Input
-              value={gatewayPort}
-              onChange={(event) => setGatewayPort(event.target.value.replace(/[^0-9]/g, ""))}
-              inputMode="numeric"
-              className="border-slate-600 bg-slate-900 font-mono text-white"
-            />
-          </div>
+          <Button
+            type="button"
+            onClick={checkRealDeviceConnection}
+            disabled={!selectedWifiDevice || connectionChecking}
+            className="bg-cyan-600 text-white hover:bg-cyan-500"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${connectionChecking ? "animate-spin" : ""}`} />
+            {connectionChecking ? "Checking..." : "Check Real Connection"}
+          </Button>
         </div>
-
-        <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200" role="status">
-          <p className="font-semibold text-amber-200">Physical Wi-Fi activation unavailable for BMAX W003</p>
+        {connectionResult && connectionResult.deviceId === wifiDeviceId && (
+          <div role="status" className="mt-3 rounded-lg border border-slate-600 bg-slate-900/70 p-3 text-sm text-slate-100">
+            <span className={connectionResult.online ? "font-semibold text-emerald-300" : "font-semibold text-amber-300"}>
+              {connectionResult.online ? "Connected — recent gateway report" : "Not connected — no recent gateway report"}
+            </span>
+            <p className="mt-1 text-xs text-slate-400">
+              {connectionResult.lastSeenAt
+                ? `Last real report: ${new Date(connectionResult.lastSeenAt).toLocaleString("en-GB")}`
+                : "No real MQTT event recorded for this device."}
+            </p>
+          </div>
+        )}
+        <div className="mt-4 rounded-lg border border-amber-500/40 bg-slate-900/70 p-4 text-sm text-slate-200">
+          <p className="font-semibold text-amber-200">BMAX W003 factory Wi-Fi activation not yet supported</p>
           <p className="mt-2">
-            This form cannot send network credentials to an unmodified BMAX W003 trap. The previous
-            Prepare Wi-Fi Details button did not provision the mouse and has been removed.
-            Registration and branch assignment do not connect a device.
-          </p>
-          <p className="mt-2">
-            The trap must first run verified Food Safety-compatible firmware with a documented,
-            authenticated provisioning method. Then an activation service can be connected here.
-            Until a real MQTT report is received, the device remains Disconnected.
+            The factory SmartLife setup signal is not a Food Safety MQTT connection.
+            This admin page cannot configure the stock trap or send it a shop Wi-Fi password.
+            Wi-Fi/password fields that appeared to activate it have been disabled until a verified
+            Food Safety-compatible provisioning method exists. No customer Wi-Fi password is saved.
           </p>
           <p className="mt-2 text-slate-400">
-            Do not use the HP2 private address 192.168.0.14 at a different shop without a secure
-            site-to-gateway connection. Shop Wi-Fi passwords remain in this browser; this page does not transmit or save them.
+            HP2 broker 192.168.0.14:1883 is accessible only on its home network.
+            Customer sites require a verified secure remote connection as well as compatible trap firmware.
+            Use Device Check to link a confirmed physical MQTT identity before assigning it to a shop.
           </p>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
-            <p className="mt-1 break-all font-mono text-sm font-semibold text-white">{gatewayHost || "192.168.0.14"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">MQTT Port</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-white">{gatewayPort || "1883"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Devices</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
-          </div>
         </div>
       </div>
 
