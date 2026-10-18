@@ -169,36 +169,81 @@ export default function DeliveryPage() {
           ) : records.length === 0 ? (
             <p className="p-4 text-sm text-slate-400">No deliveries recorded yet</p>
           ) : (
-            <div className="overflow-x-auto scrollbar-thin">
-              <table className="min-w-[820px] w-full text-left text-sm">
-                <thead className="border-b border-slate-800 text-slate-400">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Supplier</th>
-                    <th className="px-4 py-3 font-medium">Batch</th>
-                    <th className="px-4 py-3 font-medium">Quantity</th>
-                    <th className="px-4 py-3 font-medium">Received</th>
-                    <th className="px-4 py-3 font-medium">Use By</th>
-                    <th className="px-4 py-3 font-medium">Storage</th>
-                    <th className="px-4 py-3 font-medium">Allergen</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {records.map((rec) => (
-                    <tr key={rec.id} className="text-slate-300">
-                      <td className="px-4 py-3 font-medium text-slate-100">{rec.name}</td>
-                      <td className="px-4 py-3">{rec.supplier}</td>
-                      <td className="px-4 py-3">{rec.supplier_batch}</td>
-                      <td className="px-4 py-3">{rec.quantity} {rec.unit}</td>
-                      <td className="px-4 py-3">{rec.date_received}</td>
-                      <td className="px-4 py-3">{rec.use_by_date}</td>
-                      <td className="px-4 py-3">{rec.storage_location}</td>
-                      <td className="px-4 py-3">{rec.allergen_yes_no === "Yes" ? rec.allergen_type || "Yes" : "No"}</td>
+            <>
+              {/* Mobile card grid - 2 columns */}
+              <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
+                {records.map((rec) => (
+                  <div key={rec.id} className="flex flex-col rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-sm">
+                    <div className="mb-2 min-w-0">
+                      <div className="break-words text-sm font-bold text-slate-100">{rec.name}</div>
+                      <div className="break-words text-xs text-slate-400">{rec.supplier}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Batch Number</div>
+                      <div className="break-words text-xs font-medium text-slate-200">{rec.supplier_batch}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Quantity</div>
+                      <div className="break-words text-xs text-slate-300">{rec.quantity} {rec.unit}</div>
+                    </div>
+                    <div className="mb-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Date Received</div>
+                      <div className="break-words text-xs text-slate-300">{rec.date_received}</div>
+                    </div>
+                    {rec.use_by_date && (
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Use By</div>
+                        <div className="break-words text-xs text-slate-300">{rec.use_by_date}</div>
+                      </div>
+                    )}
+                    {rec.storage_location && (
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Storage</div>
+                        <div className="break-words text-xs text-slate-300">{rec.storage_location}</div>
+                      </div>
+                    )}
+                    {rec.allergen_yes_no && (
+                      <div className="mt-auto">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Allergen</div>
+                        <div className="break-words text-xs font-medium text-amber-400">{rec.allergen_yes_no === "Yes" ? (rec.allergen_type || "Yes") : "No"}</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop/tablet table - unchanged */}
+              <div className="hidden overflow-x-auto scrollbar-thin sm:block">
+                <table className="min-w-[820px] w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Name</th>
+                      <th className="px-4 py-3 font-medium">Supplier</th>
+                      <th className="px-4 py-3 font-medium">Batch</th>
+                      <th className="px-4 py-3 font-medium">Quantity</th>
+                      <th className="px-4 py-3 font-medium">Received</th>
+                      <th className="px-4 py-3 font-medium">Use By</th>
+                      <th className="px-4 py-3 font-medium">Storage</th>
+                      <th className="px-4 py-3 font-medium">Allergen</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {records.map((rec) => (
+                      <tr key={rec.id} className="text-slate-300">
+                        <td className="px-4 py-3 font-medium text-slate-100">{rec.name}</td>
+                        <td className="px-4 py-3">{rec.supplier}</td>
+                        <td className="px-4 py-3">{rec.supplier_batch}</td>
+                        <td className="px-4 py-3">{rec.quantity} {rec.unit}</td>
+                        <td className="px-4 py-3">{rec.date_received}</td>
+                        <td className="px-4 py-3">{rec.use_by_date}</td>
+                        <td className="px-4 py-3">{rec.storage_location}</td>
+                        <td className="px-4 py-3">{rec.allergen_yes_no === "Yes" ? rec.allergen_type || "Yes" : "No"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
