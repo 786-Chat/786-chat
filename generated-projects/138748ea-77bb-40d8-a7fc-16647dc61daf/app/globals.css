@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --steel: #475569;
+  --navy: #1e293b;
+  --process-blue: #2563eb;
+  --safety-amber: #f59e0b;
+  --quality-green: #10b981;
+}
+
+body {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Compact industrial typography */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Anti-glare plant canvas with restrained schematic texture */
+.plant-canvas {
+  background-color: #f8fafc;
+  background-image: linear-gradient(rgba(30, 41, 59, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 41, 59, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Functional separators keyed to production state */
+.border-state {
+  border-color: #cbd5e1;
+}
+.border-state-active {
+  border-color: var(--process-blue);
+}
+.border-state-warning {
+  border-color: var(--safety-amber);
+}
+.border-state-ok {
+  border-color: var(--quality-green);
+}
+
+/* Touch-safe controls */
+button, a, input, select {
+  min-height: 44px;
+}
+
+/* Responsive table container */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile bottom-tab shell */
+@media (max-width: 768px) {
+  .bottom-tabs {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-around;
+    padding: 0.5rem 0;
+    z-index: 50;
+  }
+  .bottom-tabs a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .bottom-tabs a.active {
+    color: var(--process-blue);
+  }
+}

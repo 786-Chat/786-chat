@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "capabilities": ["database", "authentication", "storage", "email", "api"],
+  "providers": {
+    "database": {
+      "driver": "@neondatabase/serverless",
+      "env": ["DATABASE_URL"]
+    },
+    "storage": {
+      "driver": "@vercel/blob",
+      "env": ["BLOB_READ_WRITE_TOKEN"]
+    },
+    "email": {
+      "driver": "resend",
+      "env": ["RESEND_API_KEY", "EMAIL_FROM"]
+    },
+    "auth": {
+      "driver": "jose",
+      "env": ["AUTH_SECRET"]
+    }
+  },
+  "migrations": ["sql/migrations/001_initial.sql"],
+  "apiRoutes": [
+    "app/api/auth/register/route.ts",
+    "app/api/auth/login/route.ts",
+    "app/api/auth/logout/route.ts",
+    "app/api/auth/session/route.ts",
+    "app/api/auth/forgot-password/route.ts",
+    "app/api/auth/reset-password/route.ts",
+    "app/api/auth/verify-email/route.ts",
+    "app/api/uploads/route.ts",
+    "app/api/uploads/[id]/route.ts",
+    "app/api/email/route.ts"
+  ]
+}
