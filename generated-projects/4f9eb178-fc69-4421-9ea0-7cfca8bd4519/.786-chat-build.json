@@ -1,0 +1,12 @@
+{
+  "projectId": "4f9eb178-fc69-4421-9ea0-7cfca8bd4519",
+  "buildId": "3219a5dd-a538-440d-9d72-fd6bcc930d3e",
+  "title": "Saffron Manager",
+  "sourceVersion": "3761b9224a6c63996324f1d04e0c1a37adc0afce6689f8c46a218e2362b8c867",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-11T00:47:21.735Z"
+}
