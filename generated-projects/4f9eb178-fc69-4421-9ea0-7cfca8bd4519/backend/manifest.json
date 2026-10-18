@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "saffron-manager-backend",
+  "capabilities": ["database", "api"],
+  "database": {
+    "provider": "neon",
+    "env": "DATABASE_URL",
+    "migration": "sql/migrations/001_initial.sql"
+  },
+  "api": {
+    "routes": [
+      "/api/customers",
+      "/api/customers/[id]",
+      "/api/reservations",
+      "/api/reservations/[id]",
+      "/api/products",
+      "/api/products/[id]",
+      "/api/stock-movements",
+      "/api/stock-movements/transaction"
+    ]
+  },
+  "tables": ["customers", "reservations", "products", "stock_movements"],
+  "validation": "zod"
+}
