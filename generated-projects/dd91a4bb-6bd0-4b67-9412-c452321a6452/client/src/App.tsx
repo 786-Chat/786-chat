@@ -178,13 +178,15 @@ function useSubdomainRedirect() {
       return;
     }
     
-    const isSubdomain = hostname.endsWith('.link24.online') && 
-      hostname !== 'link24.online' && 
-      hostname !== 'www.link24.online';
+    const is786Subdomain = hostname.endsWith('.786.chat') && hostname !== '786.chat' && hostname !== 'www.786.chat';
+    const isLegacyLink24Subdomain = hostname.endsWith('.link24.online') && hostname !== 'link24.online' && hostname !== 'www.link24.online';
+    const isSubdomain = is786Subdomain || isLegacyLink24Subdomain;
     
     const isCustomDomain = !hostname.includes('replit') && 
       !hostname.includes('localhost') && 
       !hostname.includes('127.0.0.1') &&
+      hostname !== '786.chat' &&
+      hostname !== 'www.786.chat' &&
       hostname !== 'link24.online' &&
       hostname !== 'www.link24.online' &&
       !isSubdomain;
