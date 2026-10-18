@@ -14,6 +14,11 @@ test("imported server database clients receive generated runtime provisioning ma
   assert.match(finalizer, /lib\/server\/db\.ts/)
   assert.match(finalizer, /sql\/migrations\/001_initial\.sql/)
   assert.match(finalizer, /SELECT 1;/)
+  assert.match(finalizer, /ensureImportedDrizzleSchemaBootstrap/)
+  assert.match(finalizer, /scripts\/786-drizzle-bootstrap\.mjs/)
+  assert.match(finalizer, /information_schema\.tables/)
+  assert.match(finalizer, /drizzle-kit/)
+  assert.match(finalizer, /count > 0/)
 })
 
 test("Replit auth imports do not crash Vercel when Replit OIDC variables are absent", () => {
