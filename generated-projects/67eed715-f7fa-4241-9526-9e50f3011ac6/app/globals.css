@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #FDF6EC;
+  --foreground: #2D2A26;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Georgia', serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent text-white px-6 py-3 rounded-full font-semibold hover:bg-opacity-90 transition;
+  }
+  .btn-outline {
+    @apply border border-accent text-accent px-6 py-3 rounded-full font-semibold hover:bg-accent hover:text-white transition;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-md p-6;
+  }
+  .input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+}
