@@ -35,6 +35,24 @@ test("quoted one-match text edits cannot regenerate the whole existing design", 
   assert.match(projectRoute, /\.\.\.\(current\?\.metadata \|\| \{\}\)/)
 })
 
+
+
+test("large existing project edits use exact patches and keep uploaded asset URLs", async () => {
+  const [codegen, context, api] = await Promise.all([
+    read("lib/786-admin/codegen.ts"),
+    read("lib/786-chat/provider-context.ts"),
+    read("components/786-chat/api.ts"),
+  ])
+  assert.match(codegen, /ExistingPatchSchema/)
+  assert.match(codegen, /search must match exactly once/)
+  assert.match(codegen, /Existing files must be changed with targeted patches/)
+  assert.match(codegen, /EDIT EXISTING PROJECT WITH TARGETED PATCHES/)
+  assert.match(context, /relevant excerpt from later in this same file/)
+  assert.match(context, /safeExcerpt\(item\.content, tokens\)/)
+  assert.match(api, /ATTACHED ASSET URLS/)
+  assert.match(api, /attachment\.url/)
+})
+
 test("booking and database requests become verifiable project requirements", async () => {
   const [specification, architecture, validation] = await Promise.all([
     read("lib/786-chat/specification.ts"),

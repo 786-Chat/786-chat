@@ -13,11 +13,24 @@ export type CodegenResult = { title: string; description: string; reply: string;
 
 const FileSchema = z.object({ path: z.string().min(1), content: z.string(), language: z.string().optional() })
 const ProjectSchema = z.object({ title: z.string().min(1), description: z.string().min(1), reply: z.string().min(1), files: z.array(FileSchema).min(1) })
+const ExistingPatchSchema = z.object({
+  path: z.string().min(1),
+  search: z.string().min(1),
+  replace: z.string(),
+})
+const ExistingEditSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  reply: z.string().optional(),
+  patches: z.array(ExistingPatchSchema).optional().default([]),
+  files: z.array(FileSchema).optional().default([]),
+})
 type ProjectObject = z.infer<typeof ProjectSchema>
 
 const SYSTEM_PROMPT = `You are 786.Chat's structured project file generator. Return a real runnable Next.js App Router project as JSON.
-Rules: Return FULL file content, never diffs or placeholders. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Preserve existing files for edits and emit only new or modified files. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. Return JSON only.`
+Rules: For NEW projects return FULL file content, never diffs or placeholders. For EXISTING project edits, preserve all unrelated code and use exact targeted patch operations whenever modifying an existing file; only return full file content for brand-new files. app/page.tsx is mandatory for new projects. Use TypeScript and Tailwind CSS. Frontend imports may use react, next/*, lucide-react, clsx and tailwind-merge. Backend may use @neondatabase/serverless and zod when requested. Every internal slash href must have a matching app/**/page.tsx route. Keep shared UI reusable and route wrappers thin. Every JSX identifier must be declared/imported. For Neon initialize connections lazily and use parameterized queries. Return JSON only.`
 const JSON_FORMAT_PROMPT = `\nReturn exactly one JSON object: {"title":"string","description":"string","reply":"string","files":[{"path":"string","content":"complete file content","language":"string"}]}. Begin with { and end with }. Escape JSON control characters. Keep metadata concise. Avoid duplicated code so the response fits the output budget.`
+const EXISTING_EDIT_JSON_FORMAT_PROMPT = `\nReturn exactly one JSON object: {"title":"string","description":"string","reply":"string","patches":[{"path":"existing/file.tsx","search":"exact unique source text copied verbatim","replace":"replacement text"}],"files":[{"path":"brand-new-file.tsx","content":"complete new file content","language":"tsx"}]}. Use patches for every existing file. The search text must occur exactly once in that file and must NOT include excerpt marker comments. Use multiple small patches when different areas of one file must change. files is ONLY for brand-new paths. Do not return unchanged files. Begin with { and end with }.`
 const FILE_UNIT_JSON_FORMAT_PROMPT = `\nReturn ONLY this tiny JSON object with no markdown or prose: {"path":"exact requested path","content":"complete file content"}. Do not return title, description, reply, a files array, or any other key. Begin with { and end with }.`
 const TRUNCATION_MESSAGE = "DeepSeek JSON response was truncated before all project files were returned."
 const COMPACT_RETRY_MESSAGE = "Provider response was too large or incomplete; retrying with compact project output."
@@ -60,25 +73,91 @@ function extractProjectJson(text: string, allowRecovery = true): ProjectObject {
   throw new Error("Provider JSON response could not be parsed or validated.")
 }
 
+function safeProjectPath(path: string) {
+  return Boolean(path) && !path.startsWith("/") && !/(^|\/)\.\.(\/|$)/.test(path)
+}
+
+function occurrenceCount(content: string, search: string) {
+  if (!search) return 0
+  return content.split(search).length - 1
+}
+
+function extractExistingEditJson(text: string, input: CodegenInput): ProjectObject {
+  if (!input.existing) throw new Error("Existing edit context is required.")
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
+  const start = trimmed.indexOf("{")
+  let parsed: z.infer<typeof ExistingEditSchema> | null = null
+
+  if (start >= 0) {
+    for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
+      try {
+        const candidate = ExistingEditSchema.safeParse(JSON.parse(trimmed.slice(start, end + 1)))
+        if (candidate.success) {
+          parsed = candidate.data
+          break
+        }
+      } catch {}
+    }
+  }
+  if (!parsed) throw new Error("Existing-project edit JSON could not be parsed or validated.")
+
+  const working = { ...input.existing.keyFiles }
+  const changed: Record<string, string> = {}
+
+  for (const patch of parsed.patches) {
+    if (!safeProjectPath(patch.path) || !(patch.path in working)) {
+      throw new Error(`Existing-project patch targeted an invalid or missing path: ${patch.path}`)
+    }
+    const current = working[patch.path]
+    const matches = occurrenceCount(current, patch.search)
+    if (matches !== 1) {
+      throw new Error(`Existing-project patch search must match exactly once in ${patch.path}; found ${matches}.`)
+    }
+    const next = current.replace(patch.search, patch.replace)
+    working[patch.path] = next
+    changed[patch.path] = next
+  }
+
+  for (const file of parsed.files) {
+    if (!safeProjectPath(file.path)) throw new Error(`Generated file path is invalid: ${file.path}`)
+    if (file.path in input.existing.keyFiles) {
+      throw new Error(`Existing files must be changed with targeted patches, not full-file replacement: ${file.path}`)
+    }
+    changed[file.path] = file.content
+  }
+
+  if (!Object.keys(changed).length) throw new Error("Existing-project edit did not produce any safe file changes.")
+
+  return {
+    title: parsed.title?.trim() || input.existing.title,
+    description: parsed.description?.trim() || input.existing.description,
+    reply: parsed.reply?.trim() || "Updated the requested project area and preserved unrelated code.",
+    files: Object.entries(changed).map(([path, content]) => ({ path, content })),
+  }
+}
+
 function buildPrompt(input: CodegenInput) {
   const fileUnitTarget = fileUnitTargetFromPrompt(input.prompt)
   if (fileUnitTarget) return ["MODE: FILE UNIT", `EXACT TARGET PATH: ${fileUnitTarget}`, "USER REQUEST:", input.prompt.trim(), "Generate only the exact target file with complete content."].join("\n") + FILE_UNIT_JSON_FORMAT_PROMPT
   if (!input.existing) return [`MODE: NEW PROJECT`, `USER REQUEST:`, input.prompt.trim(), `Generate the complete requested project using shared components and compact route wrappers.`].join("\n") + JSON_FORMAT_PROMPT
   const boundedKeyFiles = boundedExistingProjectContext(input.prompt, input.existing.keyFiles)
-  return ["MODE: EDIT EXISTING PROJECT", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "RELEVANT EXISTING FILE CONTENTS (BOUNDED):", Object.entries(boundedKeyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Emit only new or modified files."].join("\n") + JSON_FORMAT_PROMPT
+  return ["MODE: EDIT EXISTING PROJECT WITH TARGETED PATCHES", `EXISTING TITLE: ${input.existing.title}`, `EXISTING DESCRIPTION: ${input.existing.description}`, "ALL EXISTING FILE PATHS:", [...input.existing.fileTree].sort().join("\n"), "RELEVANT EXISTING FILE CONTENTS (BOUNDED):", Object.entries(boundedKeyFiles).map(([p, c]) => `--- FILE: ${p} ---\n${c}\n--- END FILE ---`).join("\n\n"), "USER REQUEST:", input.prompt.trim(), "Change only the requested area. Copy each patch search string exactly from the real source shown above, make it unique, and preserve every unrelated area. Use files only when the user genuinely needs a brand-new file."].join("\n") + EXISTING_EDIT_JSON_FORMAT_PROMPT
 }
 function compactRetryPrompt(prompt: string, existing: boolean) {
   if (/\bFILE-LEVEL FULL-STACK GENERATION\b/i.test(prompt)) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nONE FILE RETRY — HARD OUTPUT BOUND: Output ONLY {"path":"exact requested path","content":"complete file content"} with no markdown, prose, metadata, files array, or extra keys, in at most 6,000 output tokens. Never return a prefix, continuation, patch, or partial file. If repeated data would exceed the bound, replace it with concise deterministic code that produces the same behavior.`
-  if (existing) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return ONLY the smallest set of complete files directly changed by the request. Do not resend unchanged files. Keep title, description and reply extremely short.`
+  if (existing) return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nEXISTING PROJECT RETRY: Return only small exact patches for existing files and complete content only for brand-new files. Keep title, description and reply extremely short. Every patch search string must be copied verbatim and match exactly once.`
   return `${prompt}\n\n${COMPACT_RETRY_MESSAGE}\nNEW PROJECT RETRY: Generate the smallest COMPLETE runnable project satisfying EVERY explicit requirement. Keep every requested route, API, schema and functional control. Use shared components, thin route wrappers and one concise stylesheet. Do not include documentation, tests, duplicate data, decorative SVG, base64 images or unnecessary configuration. Keep title, description and reply extremely short.`
 }
 function attachmentContent(prompt: string, attachments: CodegenAttachment[]): Array<TextPart | ImagePart | FilePart> { const c: Array<TextPart | ImagePart | FilePart> = [{ type: "text", text: prompt }]; for (const a of attachments) c.push(a.mediaType.startsWith("image/") ? { type: "image", image: a.url, mediaType: a.mediaType } : { type: "file", data: a.url, mediaType: a.mediaType, filename: a.name || "attachment" }); return c }
 
 function extractGeneratedObject(text: string, input: CodegenInput): ProjectObject {
   const target = fileUnitTargetFromPrompt(input.prompt)
-  if (!target) return extractProjectJson(text)
-  const file = parseFileUnitOutput(text, target)
-  return { title: "Generated application", description: "Generated by 786.Chat", reply: "File generated.", files: [file] }
+  if (target) {
+    const file = parseFileUnitOutput(text, target)
+    return { title: "Generated application", description: "Generated by 786.Chat", reply: "File generated.", files: [file] }
+  }
+  if (input.existing) return extractExistingEditJson(text, input)
+  return extractProjectJson(text)
 }
 
 async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMode) {

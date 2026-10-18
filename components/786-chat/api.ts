@@ -186,8 +186,11 @@ export async function generateBuilderProject(request: GenerationRequest) {
         "IMAGE REFERENCE ANALYSIS — GEMINI VISION ONLY:",
         vision.response,
         "",
+        "ATTACHED ASSET URLS — USE THESE EXACT URLS WHEN THE USER ASKS TO INSERT OR REPLACE AN IMAGE:",
+        ...request.attachments.map((attachment) => `- ${attachment.name || "attachment"}: ${attachment.url}`),
+        "",
         "CODING INSTRUCTION:",
-        "Use the image analysis above only as visual/reference context. DeepSeek must perform all project code generation, editing and repair. Do not claim the coding model can directly see the attachment.",
+        "Use the image analysis above only as visual/reference context. DeepSeek must perform all project code generation, editing and repair. When the requested edit uses an uploaded image, insert its exact attached asset URL into the existing project file. Do not claim the coding model can directly see the attachment.",
       ].join("\n"),
     }
   }
