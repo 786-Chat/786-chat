@@ -7,6 +7,10 @@ import { sendAccountEmail } from "@/lib/transactional-email"
 import { consumeSecurityRateLimit, rateLimitResponse, requestIdentifier } from "@/lib/786-chat/security"
 
 export async function POST(request: Request) {
+  // Pre-launch: public account creation is disabled until the owner opens registration.
+  if (process.env.PUBLIC_REGISTRATION_ENABLED !== "true") {
+    return NextResponse.json({ error: "786.Chat is not accepting new registrations yet." }, { status: 403 })
+  }
   try {
     await ensureAccountSecuritySchema()
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>

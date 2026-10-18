@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSession } from "@/lib/auth";
+import { isAdminUser } from "@/lib/admin-config";
 import { sql } from "@/lib/786-admin/db";
 import {
   createHostedDomain,
@@ -217,6 +218,9 @@ export async function POST(request: Request, { params }: Context) {
   if (!session?.email)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerEmail = session.email.toLowerCase().trim();
+  if (process.env.CUSTOMER_ACCESS_ENABLED !== "true" && !isAdminUser(ownerEmail)) {
+    return NextResponse.json({ error: "786.Chat publishing is owner-only before launch." }, { status: 403 });
+  }
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as Record<
     string,
