@@ -653,11 +653,12 @@ export function ProductionView() {
               </span>
               Production Cooling & Freezer Status
             </h3>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            {/* Mobile: 2 columns, desktop: horizontal row */}
+            <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-row lg:items-center lg:gap-3">
               {steps.map((step, index) => (
-                <div key={step.label} className="flex flex-1 items-center gap-3">
+                <div key={step.label} className={`${index === steps.length - 1 ? "col-span-2" : ""} lg:flex lg:flex-1 lg:items-center lg:gap-3`}>
                   <div
-                    className={`flex flex-1 items-center gap-3 rounded-xl border-2 px-3 py-3 transition-all ${
+                    className={`flex items-center gap-2 rounded-xl border-2 px-2 py-2 transition-all lg:flex-1 lg:px-3 lg:py-3 ${
                       step.tone === "green"
                         ? "border-emerald-300 bg-emerald-50 shadow-sm"
                         : step.tone === "amber"
@@ -668,7 +669,7 @@ export function ProductionView() {
                     }`}
                   >
                     <step.icon
-                      className={`h-6 w-6 shrink-0 ${
+                      className={`h-5 w-5 shrink-0 lg:h-6 lg:w-6 ${
                         step.tone === "green"
                           ? "text-emerald-500"
                           : step.tone === "amber"
@@ -679,7 +680,7 @@ export function ProductionView() {
                       }`}
                     />
                     <span
-                      className={`text-sm font-semibold ${
+                      className={`text-xs font-semibold leading-tight lg:text-sm ${
                         step.tone === "green"
                           ? "text-emerald-800"
                           : step.tone === "amber"
@@ -692,7 +693,7 @@ export function ProductionView() {
                       {step.label}
                     </span>
                     {step.value && (
-                      <span className="ml-auto text-sm font-bold text-slate-700">{step.value}</span>
+                      <span className="ml-auto text-xs font-bold text-slate-700 lg:text-sm">{step.value}</span>
                     )}
                   </div>
                   {index < steps.length - 1 && (
