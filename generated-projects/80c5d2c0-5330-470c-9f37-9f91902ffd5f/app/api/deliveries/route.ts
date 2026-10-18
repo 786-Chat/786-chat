@@ -37,5 +37,11 @@ export async function POST(request: Request) {
     INSERT INTO deliveries (id, name, supplier, supplier_batch, quantity, unit, date_received, use_by_date, storage_location, allergen_yes_no, allergen_type, notes)
     VALUES (${id}, ${data.name}, ${data.supplier}, ${data.supplierBatch}, ${data.quantity}, ${data.unit}, ${data.dateReceived}, ${data.useByDate}, ${data.storageLocation}, ${data.allergenYesNo}, ${data.allergenType}, ${data.notes})
   `;
-  return NextResponse.json({ id, ...data }, { status: 201 });
+  // Create corresponding raw-stock lot in ingredients table
+  const ingredientId = crypto.randomUUID();
+  await db`
+    INSERT INTO ingredients (id, name, supplier, supplier_batch, quantity, unit, date_received, use_by_date, storage_location, allergen_yes_no, allergen_type, notes)
+    VALUES (${ingredientId}, ${data.name}, ${data.supplier}, ${data.supplierBatch}, ${data.quantity}, ${data.unit}, ${data.dateReceived}, ${data.useByDate}, ${data.storageLocation}, ${data.allergenYesNo}, ${data.allergenType}, ${data.notes})
+  `;
+  return NextResponse.json({ id, ...data, ingredientId }, { status: 201 });
 }
