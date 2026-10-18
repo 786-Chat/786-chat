@@ -1,0 +1,12 @@
+{
+  "projectId": "311bd094-76e5-41bf-beab-98fbdbbbf7e8",
+  "buildId": "70124f75-aa6a-4e23-b8f8-0764db45b1af",
+  "title": "Next.js Starter with Shared Components",
+  "sourceVersion": "6d33d74ff3eccbe9a250693f210b401329e63d6d2c4bcb59ee5c0e679f88e126",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-14T18:24:54.605Z"
+}
