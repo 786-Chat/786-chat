@@ -1,0 +1,12 @@
+{
+  "projectId": "8aa33549-aafc-42aa-8b70-21e7d096758c",
+  "buildId": "ec914636-83e2-4377-b903-661dba5d720d",
+  "title": "PearlCare Dental Clinic",
+  "sourceVersion": "3adcf2a98e2ea6827056ac4365cc4a53c4493ff6591672eb6ab19e7f693cb057",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-07-30T16:42:11.131Z"
+}
