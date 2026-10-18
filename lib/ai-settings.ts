@@ -1,18 +1,17 @@
 import "server-only"
 import { sql } from "@/lib/db"
 
-
 // DeepSeek pricing (per 1M tokens)
 export const DEEPSEEK_PRICING = {
   "deepseek-chat": {
-    input: 0.14,   // $0.14 per 1M input tokens
-    output: 0.28,  // $0.28 per 1M output tokens
-    cached: 0.014, // $0.014 per 1M cached input tokens
+    input: 0.14,
+    output: 0.28,
+    cached: 0.014,
   },
   "deepseek-reasoner": {
-    input: 0.55,   // $0.55 per 1M input tokens
-    output: 2.19,  // $2.19 per 1M output tokens
-    cached: 0.055, // $0.055 per 1M cached input tokens
+    input: 0.55,
+    output: 2.19,
+    cached: 0.055,
   },
 } as const
 
@@ -35,8 +34,8 @@ export interface AISettings {
 
 // Get current AI settings
 export async function getAISettings(): Promise<AISettings> {
-  const [settings] = await sql`
-    SELECT 
+  const [settings] = (await sql`
+    SELECT
       id,
       model,
       vision_model as "visionModel",
@@ -51,14 +50,13 @@ export async function getAISettings(): Promise<AISettings> {
       is_active as "isActive"
     FROM ai_settings
     LIMIT 1
-  `
+  `) as unknown as AISettings[]
 
   if (!settings) {
-    // Return defaults if no settings exist
     return {
       id: "",
       model: "deepseek-chat",
-     visionModel: "gemini-2.5-flash",
+      visionModel: "gemini-2.5-flash",
       temperature: 0.7,
       maxTokens: 4096,
       systemPrompt: "You are MujeebProAI, an advanced AI assistant created by Mujeeb Sardar.",
@@ -80,7 +78,6 @@ export async function getAISettings(): Promise<AISettings> {
   }
 }
 
-// Update AI settings
 export async function updateAISettings(
   settings: Partial<AISettings>,
   adminId: string
@@ -88,7 +85,7 @@ export async function updateAISettings(
   try {
     await sql`
       UPDATE ai_settings
-      SET 
+      SET
         model = COALESCE(${settings.model}, model),
         vision_model = COALESCE(${settings.visionModel}, vision_model),
         temperature = COALESCE(${settings.temperature}, temperature),
@@ -110,7 +107,6 @@ export async function updateAISettings(
   }
 }
 
-// Calculate cost for a request
 export function calculateCost(
   model: DeepSeekModel,
   inputTokens: number,
@@ -122,7 +118,6 @@ export function calculateCost(
   return inputCost + outputCost
 }
 
-// Track usage and cost
 export async function trackUsage(
   userId: string,
   inputTokens: number,
@@ -134,8 +129,8 @@ export async function trackUsage(
   await sql`
     INSERT INTO ai_cost_tracking (user_id, date, messages_count, input_tokens, output_tokens, estimated_cost_usd, model)
     VALUES (${userId}::uuid, CURRENT_DATE, 1, ${inputTokens}, ${outputTokens}, ${cost}, ${model})
-    ON CONFLICT (user_id, date) 
-    DO UPDATE SET 
+    ON CONFLICT (user_id, date)
+    DO UPDATE SET
       messages_count = ai_cost_tracking.messages_count + 1,
       input_tokens = ai_cost_tracking.input_tokens + ${inputTokens},
       output_tokens = ai_cost_tracking.output_tokens + ${outputTokens},
@@ -144,40 +139,31 @@ export async function trackUsage(
   `
 }
 
-// Check if user has reached daily limit
 export async function checkUserDailyLimit(userId: string): Promise<{ allowed: boolean; used: number; limit: number }> {
   const settings = await getAISettings()
-  
   const [usage] = await sql`
     SELECT COALESCE(messages_count, 0) as count
     FROM ai_cost_tracking
     WHERE user_id = ${userId}::uuid AND date = CURRENT_DATE
   `
-
   const used = Number(usage?.count || 0)
   const allowed = !settings.autoBlockOnLimit || used < settings.dailyMessageLimit
-
   return { allowed, used, limit: settings.dailyMessageLimit }
 }
 
-// Check if user has reached monthly token limit
 export async function checkUserMonthlyLimit(userId: string): Promise<{ allowed: boolean; used: number; limit: number }> {
   const settings = await getAISettings()
-  
   const [usage] = await sql`
     SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as tokens
     FROM ai_cost_tracking
-    WHERE user_id = ${userId}::uuid 
+    WHERE user_id = ${userId}::uuid
     AND date >= date_trunc('month', CURRENT_DATE)
   `
-
   const used = Number(usage?.tokens || 0)
   const allowed = !settings.autoBlockOnLimit || used < settings.monthlyTokenLimit
-
   return { allowed, used, limit: settings.monthlyTokenLimit }
 }
 
-// Get cost summary
 export async function getCostSummary(): Promise<{
   today: { cost: number; messages: number; tokens: number }
   thisMonth: { cost: number; messages: number; tokens: number }
@@ -186,7 +172,7 @@ export async function getCostSummary(): Promise<{
   const settings = await getAISettings()
 
   const [todayStats] = await sql`
-    SELECT 
+    SELECT
       COALESCE(SUM(estimated_cost_usd), 0) as cost,
       COALESCE(SUM(messages_count), 0) as messages,
       COALESCE(SUM(input_tokens + output_tokens), 0) as tokens
@@ -195,7 +181,7 @@ export async function getCostSummary(): Promise<{
   `
 
   const [monthStats] = await sql`
-    SELECT 
+    SELECT
       COALESCE(SUM(estimated_cost_usd), 0) as cost,
       COALESCE(SUM(messages_count), 0) as messages,
       COALESCE(SUM(input_tokens + output_tokens), 0) as tokens
@@ -204,8 +190,8 @@ export async function getCostSummary(): Promise<{
   `
 
   const monthCost = Number(monthStats?.cost || 0)
-  const budgetPercentage = settings.monthlyBudgetUsd > 0 
-    ? (monthCost / settings.monthlyBudgetUsd) * 100 
+  const budgetPercentage = settings.monthlyBudgetUsd > 0
+    ? (monthCost / settings.monthlyBudgetUsd) * 100
     : 0
 
   return {
@@ -228,7 +214,6 @@ export async function getCostSummary(): Promise<{
   }
 }
 
-// Get cost per user
 export async function getCostPerUser(): Promise<Array<{
   userId: string
   userName: string
@@ -239,7 +224,7 @@ export async function getCostPerUser(): Promise<Array<{
   monthMessages: number
 }>> {
   const results = await sql`
-    SELECT 
+    SELECT
       u.id as user_id,
       u.name as user_name,
       u.email as user_email,

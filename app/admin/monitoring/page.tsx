@@ -48,6 +48,8 @@ type MonitoringPayload = {
   }
 }
 
+type MonitoringCard = [label: string, value: number, Icon: typeof Activity]
+
 function when(value: string | null) {
   return value ? new Date(value).toLocaleString("en-GB") : "—"
 }
@@ -102,6 +104,13 @@ export default function MonitoringPage() {
 
   const summary = data?.summary || {}
   const openIncidents = data?.incidents.filter((incident) => incident.status !== "resolved") || []
+  const monitoringCards: MonitoringCard[] = [
+    ["Open incidents", summary.open_incidents || 0, CircleAlert],
+    ["Critical", summary.critical_incidents || 0, Siren],
+    ["Failures · 24h", summary.failures_24h || 0, AlertTriangle],
+    ["Journeys passed · 7d", summary.journeys_passed_7d || 0, CheckCircle2],
+    ["Journeys failed · 7d", summary.journeys_failed_7d || 0, Activity],
+  ]
 
   return (
     <div className="space-y-6">
@@ -124,17 +133,11 @@ export default function MonitoringPage() {
       {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ["Open incidents", summary.open_incidents || 0, CircleAlert],
-          ["Critical", summary.critical_incidents || 0, Siren],
-          ["Failures · 24h", summary.failures_24h || 0, AlertTriangle],
-          ["Journeys passed · 7d", summary.journeys_passed_7d || 0, CheckCircle2],
-          ["Journeys failed · 7d", summary.journeys_failed_7d || 0, Activity],
-        ].map(([label, value, Icon]) => (
-          <Card key={String(label)}><CardContent className="p-5">
+        {monitoringCards.map(([label, value, Icon]) => (
+          <Card key={label}><CardContent className="p-5">
             <Icon className="mb-3 h-5 w-5 text-primary" />
-            <p className="text-sm text-muted-foreground">{String(label)}</p>
-            <p className="mt-1 text-3xl font-bold">{String(value)}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="mt-1 text-3xl font-bold">{value}</p>
           </CardContent></Card>
         ))}
       </div>
