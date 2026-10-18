@@ -1,0 +1,12 @@
+{
+  "projectId": "8be54d22-b5cc-494b-9819-96d1ca2dd918",
+  "buildId": "dcac0362-907f-45a0-a0d6-e2efa842953b",
+  "title": "Small Open-World Crime Game",
+  "sourceVersion": "c38fb6502e1c7642935446e6ad66b5765e93a87fdd79420c379a47aa8b8433ef",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-14T18:58:37.010Z"
+}
