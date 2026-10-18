@@ -656,12 +656,76 @@ export default function BranchDashboard() {
 
     return (
       <>
-      {/* Full Table Layout */}
-      <div className="bg-slate-800/50 rounded-lg overflow-hidden">
+      {/* Phone/tablet portrait: use real report cards rather than a clipped seven-column table. */}
+      <div className="md:hidden space-y-3" data-testid="monthly-reports-mobile">
+        {monthlyReports.map((report) => (
+          <article key={report.id} className="min-w-0 rounded-xl border border-slate-700 bg-slate-800/80 p-4 shadow-sm">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="h-10 w-10 shrink-0 rounded-lg bg-purple-600/80 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-white break-words">{report.title || report.filename}</h3>
+                <p className="mt-1 text-xs text-slate-400 break-all">{report.filename}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge className="bg-purple-600/20 text-purple-200 border-purple-500/30 whitespace-normal">
+                {report.reportType === 'inspection-report' ? 'Inspection' :
+                 report.reportType === 'coshh-risk-assessment' ? 'COSHH Risk' :
+                 report.reportType === 'monthly-summary' ? 'Monthly Summary' : report.reportType || 'Report'}
+              </Badge>
+              <span className="text-xs text-slate-300">{report.viewSize || 'A4'} · {report.mimeType?.includes('pdf') ? 'PDF' : report.mimeType?.includes('image') ? 'Image' : 'Document'}</span>
+              <span className="text-xs text-slate-400">{report.fileSize ? Math.round(report.fileSize / 1024) + ' KB' : ''}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-slate-300">
+                Received: {report.receivedAt ? new Date(report.receivedAt).toLocaleDateString() : 'Not received'}
+              </span>
+              <span className={report.isInMyDocs ? "text-green-400" : "text-sky-300"}>
+                {report.isInMyDocs ? 'In My Docs' : 'Received'}
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Button type="button" size="sm"
+                onClick={() => handleViewPDF(report)}
+                className="bg-purple-600 hover:bg-purple-700 text-white min-w-0"
+                aria-label={`View ${report.title || report.filename}`}
+                data-testid={`button-view-mobile-monthly-report-${report.id}`}>
+                <Eye className="h-4 w-4 mr-2 shrink-0" /> View PDF
+              </Button>
+              <Button type="button" size="sm"
+                onClick={() => sendReportToMyDocs.mutate(report.id)}
+                disabled={sendReportToMyDocs.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-0"
+                aria-label={`Save ${report.title || report.filename} to My Docs`}
+                data-testid={`button-save-mobile-monthly-report-${report.id}`}>
+                <Send className="h-4 w-4 mr-2 shrink-0" /> Save
+              </Button>
+            </div>
+            <button type="button" className="mt-3 text-xs text-red-300 hover:text-red-200 underline"
+              disabled={deleteMonthlyReport.isPending}
+              onClick={() => {
+                if (window.confirm('Delete this monthly report? This cannot be undone.')) {
+                  deleteMonthlyReport.mutate(report.id);
+                }
+              }}
+              data-testid={`button-delete-mobile-monthly-report-${report.id}`}>
+              Delete report
+            </button>
+          </article>
+        ))}
+        <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-lg bg-slate-900/60 text-xs text-slate-300">
+          <span>Total Reports: <strong className="text-white">{monthlyReports.length}</strong></span>
+          <span>In My Docs: <strong className="text-green-400">{monthlyReports.filter(r => r.isInMyDocs).length}</strong></span>
+        </div>
+      </div>
+      {/* Desktop: keep familiar table with horizontal scrolling when needed. */}
+      <div className="hidden md:block min-w-0 bg-slate-800/50 rounded-lg overflow-hidden">
 
         
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1080px]">
             <thead className="bg-slate-700/50">
               <tr>
                 <th className="text-left px-6 py-3 text-sm font-medium text-slate-300">Document</th>
@@ -718,7 +782,7 @@ export default function BranchDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-sm text-green-400">
-                        {report.isInMyDocs ? 'In My Docs' : 'Available'}
+                        {report.isInMyDocs ? 'In My Docs' : 'Received'}
                       </span>
                     </div>
                   </td>
@@ -779,23 +843,6 @@ export default function BranchDashboard() {
         </div>
       </div>
       
-      {/* Grid View Toggle Button */}
-      <div className="mt-4 text-center">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            // Toggle between table and grid view
-            const gridView = document.querySelector('.monthly-reports-grid');
-            const tableView = document.querySelector('.monthly-reports-table');
-            // This would toggle between views if implemented
-          }}
-          className="border-slate-600 text-slate-300 hover:bg-slate-700"
-        >
-          <Grid className="h-4 w-4 mr-2" />
-          Switch to Grid View
-        </Button>
-      </div>
 
     </>
     );
