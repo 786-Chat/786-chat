@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Raja Catering",
+    "slug": "raja-catering",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1120"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rajacatering.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0b1120"
+      },
+      "package": "com.rajacatering.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
