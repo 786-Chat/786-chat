@@ -657,7 +657,7 @@ export default function BranchDashboard() {
     return (
       <>
       {/* Phone/tablet portrait: use real report cards rather than a clipped seven-column table. */}
-      <div className="md:hidden space-y-3" data-testid="monthly-reports-mobile">
+      <div className="lg:hidden space-y-3" data-testid="monthly-reports-mobile">
         {monthlyReports.map((report) => (
           <article key={report.id} className="min-w-0 rounded-xl border border-slate-700 bg-slate-800/80 p-4 shadow-sm">
             <div className="flex items-start gap-3 min-w-0">
@@ -721,7 +721,7 @@ export default function BranchDashboard() {
         </div>
       </div>
       {/* Desktop: keep familiar table with horizontal scrolling when needed. */}
-      <div className="hidden md:block min-w-0 bg-slate-800/50 rounded-lg overflow-hidden">
+      <div className="hidden lg:block min-w-0 bg-slate-800/50 rounded-lg overflow-hidden">
 
         
         <div className="overflow-x-auto">
