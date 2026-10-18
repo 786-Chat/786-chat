@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --deepgreen: #0f3d2e;
+  --cream: #fdf6e3;
+  --gold: #d4af37;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--deepgreen);
+}
