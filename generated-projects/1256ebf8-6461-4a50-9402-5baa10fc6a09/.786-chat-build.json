@@ -1,0 +1,12 @@
+{
+  "projectId": "1256ebf8-6461-4a50-9402-5baa10fc6a09",
+  "buildId": "e40309e3-8ffe-4789-bd97-17d63ce6256a",
+  "title": "Obsidian & Ivory — Private Client Login",
+  "sourceVersion": "ef5b6fc0944422b95306b477d8210f083c8d2378c734e18d1ef9f99cc70438b9",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-02T00:19:00.086Z"
+}
