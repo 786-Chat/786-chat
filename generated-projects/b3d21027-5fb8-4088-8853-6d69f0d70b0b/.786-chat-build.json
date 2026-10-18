@@ -1,0 +1,12 @@
+{
+  "projectId": "b3d21027-5fb8-4088-8853-6d69f0d70b0b",
+  "buildId": "5fd10e43-4067-4dcc-983a-00d3327f54a0",
+  "title": "Bean House Coffee Shop",
+  "sourceVersion": "4d9761bbef09070c742f375b0ee0dfdf160cc382c359272a334cc72cb0270855",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-20T16:49:39.431Z"
+}
