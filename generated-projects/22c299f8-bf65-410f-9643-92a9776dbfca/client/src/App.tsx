@@ -16,6 +16,7 @@ import BranchDemo from "@/pages/BranchDemo";
 import BranchChartPage from "@/pages/BranchChartPage";
 import LogoTest from "@/pages/LogoTest";
 import PDFBuilder from "@/pages/PDFBuilder";
+import CertificateMakerPlatform from "@/pages/CertificateMakerPlatform";
 
 import NotFound from "@/pages/not-found";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -153,6 +154,7 @@ function Router() {
       {/* Admin routes */}
       <Route path="/admin-dashboard" component={AdminDashboard} />
       <Route path="/pdf-builder" component={PDFBuilder} />
+      <Route path="/certificate-maker-platform" component={CertificateMakerPlatform} />
       <Route path="/file-manager" component={FileManager} />
 
       {/* Legacy dashboard aliases */}
