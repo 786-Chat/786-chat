@@ -1,0 +1,12 @@
+{
+  "projectId": "74b7a250-d146-4d0d-ac0c-7d012dc6caed",
+  "buildId": "76b9ef80-f95f-458b-b1b0-2c184a762ada",
+  "title": "Login Page",
+  "sourceVersion": "71de94accd4fafb6d8cdbe7f94db3c5da6c2262ab0f746873fa41c4fda7b5199",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-05T23:45:00.681Z"
+}
