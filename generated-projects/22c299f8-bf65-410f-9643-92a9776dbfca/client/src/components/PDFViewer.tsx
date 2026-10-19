@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -120,7 +120,7 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 pest-pdf-viewer"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Full-screen on mobile, contained on desktop */}
@@ -178,7 +178,7 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto bg-slate-900 flex items-start justify-center p-6">
+        <div className="flex-1 overflow-auto bg-slate-900 flex items-start justify-center p-6 pest-pdf-scroll">
           {loading && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
               <Loader2 className="w-10 h-10 animate-spin" />
@@ -196,7 +196,7 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
 
           {!loading && !error && isPDF && (
             <div className="shadow-2xl" style={{ lineHeight: 0 }}>
-              <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
+              <canvas ref={canvasRef} className="pest-pdf-canvas" style={{ display: 'block', maxWidth: '100%', '--pest-pdf-mobile-width': `calc(${zoom}vw - ${zoom * 0.16}px)` } as CSSProperties} />
             </div>
           )}
 
