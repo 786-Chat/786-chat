@@ -1865,7 +1865,7 @@ export default function BranchDashboard() {
                   </div>
                   <div className="h-8 sm:h-10 lg:h-12 overflow-hidden ticker" data-testid="ticker-branch-name">
                     <div className="ticker-track text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-                      <span>{currentBranch.name}</span>
+                      <span>{currentBranch?.name ?? ""}</span>
                     </div>
                   </div>
                 </div>
