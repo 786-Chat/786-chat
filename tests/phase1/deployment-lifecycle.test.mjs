@@ -38,7 +38,7 @@ test("Deploy panel exposes domains and release history", () => {
   const workspace = read("components/786-chat/workspace.tsx");
   assert.match(workspace, /Deployment history/);
   assert.match(workspace, /Republish existing website/);
-  assert.match(workspace, /window\\.confirm/);
+  assert.match(workspace, /window\.confirm/);
   assert.match(workspace, /Roll back/);
   assert.match(workspace, /Refresh DNS/);
 });
