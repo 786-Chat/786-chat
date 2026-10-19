@@ -58,6 +58,7 @@ import BranchNotificationPanel from "@/components/BranchNotificationPanel";
 import BranchChartPage from "@/pages/BranchChartPage";
 import BranchSmartDevicesPanel from "@/components/BranchSmartDevicesPanel";
 import BranchIotAlertsPanel from "@/components/BranchIotAlertsPanel";
+import { SmartLifeBranchDevices, SmartLifeBranchAlerts, SmartLifeAlarmListener } from "@/components/SmartLifeBranchPanels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -125,6 +126,42 @@ interface MonthlyReport {
 
 export default function BranchDashboard() {
   const [activeSection, setActiveSection] = useState("dashboard");
+
+  // Rule 1: Only this authenticated branch receives its own sidebar settings.
+  // Hiding navigation does not delete events or silence genuine alarms.
+  const { data: branchSidebarVisibility } = useQuery<{ deviceAlerts: boolean; smartDevices: boolean; smartlifeAlert: boolean; smartlifeDevices: boolean }>({
+    queryKey: ["/api/branch/sidebar-visibility"],
+    queryFn: async () => {
+      const response = await fetch("/api/branch/sidebar-visibility", {
+        credentials: "include", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not load branch sidebar settings");
+      return response.json();
+    },
+    retry: 1,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 20000,
+  });
+  const branchDeviceAlertsShown = branchSidebarVisibility?.deviceAlerts !== false;
+  const branchSmartDevicesShown = branchSidebarVisibility?.smartDevices !== false;
+
+  // SmartLife data remains in its own database table.
+  // Read its visibility using the existing proven branch sidebar refresh.
+  const branchSmartLifeAlertShown = branchSidebarVisibility?.smartlifeAlert === true;
+  const branchSmartLifeDevicesShown = branchSidebarVisibility?.smartlifeDevices === true;
+
+
+  useEffect(() => {
+    if ((activeSection === "device-alerts" && !branchDeviceAlertsShown) ||
+        (activeSection === "smart-devices" && !branchSmartDevicesShown) ||
+        (activeSection === "smartlife-alert" && !branchSmartLifeAlertShown) ||
+        (activeSection === "smartlife-devices" && !branchSmartLifeDevicesShown)) {
+      setActiveSection("dashboard");
+    }
+  }, [activeSection, branchDeviceAlertsShown, branchSmartDevicesShown, branchSmartLifeAlertShown, branchSmartLifeDevicesShown]);
+
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [selectedTheme, setSelectedTheme] = useState("blue");
@@ -169,6 +206,7 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     const openSmartDevices = () => {
+      if (!branchSmartDevicesShown) return;
       setActiveSection("smart-devices");
       setSidebarOpen(false);
       void refetchIotDevices();
@@ -179,7 +217,7 @@ export default function BranchDashboard() {
       window.removeEventListener("food-safety-open-smart-devices", openSmartDevices);
       window.removeEventListener("food-safety-iot-alerts-updated", openSmartDevices);
     };
-  }, [refetchIotDevices]);
+  }, [refetchIotDevices, branchSmartDevicesShown]);
 
   // Yearly docs state
   const [showViewer, setShowViewer] = useState(false);
@@ -723,7 +761,7 @@ export default function BranchDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-end space-x-2">
+                    <div className="flex items-center justify-end space-x-2 branch-document-actions">
                       <Button
                         size="sm"
                         onClick={() => deleteMonthlyReport.mutate(report.id)}
@@ -1303,7 +1341,7 @@ export default function BranchDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-end space-x-2">
+                          <div className="flex items-center justify-end space-x-2 branch-document-actions">
                             <Button
                               size="sm"
                               onClick={() => deletePestControlDoc.mutate(doc.id)}
@@ -1528,7 +1566,7 @@ export default function BranchDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-end space-x-2">
+                          <div className="flex items-center justify-end space-x-2 branch-document-actions">
                             <Button
                               size="sm"
                               onClick={() => {
@@ -1675,8 +1713,18 @@ export default function BranchDashboard() {
         { id: "monthly-reports", label: "Monthly Reports", icon: Calendar },
         { id: "yearly-docs", label: "Yearly Docs", icon: Archive },
         { id: "useful-links", label: "Useful Links", icon: LinkIcon },
-        { id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell },
-        { id: "smart-devices", label: "Smart Devices", icon: Shield }
+        ...(branchDeviceAlertsShown
+          ? [{ id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell }]
+          : []),
+        ...(branchSmartDevicesShown
+          ? [{ id: "smart-devices", label: "Smart Devices", icon: Shield }]
+          : []),
+        ...(branchSmartLifeAlertShown
+          ? [{ id: "smartlife-alert", label: "SmartLife Alert", icon: Bell }]
+          : []),
+        ...(branchSmartLifeDevicesShown
+          ? [{ id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }]
+          : [])
       ]
     },
     {
@@ -1866,12 +1914,16 @@ export default function BranchDashboard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => setActiveSection("device-alerts")} variant="outline" className={branchIotAlarms.length ? "border-red-500/50 text-red-200" : "border-slate-600 text-slate-200"}>
-                      <Bell className="mr-2 h-4 w-4" />View Alerts
-                    </Button>
-                    <Button onClick={() => setActiveSection("smart-devices")} className="bg-blue-600 text-white hover:bg-blue-500">
-                      <Shield className="mr-2 h-4 w-4" />Smart Devices
-                    </Button>
+                    {branchDeviceAlertsShown && (
+                      <Button onClick={() => setActiveSection("device-alerts")} variant="outline" className={branchIotAlarms.length ? "border-red-500/50 text-red-200" : "border-slate-600 text-slate-200"}>
+                        <Bell className="mr-2 h-4 w-4" />View Alerts
+                      </Button>
+                    )}
+                    {branchSmartDevicesShown && (
+                      <Button onClick={() => setActiveSection("smart-devices")} className="bg-blue-600 text-white hover:bg-blue-500">
+                        <Shield className="mr-2 h-4 w-4" />Smart Devices
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -2455,10 +2507,20 @@ export default function BranchDashboard() {
         );
 
       case "device-alerts":
-        return <BranchIotAlertsPanel onOpenDevices={() => setActiveSection("smart-devices")} />;
+        return branchDeviceAlertsShown
+          ? <BranchIotAlertsPanel onOpenDevices={() => setActiveSection(branchSmartDevicesShown ? "smart-devices" : "dashboard")} />
+          : <p className="p-5 text-slate-300">This sidebar section is hidden by the administrator.</p>;
 
       case "smart-devices":
-        return <BranchSmartDevicesPanel />;
+        return branchSmartDevicesShown
+          ? <BranchSmartDevicesPanel />
+          : <p className="p-5 text-slate-300">This sidebar section is hidden by the administrator.</p>;
+
+      case "smartlife-alert":
+        return branchSmartLifeAlertShown ? <SmartLifeBranchAlerts branchKey={currentBranch?.id || ""} /> : null;
+
+      case "smartlife-devices":
+        return branchSmartLifeDevicesShown ? <SmartLifeBranchDevices branchKey={currentBranch?.id || ""} branchName={currentBranch?.name || "Restaurant"} /> : null;
 
       case "payments":
         return (
@@ -2973,6 +3035,9 @@ export default function BranchDashboard() {
           {renderMainContent()}
         </div>
       </div>
+
+      {/* Restaurant-only SmartLife alert listener; separate from Food Safety IoT. */}
+      <SmartLifeAlarmListener enabled={branchSmartLifeAlertShown} branchKey={currentBranch?.id || ""} />
 
       {/* Logout Confirmation Dialog */}
       <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
