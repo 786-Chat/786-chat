@@ -123,7 +123,10 @@ export default function BranchSmartDevicesPanel() {
             {devices.map((device: any, index: number) => {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
-              const powerLabel = readableStatus(snap.power) || (device.isOnline ? "Connected" : "Disconnected");
+              const lastReport = device.lastCheckedAt ? new Date(device.lastCheckedAt) : null;
+              const hasValidReport = Boolean(lastReport && !Number.isNaN(lastReport.getTime()));
+              const powerLabel = readableStatus(snap.power) || (device.isOnline ? "Connected" : hasValidReport ? "Not reporting" : "Awaiting first report");
+              const connectionLabel = device.isOnline ? "Connected" : hasValidReport ? "Not reporting" : "Not verified";
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
                   <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
@@ -134,7 +137,7 @@ export default function BranchSmartDevicesPanel() {
                         <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                         {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{device.notes}</p>}
                       </div>
-                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Connected" : "Disconnected"}</Badge>
+                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{connectionLabel}</Badge>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -152,12 +155,12 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.isOnline ? "Connected" : "Disconnected"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{connectionLabel}</span></div>
                       </div>
                     </div>
 
                     <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first check"}
+                      Last report: {hasValidReport ? lastReport!.toLocaleString("en-GB") : "Waiting for first device report"} · Sleep cannot be confirmed online without a report.
                     </div>
                   </div>
                 </div>

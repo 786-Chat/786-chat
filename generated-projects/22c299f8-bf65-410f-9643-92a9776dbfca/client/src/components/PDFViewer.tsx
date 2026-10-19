@@ -2,8 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight, AlertTriangle, Loader2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// Vite root is /client. Bundling the matching worker avoids stale or missing /public worker URLs.
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface PDFViewerProps {
   fileUrl: string;
@@ -41,10 +43,19 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
 
     try {
       const page = await doc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 1.5 * (scale / 100) });
+      // On iPhone, 100% means fit A4 to the available screen width.
+      // Zoom above 100% increases the visible PDF size; the container can scroll.
+      const pageAt100 = page.getViewport({ scale: 1 });
+      const displayWidth = Math.max(260, (canvas.parentElement?.parentElement?.clientWidth || window.innerWidth) - 24);
+      const fitScale = Math.min(1.5, displayWidth / pageAt100.width);
+      const displayScale = fitScale * (scale / 100);
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      const viewport = page.getViewport({ scale: displayScale * pixelRatio });
 
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      canvas.style.width = `${Math.ceil(pageAt100.width * displayScale)}px`;
+      canvas.style.height = `${Math.ceil(pageAt100.height * displayScale)}px`;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -65,6 +76,8 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
   useEffect(() => {
     if (!isPDF) { setLoading(false); return; }
 
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
     setError(null);
     setCurrentPage(1);
@@ -82,24 +95,51 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
       canvas.height = 0;
     }
 
-    const task = pdfjsLib.getDocument({ url: fileUrl, withCredentials: true });
-    loadTaskRef.current = task;
-
-    task.promise.then(doc => {
-      if (loadTaskRef.current !== task) return;
-      pdfDocRef.current = doc;
-      setTotalPages(doc.numPages);
-      setLoading(false);
-      renderPage(doc, 1, zoom);
-    }).catch(err => {
-      if (err?.name === 'AbortException') return;
-      setError('Could not load this PDF.');
-      setLoading(false);
-    });
-
+    // Read the authenticated response first. A 401, 404 or 500 is not a PDF;
+    // passing that response straight into pdf.js hides its actual cause.
+    const loadPdf = async () => {
+      try {
+        const response = await fetch(fileUrl, {
+          credentials: 'include',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 401) throw new Error('Your branch session has expired. Log in again to view this report.');
+          if (response.status === 403) throw new Error('This report is not assigned to your branch. Please contact the administrator.');
+          if (response.status === 404) throw new Error('The original PDF was not found in document storage. The administrator needs to restore or re-upload this report.');
+          throw new Error(`The report server returned HTTP ${response.status}. Please retry or contact the administrator.`);
+        }
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('text/html') || contentType.includes('application/json')) {
+          throw new Error('The server returned a page instead of a PDF. Please check your login and ask the administrator to verify the report.');
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.length < 5 || String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') {
+          throw new Error('The saved report is not a valid PDF. Please ask the administrator to check the original file.');
+        }
+        if (!active) return;
+        const task = pdfjsLib.getDocument({ data: bytes });
+        loadTaskRef.current = task;
+        const doc = await task.promise;
+        if (!active || loadTaskRef.current !== task) { await doc.destroy(); return; }
+        pdfDocRef.current = doc;
+        setTotalPages(doc.numPages);
+        setLoading(false);
+        renderPage(doc, 1, zoom);
+      } catch (err: any) {
+        if (!active || err?.name === 'AbortError' || err?.name === 'AbortException') return;
+        console.error('PDF view failed:', err);
+        setError(err instanceof Error ? err.message : 'Unable to open the PDF.');
+        setLoading(false);
+      }
+    };
+    void loadPdf();
     return () => {
-      if (loadTaskRef.current === task) {
-        task.destroy().catch(() => {});
+      active = false;
+      controller.abort();
+      if (loadTaskRef.current) {
+        loadTaskRef.current.destroy().catch(() => {});
         loadTaskRef.current = null;
       }
     };
@@ -111,6 +151,17 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
     }
   }, [currentPage, zoom, totalPages, renderPage]);
 
+  useEffect(() => {
+    // Re-fit the A4 page when a phone rotates between portrait and landscape.
+    const onResize = () => {
+      if (pdfDocRef.current && totalPages > 0) {
+        void renderPage(pdfDocRef.current, currentPage, zoom);
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [currentPage, zoom, totalPages, renderPage]);
+
   const handleDownload = () => {
     const a = document.createElement('a');
     a.href = fileUrl;
@@ -120,7 +171,7 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Full-screen on mobile, contained on desktop */}
@@ -168,7 +219,7 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
                 <div className="w-px h-5 bg-slate-700 mx-0.5" />
               </>
             )}
-            <Button variant="ghost" size="sm" onClick={handleDownload} className="text-white hover:bg-slate-700 h-9 w-9 p-0">
+            <Button variant="ghost" size="sm" onClick={handleDownload} disabled={loading || !!error} className="text-white hover:bg-slate-700 h-9 w-9 p-0" title="Download document">
               <Download className="w-4 h-4" />
             </Button>
             <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-slate-700 h-9 w-9 p-0">
@@ -178,25 +229,25 @@ export default function PDFViewer({ fileUrl, fileName, fileSize, onClose, title 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto bg-slate-900 flex items-start justify-center p-6">
+        <div className="flex-1 min-w-0 overflow-auto bg-slate-900 p-2 sm:p-6">
           {loading && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center min-h-full gap-3 text-slate-400">
               <Loader2 className="w-10 h-10 animate-spin" />
               <p className="text-sm">Loading document…</p>
             </div>
           )}
 
           {!loading && error && (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-center max-w-xs">
+            <div className="flex flex-col items-center justify-center min-h-full gap-4 text-center max-w-xs mx-auto">
               <AlertTriangle className="w-12 h-12 text-amber-400" />
-              <p className="text-white font-medium">File not available</p>
-              <p className="text-sm text-slate-400">This document could not be found. The file may have been deleted or not uploaded correctly. Please ask your administrator to re-upload it.</p>
+              <p className="text-white font-medium">Unable to open report</p>
+              <p role="alert" className="text-sm text-slate-400">{error}</p>
             </div>
           )}
 
           {!loading && !error && isPDF && (
-            <div className="shadow-2xl" style={{ lineHeight: 0 }}>
-              <canvas ref={canvasRef} style={{ display: 'block', maxWidth: '100%' }} />
+            <div className="shadow-2xl mx-auto w-fit" style={{ lineHeight: 0 }}>
+              <canvas ref={canvasRef} style={{ display: 'block', maxWidth: 'none' }} />
             </div>
           )}
 
