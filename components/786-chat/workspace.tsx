@@ -1729,8 +1729,19 @@ export function SevenEightSixWorkspace() {
                       </div>
                       <div className="ml-auto flex flex-wrap gap-2">
                         <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-[14px] font-bold">Open live <ExternalLink className="h-3.5 w-3.5" /></a>
-                        <button type="button" onClick={() => void redeployVerifiedProject()} disabled={panelBusy || build?.status !== "passed" || visualDirty} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-[14px] font-black text-slate-950 disabled:opacity-40">
-                          {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />} Redeploy current build
+                        <button
+                          type="button"
+                          title="Republish the current verified build to the existing connected domain (redeploy current build)"
+                          onClick={() => {
+                            const domainName = primary?.address_type === "path" ? "the existing project link" : primary?.hostname || "the existing website"
+                            if (window.confirm(`Republish the latest verified preview to ${domainName}? This will replace the currently live website. No new domain or DNS changes will be created. Continue?`)) {
+                              void redeployVerifiedProject()
+                            }
+                          }}
+                          disabled={panelBusy || build?.status !== "passed" || visualDirty}
+                          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-violet-300 px-4 py-2.5 text-[14px] font-black text-slate-950 disabled:opacity-40"
+                        >
+                          {panelBusy && deploymentActionVersion === null ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />} Republish existing website
                         </button>
                       </div>
                     </div>
