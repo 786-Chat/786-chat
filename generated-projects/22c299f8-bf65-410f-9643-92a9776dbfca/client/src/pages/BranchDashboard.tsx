@@ -58,6 +58,7 @@ import BranchNotificationPanel from "@/components/BranchNotificationPanel";
 import BranchChartPage from "@/pages/BranchChartPage";
 import BranchSmartDevicesPanel from "@/components/BranchSmartDevicesPanel";
 import BranchIotAlertsPanel from "@/components/BranchIotAlertsPanel";
+import { SmartLifeBranchDevices, SmartLifeBranchAlerts, SmartLifeAlarmListener } from "@/components/SmartLifeBranchPanels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -125,6 +126,42 @@ interface MonthlyReport {
 
 export default function BranchDashboard() {
   const [activeSection, setActiveSection] = useState("dashboard");
+
+  // Rule 1: Only this authenticated branch receives its own sidebar settings.
+  // Hiding navigation does not delete events or silence genuine alarms.
+  const { data: branchSidebarVisibility } = useQuery<{ deviceAlerts: boolean; smartDevices: boolean; smartlifeAlert: boolean; smartlifeDevices: boolean }>({
+    queryKey: ["/api/branch/sidebar-visibility"],
+    queryFn: async () => {
+      const response = await fetch("/api/branch/sidebar-visibility", {
+        credentials: "include", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not load branch sidebar settings");
+      return response.json();
+    },
+    retry: 1,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 20000,
+  });
+  const branchDeviceAlertsShown = branchSidebarVisibility?.deviceAlerts !== false;
+  const branchSmartDevicesShown = branchSidebarVisibility?.smartDevices !== false;
+
+  // SmartLife data remains in its own database table.
+  // Read its visibility using the existing proven branch sidebar refresh.
+  const branchSmartLifeAlertShown = branchSidebarVisibility?.smartlifeAlert === true;
+  const branchSmartLifeDevicesShown = branchSidebarVisibility?.smartlifeDevices === true;
+
+
+  useEffect(() => {
+    if ((activeSection === "device-alerts" && !branchDeviceAlertsShown) ||
+        (activeSection === "smart-devices" && !branchSmartDevicesShown) ||
+        (activeSection === "smartlife-alert" && !branchSmartLifeAlertShown) ||
+        (activeSection === "smartlife-devices" && !branchSmartLifeDevicesShown)) {
+      setActiveSection("dashboard");
+    }
+  }, [activeSection, branchDeviceAlertsShown, branchSmartDevicesShown, branchSmartLifeAlertShown, branchSmartLifeDevicesShown]);
+
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [selectedTheme, setSelectedTheme] = useState("blue");
@@ -169,6 +206,7 @@ export default function BranchDashboard() {
 
   useEffect(() => {
     const openSmartDevices = () => {
+      if (!branchSmartDevicesShown) return;
       setActiveSection("smart-devices");
       setSidebarOpen(false);
       void refetchIotDevices();
@@ -179,7 +217,7 @@ export default function BranchDashboard() {
       window.removeEventListener("food-safety-open-smart-devices", openSmartDevices);
       window.removeEventListener("food-safety-iot-alerts-updated", openSmartDevices);
     };
-  }, [refetchIotDevices]);
+  }, [refetchIotDevices, branchSmartDevicesShown]);
 
   // Yearly docs state
   const [showViewer, setShowViewer] = useState(false);
@@ -656,12 +694,76 @@ export default function BranchDashboard() {
 
     return (
       <>
-      {/* Full Table Layout */}
-      <div className="bg-slate-800/50 rounded-lg overflow-hidden">
+      {/* Phone/tablet portrait: use real report cards rather than a clipped seven-column table. */}
+      <div className="lg:hidden space-y-3" data-testid="monthly-reports-mobile">
+        {monthlyReports.map((report) => (
+          <article key={report.id} className="min-w-0 rounded-xl border border-slate-700 bg-slate-800/80 p-4 shadow-sm">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="h-10 w-10 shrink-0 rounded-lg bg-purple-600/80 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-white break-words">{report.title || report.filename}</h3>
+                <p className="mt-1 text-xs text-slate-400 break-all">{report.filename}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Badge className="bg-purple-600/20 text-purple-200 border-purple-500/30 whitespace-normal">
+                {report.reportType === 'inspection-report' ? 'Inspection' :
+                 report.reportType === 'coshh-risk-assessment' ? 'COSHH Risk' :
+                 report.reportType === 'monthly-summary' ? 'Monthly Summary' : report.reportType || 'Report'}
+              </Badge>
+              <span className="text-xs text-slate-300">{report.viewSize || 'A4'} · {report.mimeType?.includes('pdf') ? 'PDF' : report.mimeType?.includes('image') ? 'Image' : 'Document'}</span>
+              <span className="text-xs text-slate-400">{report.fileSize ? Math.round(report.fileSize / 1024) + ' KB' : ''}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-slate-300">
+                Received: {report.receivedAt ? new Date(report.receivedAt).toLocaleDateString() : 'Not received'}
+              </span>
+              <span className={report.isInMyDocs ? "text-green-400" : "text-sky-300"}>
+                {report.isInMyDocs ? 'In My Docs' : 'Received'}
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Button type="button" size="sm"
+                onClick={() => handleViewPDF(report)}
+                className="bg-purple-600 hover:bg-purple-700 text-white min-w-0"
+                aria-label={`View ${report.title || report.filename}`}
+                data-testid={`button-view-mobile-monthly-report-${report.id}`}>
+                <Eye className="h-4 w-4 mr-2 shrink-0" /> View PDF
+              </Button>
+              <Button type="button" size="sm"
+                onClick={() => sendReportToMyDocs.mutate(report.id)}
+                disabled={sendReportToMyDocs.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-0"
+                aria-label={`Save ${report.title || report.filename} to My Docs`}
+                data-testid={`button-save-mobile-monthly-report-${report.id}`}>
+                <Send className="h-4 w-4 mr-2 shrink-0" /> Save
+              </Button>
+            </div>
+            <button type="button" className="mt-3 text-xs text-red-300 hover:text-red-200 underline"
+              disabled={deleteMonthlyReport.isPending}
+              onClick={() => {
+                if (window.confirm('Delete this monthly report? This cannot be undone.')) {
+                  deleteMonthlyReport.mutate(report.id);
+                }
+              }}
+              data-testid={`button-delete-mobile-monthly-report-${report.id}`}>
+              Delete report
+            </button>
+          </article>
+        ))}
+        <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-lg bg-slate-900/60 text-xs text-slate-300">
+          <span>Total Reports: <strong className="text-white">{monthlyReports.length}</strong></span>
+          <span>In My Docs: <strong className="text-green-400">{monthlyReports.filter(r => r.isInMyDocs).length}</strong></span>
+        </div>
+      </div>
+      {/* Desktop: keep familiar table with horizontal scrolling when needed. */}
+      <div className="hidden lg:block min-w-0 bg-slate-800/50 rounded-lg overflow-hidden">
 
         
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1080px]">
             <thead className="bg-slate-700/50">
               <tr>
                 <th className="text-left px-6 py-3 text-sm font-medium text-slate-300">Document</th>
@@ -718,7 +820,7 @@ export default function BranchDashboard() {
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="text-sm text-green-400">
-                        {report.isInMyDocs ? 'In My Docs' : 'Available'}
+                        {report.isInMyDocs ? 'In My Docs' : 'Received'}
                       </span>
                     </div>
                   </td>
@@ -779,23 +881,6 @@ export default function BranchDashboard() {
         </div>
       </div>
       
-      {/* Grid View Toggle Button */}
-      <div className="mt-4 text-center">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            // Toggle between table and grid view
-            const gridView = document.querySelector('.monthly-reports-grid');
-            const tableView = document.querySelector('.monthly-reports-table');
-            // This would toggle between views if implemented
-          }}
-          className="border-slate-600 text-slate-300 hover:bg-slate-700"
-        >
-          <Grid className="h-4 w-4 mr-2" />
-          Switch to Grid View
-        </Button>
-      </div>
 
     </>
     );
@@ -1675,8 +1760,18 @@ export default function BranchDashboard() {
         { id: "monthly-reports", label: "Monthly Reports", icon: Calendar },
         { id: "yearly-docs", label: "Yearly Docs", icon: Archive },
         { id: "useful-links", label: "Useful Links", icon: LinkIcon },
-        { id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell },
-        { id: "smart-devices", label: "Smart Devices", icon: Shield }
+        ...(branchDeviceAlertsShown
+          ? [{ id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell }]
+          : []),
+        ...(branchSmartDevicesShown
+          ? [{ id: "smart-devices", label: "Smart Devices", icon: Shield }]
+          : []),
+        ...(branchSmartLifeAlertShown
+          ? [{ id: "smartlife-alert", label: "SmartLife Alert", icon: Bell }]
+          : []),
+        ...(branchSmartLifeDevicesShown
+          ? [{ id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }]
+          : [])
       ]
     },
     {
@@ -1866,12 +1961,16 @@ export default function BranchDashboard() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={() => setActiveSection("device-alerts")} variant="outline" className={branchIotAlarms.length ? "border-red-500/50 text-red-200" : "border-slate-600 text-slate-200"}>
-                      <Bell className="mr-2 h-4 w-4" />View Alerts
-                    </Button>
-                    <Button onClick={() => setActiveSection("smart-devices")} className="bg-blue-600 text-white hover:bg-blue-500">
-                      <Shield className="mr-2 h-4 w-4" />Smart Devices
-                    </Button>
+                    {branchDeviceAlertsShown && (
+                      <Button onClick={() => setActiveSection("device-alerts")} variant="outline" className={branchIotAlarms.length ? "border-red-500/50 text-red-200" : "border-slate-600 text-slate-200"}>
+                        <Bell className="mr-2 h-4 w-4" />View Alerts
+                      </Button>
+                    )}
+                    {branchSmartDevicesShown && (
+                      <Button onClick={() => setActiveSection("smart-devices")} className="bg-blue-600 text-white hover:bg-blue-500">
+                        <Shield className="mr-2 h-4 w-4" />Smart Devices
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -2455,10 +2554,20 @@ export default function BranchDashboard() {
         );
 
       case "device-alerts":
-        return <BranchIotAlertsPanel onOpenDevices={() => setActiveSection("smart-devices")} />;
+        return branchDeviceAlertsShown
+          ? <BranchIotAlertsPanel onOpenDevices={() => setActiveSection(branchSmartDevicesShown ? "smart-devices" : "dashboard")} />
+          : <p className="p-5 text-slate-300">This sidebar section is hidden by the administrator.</p>;
 
       case "smart-devices":
-        return <BranchSmartDevicesPanel />;
+        return branchSmartDevicesShown
+          ? <BranchSmartDevicesPanel />
+          : <p className="p-5 text-slate-300">This sidebar section is hidden by the administrator.</p>;
+
+      case "smartlife-alert":
+        return branchSmartLifeAlertShown ? <SmartLifeBranchAlerts branchKey={currentBranch?.id || ""} /> : null;
+
+      case "smartlife-devices":
+        return branchSmartLifeDevicesShown ? <SmartLifeBranchDevices branchKey={currentBranch?.id || ""} branchName={currentBranch?.name || "Restaurant"} /> : null;
 
       case "payments":
         return (
@@ -2973,6 +3082,9 @@ export default function BranchDashboard() {
           {renderMainContent()}
         </div>
       </div>
+
+      {/* Restaurant-only SmartLife alert listener; separate from Food Safety IoT. */}
+      <SmartLifeAlarmListener enabled={branchSmartLifeAlertShown} branchKey={currentBranch?.id || ""} />
 
       {/* Logout Confirmation Dialog */}
       <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
