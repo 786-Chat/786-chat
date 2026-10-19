@@ -313,9 +313,34 @@ export default function BranchDashboard() {
   };
 
   // Get current branch data
-  const { data: currentBranch, isLoading: branchLoading } = useQuery<Branch>({
+  const { data: currentBranch, isLoading: branchLoading, isFetching: branchRefreshing, error: branchError, refetch: refetchBranch } = useQuery<Branch, Error & { status?: number }>({
     queryKey: ["/api/branch/current"],
+    queryFn: async () => {
+      const response = await fetch("/api/branch/current", { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const error = new Error("Unable to verify branch session") as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+      const branch = await response.json();
+      if (!branch?.id || typeof branch.name !== "string" || !branch.name.trim()) {
+        throw new Error("Branch profile is incomplete");
+      }
+      return branch as Branch;
+    },
+    retry: false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  const branchSessionInvalid = Boolean(branchError && [401, 403, 404].includes(branchError.status ?? 0));
+  useEffect(() => {
+    if (branchSessionInvalid) {
+      window.location.replace("/branch-login");
+    }
+  }, [branchSessionInvalid]);
 
   // Get branch statistics
   const { data: stats } = useQuery<BranchStats>({
@@ -398,6 +423,7 @@ export default function BranchDashboard() {
     try {
       await fetch("/api/branch/logout", { method: "POST", credentials: "include" });
     } catch (_) {}
+    queryClient.clear(); // Prevent cached data from a previous branch appearing after logout.
     window.location.href = "/branch-login";
   };
 
@@ -1750,34 +1776,28 @@ export default function BranchDashboard() {
     }
   ];
 
+  // Only display verified figures. The server's tasksCount is still static,
+  // and no calculated compliance percentage is available yet.
   const statsCards = [
     {
       title: "Your Rating",
-      value: `${currentBranch?.starRating || 5}/5`,
-      change: "+0.5",
-      color: "from-purple-600 to-purple-700",
-      positive: true
+      value: currentBranch?.starRating != null ? `${currentBranch.starRating}/5` : "Not rated",
+      color: "from-purple-600 to-purple-700"
     },
     {
       title: "Documents",
-      value: stats?.documentsCount || 0,
-      change: "+3",
-      color: "from-purple-800 to-purple-900",
-      positive: true
+      value: typeof stats?.documentsCount === "number" ? stats.documentsCount : "—",
+      color: "from-purple-800 to-purple-900"
     },
     {
       title: "Compliance",
-      value: "92%",
-      change: "+5%",
-      color: "from-blue-600 to-blue-700",
-      positive: true
+      value: "Not tracked",
+      color: "from-blue-600 to-blue-700"
     },
     {
       title: "Pending Tasks",
-      value: "4",
-      change: "-2",
-      color: "from-purple-700 to-purple-800",
-      positive: false
+      value: "Not tracked",
+      color: "from-purple-700 to-purple-800"
     }
   ];
 
@@ -1826,15 +1846,17 @@ export default function BranchDashboard() {
                   <div className="flex items-center gap-3">
                     <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">Pest Control Dashboard</h1>
                     <div className="flex items-center">
-                      {currentBranch?.starRating === 0 ? (
+                      {currentBranch?.starRating == null ? (
+                        <span className="text-slate-300 text-sm">Not rated</span>
+                      ) : currentBranch.starRating === 0 ? (
                         <span className="text-red-400 text-2xl sm:text-3xl lg:text-4xl font-bold">0★</span>
                       ) : (
                         <div className={`flex ${
-                          (currentBranch?.starRating || 5) >= 4 ? 'text-green-400' : 
-                          (currentBranch?.starRating || 5) === 3 ? 'text-yellow-500' :
+                          currentBranch.starRating >= 4 ? 'text-green-400' :
+                          currentBranch.starRating === 3 ? 'text-yellow-500' :
                           'text-amber-500'
                         }`}>
-                          {[...Array(currentBranch?.starRating || 5)].map((_, i) => (
+                          {[...Array(Math.min(5, Math.max(0, Math.floor(currentBranch.starRating))))].map((_, i) => (
                             <span key={i} className="text-2xl sm:text-3xl lg:text-4xl">★</span>
                           ))}
                         </div>
@@ -1843,7 +1865,7 @@ export default function BranchDashboard() {
                   </div>
                   <div className="h-8 sm:h-10 lg:h-12 overflow-hidden ticker" data-testid="ticker-branch-name">
                     <div className="ticker-track text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-                      <span>{currentBranch?.name || "Amigos Burgers & Shakes"}</span>
+                      <span>{currentBranch.name}</span>
                     </div>
                   </div>
                 </div>
@@ -1876,13 +1898,6 @@ export default function BranchDashboard() {
                             {stat.value}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex-shrink-0">
-                        <span className={`text-xs sm:text-sm font-medium ${
-                          stat.positive ? 'text-green-300' : 'text-red-300'
-                        }`}>
-                          {stat.change}
-                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -2834,13 +2849,33 @@ export default function BranchDashboard() {
     }
   };
 
-  if (branchLoading) {
+  if (branchLoading || branchRefreshing) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-400 text-sm">Loading dashboard…</p>
+          <p className="text-slate-400 text-sm">Verifying branch login…</p>
         </div>
+      </div>
+    );
+  }
+
+  // Never render customer information unless the current branch was verified.
+  if (branchSessionInvalid) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center gap-4 p-6">
+        <p>Session expired. Redirecting to Branch Login…</p>
+        <a href="/branch-login" className="text-blue-300 underline">Go to Branch Login</a>
+      </div>
+    );
+  }
+
+  if (!currentBranch || branchError) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center gap-4 p-6">
+        <p>Unable to load your branch details. No customer data is being displayed.</p>
+        <Button onClick={() => void refetchBranch()}>Try again</Button>
+        <a href="/branch-login" className="text-blue-300 underline">Branch Login</a>
       </div>
     );
   }
@@ -2978,7 +3013,7 @@ export default function BranchDashboard() {
               {/* Branch Info */}
               <div className="flex-1 min-w-0">
                 <h2 className="text-white font-bold text-xs truncate">
-                  {branchProfile?.name || 'Amigos Burgers & Shakes'}
+                  {currentBranch.name}
                 </h2>
                 <p className="text-slate-400 text-xs truncate">
                   {branchProfile?.address || 'Dashboard'}
