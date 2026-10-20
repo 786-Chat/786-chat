@@ -177,16 +177,28 @@ export class ObjectStorageService {
           res.sendStatus(404);
           return;
         }
+        // Full authenticated PDF response with a known length for Safari.
+        // No public caching of private customer documents.
         res.set({
           "Content-Type": result.blob.contentType || "application/octet-stream",
-          "Cache-Control": `private, max-age=${cacheTtlSec}`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Accept-Ranges": "none",
         });
+        if (Number.isFinite(result.blob.size) && result.blob.size > 0) {
+          res.setHeader("Content-Length", String(result.blob.size));
+        }
         const { Readable } = await import("node:stream");
-        Readable.fromWeb(result.stream as any).pipe(res);
+        const { pipeline } = await import("node:stream/promises");
+        await pipeline(Readable.fromWeb(result.stream as any), res);
         return;
       } catch (error) {
         console.error("Error serving Vercel Blob:", error);
-        if (!res.headersSent) res.status(500).json({ error: "Error streaming file" });
+        if (!res.headersSent) {
+          res.status(503).json({ error: "Document temporarily unavailable. Please try again." });
+        } else if (!res.destroyed) {
+          res.destroy(error as Error);
+        }
         return;
       }
     }
