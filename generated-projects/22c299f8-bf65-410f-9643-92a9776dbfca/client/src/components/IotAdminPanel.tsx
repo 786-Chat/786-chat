@@ -44,6 +44,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -378,6 +382,53 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({

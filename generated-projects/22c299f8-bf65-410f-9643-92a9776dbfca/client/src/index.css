@@ -1285,3 +1285,40 @@ button, [role="button"], a, input[type="checkbox"], input[type="radio"], select 
   #root button, #root label, #root p, #root span:not(.ticker-track), #root h1, #root h2, #root h3, #root h4 { overflow-wrap: anywhere; }
   #root img, #root video, #root svg { max-width: 100%; }
 }
+
+/* Pest Control branch document table actions: keep icons visible on tablet/mobile.
+   Desktop design and all document actions remain unchanged. */
+@media (max-width: 1023px) {
+  #root .branch-document-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  #root .branch-document-actions > button > svg {
+    display: block;
+    flex: 0 0 16px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    height: 16px;
+    min-height: 16px;
+  }
+}
+
+/* Mobile PDF: A4 fits screen width; two-finger pinch is handled by PDFViewer. */
+#root .pest-pdf-viewer .pest-pdf-scroll {
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+}
+#root .pest-pdf-viewer .pest-pdf-canvas { max-width: none !important; }
+@media (max-width: 639px) {
+  #root .pest-pdf-viewer .pest-pdf-scroll { padding: 8px; }
+}
