@@ -23,11 +23,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
       - name: Install dependencies
-        run: |
-          npm install --global npm@11
-          npm install --ignore-scripts
+        run: npm install --ignore-scripts
       - name: Phase 1 A
         run: node --test tests/phase1/account-security.test.mjs tests/phase1/admin-preview-storage.test.mjs tests/phase1/build-repair-loop.test.mjs tests/phase1/business-software-generation.test.mjs tests/phase1/canonical-workspace-actions.test.mjs tests/phase1/compiled-preview-contract.test.mjs tests/phase1/deployment-domains.test.mjs tests/phase1/deployment-lifecycle.test.mjs tests/phase1/generation-pipeline.test.mjs
       - name: Phase 1 B
