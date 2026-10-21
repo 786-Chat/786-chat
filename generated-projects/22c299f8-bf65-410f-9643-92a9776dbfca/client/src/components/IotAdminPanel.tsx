@@ -448,11 +448,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        toast({ title: "Could not unassign device", description: data?.message || "Please try again", variant: "destructive" });
+        toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
         return;
       }
       setPendingRemoveDeviceId("");
-      toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
+      toast({ title: "Device removed from active list", description: `${name} has been archived. Historical records are preserved.` });
       await loadBase();
     } finally {
       setRemovingDeviceId("");
@@ -1169,7 +1169,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {advancedDeviceId === String(device.id) && (pendingRemoveDeviceId === String(device.id) ? (
+                    {pendingRemoveDeviceId === String(device.id) && <p className="w-full text-xs text-amber-200">Remove {String(device.deviceName || device.deviceId)} ({String(device.deviceId)}) from {String(device.branchName || "Unassigned branch")}? This archives its registration; reports and history remain saved.</p>}
+                    {pendingRemoveDeviceId === String(device.id) ? (
                       <>
                         <Button
                           size="sm"
@@ -1178,7 +1179,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                           className="bg-red-600 text-white hover:bg-red-500"
                         >
                           <Trash2 className="mr-1 h-3 w-3" />
-                          {removingDeviceId === String(device.id) ? "Unassigning..." : "Confirm Unassign"}
+                          {removingDeviceId === String(device.id) ? "Removing..." : "Confirm Remove"}
                         </Button>
                         <Button
                           size="sm"
@@ -1198,9 +1199,9 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                         className="border-red-700/60 text-red-300"
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
-                        Unassign Device
+                        Delete Device
                       </Button>
-                    ))}
+                    )}
                   </div>
                 </div>
               );
