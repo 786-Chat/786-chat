@@ -155,8 +155,6 @@ import { Label } from "@/components/ui/label";
 import UsefulLinksSection from "@/components/UsefulLinksSection";
 import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
-import IotAdminPanel from "@/components/IotAdminPanel";
-import DeviceCheckPanel from "@/components/DeviceCheckPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
