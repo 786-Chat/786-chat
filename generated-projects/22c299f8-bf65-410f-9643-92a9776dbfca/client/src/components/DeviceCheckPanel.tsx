@@ -56,7 +56,6 @@ export default function DeviceCheckPanel() {
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [busy, setBusy] = useState("");
-  const [refreshStatus, setRefreshStatus] = useState("");
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
@@ -83,33 +82,6 @@ export default function DeviceCheckPanel() {
     }
   };
 
-
-  const refreshReports = async () => {
-    if (busy === "refresh") return;
-    setBusy("refresh");
-    setRefreshStatus("Checking latest HP2 reports...");
-    try {
-      const response = await fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message || "Device Check request failed (HTTP " + response.status + ")");
-      }
-      const data = await response.json();
-      if (!Array.isArray(data)) throw new Error("Unexpected Device Check response.");
-      setRows(data);
-      setRefreshStatus("Loaded " + data.length + " HP2 record(s), including " + data.filter((row: DeviceCheckRow) => row.hardwareKey?.startsWith("wifi-ap:")).length + " Wi-Fi AP sighting(s).");
-      await Promise.allSettled([
-        fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d)) setRegistered(d); } }),
-        fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d?.branches)) setBranches(d.branches); } }),
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not load HP2 reports.";
-      setRefreshStatus("Refresh failed: " + message);
-      toast({ title: "HP2 reports could not load", description: message, variant: "destructive" });
-    } finally {
-      setBusy("");
-    }
-  };
 
   // An admin-entered HP2 scan is a historic Wi-Fi sighting, never MQTT telemetry.
   const recordWifiObservation = async () => {
@@ -166,6 +138,29 @@ export default function DeviceCheckPanel() {
       ...current,
       [id]: { ...(current[id] || emptyDraft()), ...patch },
     }));
+  };
+
+  const registerPendingFromWifi = async (row: { id: string }) => {
+    const draft = drafts[row.id] || emptyDraft();
+    const deviceId = draft.deviceId.trim().toUpperCase();
+    if (!deviceId || !draft.deviceName.trim() || !draft.branchId || !draft.notes.trim()) return;
+    if (registered.some((device) => device.deviceId.toUpperCase() === deviceId)) {
+      toast({ title: "Already registered", description: "Use Smart Devices → Edit / Reassign for an existing device.", variant: "destructive" });
+      return;
+    }
+    setBusy("pending:" + row.id);
+    try {
+      const response = await fetch("/api/iot/devices", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ deviceId, deviceName: draft.deviceName.trim(), branchId: draft.branchId, notes: draft.notes.trim(), hardwareModel: "BK7231N-MOUSE-V1" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { toast({ title: "Could not save", description: data?.message || "Registration failed", variant: "destructive" }); return; }
+      toast({ title: "Pending device saved", description: "Customer and location saved. Wi-Fi observation is NOT linked as live MQTT telemetry." });
+      setDrafts((current) => ({ ...current, [row.id]: emptyDraft() }));
+      await load();
+    } catch { toast({ title: "Network error", description: "Could not save registration.", variant: "destructive" }); }
+    finally { setBusy(""); }
   };
 
   const linkExisting = async (row: DeviceCheckRow) => {
@@ -258,6 +253,8 @@ export default function DeviceCheckPanel() {
     }
   };
 
+  const manualDraft = drafts["manual-registration"] || emptyDraft();
+
   return (
     <div className="space-y-5 w-full max-w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -270,13 +267,13 @@ export default function DeviceCheckPanel() {
             <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
           </div>
         </div>
-        <Button type="button" onClick={refreshReports} disabled={busy === "refresh"} className="bg-slate-800 text-white hover:bg-slate-700">
+        <Button type="button" onClick={() => load().catch(() => {})} className="bg-slate-800 text-white hover:bg-slate-700">
           <RefreshCw className="mr-2 h-4 w-4" />
           Check latest HP2 reports
         </Button>
       </div>
 
-      {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}\n      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
+      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 text-cyan-300" />
           <div>
@@ -331,6 +328,23 @@ export default function DeviceCheckPanel() {
           className="mt-3 bg-amber-600 text-white hover:bg-amber-500">
           <Wifi className="mr-2 h-4 w-4" />
           {busy === "wifi-observation" ? "Recording..." : "Save HP2 Wi-Fi sighting (not MQTT)"}
+        </Button>
+      </div>
+
+      <div className="rounded-2xl border border-blue-500/25 bg-slate-800/70 p-5 space-y-3">
+        <h3 className="font-semibold text-white">Register New Device — Pending Activation</h3>
+        <p className="text-sm text-slate-300">Save a new device ID, customer and installation area even when no Wi-Fi is detected. This does not provision firmware or establish live MQTT. Mouse #7 is already registered to Addis Restaurant; edit it in Smart Devices instead of registering it again.</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Input aria-label="New device ID" placeholder="New unique ID, e.g. FS-MOUSE-000004" value={manualDraft.deviceId} onChange={(e) => setDraft("manual-registration", { deviceId: e.target.value.toUpperCase() })} className="border-slate-600 bg-slate-950 text-white" />
+          <Input aria-label="Device name" placeholder="Device name, e.g. Mouse 8" value={manualDraft.deviceName} onChange={(e) => setDraft("manual-registration", { deviceName: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
+          <select aria-label="Customer branch" value={manualDraft.branchId} onChange={(e) => setDraft("manual-registration", { branchId: e.target.value })} className="h-10 w-full rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white">
+            <option value="">Select customer branch...</option>
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+          <Input aria-label="Installation area" placeholder="Installation area, e.g. Kitchen / Back Door" value={manualDraft.notes} onChange={(e) => setDraft("manual-registration", { notes: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
+        </div>
+        <Button type="button" onClick={() => registerPendingFromWifi({ id: "manual-registration" })} disabled={busy === "pending:manual-registration" || !manualDraft.deviceId.trim() || !manualDraft.deviceName.trim() || !manualDraft.branchId || !manualDraft.notes.trim()} className="bg-blue-600 text-white hover:bg-blue-500">
+          {busy === "pending:manual-registration" ? "Saving..." : "Save pending registration (not live)"}
         </Button>
       </div>
 
@@ -400,11 +414,28 @@ export default function DeviceCheckPanel() {
                 )}
 
                 {wifiOnly ? (
+                  <>
                   <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
                     Wi-Fi access point detected, but no MQTT device identity or trap events have been verified.
-                    To protect existing shop assignments, this observation cannot be linked or assigned until physical MQTT identity is established.
+                    You can create a separate pending customer device record below. This Wi-Fi sighting is NOT automatically linked to MQTT or marked live.
                     When green pairing flashing times out, the last recorded signal remains visible as historic information.
                   </div>
+                  <div className="mt-3 space-y-3 rounded-xl border border-slate-600 bg-slate-900/60 p-4">
+                    <h4 className="font-semibold text-white">Register new customer device (pending activation)</h4>
+                    <p className="text-xs text-slate-300">This records the branch and location only. It does not link the SmartLife MAC, configure firmware or enable MQTT alarms. Use Smart Devices to edit an already registered ID.</p>
+                    <p className="text-xs text-slate-400">Observed Wi-Fi MAC: {row.macAddress || "Not recorded"}</p>
+                    <Input aria-label="New device ID" placeholder="New unique ID, e.g. FS-MOUSE-000004" value={draft.deviceId} onChange={(e) => setDraft(row.id, { deviceId: e.target.value.toUpperCase() })} className="border-slate-600 bg-slate-950 text-white" />
+                    <Input aria-label="Device name" placeholder="Device name, e.g. Mouse 8" value={draft.deviceName} onChange={(e) => setDraft(row.id, { deviceName: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
+                    <select aria-label="Customer branch" value={draft.branchId} onChange={(e) => setDraft(row.id, { branchId: e.target.value })} className="h-10 w-full rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white">
+                      <option value="">Select customer branch...</option>
+                      {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                    </select>
+                    <Input aria-label="Installation area" placeholder="Installation area, e.g. Kitchen / Back Door" value={draft.notes} onChange={(e) => setDraft(row.id, { notes: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
+                    <Button type="button" onClick={() => registerPendingFromWifi(row)} disabled={busy === "pending:" + row.id || !draft.deviceId.trim() || !draft.deviceName.trim() || !draft.branchId || !draft.notes.trim()} className="bg-blue-600 text-white hover:bg-blue-500">
+                      {busy === "pending:" + row.id ? "Saving..." : "Save as pending (not live)"}
+                    </Button>
+                  </div>
+                  </>
                 ) : row.assignedDeviceId ? (
                   <div className="mt-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4">
                     <div className="flex items-start gap-2">
