@@ -44,6 +44,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -378,6 +382,53 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -448,11 +499,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
+        toast({ title: "Could not unassign device", description: data?.message || "Please try again", variant: "destructive" });
         return;
       }
       setPendingRemoveDeviceId("");
-      toast({ title: "Device removed from active list", description: `${name} has been archived. Historical records are preserved.` });
+      toast({ title: "Device unassigned", description: `${name} is now available to assign to another shop.` });
       await loadBase();
     } finally {
       setRemovingDeviceId("");
@@ -1169,8 +1220,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {pendingRemoveDeviceId === String(device.id) && <p className="w-full text-xs text-amber-200">Remove {String(device.deviceName || device.deviceId)} ({String(device.deviceId)}) from {String(device.branchName || "Unassigned branch")}? This archives its registration; reports and history remain saved.</p>}
-                    {pendingRemoveDeviceId === String(device.id) ? (
+                    {advancedDeviceId === String(device.id) && (pendingRemoveDeviceId === String(device.id) ? (
                       <>
                         <Button
                           size="sm"
@@ -1179,7 +1229,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                           className="bg-red-600 text-white hover:bg-red-500"
                         >
                           <Trash2 className="mr-1 h-3 w-3" />
-                          {removingDeviceId === String(device.id) ? "Removing..." : "Confirm Remove"}
+                          {removingDeviceId === String(device.id) ? "Unassigning..." : "Confirm Unassign"}
                         </Button>
                         <Button
                           size="sm"
@@ -1199,9 +1249,9 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                         className="border-red-700/60 text-red-300"
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
-                        Delete Device
+                        Unassign Device
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
               );
