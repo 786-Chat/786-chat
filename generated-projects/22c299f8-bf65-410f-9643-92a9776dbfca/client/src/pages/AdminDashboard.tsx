@@ -2364,8 +2364,6 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
-      { id: "device-check", label: "Device Check", icon: Radar },
-      { id: "iot-cloud", label: "Smart Devices", icon: Zap }
     ]},
     
     // ACCOUNT
@@ -3971,10 +3969,8 @@ export default function AdminDashboard() {
             )}
 
             {/* Physical device identification before branch assignment */}
-            {activeTab === "device-check" && <DeviceCheckPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
