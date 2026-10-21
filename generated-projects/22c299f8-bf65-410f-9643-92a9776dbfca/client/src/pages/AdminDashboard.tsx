@@ -95,6 +95,7 @@ import {
   ExternalLink,
   RefreshCw,
   Radar,
+  Wifi,
   PlayCircle,
   PauseCircle,
   StopCircle,
@@ -157,6 +158,7 @@ import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
 import IotAdminPanel from "@/components/IotAdminPanel";
 import DeviceCheckPanel from "@/components/DeviceCheckPanel";
+import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
@@ -407,6 +409,92 @@ export default function AdminDashboard() {
   // States
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showNotificationSidebar, setShowNotificationSidebar] = useState(false);
+
+  // Rule 1: Admin-only per-branch visibility controls, independent for both sections.
+  const [visibilityPopupKey, setVisibilityPopupKey] = useState<"device-alerts" | "smart-devices" | "smartlife-alert" | "smartlife-devices" | null>(null);
+  const [visibilityBranches, setVisibilityBranches] = useState<{ id: string; name: string }[]>([]);
+  const [visibilityBranchSearch, setVisibilityBranchSearch] = useState("");
+  const [visibilitySelectedBranchId, setVisibilitySelectedBranchId] = useState("");
+  const [visibilityValue, setVisibilityValue] = useState<boolean | null>(null);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityError, setVisibilityError] = useState("");
+  const visibilityLookupNumber = useRef(0);
+
+  const openVisibilityPopup = async (adminSectionId: string) => {
+    const sectionKey = adminSectionId === "device-check" ? "device-alerts" : adminSectionId === "iot-cloud" ? "smart-devices" : adminSectionId === "smartlife-check" ? "smartlife-alert" : "smartlife-devices";
+    ++visibilityLookupNumber.current;
+    setVisibilityPopupKey(sectionKey);
+    setVisibilityBranchSearch("");
+    setVisibilitySelectedBranchId("");
+    setVisibilityValue(null);
+    setVisibilityError("");
+    setVisibilityBranches([]);
+    try {
+      const response = await fetch("/api/branches?page=1&limit=5000", {
+        credentials: "include", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Could not load customer branches");
+      const data = await response.json();
+      const entries = Array.isArray(data?.branches) ? data.branches : [];
+      setVisibilityBranches(entries.filter((branch: any) =>
+        Boolean(String(branch.id || "")) && Boolean(String(branch.name || "").trim()) &&
+        !String(branch.name).startsWith("Available Branch ")
+      ).map((branch: any) => ({ id: String(branch.id), name: String(branch.name) })));
+    } catch (error: any) {
+      setVisibilityError(error?.message || "Unable to load branches.");
+    }
+  };
+
+  const selectVisibilityBranch = async (branchId: string) => {
+    const requestNumber = ++visibilityLookupNumber.current;
+    setVisibilitySelectedBranchId(branchId);
+    setVisibilityValue(null);
+    setVisibilityError("");
+    try {
+      const visibilityUrl = visibilityPopupKey?.startsWith("smartlife-") ? "/api/admin/smartlife/visibility" : "/api/admin/branch-sidebar-visibility";
+      const response = await fetch(`${visibilityUrl}?branchId=${encodeURIComponent(branchId)}`, {
+        credentials: "include", cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Unable to read current branch visibility.");
+      const data = await response.json();
+      if (requestNumber !== visibilityLookupNumber.current) return;
+      setVisibilityValue(
+        visibilityPopupKey === "device-alerts" ? data.deviceAlerts !== false
+        : visibilityPopupKey === "smart-devices" ? data.smartDevices !== false
+        : visibilityPopupKey === "smartlife-alert" ? data.smartlifeAlert === true
+        : data.smartlifeDevices === true
+      );
+    } catch (error: any) {
+      setVisibilityError(error?.message || "Unable to read visibility.");
+    }
+  };
+
+  const saveVisibilityForBranch = async (visible: boolean) => {
+    if (!visibilityPopupKey || !visibilitySelectedBranchId || visibilityBusy || visibilityValue === null) return;
+    setVisibilityBusy(true);
+    setVisibilityError("");
+    try {
+      const visibilityUrl = visibilityPopupKey.startsWith("smartlife-") ? "/api/admin/smartlife/visibility" : "/api/admin/branch-sidebar-visibility";
+      const response = await fetch(visibilityUrl, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: visibilitySelectedBranchId, sectionKey: visibilityPopupKey, visible }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Unable to save visibility.");
+      setVisibilityValue(visible);
+      toast({
+        title: visible ? "Section shown" : "Section hidden",
+        description: `${visibilityPopupKey === "device-alerts" ? "Device Alerts" : visibilityPopupKey === "smart-devices" ? "Smart Devices" : visibilityPopupKey === "smartlife-alert" ? "SmartLife Alert" : "SmartLife Devices"} ${visible ? "will appear" : "will be hidden"} in the selected branch sidebar.`,
+      });
+    } catch (error: any) {
+      setVisibilityError(error?.message || "Unable to save visibility.");
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
+
 
   useEffect(() => {
     const openSmartDevices = () => setActiveTab("iot-cloud");
@@ -2365,7 +2453,9 @@ export default function AdminDashboard() {
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
       { id: "device-check", label: "Device Check", icon: Radar },
-      { id: "iot-cloud", label: "Smart Devices", icon: Zap }
+      { id: "iot-cloud", label: "Smart Devices", icon: Zap },
+      { id: "smartlife-check", label: "SmartLife Check", icon: Wifi },
+      { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }
     ]},
     
     // ACCOUNT
@@ -2526,8 +2616,8 @@ export default function AdminDashboard() {
                     const delay = (sectionIndex * section.items.length + itemIndex) * 0.05;
                     
                     return (
+                      <div key={item.id} className="flex items-center gap-1">
                       <button
-                        key={item.id}
                         onClick={() => {
                           if (item.id === "logout") {
                             void handleAdminLogout();
@@ -2567,7 +2657,7 @@ export default function AdminDashboard() {
                           if (window.innerWidth < 1024) setSidebarCollapsed(true);
                         }}
                         className={`
-                          w-full flex items-center px-3 py-2.5 rounded-lg text-left transition-all duration-300 group/item
+                          min-w-0 flex-1 flex items-center px-3 py-2.5 rounded-lg text-left transition-all duration-300 group/item
                           transform hover:scale-105 hover:translate-x-1
                           ${isActive 
                             ? 'bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 border border-pink-500/30 shadow-lg shadow-pink-500/20' 
@@ -2613,6 +2703,18 @@ export default function AdminDashboard() {
                           <div className="w-1 h-6 bg-gradient-to-b from-pink-400 to-purple-400 rounded-full animate-pulse" />
                         )}
                       </button>
+                      {(["device-check","iot-cloud","smartlife-check","smartlife-devices"].includes(item.id)) && (
+                        <button
+                          type="button"
+                          aria-label={`Manage branch sidebar visibility for ${item.label}`}
+                          title={`Show or hide ${item.id === "device-check" ? "Device Alerts" : item.id === "iot-cloud" ? "Smart Devices" : item.id === "smartlife-check" ? "SmartLife Alert" : "SmartLife Devices"} for a specific branch`}
+                          onClick={() => void openVisibilityPopup(item.id)}
+                          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-200 focus-visible:ring-2 focus-visible:ring-cyan-300"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      )}
+                      </div>
                     );
                   })}
                 </div>
@@ -2624,6 +2726,7 @@ export default function AdminDashboard() {
         {/* Main Content - full width on mobile (sidebar is fixed overlay), flex-1 on desktop */}
         <div className="flex-1 overflow-hidden w-full">
           <div className="h-full overflow-y-auto p-4 lg:p-6 pt-16 lg:pt-6 scroll-ios">
+            
             
             
             
@@ -3108,7 +3211,7 @@ export default function AdminDashboard() {
                 {/* Performance indicator for large datasets */}
                 {branchPagination?.totalCount > 1000 && (
                   <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
                       <Activity className="h-4 w-4 text-blue-400" />
                       <span className="text-blue-300 text-sm">
                         High-performance mode: Managing {branchPagination.totalCount} branches with optimized pagination
@@ -3976,6 +4079,10 @@ export default function AdminDashboard() {
             {/* Smart Devices / Food Safety Owned IoT */}
             {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}
 
+            {/* Rule 2: isolated SmartLife management — never shares owned IoT tables. */}
+            {activeTab === "smartlife-check" && <SmartLifeAdminPanel mode="check" />}
+            {activeTab === "smartlife-devices" && <SmartLifeAdminPanel mode="devices" />}
+
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
               <div className="space-y-6 w-full max-w-full overflow-hidden">
@@ -4824,7 +4931,7 @@ export default function AdminDashboard() {
                     <Card className="bg-slate-800/50 border-slate-700/50 backdrop-blur-sm">
                       <CardHeader>
                         <CardTitle className="text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div className="flex items-center space-x-3">
+                          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
                               <Settings className="h-5 w-5 text-white" />
                             </div>
@@ -8385,7 +8492,7 @@ export default function AdminDashboard() {
                     setNewSidebarPin("");
                     setConfirmSidebarPin("");
                   }}
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 w-full sm:w-auto whitespace-normal"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Save Changes
@@ -9598,6 +9705,75 @@ export default function AdminDashboard() {
           onClose={handleClosePDFViewer}
         />
       )}
+
+
+      {/* Rule 1: separate visibility control for branch Device Alerts and Smart Devices. */}
+      <Dialog open={visibilityPopupKey !== null} onOpenChange={(open) => {
+        if (!open) {
+          ++visibilityLookupNumber.current;
+          setVisibilityPopupKey(null);
+          setVisibilitySelectedBranchId("");
+        }
+      }}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-sm border-slate-700 bg-slate-900 text-white">
+          <DialogHeader>
+            <DialogTitle>
+              {visibilityPopupKey === "device-alerts" ? "Device Alerts" : visibilityPopupKey === "smart-devices" ? "Smart Devices" : visibilityPopupKey === "smartlife-alert" ? "SmartLife Alert" : "SmartLife Devices"} — Branch Visibility
+            </DialogTitle>
+            <DialogDescription className="text-slate-300">
+              Select a restaurant. Hiding only removes this sidebar item for that restaurant; no data is deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              aria-label="Search branch or shop"
+              placeholder="Search branch / shop"
+              value={visibilityBranchSearch}
+              onChange={(event) => setVisibilityBranchSearch(event.target.value)}
+              className="border-slate-600 bg-slate-950 text-white"
+            />
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950/60 p-1">
+              {visibilityBranches.filter((branch) => branch.name.toLowerCase().includes(visibilityBranchSearch.trim().toLowerCase()))
+                .slice(0, 40).map((branch) => (
+                  <button key={branch.id} type="button"
+                    onClick={() => void selectVisibilityBranch(branch.id)}
+                    className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors
+                      ${visibilitySelectedBranchId === branch.id
+                        ? "bg-cyan-700/40 text-cyan-100 ring-1 ring-cyan-500"
+                        : "text-slate-200 hover:bg-slate-800"}`}>
+                    {branch.name}
+                  </button>
+                ))}
+              {!visibilityBranches.length && !visibilityError && (
+                <p className="p-3 text-xs text-slate-400">Loading branches or no branches found.</p>
+              )}
+            </div>
+            {visibilitySelectedBranchId && (
+              <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                <p className="text-sm font-semibold text-white">
+                  {visibilityBranches.find((branch) => branch.id === visibilitySelectedBranchId)?.name || "Selected branch"}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  Current setting: {visibilityValue === null ? "Loading…" : visibilityValue ? "Shown in branch sidebar" : "Hidden from branch sidebar"}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button type="button" disabled={visibilityBusy || visibilityValue === null}
+                    onClick={() => void saveVisibilityForBranch(true)}
+                    className="flex-1 bg-emerald-700 text-white hover:bg-emerald-600">
+                    Show
+                  </Button>
+                  <Button type="button" disabled={visibilityBusy || visibilityValue === null}
+                    onClick={() => void saveVisibilityForBranch(false)}
+                    className="flex-1 bg-red-700 text-white hover:bg-red-600">
+                    Hide
+                  </Button>
+                </div>
+              </div>
+            )}
+            {visibilityError && <p role="alert" className="text-sm text-red-300">{visibilityError}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Notification Sidebar */}
       <NotificationSidebar 
