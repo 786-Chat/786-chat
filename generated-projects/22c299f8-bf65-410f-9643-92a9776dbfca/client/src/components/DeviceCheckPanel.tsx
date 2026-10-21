@@ -56,6 +56,7 @@ export default function DeviceCheckPanel() {
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [busy, setBusy] = useState("");
+  const [refreshStatus, setRefreshStatus] = useState("");
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
@@ -82,6 +83,33 @@ export default function DeviceCheckPanel() {
     }
   };
 
+
+  const refreshReports = async () => {
+    if (busy === "refresh") return;
+    setBusy("refresh");
+    setRefreshStatus("Checking latest HP2 reports...");
+    try {
+      const response = await fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.message || "Device Check request failed (HTTP " + response.status + ")");
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error("Unexpected Device Check response.");
+      setRows(data);
+      setRefreshStatus("Loaded " + data.length + " HP2 record(s), including " + data.filter((row: DeviceCheckRow) => row.hardwareKey?.startsWith("wifi-ap:")).length + " Wi-Fi AP sighting(s).");
+      await Promise.allSettled([
+        fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d)) setRegistered(d); } }),
+        fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d?.branches)) setBranches(d.branches); } }),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load HP2 reports.";
+      setRefreshStatus("Refresh failed: " + message);
+      toast({ title: "HP2 reports could not load", description: message, variant: "destructive" });
+    } finally {
+      setBusy("");
+    }
+  };
 
   // An admin-entered HP2 scan is a historic Wi-Fi sighting, never MQTT telemetry.
   const recordWifiObservation = async () => {
@@ -242,13 +270,13 @@ export default function DeviceCheckPanel() {
             <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
           </div>
         </div>
-        <Button type="button" onClick={() => load().catch(() => {})} className="bg-slate-800 text-white hover:bg-slate-700">
+        <Button type="button" onClick={refreshReports} disabled={busy === "refresh"} className="bg-slate-800 text-white hover:bg-slate-700">
           <RefreshCw className="mr-2 h-4 w-4" />
           Check latest HP2 reports
         </Button>
       </div>
 
-      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
+      {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}\n      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 text-cyan-300" />
           <div>
