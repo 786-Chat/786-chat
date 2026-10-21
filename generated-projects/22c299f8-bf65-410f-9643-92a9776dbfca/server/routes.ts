@@ -8122,6 +8122,7 @@ Generated: ${new Date().toISOString()}
           last_seen_at,
           last_alarm_at
         FROM owned_iot_devices
+        WHERE COALESCE(lifecycle_state, '') <> 'archived'
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
@@ -8684,27 +8685,36 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Archive a registration without deleting telemetry, alarms, or customer history.
   app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
-      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
-        console.warn('Automatic device backup failed:', error?.message || error),
-      );
-      const result: any = await db.execute(sql`
-        UPDATE owned_iot_devices
-        SET branch_id = NULL,
-            lifecycle_state = 'unassigned',
-            is_online = false,
-            last_alarm_at = NULL,
-            updated_at = now()
-        WHERE id::text = ${String(req.params.id)}
-        RETURNING id, device_id
+      const deviceId = String(req.params.id || "").trim();
+      const existing: any = await db.execute(sql`
+        SELECT id, device_id FROM owned_iot_devices
+        WHERE id::text = ${deviceId} AND COALESCE(lifecycle_state, '') <> 'archived'
+        LIMIT 1
       `);
-      const rows = Array.isArray(result) ? result : (result?.rows || []);
-      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
-      res.json({ success: true, source: "owned" });
+      const rows = Array.isArray(existing) ? existing : (existing?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "Device not found or already archived." });
+      // Do not archive if there is an active MQTT report within the last 90 seconds.
+      const active: any = await db.execute(sql`
+        SELECT id FROM owned_iot_devices
+        WHERE id::text = ${deviceId} AND is_online = true
+          AND last_seen_at > now() - interval '90 seconds' LIMIT 1
+      `);
+      if ((Array.isArray(active) ? active : (active?.rows || [])).length)
+        return res.status(409).json({ message: "Device is currently reporting live. Disconnect and verify before removing." });
+      await createOwnedIotDeviceBackup('auto', 'Before Archive Device');
+      await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET lifecycle_state = 'archived', is_online = false, last_alarm_at = NULL, updated_at = now()
+        WHERE id::text = ${deviceId}
+      `);
+      return res.json({ success: true, archived: true, deviceId: rows[0].device_id });
     } catch (err: any) {
-      res.status(500).json({ message: err?.message || "Unable to remove device" });
+      console.error("Archive owned IoT device:", err?.message || err);
+      return res.status(500).json({ message: "Could not archive device safely." });
     }
   });
 
