@@ -155,8 +155,6 @@ import { Label } from "@/components/ui/label";
 import UsefulLinksSection from "@/components/UsefulLinksSection";
 import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
-import IotAdminPanel from "@/components/IotAdminPanel";
-import DeviceCheckPanel from "@/components/DeviceCheckPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
@@ -408,11 +406,6 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [showNotificationSidebar, setShowNotificationSidebar] = useState(false);
 
-  useEffect(() => {
-    const openSmartDevices = () => setActiveTab("iot-cloud");
-    window.addEventListener("food-safety-open-smart-devices", openSmartDevices);
-    return () => window.removeEventListener("food-safety-open-smart-devices", openSmartDevices);
-  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [settingsTab, setSettingsTab] = useState("branch-dashboard");
@@ -2364,8 +2357,6 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
-      { id: "device-check", label: "Device Check", icon: Radar },
-      { id: "iot-cloud", label: "Smart Devices", icon: Zap }
     ]},
     
     // ACCOUNT
@@ -2817,12 +2808,9 @@ export default function AdminDashboard() {
                                 <span>Device Monitoring & Alerts</span>
                               </CardTitle>
                               <CardDescription className="mt-1 text-slate-400">
-                                Admin overview only. Open Smart Devices and select a branch to view individual device cards.
+                                Device management is temporarily hidden during the approved interface cleanup. Existing monitoring data is preserved.
                               </CardDescription>
                             </div>
-                            <Button onClick={() => setActiveTab("iot-cloud")} variant="outline" className="border-slate-600 text-slate-200">
-                              Open Smart Devices
-                            </Button>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -3971,10 +3959,8 @@ export default function AdminDashboard() {
             )}
 
             {/* Physical device identification before branch assignment */}
-            {activeTab === "device-check" && <DeviceCheckPanel />}
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {activeTab === "iot-cloud" && <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
