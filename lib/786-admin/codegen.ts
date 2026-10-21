@@ -52,12 +52,26 @@ function recoverTruncatedProject(text: string): ProjectObject | null {
 function extractProjectJson(text: string, allowRecovery = true): ProjectObject {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
   const start = trimmed.indexOf("{")
+  let parsedJson = false
+  let invalidShape = false
   if (start >= 0) for (let end = trimmed.lastIndexOf("}"); end > start; end = trimmed.lastIndexOf("}", end - 1)) {
-    try { return ProjectSchema.parse(JSON.parse(trimmed.slice(start, end + 1))) } catch {}
+    try {
+      const value: unknown = JSON.parse(trimmed.slice(start, end + 1))
+      parsedJson = true
+      const result = ProjectSchema.safeParse(value)
+      if (result.success) return result.data
+      invalidShape = true
+    } catch {
+      // The model may have returned prose or an incomplete JSON object.
+    }
   }
   const recovered = allowRecovery ? recoverTruncatedProject(trimmed) : null
   if (recovered) return recovered
-  throw new Error("Provider JSON response could not be parsed or validated.")
+  if (invalidShape) throw new Error("Provider JSON response could not be parsed or validated: missing required project fields or files.")
+  if (!trimmed) throw new Error("Provider JSON response could not be parsed or validated: empty response.")
+  throw new Error(parsedJson
+    ? "Provider JSON response could not be parsed or validated: invalid project structure."
+    : "Provider JSON response could not be parsed or validated: malformed or non-JSON output.")
 }
 
 function buildPrompt(input: CodegenInput) {
@@ -109,7 +123,7 @@ async function runDeepSeek(input: CodegenInput, prompt: string, mode: CodegenMod
     if (!result.text?.trim()) throw new Error("DeepSeek Gateway returned no output text.")
     let object: ProjectObject
     try { object = extractGeneratedObject(result.text, input) } catch (error) {
-      if (/JSON response could not be parsed|did not contain a JSON object/i.test(error instanceof Error ? error.message : String(error))) throw new Error(TRUNCATION_MESSAGE)
+      if (/JSON response could not be parsed|did not contain a JSON object/i.test(error instanceof Error ? error.message : String(error))) throw new Error(`DeepSeek Gateway returned invalid structured output: ${error instanceof Error ? error.message : String(error)}`)
       throw error
     }
     return { object, usage: result.usage }
