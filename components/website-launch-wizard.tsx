@@ -329,6 +329,7 @@ export function WebsiteLaunchWizard({ theme, onClose }: WebsiteLaunchWizardProps
 
   return true
     }
+    return false
   }
 
   const nextStep = () => {
