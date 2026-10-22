@@ -130,7 +130,7 @@ export default function MonitoringPage() {
           ["Failures · 24h", summary.failures_24h || 0, AlertTriangle],
           ["Journeys passed · 7d", summary.journeys_passed_7d || 0, CheckCircle2],
           ["Journeys failed · 7d", summary.journeys_failed_7d || 0, Activity],
-        ].map(([label, value, Icon]) => (
+        ] as Array<[string, number, typeof Activity]>).map(([label, value, Icon]) => (
           <Card key={String(label)}><CardContent className="p-5">
             <Icon className="mb-3 h-5 w-5 text-primary" />
             <p className="text-sm text-muted-foreground">{String(label)}</p>
