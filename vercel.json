@@ -1,5 +1,5 @@
 {
-  "buildCommand": "next build",
+  "buildCommand": "node scripts/deepseek-preview-smoke.mjs && next build",
   "crons": [
     {
       "path": "/api/cron/customer-journey",
