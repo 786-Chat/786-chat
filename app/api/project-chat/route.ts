@@ -10,7 +10,7 @@ export const maxDuration = 60
 export async function POST(request: Request) {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return new Response("Unauthorized", { status: 401 })
     }
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const siteCheck = await sql`
       SELECT id, user_id, site_name, subdomain, site_config, site_content
       FROM customer_sites 
-      WHERE id = ${siteId} AND user_id = ${session.user.id}
+      WHERE id = ${siteId} AND user_id = ${session.id}
     `
 
     if (siteCheck.length === 0) {
@@ -193,7 +193,7 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
       abortSignal: request.signal,
     })
 
-    return result.toDataStreamResponse()
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("Project chat error:", error)
     return new Response("Internal Server Error", { status: 500 })

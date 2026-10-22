@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
+import { DefaultChatTransport } from "ai"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
 import ReactMarkdown from "react-markdown"
@@ -438,18 +439,20 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
     sendMessage,
     status,
     stop,
-    reload,
+    regenerate,
     error,
     setMessages,
   } = useChat({
+    transport: new DefaultChatTransport({
     api: "/api/chat",
-    body: {
+    body: () => ({
       chatId: currentChatId,
       projectId: projectId || undefined,
       usage: usage ? { used: usage.used, limit: usage.limit, plan: usage.plan } : undefined,
       files: attachedFiles.filter((f) => f.url).map((f) => ({ url: f.url!, type: f.type })),
-    },
-    onResponse: (response) => {
+    }),
+    fetch: async (input, init) => {
+      const response = await fetch(input, init)
       const nextChatId = response.headers.get("X-Chat-Id") || ""
       const nextProjectId = response.headers.get("X-Project-Id") || ""
 
@@ -472,7 +475,9 @@ export function WorkspaceChatPanel({ projectId, onPreviewUpdate, viewMode, onVie
           })
         )
       }
+      return response
     },
+    }),
     onError: (err) => {
       console.error("Chat error:", err)
     },
@@ -1024,7 +1029,7 @@ PROJECT_FILE_SYSTEM_RULE:
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => reload()}
+                  onClick={() => regenerate()}
                   className="border-red-800/30 text-red-400 hover:bg-red-900/20"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
@@ -1117,7 +1122,7 @@ PROJECT_FILE_SYSTEM_RULE:
                         </button>
 
                         <button
-                          onClick={() => reload()}
+                          onClick={() => regenerate()}
                           className="text-gray-500 hover:text-gray-300 transition-colors"
                           title="Regenerate"
                         >

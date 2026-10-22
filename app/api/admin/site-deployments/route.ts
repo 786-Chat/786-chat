@@ -6,13 +6,13 @@ import { getSession } from "@/lib/auth"
 export async function GET() {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     // Check if admin
     const [user] = await sql`
-      SELECT role FROM users WHERE id = ${session.user.id}::uuid
+      SELECT role FROM users WHERE id = ${session.id}::uuid
     `
     if (user?.role !== "admin" && user?.role !== "superadmin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })

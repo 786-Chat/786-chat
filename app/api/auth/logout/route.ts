@@ -26,7 +26,7 @@ export async function POST() {
 
   for (const name of COOKIE_NAMES) {
     // Current host-only cookies.
-    response.cookies.set(name, expiredCookie)
+    response.cookies.set({ name, ...expiredCookie })
 
     // Remove older cookies that may have been issued for the apex domain.
     response.headers.append(

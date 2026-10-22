@@ -72,7 +72,7 @@ export async function getAISettings(): Promise<AISettings> {
   }
 
   return {
-    ...settings,
+    ...(settings as unknown as AISettings),
     temperature: Number(settings.temperature),
     monthlyBudgetUsd: Number(settings.monthlyBudgetUsd),
     budgetAlertThreshold: Number(settings.budgetAlertThreshold),

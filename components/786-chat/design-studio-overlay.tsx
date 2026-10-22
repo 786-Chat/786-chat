@@ -646,6 +646,7 @@ export function DesignStudioOverlay() {
     try {
       await saveQueue.current
       let next = await queueBuilderBuild(project.id)
+      if (!next) throw new Error("Design Studio build could not be queued.")
       setBuild(next)
       for (let index = 0; index < 120 && ["queued", "running"].includes(next.status); index += 1) {
         await wait(2000)

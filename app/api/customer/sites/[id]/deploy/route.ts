@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const session = await getSession()
-    if (!session?.userId) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -17,7 +17,7 @@ export async function POST(
     // Get the site and verify ownership
     const sites = await sql`
       SELECT * FROM customer_sites 
-      WHERE id = ${siteId} AND user_id = ${session.userId}
+      WHERE id = ${siteId} AND user_id = ${session.id}
     `
 
     if (sites.length === 0) {
@@ -41,7 +41,7 @@ export async function POST(
     // For now, we'll record the deployment
     await sql`
       INSERT INTO site_deployments (site_id, user_id, status, deployed_at)
-      VALUES (${siteId}, ${session.userId}, 'success', NOW())
+      VALUES (${siteId}, ${session.id}, 'success', NOW())
       ON CONFLICT DO NOTHING
     `.catch(() => {
       // Table might not exist, that's okay

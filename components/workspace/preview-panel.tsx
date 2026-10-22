@@ -1273,41 +1273,6 @@ useEffect(() => {
               </Button>
             )}
           </div>
-        ) : viewMode === "code" && (displayPreviewHtml || currentPreviewHtml) ? (
-          <div className="absolute inset-0 overflow-auto">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-[#0d1117] sticky top-0 z-10">
-              <span className="text-xs text-white/50">Generated Code</span>
-
-              <button
-                onClick={copyCode}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white text-xs transition-colors"
-              >
-                {copied ? (
-                  <Check className="w-3 h-3 text-green-400" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-
-            <pre className="p-4 text-xs text-white/80 font-mono leading-relaxed whitespace-pre-wrap break-words">
-              {displayPreviewHtml || currentPreviewHtml}
-            </pre>
-          </div>
-        ) : viewMode === "code" && safeLiveUrl ? (
-          <div className="absolute inset-0 flex flex-col bg-[#08080d]">
-            {/* Source file hints at top */}
-            <div className="flex-shrink-0">
-              {renderLiveUrlCodeNotice()}
-              {renderLiveCodePanel()}
-            </div>
-
-            {/* Live preview below the hints */}
-            <div className="flex-1 relative min-h-0">
-              {renderPreviewFrame("url")}
-            </div>
-          </div>
         ) : hasPreviewHtml ? (
           renderPreviewFrame("html")
         ) : projectPreviewApiUrl ? (
