@@ -168,7 +168,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [dashboardOpen, setDashboardOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(true)
-  const [activeView, setActiveView] = useState<"chat">("chat")
+  const [activeView, setActiveView] = useState<"chat" | "preview">("chat")
   const [previewDevice, setPreviewDevice] = useState("full")
   const [previewUrl, setPreviewUrl] = useState("")
   const [previewExpanded, setPreviewExpanded] = useState(false)
