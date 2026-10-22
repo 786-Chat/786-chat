@@ -23,9 +23,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+      - name: Focused AI JSON regression (no dependencies needed)
+        run: node --test tests/phase1/provider-json-recovery.test.mjs
       - name: Install dependencies
-        run: npm install --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Phase 1 A
         run: node --test tests/phase1/account-security.test.mjs tests/phase1/admin-preview-storage.test.mjs tests/phase1/build-repair-loop.test.mjs tests/phase1/business-software-generation.test.mjs tests/phase1/canonical-workspace-actions.test.mjs tests/phase1/compiled-preview-contract.test.mjs tests/phase1/deployment-domains.test.mjs tests/phase1/deployment-lifecycle.test.mjs tests/phase1/generation-pipeline.test.mjs
       - name: Phase 1 B
@@ -33,7 +35,7 @@ jobs:
         run: node --test tests/phase1/isolation-and-generation.test.mjs tests/phase1/legacy-runtime-retirement.test.mjs tests/phase1/multi-platform-generator.test.mjs tests/phase1/next-config-compatibility.test.mjs tests/phase1/premium-workspace-layout.test.mjs tests/phase1/preview-route-stability.test.mjs
       - name: Phase 1 C providers
         if: always()
-        run: node --test tests/phase1/provider-cleanup.test.mjs tests/phase1/provider-compact-generation.test.mjs tests/phase1/provider-diagnostics.test.mjs tests/phase1/provider-failover.test.mjs
+        run: node --test tests/phase1/provider-cleanup.test.mjs tests/phase1/provider-compact-generation.test.mjs tests/phase1/provider-diagnostics.test.mjs tests/phase1/provider-failover.test.mjs tests/phase1/provider-json-recovery.test.mjs
       - name: Phase 1 D
         if: always()
         run: node --test tests/phase1/routing-and-edit-preservation.test.mjs tests/phase1/single-builder-entrypoints.test.mjs tests/phase1/transactional-persistence.test.mjs tests/phase1/visual-editor.test.mjs
