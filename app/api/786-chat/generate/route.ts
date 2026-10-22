@@ -42,6 +42,7 @@ import {
 import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
 import { screenBuilderPrompt } from "@/lib/786-chat/security"
 import { isExplicitNewProjectIntent } from "@/lib/786-chat/project-intent"
+import { isBuilderChatOnlyMessage } from "@/lib/786-chat/message-intent"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -93,6 +94,16 @@ export async function POST(request: Request) {
   if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
   const repairPass = Math.max(0, Number(continuationState?.repairPass || 0))
   const prompt = String(continuationState?.prompt || payload.message || "").trim()
+  // Refuse to turn inspection questions into source regeneration or paid repairs.
+  // The workspace calls /api/786-chat/ask for authenticated, read-only answers.
+  if (!continuationState && isBuilderChatOnlyMessage(prompt)) {
+    return NextResponse.json({
+      success: false,
+      error: "This is a read-only question. Use the 786.Chat project chat answer endpoint; no files were changed.",
+      warning: "READ_ONLY_QUESTION_REQUIRES_CHAT",
+      projectPreserved: true,
+    }, { status: 409 })
+  }
   const explicitNewApplication = isExplicitNewProjectIntent(prompt)
   if (explicitNewApplication) {
     delete payload.projectId
