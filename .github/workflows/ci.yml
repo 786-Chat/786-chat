@@ -16,6 +16,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ai-json-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify recoverable provider JSON and strict validation
+        run: node --test tests/phase1/provider-json-recovery.test.mjs
+
   test-and-typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 20
