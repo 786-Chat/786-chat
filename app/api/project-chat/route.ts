@@ -193,7 +193,7 @@ Be helpful, friendly, and creative. Suggest improvements when appropriate.`
       abortSignal: request.signal,
     })
 
-    return result.toDataStreamResponse()
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("Project chat error:", error)
     return new Response("Internal Server Error", { status: 500 })
