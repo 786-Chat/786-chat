@@ -7,7 +7,7 @@ import { getSession } from "@/lib/auth"
 export async function GET() {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -18,7 +18,7 @@ export async function GET() {
         cs.subdomain
       FROM deployments d
       LEFT JOIN customer_sites cs ON d.site_id = cs.id
-      WHERE d.user_id = ${session.user.id}::uuid
+      WHERE d.user_id = ${session.id}::uuid
       ORDER BY d.created_at DESC
       LIMIT 50
     `
@@ -34,7 +34,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
     // Get the site
     const [site] = await sql`
-      SELECT * FROM customer_sites WHERE id = ${siteId}::uuid AND user_id = ${session.user.id}::uuid
+      SELECT * FROM customer_sites WHERE id = ${siteId}::uuid AND user_id = ${session.id}::uuid
     `
 
     if (!site) {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       INSERT INTO deployments (
         user_id, site_id, status, environment, domain, created_at
       ) VALUES (
-        ${session.user.id}::uuid,
+        ${session.id}::uuid,
         ${siteId}::uuid,
         'building',
         ${environment},
