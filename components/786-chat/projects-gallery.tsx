@@ -200,7 +200,7 @@ export function ProjectsGallery() {
       try {
         const build = await queueBuilderBuild(duplicated.projectId)
         setBuilds((current) => ({ ...current, [duplicated.projectId]: build }))
-        if (["queued", "running"].includes(build.status)) {
+        if (build && ["queued", "running"].includes(build.status)) {
           void watchDuplicatedBuild(duplicated.projectId)
         }
       } catch (buildError) {
