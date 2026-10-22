@@ -32,7 +32,7 @@ export async function GET() {
       })
     }
 
-    const balanceData = await getUserBalance(session.userId)
+    const balanceData = await getUserBalance(session.id)
 
     const used = Number(balanceData?.freeMessagesUsed ?? balanceData?.totalMessagesSent ?? 0)
    const limit = FREE_MESSAGES_LIMIT
