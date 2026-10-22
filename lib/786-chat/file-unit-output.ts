@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { parseProviderJson } from "@/lib/786-chat/provider-json-recovery"
 
 const FileUnitSchema = z.object({
   path: z.string().min(1),
@@ -26,7 +27,7 @@ export function fileUnitTargetFromPrompt(prompt: string) {
 
 export function parseFileUnitOutput(text: string, expectedPath: string) {
   let value: unknown
-  try { value = JSON.parse(text.trim()) } catch { throw new Error("File unit JSON response could not be parsed or validated.") }
+  try { value = parseProviderJson(text) } catch { throw new Error("File unit JSON response could not be parsed or validated.") }
   const parsed = FileUnitSchema.safeParse(value)
   if (!parsed.success) throw new Error("File unit JSON response could not be parsed or validated.")
   if (parsed.data.path !== expectedPath) throw new Error(`File unit returned the wrong path; expected ${expectedPath}.`)
