@@ -55,7 +55,7 @@ export async function GET() {
     `
 
     const statusMap: Record<string, number> = {}
-    statusCounts.forEach((row: { status: string; count: number }) => {
+    statusCounts.forEach((row) => {
       statusMap[row.status] = Number(row.count)
     })
 
