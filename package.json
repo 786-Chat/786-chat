@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/phase1/*.test.mjs tests/phase2/*.test.mjs",
     "test:phase1": "node --test tests/phase1/*.test.mjs",
-    "test:phase2": "node --test tests/phase2/*.test.mjs"
+    "test:phase2": "node --test tests/phase2/*.test.mjs",
+    "prebuild": "node scripts/deepseek-preview-smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
