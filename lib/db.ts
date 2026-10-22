@@ -35,7 +35,7 @@ export function getSql() {
 }
 
 // Export sql as a function that uses lazy loading
-export const sql = new Proxy((() => {}) as NeonQueryFunction<false, false>, {
+export const sql = new Proxy((() => {}) as unknown as NeonQueryFunction<false, false>, {
   apply(_target, _thisArg, args) {
     return (getSql() as any)(...args)
   },
