@@ -1070,7 +1070,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                      <p className="truncate font-semibold text-white">{device.deviceId === "FS-MOUSE-000002" ? "Device 3 — Mouse Trap 12" : `Device ${index + 1} — ${device.deviceName}`}</p>
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
