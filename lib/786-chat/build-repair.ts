@@ -372,7 +372,7 @@ export async function repairFailedBuild(input: {
       ?? deterministicClientBoundaryRepair(context, input.logs)
       ?? deterministicNeonResultRepair(context, input.logs)
       ?? { ...(await generateRepair(context, input.logs)), removedPaths: [] }
-    const merged = { ...context.files, ...repair.files }
+    const merged: Record<string, string> = { ...context.files, ...repair.files }
     for (const path of repair.removedPaths) delete merged[path]
     const validation = validateGeneratedProject(merged)
     if (!validation.valid) {
