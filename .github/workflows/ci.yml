@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 24
       - name: Verify recoverable provider JSON and strict validation
-        run: node --test tests/phase1/provider-json-recovery.test.mjs
+        run: node --test tests/phase1/provider-json-recovery.test.mjs tests/phase1/builder-readonly-legacy-security.test.mjs
 
   test-and-typecheck:
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: 24
       - name: Focused AI JSON regression (no dependencies needed)
-        run: node --test tests/phase1/provider-json-recovery.test.mjs
+        run: node --test tests/phase1/provider-json-recovery.test.mjs tests/phase1/builder-readonly-legacy-security.test.mjs
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Phase 1 A
