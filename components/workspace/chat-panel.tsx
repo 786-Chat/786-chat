@@ -1122,7 +1122,7 @@ PROJECT_FILE_SYSTEM_RULE:
                         </button>
 
                         <button
-                          onClick={() => reload()}
+                          onClick={() => regenerate()}
                           className="text-gray-500 hover:text-gray-300 transition-colors"
                           title="Regenerate"
                         >
