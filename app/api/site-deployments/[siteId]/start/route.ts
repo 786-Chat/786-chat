@@ -84,7 +84,7 @@ export async function POST(
 ) {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -102,7 +102,7 @@ export async function POST(
       // Create new deployment
       const [newDeployment] = await sql`
         INSERT INTO site_deployments (site_id, user_id, status, current_step, steps_completed)
-        VALUES (${siteId}::uuid, ${session.user.id}::uuid, 'deploying', 'preparing', '[]'::jsonb)
+        VALUES (${siteId}::uuid, ${session.id}::uuid, 'deploying', 'preparing', '[]'::jsonb)
         RETURNING *
       `
       deployment = newDeployment
