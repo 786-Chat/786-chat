@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const session = await getSession()
-    if (!session?.user?.id) {
+    if (!session?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -32,7 +32,7 @@ export async function GET(
       // Create a new pending deployment
       const [newDeployment] = await sql`
         INSERT INTO site_deployments (site_id, user_id, status, current_step)
-        VALUES (${siteId}::uuid, ${session.user.id}::uuid, 'pending', 'preparing')
+        VALUES (${siteId}::uuid, ${session.id}::uuid, 'pending', 'preparing')
         RETURNING *
       `
       return NextResponse.json({
