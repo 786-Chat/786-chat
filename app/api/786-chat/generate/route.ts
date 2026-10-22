@@ -16,7 +16,7 @@ import { designFamilyBrief } from "@/lib/786-chat/design-system"
 import { injectVisualEditorFiles } from "@/lib/786-chat/visual-editor"
 import { systemBlueprintBrief } from "@/lib/786-chat/system-blueprints"
 import { OPTIONAL_PROJECT_FEATURE_RULES } from "@/lib/786-admin/optional-feature-rules"
-import { listProjects } from "@/lib/786-admin/projects"
+import { getProjectWithData, listProjects } from "@/lib/786-admin/projects"
 import { systemArchitectureBrief } from "@/lib/786-chat/system-architecture"
 import {
   backendCapabilityBrief,
@@ -42,6 +42,7 @@ import {
 import { validateGeneratedSecurity } from "@/lib/786-chat/generated-security"
 import { screenBuilderPrompt } from "@/lib/786-chat/security"
 import { isExplicitNewProjectIntent } from "@/lib/786-chat/project-intent"
+import { isBuilderChatOnlyMessage } from "@/lib/786-chat/message-intent"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -93,6 +94,16 @@ export async function POST(request: Request) {
   if (suppliedContinuation && !continuationState) return NextResponse.json({ success: false, error: "Generation continuation is invalid or expired." }, { status: 403 })
   const repairPass = Math.max(0, Number(continuationState?.repairPass || 0))
   const prompt = String(continuationState?.prompt || payload.message || "").trim()
+  // Refuse to turn inspection questions into source regeneration or paid repairs.
+  // The workspace calls /api/786-chat/ask for authenticated, read-only answers.
+  if (!continuationState && isBuilderChatOnlyMessage(prompt)) {
+    return NextResponse.json({
+      success: false,
+      error: "This is a read-only question. Use the 786.Chat project chat answer endpoint; no files were changed.",
+      warning: "READ_ONLY_QUESTION_REQUIRES_CHAT",
+      projectPreserved: true,
+    }, { status: 409 })
+  }
   const explicitNewApplication = isExplicitNewProjectIntent(prompt)
   if (explicitNewApplication) {
     delete payload.projectId
@@ -106,6 +117,18 @@ export async function POST(request: Request) {
       error: promptSecurity.message,
       warning: promptSecurity.code,
     }, { status: 403 })
+  }
+  // Trust only the owner-scoped saved project as an unchanged-source baseline.
+  const trustedProjectId = explicitNewApplication
+    ? ""
+    : typeof continuationState?.projectId === "string"
+      ? continuationState.projectId
+      : typeof payload.projectId === "string" ? payload.projectId : ""
+  const trustedProject = trustedProjectId
+    ? await getProjectWithData(trustedProjectId, ownerEmail)
+    : null
+  if (trustedProjectId && !trustedProject) {
+    return NextResponse.json({ success: false, error: "Project not found." }, { status: 404 })
   }
   const editIntent = classifyApplicationEdit(prompt)
   if (editIntent.kind === "undo" && typeof payload.projectId === "string") {
@@ -261,7 +284,7 @@ export async function POST(request: Request) {
 
   if (response.ok && result.success === true && result.continuationRequired === true && result.continuation && typeof result.continuation === "object") {
     await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-    const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief, fileContinuation: result.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass })
+    const continuationToken = signGenerationContinuation({ generationId, prompt, projectId: trustedProjectId, analysisSeed, specification, plan, generationBrief, fileContinuation: result.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass })
     return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((result.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: plan.files.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage })
   }
 
@@ -307,13 +330,7 @@ export async function POST(request: Request) {
   const generatedFiles = project?.files && typeof project.files === "object"
     ? project.files as Record<string, string>
     : {}
-  const existingFiles =
-    payload.existing &&
-    typeof payload.existing === "object" &&
-    (payload.existing as Record<string, unknown>).keyFiles &&
-    typeof (payload.existing as Record<string, unknown>).keyFiles === "object"
-      ? (payload.existing as { keyFiles: Record<string, string> }).keyFiles
-      : {}
+  const existingFiles = trustedProject?.files || {}
   let files = injectVisualEditorFiles(
     normalizeGeneratedAuthLinks(
       specification,
@@ -327,7 +344,7 @@ export async function POST(request: Request) {
     payload.visualEditorState,
   )
   let validation = validateGeneratedProject(specification, files)
-  let securityValidation = validateGeneratedSecurity(files)
+  let securityValidation = validateGeneratedSecurity(files, { unchangedFiles: existingFiles })
   validation.errors.push(...securityValidation.errors.map((issue) =>
     `${issue.message}${issue.path ? ` (${issue.path})` : ""}`
   ))
@@ -445,13 +462,13 @@ export async function POST(request: Request) {
 
     if (repairResponse.ok && repaired.success === true && repaired.continuationRequired === true && repaired.continuation && typeof repaired.continuation === "object") {
       await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repaired.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, projectId: trustedProjectId, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repaired.continuation, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
       return NextResponse.json({ success: true, continuationRequired: true, generationId, continuationToken, progress: { completedFiles: Object.keys((repaired.continuation as { completedFiles?: Record<string, string> }).completedFiles || {}).length, totalFiles: Object.keys(files).length + requiredRepairFiles.length }, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairAttempted: true })
     }
 
     if (!repairResponse.ok || repaired.success !== true) {
       await recordBuilderGenerationProgress({ generationId, ownerEmail, providerAttempts: aggregateAttempts, usage: aggregateUsage })
-      const continuationToken = signGenerationContinuation({ generationId, prompt, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repairSeed, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
+      const continuationToken = signGenerationContinuation({ generationId, prompt, projectId: trustedProjectId, analysisSeed, specification, plan, generationBrief: repairBrief, fileContinuation: repairSeed, providerAttempts: aggregateAttempts, usage: aggregateUsage, repairPass: repairPass + 1 })
       return NextResponse.json({
         success: true,
         continuationRequired: true,
@@ -485,7 +502,7 @@ export async function POST(request: Request) {
         payload.visualEditorState,
       )
       validation = validateGeneratedProject(specification, files)
-      securityValidation = validateGeneratedSecurity(files)
+      securityValidation = validateGeneratedSecurity(files, { unchangedFiles: existingFiles })
       validation.errors.push(...securityValidation.errors.map((issue) =>
         `${issue.message}${issue.path ? ` (${issue.path})` : ""}`
       ))

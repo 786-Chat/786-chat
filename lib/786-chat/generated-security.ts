@@ -13,7 +13,7 @@ export type GeneratedSecurityResult = {
 const SECRET_PATH = /(?:^|\/)(?:\.env(?:\..+)?|\.npmrc|\.yarnrc|credentials\.json|service-account\.json|id_rsa|id_ed25519|.*\.(?:pem|p12|pfx|key))$/i
 const ENV_PATH = /(?:^|\/)\.env(?:\..+)?$/i
 const CODE_PATH = /\.(?:[cm]?[jt]sx?)$/i
-const PUBLIC_STATIC_CODE = /^(?:public|static)\//i
+const PUBLIC_STATIC_CODE = /^(?:(?:client|src)\/)?(?:public|static)\//i
 const DOCUMENTATION_PATH = /(?:^|\/)(?:docs\/.*\.md|README(?:\.md)?)$/i
 const SERVER_ROUTE = /^(?:src\/)?app\/api\/.+\/route\.(?:[cm]?[jt]s)$/i
 const PUBLIC_AUTH_BOOTSTRAP_ROUTE = /^(?:src\/)?app\/api\/auth\/(?:register|login|logout|forgot-password|reset-password|verify-email)\/route\.(?:[cm]?[jt]s)$/i
@@ -73,7 +73,10 @@ function isSafePublicReadOnlyDatabaseRoute(path: string, content: string) {
   return EXPORTED_GET.test(content) && !EXPORTED_MUTATION.test(content) && PUBLIC_LOOKUP_TOKEN.test(content)
 }
 
-export function validateGeneratedSecurity(files: Record<string, string>): GeneratedSecurityResult {
+export function validateGeneratedSecurity(
+  files: Record<string, string>,
+  options: { unchangedFiles?: Record<string, string> } = {},
+): GeneratedSecurityResult {
   const errors: GeneratedSecurityIssue[] = []
   const warnings: GeneratedSecurityIssue[] = []
 
@@ -96,7 +99,21 @@ export function validateGeneratedSecurity(files: Record<string, string>): Genera
     }
     if (!CODE_PATH.test(normalizedPath) || PUBLIC_STATIC_CODE.test(normalizedPath)) continue
     for (const [code, pattern, message] of DANGEROUS_CODE) {
-      if (pattern.test(content)) errors.push({ code, path, message })
+      if (!pattern.test(content)) continue
+      // Only a byte-for-byte match with previously saved, server-verified
+      // project source is tolerated. Edits or newly introduced OS execution
+      // remain blocked. Never grandfather secrets or dependency scripts.
+      const unchangedLegacy = Object.prototype.hasOwnProperty.call(options.unchangedFiles || {}, path) &&
+        options.unchangedFiles?.[path] === content
+      if (unchangedLegacy) {
+        warnings.push({
+          code: `UNCHANGED_LEGACY_${code}`,
+          path,
+          message: `Unchanged legacy source retained: ${message} Do not execute this file inside the builder runtime.`,
+        })
+      } else {
+        errors.push({ code, path, message })
+      }
     }
     if (
       CLIENT_FILE.test(normalizedPath) &&

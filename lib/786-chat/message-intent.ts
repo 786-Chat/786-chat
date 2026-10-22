@@ -14,11 +14,17 @@ const QUESTION_PATTERNS = [
   /\?\s*$/,
 ] as const
 
+// Imperative inspection requests are questions, not code-generation instructions.
+// A later affirmative mutation ("read and then fix") must still be an edit.
+const READ_ONLY_INSPECTION = /^(?:(?:please|kindly)\s+)?(?:read|inspect|review|identify|explain|describe|summari[sz]e|analyse|analyze|look\s+at|tell\s+me\s+about)\b/i
+const FOLLOW_UP_EDIT = /\b(?:and|then)\s+(?:then\s+)?(?:please\s+)?(?:add|create|build|make|change|update|edit|fix|repair|remove|delete|replace|redesign|implement|apply|move|rename|connect|integrate|deploy|restore|undo|redo|generate)\b/i
+
 export function classifyBuilderMessageIntent(message: string): BuilderMessageIntent {
   const text = String(message || "").trim()
   if (!text) return "edit"
 
   if (DIRECT_EDIT_PATTERNS.some((pattern) => pattern.test(text))) return "edit"
+  if (READ_ONLY_INSPECTION.test(text) && !FOLLOW_UP_EDIT.test(text)) return "chat"
   if (QUESTION_PATTERNS.some((pattern) => pattern.test(text))) return "chat"
 
   return "edit"

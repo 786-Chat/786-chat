@@ -31,7 +31,7 @@ test("generated source and builds share security and dependency validation", asy
   assert.match(generated, /DEPENDENCY_LIFECYCLE_SCRIPT/)
   assert.match(generated, /DATABASE_ROUTE_WITHOUT_ACCESS_GUARD/)
   assert.match(build, /validateGeneratedSecurity\(files\)/)
-  assert.match(save, /validateGeneratedSecurity\(files\)/)
+  assert.match(save, /validateGeneratedSecurity\(files,\s*\{\s*unchangedFiles:\s*current\?\.files\s*\}\)/)
 })
 
 test("project secrets are tenant-scoped and encrypted with AES-256-GCM", async () => {
