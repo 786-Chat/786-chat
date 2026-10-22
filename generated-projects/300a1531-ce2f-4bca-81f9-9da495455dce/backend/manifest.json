@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "capabilities": ["database", "api"],
+  "resources": {
+    "database": {
+      "provider": "neon",
+      "env": "DATABASE_URL"
+    }
+  },
+  "migrations": "sql/migrations/001_initial.sql",
+  "api": {
+    "auth": ["/api/auth/register", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/verify-email"],
+    "customers": ["/api/customers", "/api/customers/[id]"],
+    "reservations": ["/api/reservations", "/api/reservations/[id]"],
+    "orders": ["/api/orders", "/api/orders/[id]"]
+  }
+}
