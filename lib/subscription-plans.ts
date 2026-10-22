@@ -82,7 +82,7 @@ export function getPlan(planId: string) {
 // Check if user has access to a feature based on their plan
 export function hasFeature(planId: string, feature: string): boolean {
   const plan = getPlan(planId)
-  return plan.features.includes(feature)
+  return (plan.features as readonly string[]).includes(feature)
 }
 
 // Check usage limits
