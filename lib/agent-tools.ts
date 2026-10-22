@@ -9,7 +9,7 @@ import { sql } from "@/lib/db"
 // Tool to search/find code patterns
 export const searchCodeTool = tool({
   description: "Search for code patterns or find files in the MujeebProAI codebase. Returns file paths and matching content.",
-  parameters: z.object({
+  inputSchema: z.object({
     query: z.string().describe("Search query - can be a function name, component name, or text pattern"),
     fileType: z.string().optional().describe("Optional file extension filter like 'tsx', 'ts', 'css'"),
   }),
@@ -49,7 +49,7 @@ export const searchCodeTool = tool({
 // Tool to get database information
 export const getDatabaseInfoTool = tool({
   description: "Get information about the MujeebProAI database schema and tables",
-  parameters: z.object({
+  inputSchema: z.object({
     tableName: z.string().optional().describe("Optional specific table name to get details for"),
   }),
   execute: async ({ tableName }) => {
@@ -71,7 +71,7 @@ export const getDatabaseInfoTool = tool({
           WHERE table_schema = 'public'
           ORDER BY table_name
         `
-        return { success: true, tables: tables.map((t: { table_name: string }) => t.table_name) }
+        return { success: true, tables: tables.map((t) => String(t.table_name)) }
       }
     } catch (error) {
       return { error: error instanceof Error ? error.message : "Database query failed" }
@@ -82,20 +82,20 @@ export const getDatabaseInfoTool = tool({
 // Tool to query database (SELECT only for safety)
 export const queryDatabaseTool = tool({
   description: "Run a SELECT query on the MujeebProAI database. Only SELECT queries are allowed for safety.",
-  parameters: z.object({
+  inputSchema: z.object({
     query: z.string().describe("SQL SELECT query to execute. Must start with SELECT."),
   }),
   execute: async ({ query }) => {
     try {
       // Ensure only SELECT queries
       const trimmedQuery = query.trim().toUpperCase()
-      if (!trimmedQuery.startsWith("SELECT")) {
+      if (!/^SELECT\b/.test(trimmedQuery) || /;|--|\/\*|\*\//.test(query) || /\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|COPY|INTO)\b/.test(trimmedQuery)) {
         return { error: "Only SELECT queries are allowed for safety. Use the admin panel for data modifications." }
       }
       
       // Limit results for safety
       const safeQuery = query.includes("LIMIT") ? query : `${query} LIMIT 100`
-      const result = await sql.unsafe(safeQuery)
+      const result = await sql.query(safeQuery, [])
       
       return { 
         success: true, 
@@ -111,7 +111,7 @@ export const queryDatabaseTool = tool({
 // Tool to provide code suggestions
 export const suggestCodeTool = tool({
   description: "Provide code suggestions for modifying MujeebProAI. Use this when the admin asks to change something.",
-  parameters: z.object({
+  inputSchema: z.object({
     component: z.string().describe("Which component or file to modify (e.g., 'sidebar', 'header', 'chat')"),
     change: z.string().describe("Description of the change to make"),
   }),
