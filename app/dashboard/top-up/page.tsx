@@ -27,7 +27,9 @@ export default function TopUpPage() {
 
   const fetchClientSecret = useCallback(async () => {
     if (!selectedPackage) throw new Error("No package selected")
-    return startCreditsCheckout(selectedPackage)
+    const clientSecret = await startCreditsCheckout(selectedPackage)
+    if (!clientSecret) throw new Error("Stripe checkout could not be initialized.")
+    return clientSecret
   }, [selectedPackage])
 
   const handleComplete = useCallback(() => {
