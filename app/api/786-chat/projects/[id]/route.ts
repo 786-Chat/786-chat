@@ -60,7 +60,7 @@ export async function PATCH(request: Request, { params }: Context) {
       validation,
     }, { status: 422 })
   }
-  const securityValidation = validateGeneratedSecurity(files)
+  const securityValidation = validateGeneratedSecurity(files, { unchangedFiles: current?.files })
   if (!securityValidation.valid) {
     return NextResponse.json({
       error: "The edited source contains unsafe code, dependencies or credentials.",
