@@ -205,7 +205,7 @@ export default function TopUpPage() {
                   <EmbeddedCheckoutProvider
                     stripe={stripePromise}
                     options={{
-                      clientSecret: fetchClientSecret,
+                      fetchClientSecret,
                       onComplete: handleComplete,
                     }}
                   >
