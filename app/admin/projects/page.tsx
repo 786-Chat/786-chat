@@ -292,7 +292,7 @@ export default function AdminProjectsPage() {
                       ["Messages", selected.project.message_count || 0],
                       ["Revisions", selected.project.revision_count || selected.revisions.length || 0],
                       ["Builds", selected.builds.length || 0],
-                    ].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[.03] p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{String(value)}</p></div>)}
+                    ].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-white/10 bg-white/[.03] p-4"><p className="text-xs text-slate-500">{String(label)}</p><p className="mt-1 text-2xl font-black">{String(value)}</p></div>)}
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
