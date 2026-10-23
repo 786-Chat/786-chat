@@ -364,6 +364,7 @@ export default function DeviceCheckPanel() {
                 </div>
                 <p className="mt-3 text-xs text-slate-400">Last HP2 report: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}</p>
                 <p className="mt-1 text-xs text-slate-400">{row.wifiObservationSource === "admin-entry" ? "Manually recorded" : "HP2 scanner observation"} · Not assigned automatically</p>
+                <button type="button" disabled={busy === "remove:" + row.id} onClick={() => removeWifiSighting(row)} className="mt-3 rounded border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-950/50">Remove Wi-Fi Sighting</button>
               </article>
             ))}
           </div>
