@@ -826,7 +826,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
               className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
             >
               <option value="">Select registered device...</option>
-              {(activeBranch ? activeBranchDevices : ownedDevices).map((device: any) => (
+              {activeBranchDevices.map((device: any) => (
                 <option key={device.id} value={device.deviceId}>
                   {device.deviceName || device.deviceId} — {device.deviceId}
                 </option>
@@ -920,7 +920,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Food Safety devices</p>
-            <p className="mt-1 text-sm font-semibold text-white">{ownedDevices.length}</p>
+            <p className="mt-1 text-sm font-semibold text-white">{visibleOwnedDevices.length}</p>
           </div>
         </div>
         </div>
