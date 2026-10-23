@@ -123,10 +123,18 @@ export default function BranchSmartDevicesPanel() {
             {devices.map((device: any, index: number) => {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
-              const powerLabel = readableStatus(snap.power) || (device.isOnline ? "Connected" : "Disconnected");
+              const connectionLabel = device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" :
+                device.isOnline ? "MQTT Connected" :
+                device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT not verified)" :
+                device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
+                device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : "Awaiting activation";
+              const powerLabel = device.connectionState === "turned_off" ? "Turned OFF" :
+                device.connectionState === "wifi_seen" ? "Wi-Fi signal seen" :
+                device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
+                readableStatus(snap.power) || "Awaiting activation";
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
-                  <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
+                  <div className={`h-1.5 ${device.connectionState === "turned_off" ? "bg-red-500" : device.isOnline ? "bg-emerald-500" : device.connectionState === "wifi_seen" ? "bg-cyan-500" : "bg-slate-600"}`} />
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
@@ -134,7 +142,7 @@ export default function BranchSmartDevicesPanel() {
                         <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                         {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{device.notes}</p>}
                       </div>
-                      <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>{device.isOnline ? "Connected" : "Disconnected"}</Badge>
+                      <Badge className={device.connectionState === "turned_off" ? "bg-red-500/20 text-red-100" : device.isOnline ? "bg-emerald-500/15 text-emerald-300" : device.connectionState === "wifi_seen" ? "bg-cyan-500/15 text-cyan-200" : device.connectionState === "sleeping" ? "bg-amber-500/15 text-amber-200" : "bg-slate-700 text-slate-300"}>{connectionLabel}</Badge>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -152,10 +160,22 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.isOnline ? "Connected" : "Disconnected"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Connected (MQTT)" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
                       </div>
                     </div>
 
+                    {device.connectionState === "turned_off" && (
+                      <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3">
+                        <p className="font-semibold text-red-100">Mouse turned OFF — please contact Pest Controller Mujeeb</p>
+                        <p className="mt-1 text-xs text-red-100/80">Your mouse remains assigned to this branch. Ask Mujeeb to check its power before it is used again.</p>
+                        <button type="button" onClick={() => {
+                          const message = "Pest Controller Mujeeb: The mouse trap " + device.deviceName + " (" + device.deviceId + ") at our branch is confirmed turned OFF. Please arrange a check.";
+                          void navigator.clipboard?.writeText(message).then(() => window.alert("Message copied. Send it to Pest Controller Mujeeb using your usual contact method.")).catch(() => window.prompt("Copy this message for Mujeeb:", message));
+                        }} className="mt-3 rounded-lg border border-red-300/60 px-3 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20">
+                          Copy message for Pest Controller Mujeeb
+                        </button>
+                      </div>
+                    )}
                     <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
                       Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first check"}
                     </div>

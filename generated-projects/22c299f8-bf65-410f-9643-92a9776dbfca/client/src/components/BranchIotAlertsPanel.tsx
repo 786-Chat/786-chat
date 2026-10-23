@@ -160,7 +160,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
               <h3 className="font-bold text-emerald-100">Ready</h3>
               <p className="mt-1 text-sm text-emerald-200/80">
                 {devices.length
-                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
+                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently reporting (may be sleeping).` : ""}`
                   : "No smart devices are assigned to this branch yet."}
               </p>
             </div>
