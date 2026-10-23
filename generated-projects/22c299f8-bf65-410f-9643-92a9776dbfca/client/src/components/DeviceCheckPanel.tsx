@@ -190,6 +190,29 @@ export default function DeviceCheckPanel() {
     finally { setBusy(""); }
   };
 
+  const assignWifiExisting = async (row: DeviceCheckRow) => {
+    const deviceId = String(existingChoice[row.id] || "").trim().toUpperCase();
+    const target = registered.find(item => item.deviceId.toUpperCase() === deviceId);
+    if (!selectedBranchId || !wifiPhysicallyConfirmed[row.id] || !target || String(target.branchId) !== selectedBranchId) {
+      toast({ title: "Confirm the physical mouse and branch", description: "Choose a device registered to this customer, then tick the physical identity confirmation.", variant: "destructive" });
+      return;
+    }
+    setBusy("wifi-link:" + row.id);
+    try {
+      const response = await fetch("/api/iot/device-check/" + encodeURIComponent(row.id) + "/link-wifi", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ deviceId, branchId: selectedBranchId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Unable to link sighting");
+      toast({ title: "Mouse assigned to branch", description: deviceId + " moved from unassigned Wi-Fi sightings to its customer. MQTT not verified." });
+      setWifiAssignOpenId("");
+      await load();
+    } catch (err: any) {
+      toast({ title: "Assignment failed", description: err?.message || "Please retry", variant: "destructive" });
+    } finally { setBusy(""); }
+  };
+
   const linkExisting = async (row: DeviceCheckRow) => {
     const deviceId = String(existingChoice[row.id] || "").trim();
     if (!deviceId) {
