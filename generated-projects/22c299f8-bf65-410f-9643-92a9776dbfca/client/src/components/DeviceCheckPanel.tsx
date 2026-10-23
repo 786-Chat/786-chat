@@ -406,7 +406,7 @@ export default function DeviceCheckPanel() {
             <div key={row.id} className="mt-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
               <p className="text-sm font-semibold text-white">{row.assignedDeviceName || row.hostname || "Mouse"} — {row.assignedDeviceId}</p>
               <p className="mt-1 font-mono text-xs text-cyan-200">{row.hostname || row.mqttPrefix || "Wi-Fi observation"}{row.macAddress ? " · " + row.macAddress : ""}</p>
-              <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? "Wi-Fi identity assigned · MQTT not verified" : row.isLive ? "MQTT live" : "MQTT last seen / offline"}</p>
+              <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? (row.isWifiRecentlySeen ? "Wi-Fi recently observed · MQTT unverified" : "Sleeping / No recent Wi-Fi signal · MQTT unverified") : row.isLive ? "MQTT live" : "Sleeping / No recent MQTT signal"}</p>
             </div>
           ))}
           <button type="button" onClick={() => beginMouseScan(selectedBranchId)} className="mt-3 rounded border border-cyan-500/60 px-3 py-2 text-sm text-cyan-100">Start fresh detection for next mouse</button>
@@ -435,7 +435,7 @@ export default function DeviceCheckPanel() {
                     <p className="mt-1 break-all font-mono text-xs text-cyan-200">{row.macAddress || "MAC not reported"}</p>
                   </div>
                   <span className={"rounded-full px-3 py-1 text-xs font-semibold " + (row.isWifiRecentlySeen ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-700 text-slate-300")}>
-                    {row.isWifiRecentlySeen ? "Recently detected" : "Previous sighting"}
+                    {row.isWifiRecentlySeen ? "Recent HP2 signal" : "Last sighting (not live)"}
                   </span>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2">
