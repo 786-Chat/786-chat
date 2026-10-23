@@ -148,8 +148,8 @@ export default function BranchDashboard() {
 
   // SmartLife data remains in its own database table.
   // Read its visibility using the existing proven branch sidebar refresh.
-  const branchSmartLifeAlertShown = branchSidebarVisibility?.smartlifeAlert === true;
-  const branchSmartLifeDevicesShown = branchSidebarVisibility?.smartlifeDevices === true;
+  const branchSmartLifeAlertShown = branchSidebarVisibility?.smartlifeAlert !== false;
+  const branchSmartLifeDevicesShown = branchSidebarVisibility?.smartlifeDevices !== false;
 
 
   useEffect(() => {
