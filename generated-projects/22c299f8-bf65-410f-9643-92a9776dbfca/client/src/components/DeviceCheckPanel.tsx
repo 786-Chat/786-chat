@@ -371,6 +371,9 @@ export default function DeviceCheckPanel() {
         </div>
       </details>
 
+      <details className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
+        <summary className="cursor-pointer font-semibold text-slate-200">Advanced: historical MQTT identities and linking ({rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).length})</summary>
+        <div className="mt-4">
       {rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
           <Wifi className="mx-auto h-9 w-9 text-slate-500" />
@@ -543,6 +546,8 @@ export default function DeviceCheckPanel() {
           })}
         </div>
       )}
+        </div>
+      </details>
     </div>
   );
 }
