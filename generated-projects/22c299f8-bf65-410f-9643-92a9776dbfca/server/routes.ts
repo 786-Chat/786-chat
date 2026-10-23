@@ -8211,12 +8211,20 @@ Generated: ${new Date().toISOString()}
 
   // A device is only "Connected" when it has reported recently.
   // This prevents an old MQTT event from leaving a device green for days.
-  const OWNED_IOT_ONLINE_WINDOW_MS = 30 * 60 * 1000;
+  // Sleeping battery traps may stop reporting without an offline event.
+  const OWNED_IOT_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
   const ownedIotIsOnline = (reportedOnline: unknown, lastSeenAt: unknown) => {
     if (!reportedOnline || !lastSeenAt) return false;
     const lastSeenMs = new Date(String(lastSeenAt)).getTime();
     return Number.isFinite(lastSeenMs) && (Date.now() - lastSeenMs) <= OWNED_IOT_ONLINE_WINDOW_MS;
+  };
+
+  const ownedIotConnectionState = (row: any): string => {
+    if (ownedIotIsOnline(row.is_online, row.last_seen_at)) return "online";
+    if (row.last_event_type === "offline") return "disconnected";
+    if (row.last_seen_at) return "sleeping";
+    return row.lifecycle_state || "awaiting_activation";
   };
 
   const ownedIotDevicesForAdmin = async () => {
