@@ -1305,7 +1305,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const branchId = String(session.branchId);
       const sidebar = await readSidebarVisibility(branchId);
-      res.json({ ...sidebar, smartlifeAlert: true, smartlifeDevices: true });
+      // SmartLife visibility is stored separately from owned-IoT visibility.
+      let smartlifeAlert = false;
+      let smartlifeDevices = false;
+      try {
+        const smartlifeSettings = await db.execute(sql`
+          SELECT alert_visible, devices_visible FROM smartlife_branch_visibility
+          WHERE branch_id = ${branchId}::uuid LIMIT 1
+        `);
+        const saved = visibilityRows(smartlifeSettings)[0];
+        smartlifeAlert = saved?.alert_visible === true;
+        smartlifeDevices = saved?.devices_visible === true;
+      } catch {
+        // SmartLife settings cannot be verified; avoid falsely claiming sections enabled.
+      }
+      res.json({ ...sidebar, smartlifeAlert, smartlifeDevices });
     } catch {
       res.status(500).json({ message: "Unable to load branch sidebar settings" });
     }
