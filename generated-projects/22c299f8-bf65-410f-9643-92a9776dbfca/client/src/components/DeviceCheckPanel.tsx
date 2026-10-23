@@ -56,7 +56,6 @@ export default function DeviceCheckPanel() {
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
-  const [showUnassigned, setShowUnassigned] = useState(false);
   const [busy, setBusy] = useState("");
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
@@ -255,6 +254,7 @@ export default function DeviceCheckPanel() {
     }
   };
 
+  const unassignedWifiTotal = rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).length;
   const unassignedSightings = rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).slice(0, 30);
   const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId).slice(0, 30);
   const removeWifiSighting = async (row: DeviceCheckRow) => {
@@ -324,7 +324,7 @@ export default function DeviceCheckPanel() {
       <section className="rounded-xl border border-blue-500/30 bg-slate-900/70 p-4">
         <h3 className="font-semibold text-white">Select Branch</h3>
         <select value={selectedBranchId} aria-label="Select branch before viewing devices"
-          onChange={e => { setSelectedBranchId(e.target.value); setShowUnassigned(false); }}
+          onChange={e => setSelectedBranchId(e.target.value)}
           className="mt-3 h-10 w-full max-w-md rounded border border-slate-600 bg-slate-950 px-3 text-white">
           <option value="">Select branch...</option>
           {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -332,14 +332,17 @@ export default function DeviceCheckPanel() {
         {selectedBranchId && <>
           <p className="mt-3 text-sm text-white">Assigned device identities ({branchDevices.length})</p>
           {branchDevices.map(row => <p key={row.id} className="mt-2 rounded bg-slate-800 p-2 text-sm text-white">{row.assignedDeviceId} — {row.assignedDeviceName || row.hostname} — {row.isLive ? "MQTT live" : "MQTT not live"}</p>)}
-          <button type="button" onClick={() => setShowUnassigned(!showUnassigned)} className="mt-3 rounded border border-cyan-400 px-3 py-2 text-sm text-cyan-200">{showUnassigned ? "Hide unassigned sightings" : "Show unassigned HP2 sightings"}</button>
         </>}
+        {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">
+          {unassignedWifiTotal} HP2 Wi-Fi sightings available. Select a branch to view the cards immediately.
+        </p>}
       </section>
-      {selectedBranchId && showUnassigned && (
+      {selectedBranchId && (
       <section className="space-y-3" aria-label="HP2 detected Wi-Fi mice">
         <div>
-          <h3 className="text-lg font-bold text-white">HP2 Detected Wi-Fi Mice</h3>
-          <p className="text-sm text-slate-300">Automatic observations from HP2 Ubuntu. Each MAC gets its own card. Previous sightings are not live MQTT connections.</p>
+          <h3 className="text-lg font-bold text-white">HP2 Wi-Fi Sightings ({unassignedWifiTotal})</h3>
+          <p className="text-sm text-slate-300">These unassigned Wi-Fi signals were detected by HP2. They are NOT yet linked to the selected branch and do not prove MQTT connectivity. Identify a physical mouse before assigning it.</p>
+          {unassignedWifiTotal > 30 && <p className="mt-1 text-xs text-amber-200">Showing the 30 most recently seen of {unassignedWifiTotal} sightings to keep this page responsive.</p>}
         </div>
         {unassignedSightings.length === 0 ? (
           <div className="rounded-xl border border-dashed border-cyan-500/30 bg-slate-900/60 p-5 text-sm text-slate-300">
