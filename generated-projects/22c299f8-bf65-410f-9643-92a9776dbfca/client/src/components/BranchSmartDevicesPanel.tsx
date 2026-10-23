@@ -166,7 +166,7 @@ export default function BranchSmartDevicesPanel() {
 
                     {device.connectionState === "turned_off" && (
                       <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3">
-                        <p className="font-semibold text-red-100">Mouse turned OFF — please contact Pest Controller Mujeeb</p>
+                        <p className="font-semibold text-red-100">Mouse turned OFF — Contact Pest Controller Mujeeb</p>
                         <p className="mt-1 text-xs text-red-100/80">Your mouse remains assigned to this branch. Ask Mujeeb to check its power before it is used again.</p>
                         <button type="button" onClick={() => {
                           const message = "Pest Controller Mujeeb: The mouse trap " + device.deviceName + " (" + device.deviceId + ") at our branch is confirmed turned OFF. Please arrange a check.";
@@ -176,8 +176,15 @@ export default function BranchSmartDevicesPanel() {
                         </button>
                       </div>
                     )}
-                    <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first check"}
+                    <div className="mt-4 space-y-1 border-t border-slate-700/70 pt-3 text-xs text-slate-300">
+                      <p>MQTT: {device.isOnline ? "Connected — recent MQTT message verified" : device.lastCheckedAt ? "No recent MQTT signal" : "Not verified"}</p>
+                      <p className="text-slate-400">Last MQTT report: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never verified"}</p>
+                      {device.wifiApName && (
+                        <>
+                          <p className="break-all text-cyan-200">HP2 Wi-Fi AP: {device.wifiApName}{device.wifiSignalPercent != null ? " · Last recorded signal " + device.wifiSignalPercent + "%" : ""}</p>
+                          <p className="text-slate-400">Last HP2 Wi-Fi sighting: {device.wifiLastSeenAt ? new Date(device.wifiLastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Not reported"} · Wi-Fi AP does not prove MQTT connection.</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
