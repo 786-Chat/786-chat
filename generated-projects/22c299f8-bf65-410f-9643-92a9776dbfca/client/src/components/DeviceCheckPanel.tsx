@@ -74,6 +74,8 @@ export default function DeviceCheckPanel() {
     setScanStartedAt(Date.now());
   };
   const [busy, setBusy] = useState("");
+  const [wifiAssignOpenId, setWifiAssignOpenId] = useState("");
+  const [wifiPhysicallyConfirmed, setWifiPhysicallyConfirmed] = useState<Record<string, boolean>>({});
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
