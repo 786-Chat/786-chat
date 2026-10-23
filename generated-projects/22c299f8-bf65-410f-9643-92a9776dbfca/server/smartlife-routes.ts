@@ -254,7 +254,21 @@ export function registerSmartLifeRoutes(app: Express, adminOnly: any) {
         RETURNING id,branch_id,device_code,display_name,installation_area,battery_percent,
           connection_status,trap_status,signal_dbm,notes,updated_at
       `));
-      if (!created.length) return res.status(409).json({message:"This SmartLife device ID is already registered."});
+      if (!created.length) {
+        const existing = rows(await db.execute(sql`
+          SELECT d.branch_id, d.display_name, d.archived_at, b.name AS branch_name
+          FROM smartlife_devices d
+          LEFT JOIN branches b ON b.id = d.branch_id
+          WHERE d.device_code = ${data.deviceCode}
+          LIMIT 1
+        `))[0];
+        return res.status(409).json({
+          message: existing
+            ? `This SmartLife ID is already registered to ${existing.branch_name || "another branch"} (${existing.display_name || data.deviceCode})${existing.archived_at ? " — archived" : ""}. Open SmartLife Devices to review it; do not register a duplicate.`
+            : "This SmartLife device ID is already registered. Open SmartLife Devices to review it.",
+          existingBranchId: existing?.branch_id || null,
+        });
+      }
       res.status(201).json(publicDevice(created[0]));
     } catch (err) { fail(res, err); }
   });
