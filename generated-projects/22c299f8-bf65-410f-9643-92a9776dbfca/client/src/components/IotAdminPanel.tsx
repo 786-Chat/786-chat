@@ -79,6 +79,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
+  const [powerBusyId, setPowerBusyId] = useState("");
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
@@ -120,6 +121,23 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       .slice(0, 20);
   }, [branches, branchSearch]);
 
+
+  const confirmPowerState = async (device: any, off: boolean) => {
+    if (off && !window.confirm("Have you physically verified " + device.deviceName + " is switched OFF? The customer will see Contact Pest Controller Mujeeb.")) return;
+    setPowerBusyId(String(device.id));
+    try {
+      const response = await fetch("/api/iot/devices/" + encodeURIComponent(device.id) + "/confirmed-power", {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ off }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Unable to save power state");
+      toast({ title: off ? "Mouse confirmed OFF" : "OFF confirmation cleared", description: off ? "Pest Controller Mujeeb contact prompt will appear for the branch." : "Status will follow actual Wi-Fi and MQTT reports." });
+      await loadBase();
+    } catch (err: any) {
+      toast({ title: "Power status not saved", description: err?.message || "Try again", variant: "destructive" });
+    } finally { setPowerBusyId(""); }
+  };
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes] = await Promise.all([
