@@ -8409,6 +8409,13 @@ Generated: ${new Date().toISOString()}
       return { status: 400, message: "Only Food Safety pairing networks are accepted from the HP2 scanner." };
     }
     const hardwareKey = "wifi-ap:" + macAddress;
+    // Return success so the HP2 scanner does not retry, but never recreate or
+    // update an ignored BSSID. Admin can restore it whenever needed.
+    const ignoredResult: any = await db.execute(sql`
+      SELECT hardware_key FROM owned_iot_wifi_ignored WHERE hardware_key = ${hardwareKey} LIMIT 1
+    `);
+    const ignoredRows = Array.isArray(ignoredResult) ? ignoredResult : (ignoredResult?.rows || []);
+    if (ignoredRows.length) return { status: 200, ignored: true, message: "Wi-Fi sighting ignored by admin; MQTT unchanged." };
     const existing: any = await db.execute(sql`
       SELECT id FROM owned_iot_device_checks
       WHERE mac_address = ${macAddress} AND hardware_key <> ${hardwareKey}
@@ -8567,6 +8574,10 @@ Generated: ${new Date().toISOString()}
         LEFT JOIN owned_iot_wifi_branch_links wl ON wl.sighting_id = c.id
         LEFT JOIN owned_iot_devices d ON d.device_id = COALESCE(c.assigned_device_id, wl.device_id)
         LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        WHERE c.hardware_key NOT LIKE 'wifi-ap:%'
+          OR NOT EXISTS (
+            SELECT 1 FROM owned_iot_wifi_ignored i WHERE i.hardware_key = c.hardware_key
+          )
         ORDER BY c.last_seen_at DESC
         LIMIT 200
       `);
