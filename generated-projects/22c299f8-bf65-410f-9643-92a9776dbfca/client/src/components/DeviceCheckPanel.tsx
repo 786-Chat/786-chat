@@ -541,18 +541,23 @@ export default function DeviceCheckPanel() {
                           placeholder="Name, e.g. Kitchen"
                           className="border-slate-600 bg-slate-950 text-white"
                         />
-                        <select
-                          value={draft.branchId}
-                          onChange={(event) => setDraft(row.id, { branchId: event.target.value })}
-                          className="h-10 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
-                        >
-                          <option value="">Select branch...</option>
-                          {branches.map((branch) => (
-                            <option key={branch.id} value={branch.id}>
-                              {branch.name}{branch.address ? " — " + branch.address : ""}{branch.postCode ? " " + branch.postCode : ""}
-                            </option>
-                          ))}
-                        </select>
+                        <details className="relative min-w-0 rounded-md border border-slate-600 bg-slate-950 text-sm text-white">
+                          <summary className="flex h-10 cursor-pointer items-center px-3">
+                            {branches.find((branch) => branch.id === draft.branchId)?.name || "Select branch..."}
+                          </summary>
+                          <div className="max-h-40 overflow-y-auto border-t border-slate-600 p-1">
+                            {branches.map((branch) => (
+                              <button key={branch.id} type="button"
+                                className="block w-full rounded px-2 py-2 text-left text-xs hover:bg-slate-700"
+                                onClick={(event) => {
+                                  setDraft(row.id, { branchId: branch.id });
+                                  event.currentTarget.closest("details")?.removeAttribute("open");
+                                }}>
+                                {branch.name}{branch.address ? " — " + branch.address : ""}{branch.postCode ? " " + branch.postCode : ""}
+                              </button>
+                            ))}
+                          </div>
+                        </details>
                         <Input
                           value={draft.notes}
                           onChange={(event) => setDraft(row.id, { notes: event.target.value })}
