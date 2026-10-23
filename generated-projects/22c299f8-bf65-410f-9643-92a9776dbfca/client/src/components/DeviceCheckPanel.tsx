@@ -363,29 +363,29 @@ export default function DeviceCheckPanel() {
       <section className="rounded-xl border border-blue-500/30 bg-slate-900/70 p-4">
         <h3 className="font-semibold text-white">Select Branch</h3>
         <select value={selectedBranchId} aria-label="Select branch before viewing devices"
-          onChange={e => setSelectedBranchId(e.target.value)}
+          onChange={e => beginMouseScan(e.target.value)}
           className="mt-3 h-10 w-full max-w-md rounded border border-slate-600 bg-slate-950 px-3 text-white">
-          <option value="">Select branch...</option>
+          <option value="">Choose branch, then switch ON one mouse...</option>
           {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         {selectedBranchId && <>
-          <p className="mt-3 text-sm text-white">Assigned device identities ({branchDevices.length})</p>
-          {branchDevices.map(row => <p key={row.id} className="mt-2 rounded bg-slate-800 p-2 text-sm text-white">{row.assignedDeviceId} — {row.assignedDeviceName || row.hostname} — {row.isLive ? "MQTT live" : "MQTT not live"}</p>)}
+          <p className="mt-3 text-sm text-white">MQTT-live identities assigned to this branch ({branchDevices.filter(row => row.isLive).length})</p>
+          {branchDevices.filter(row => row.isLive).slice(0, 10).map(row => <p key={row.id} className="mt-2 rounded bg-slate-800 p-2 text-sm text-white">{row.assignedDeviceId} — {row.assignedDeviceName || row.hostname} — MQTT live</p>)}
+          <button type="button" onClick={() => beginMouseScan(selectedBranchId)} className="mt-3 rounded border border-cyan-500/60 px-3 py-2 text-sm text-cyan-100">Start fresh detection for next mouse</button>
+          <p className="mt-2 text-xs text-slate-400">Keep other mice OFF. New Wi-Fi signals are candidates, not proof of physical identity or MQTT connectivity.</p>
         </>}
-        {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">
-          {unassignedWifiTotal} HP2 Wi-Fi sightings available. Select a branch to view the cards immediately.
-        </p>}
+        {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">Clean slate. Select Addis Restaurant or another branch, then switch ON one mouse. Old test sightings stay hidden.</p>}
       </section>
       {selectedBranchId && (
       <section className="space-y-3" aria-label="HP2 detected Wi-Fi mice">
         <div>
-          <h3 className="text-lg font-bold text-white">HP2 Wi-Fi Sightings ({unassignedWifiTotal})</h3>
-          <p className="text-sm text-slate-300">These unassigned Wi-Fi signals were detected by HP2. They are NOT yet linked to the selected branch and do not prove MQTT connectivity. Identify a physical mouse before assigning it.</p>
-          {unassignedWifiTotal > 30 && <p className="mt-1 text-xs text-amber-200">Showing the 30 most recently seen of {unassignedWifiTotal} sightings to keep this page responsive.</p>}
+          <h3 className="text-lg font-bold text-white">New Wi-Fi detections ({unassignedWifiTotal})</h3>
+          <p className="text-sm text-slate-300">Only new HP2 signals since this branch was selected appear here. Old saved sightings stay hidden. Confirm the physical mouse before assigning it; Wi-Fi is not MQTT.</p>
+          {unassignedWifiTotal > 10 && <p className="mt-1 text-xs text-amber-200">Showing the 10 newest of {unassignedWifiTotal} signals to keep this page responsive.</p>}
         </div>
         {unassignedSightings.length === 0 ? (
           <div className="rounded-xl border border-dashed border-cyan-500/30 bg-slate-900/60 p-5 text-sm text-slate-300">
-            No HP2 Wi-Fi reports yet. Check the Ubuntu scanner and refresh reports above.
+            No new Wi-Fi signal yet. Switch ON the mouse you want to identify, keeping other mice OFF. This page checks HP2 reports automatically.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -461,8 +461,8 @@ export default function DeviceCheckPanel() {
         </div>
       </details>
 
-      <details className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
-        <summary className="cursor-pointer font-semibold text-slate-200">Advanced: historical MQTT identities and linking</summary>
+      {visibleMqttRows.length > 0 && <details className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
+        <summary className="cursor-pointer font-semibold text-slate-200">Live MQTT identity — verify and link to branch</summary>
         <div className="mt-4">
       {visibleMqttRows.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
@@ -659,7 +659,7 @@ export default function DeviceCheckPanel() {
         </div>
       )}
         </div>
-      </details>
+      </details>}
     </div>
   );
 }
