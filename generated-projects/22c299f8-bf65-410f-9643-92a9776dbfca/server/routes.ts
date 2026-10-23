@@ -7737,6 +7737,8 @@ Generated: ${new Date().toISOString()}
         CONSTRAINT owned_iot_devices_battery_pct_check CHECK (battery_pct IS NULL OR battery_pct BETWEEN 0 AND 100)
       )
     `);
+    // Admin-confirmed power state. Silence alone is NOT evidence of OFF.
+    await db.execute(sql`ALTER TABLE owned_iot_devices ADD COLUMN IF NOT EXISTS manually_off_at timestamptz`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS owned_iot_events (
         id bigserial PRIMARY KEY,
@@ -8221,9 +8223,18 @@ Generated: ${new Date().toISOString()}
   };
 
   const ownedIotConnectionState = (row: any): string => {
+    const observedWifiMs = row.last_wifi_seen_at ? new Date(row.last_wifi_seen_at).getTime() : 0;
+    const mqttMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
+    const manualOffMs = row.manually_off_at ? new Date(row.manually_off_at).getTime() : 0;
+    const wifiRecentlySeen = Number.isFinite(observedWifiMs) && observedWifiMs > 0 &&
+      Date.now() - observedWifiMs < 75000;
+    // A new genuine MQTT/Wi-Fi observation after manually marking OFF restores
+    // the observed status; otherwise only an admin can confirm power is OFF.
+    if (manualOffMs > 0 && manualOffMs >= Math.max(observedWifiMs, mqttMs)) return "turned_off";
     if (ownedIotIsOnline(row.is_online, row.last_seen_at)) return "online";
+    if (wifiRecentlySeen) return "wifi_seen";
     if (row.last_event_type === "offline") return "disconnected";
-    if (row.last_seen_at) return "sleeping";
+    if (mqttMs > 0 || observedWifiMs > 0) return "sleeping";
     return row.lifecycle_state || "awaiting_activation";
   };
 
@@ -8244,6 +8255,13 @@ Generated: ${new Date().toISOString()}
           rssi,
           last_seen_at,
           last_alarm_at,
+          manually_off_at,
+          (SELECT c.last_seen_at FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_seen_at,
+          (SELECT c.wifi_signal_percent FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_signal_percent,
+          (SELECT c.hostname FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS wifi_ap_name,
           (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE COALESCE(lifecycle_state, '') <> 'archived'
@@ -8261,6 +8279,9 @@ Generated: ${new Date().toISOString()}
           isOnline,
           reportedOnline: Boolean(row.is_online),
           connectionState: ownedIotConnectionState(row),
+          wifiLastSeenAt: row.last_wifi_seen_at || null,
+          wifiSignalPercent: row.last_wifi_signal_percent == null ? null : Number(row.last_wifi_signal_percent),
+          wifiApName: row.wifi_ap_name || null,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -9051,6 +9072,13 @@ Generated: ${new Date().toISOString()}
           rssi,
           last_seen_at,
           last_alarm_at,
+          manually_off_at,
+          (SELECT c.last_seen_at FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_seen_at,
+          (SELECT c.wifi_signal_percent FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_signal_percent,
+          (SELECT c.hostname FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS wifi_ap_name,
           (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE branch_id::text = ${String(branchId)}
@@ -9069,6 +9097,9 @@ Generated: ${new Date().toISOString()}
           isOnline,
           reportedOnline: Boolean(row.is_online),
           connectionState: ownedIotConnectionState(row),
+          wifiLastSeenAt: row.last_wifi_seen_at || null,
+          wifiSignalPercent: row.last_wifi_signal_percent == null ? null : Number(row.last_wifi_signal_percent),
+          wifiApName: row.wifi_ap_name || null,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
