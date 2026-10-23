@@ -534,6 +534,25 @@ export default function DeviceCheckPanel() {
         {unassignedWifiTotal > wifiCardLimit && <button type="button" onClick={() => setWifiCardLimit(n => n + 12)} className="rounded border border-cyan-500/50 px-4 py-2 text-sm text-cyan-100 hover:bg-cyan-700/15">Show 12 more Wi-Fi sightings</button>}
       </section>
 
+      <details className="rounded-xl border border-slate-600/60 bg-slate-900/60 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-200">Ignored Wi-Fi signals ({ignoredWifi.length}) — Restore if needed</summary>
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-slate-400">HP2 still scans normally, but ignored Wi-Fi addresses do not return to Device Check. Restore a signal here if it belongs to a mouse you need later.</p>
+          {ignoredWifi.length === 0 && <p className="text-sm text-slate-400">No Wi-Fi signals ignored yet.</p>}
+          {ignoredWifi.map(item => (
+            <div key={item.hardwareKey} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
+              <div className="min-w-0">
+                <p className="break-all text-sm font-semibold text-white">{item.hostname || "Unidentified Wi-Fi signal"}</p>
+                <p className="mt-1 break-all font-mono text-xs text-slate-400">{item.macAddress || item.hardwareKey}</p>
+              </div>
+              <button type="button" disabled={busy === "restore:" + item.hardwareKey} onClick={() => restoreIgnoredWifi(item)}
+                className="rounded border border-cyan-500/50 px-3 py-2 text-xs font-semibold text-cyan-200 disabled:opacity-50">
+                {busy === "restore:" + item.hardwareKey ? "Restoring..." : "Restore Wi-Fi signal"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </details>
       <details className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
         <summary className="cursor-pointer font-semibold text-amber-200">Advanced: manual Wi-Fi observation</summary>
         <div className="mt-3">
