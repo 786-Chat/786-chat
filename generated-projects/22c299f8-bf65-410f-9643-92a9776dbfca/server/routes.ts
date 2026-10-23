@@ -8421,7 +8421,7 @@ Generated: ${new Date().toISOString()}
     const id = String(req.params.id || "");
     if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid sighting ID" });
     try {
-      await ensureOwnedIotDeviceChecks();
+      await ensureOwnedIotSchema();
       const removed = await db.execute(sql`
         DELETE FROM owned_iot_device_checks
         WHERE id = ${id}::uuid AND hardware_key LIKE 'wifi-ap:%'
