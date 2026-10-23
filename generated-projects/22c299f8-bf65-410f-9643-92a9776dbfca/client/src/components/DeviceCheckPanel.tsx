@@ -61,6 +61,7 @@ const isObsoleteLegacyDevice4 = (row: DeviceCheckRow) =>
 export default function DeviceCheckPanel() {
   const { toast } = useToast();
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
@@ -82,9 +83,13 @@ export default function DeviceCheckPanel() {
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
     ]);
 
-    if (checkRes.ok) {
-      const data = await checkRes.json();
-      setRows(Array.isArray(data) ? data : []);
+    if (!checkRes.ok) {
+      const errorData = await checkRes.json().catch(() => ({}));
+      setLoadError("Device Check API " + checkRes.status + ": " + String(errorData?.message || "Unable to load recorded HP2 Wi-Fi sightings."));
+    } else {
+      const data = await checkRes.json().catch(() => null);
+      if (Array.isArray(data)) { setRows(data); setLoadError(""); }
+      else setLoadError("Device Check API returned invalid data.");
     }
     if (devicesRes.ok) {
       const data = await devicesRes.json();
@@ -343,6 +348,7 @@ export default function DeviceCheckPanel() {
         </Button>
       </div>
 
+      {loadError && <div role="alert" className="rounded-lg border border-red-500/50 bg-red-950/40 p-3 text-sm text-red-100">Device Check loading error: {loadError}. This does not mean a mouse is switched OFF.</div>}
       <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 text-cyan-300" />
@@ -393,7 +399,7 @@ export default function DeviceCheckPanel() {
                   String(v || "").toLowerCase().includes(branchPickerSearch.trim().toLowerCase())
                 )).slice(0, 15).map(b => (
                   <button key={b.id} type="button"
-                    onClick={() => { setSelectedBranchId(String(b.id)); setBranchPickerOpen(false); setBranchPickerSearch(""); setWifiAssignOpenId(""); }}
+                    onClick={() => { setSelectedBranchId(String(b.id)); setBranchPickerOpen(false); setBranchPickerSearch(""); setWifiAssignOpenId(""); setWifiPhysicallyConfirmed({}); setExistingChoice({}); }}
                     className={"block w-full rounded px-3 py-2 text-left text-sm hover:bg-blue-600/25 " + (String(b.id) === selectedBranchId ? "bg-cyan-600/25 text-cyan-100" : "text-white")}>
                     <span className="block truncate font-medium">{b.name}</span>
                     {(b.postCode || b.address) && <span className="block truncate text-xs text-slate-400">{[b.address, b.postCode].filter(Boolean).join(" · ")}</span>}
