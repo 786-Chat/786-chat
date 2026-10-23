@@ -8243,7 +8243,8 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE COALESCE(lifecycle_state, '') <> 'archived'
         ORDER BY friendly_name NULLS LAST, device_id
@@ -8259,6 +8260,7 @@ Generated: ${new Date().toISOString()}
           notes: row.installation_location || row.hardware_model,
           isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionState: ownedIotConnectionState(row),
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -8267,7 +8269,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotConnectionState(row) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -8843,7 +8845,7 @@ Generated: ${new Date().toISOString()}
         provider: "food-safety-owned-mqtt",
         lastStatus: [
           { code: "battery_percentage", value: row.battery_pct },
-          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "status", value: ownedIotConnectionState(row) },
           { code: "rssi", value: row.rssi },
           { code: "shock", value: Boolean(row.last_alarm_at) },
         ],
@@ -9048,7 +9050,8 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE branch_id::text = ${String(branchId)}
           AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
@@ -9065,6 +9068,7 @@ Generated: ${new Date().toISOString()}
           notes: row.installation_location || row.hardware_model,
           isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionState: ownedIotConnectionState(row),
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -9073,7 +9077,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotConnectionState(row) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
