@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { Express } from "express";
 import express from "express";
+import { registerSmartLifeRoutes } from "./smartlife-routes.js";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { setupAuth, isAuthenticated } from "./replitAuth.js";
@@ -1220,6 +1221,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin authentication system - completely separate from staff access
   const adminTokens = new Set<string>();
+  // Device section visibility is per branch; never delete devices or alarms here.
+  const visibilityRows = (result: any): any[] => Array.isArray(result) ? result : result?.rows || [];
+  let visibilityTableInit: Promise<void> | null = null;
+  const ensureSidebarVisibility = () => {
+    if (!visibilityTableInit) {
+      visibilityTableInit = db.execute(sql`
+        CREATE TABLE IF NOT EXISTS pest_branch_sidebar_visibility (
+          branch_id text PRIMARY KEY,
+          device_alerts boolean NOT NULL DEFAULT true,
+          smart_devices boolean NOT NULL DEFAULT true,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `).then(() => undefined).catch((error) => {
+        visibilityTableInit = null;
+        throw error;
+      });
+    }
+    return visibilityTableInit;
+  };
+  const readSidebarVisibility = async (branchId: string) => {
+    await ensureSidebarVisibility();
+    const result = await db.execute(sql`
+      SELECT device_alerts, smart_devices
+      FROM pest_branch_sidebar_visibility WHERE branch_id = ${branchId} LIMIT 1
+    `);
+    const row = visibilityRows(result)[0];
+    return {
+      deviceAlerts: row?.device_alerts !== false,
+      smartDevices: row?.smart_devices !== false,
+    };
+  };
+  const adminForVisibility = (req: any, res: any, next: any) => {
+    const token = req.cookies?.admin_token;
+    if (!token || !adminTokens.has(token)) {
+      return res.status(401).json({ message: "Admin login required" });
+    }
+    next();
+  };
+  app.get("/api/admin/branch-sidebar-visibility", adminForVisibility, async (req, res) => {
+    const branchId = String(req.query.branchId || "").trim();
+    if (!branchId) return res.status(400).json({ message: "Select a branch" });
+    try {
+      res.json({ branchId, ...await readSidebarVisibility(branchId) });
+    } catch {
+      res.status(500).json({ message: "Unable to read branch sidebar setting" });
+    }
+  });
+  app.post("/api/admin/branch-sidebar-visibility", adminForVisibility, async (req, res) => {
+    const branchId = String(req.body?.branchId || "").trim();
+    const sectionKey = String(req.body?.sectionKey || "");
+    const visible = req.body?.visible;
+    if (!branchId || !["device-alerts", "smart-devices"].includes(sectionKey) || typeof visible !== "boolean") {
+      return res.status(400).json({ message: "Select branch, section and Show/Hide" });
+    }
+    try {
+      await ensureSidebarVisibility();
+      if (sectionKey === "device-alerts") {
+        await db.execute(sql`
+          INSERT INTO pest_branch_sidebar_visibility (branch_id, device_alerts)
+          VALUES (${branchId}, ${visible})
+          ON CONFLICT (branch_id) DO UPDATE
+          SET device_alerts = EXCLUDED.device_alerts, updated_at = now()
+        `);
+      } else {
+        await db.execute(sql`
+          INSERT INTO pest_branch_sidebar_visibility (branch_id, smart_devices)
+          VALUES (${branchId}, ${visible})
+          ON CONFLICT (branch_id) DO UPDATE
+          SET smart_devices = EXCLUDED.smart_devices, updated_at = now()
+        `);
+      }
+      res.json({ success: true, branchId, ...await readSidebarVisibility(branchId) });
+    } catch {
+      res.status(500).json({ message: "Unable to save branch sidebar setting" });
+    }
+  });
+  app.get("/api/branch/sidebar-visibility", async (req: any, res) => {
+    const session = req.session;
+    if (session?.userType !== "branch" || !session?.branchId) {
+      return res.status(401).json({ message: "Branch login required" });
+    }
+    try {
+      const branchId = String(session.branchId);
+      const sidebar = await readSidebarVisibility(branchId);
+      res.json({ ...sidebar, smartlifeAlert: true, smartlifeDevices: true });
+    } catch {
+      res.status(500).json({ message: "Unable to load branch sidebar settings" });
+    }
+  });
+  // Existing manual SmartLife endpoints, with separate branch-scoped data.
+  registerSmartLifeRoutes(app, adminForVisibility);
+
   const ADMIN_USERNAME = "sardar";
   const ADMIN_PASSWORD = "smrptt77";
   
