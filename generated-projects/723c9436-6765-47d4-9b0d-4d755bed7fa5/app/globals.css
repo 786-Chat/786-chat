@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #0a192f;
+  --cyan: #00b4d8;
+  --green: #2ecc71;
+  --amber: #f39c12;
+  --red: #e74c3c;
+}
+
+body {
+  background-color: var(--navy);
+  color: #e0e0e0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* subtle network grid background */
+.bg-grid {
+  background-image: 
+    linear-gradient(rgba(0, 180, 216, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 180, 216, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* luminous status edges */
+.status-edge {
+  border-left: 4px solid;
+}
+.status-edge.online { border-color: var(--green); }
+.status-edge.warning { border-color: var(--amber); }
+.status-edge.alarm { border-color: var(--red); }
+
+/* map pulse animation */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pulse {
+  animation: pulse 2s infinite;
+}
