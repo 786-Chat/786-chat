@@ -35,7 +35,6 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const { toast } = useToast();
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [assigned, setAssigned] = useState<any[]>([]);
-  const [wifiObservations, setWifiObservations] = useState<any[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [registering, setRegistering] = useState(false);
   const [deviceId, setDeviceId] = useState("");
@@ -108,17 +107,12 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
 
   const loadBase = async () => {
-    const [statusRes, assignedRes, branchRes, wifiCheckRes] = await Promise.all([
+    const [statusRes, assignedRes, branchRes] = await Promise.all([
       fetch("/api/iot/owned/status", { credentials: "include", cache: "no-store" }),
       fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }),
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
-      fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" }),
     ]);
 
-    if (wifiCheckRes.ok) {
-      const data = await wifiCheckRes.json().catch(() => []);
-      setWifiObservations(Array.isArray(data) ? data.filter((item: any) => String(item.hardwareKey || "").startsWith("wifi-ap:")) : []);
-    }
     if (statusRes.ok) setSystemStatus(await statusRes.json());
     if (assignedRes.ok) {
       const devices = await assignedRes.json();
@@ -556,44 +550,17 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         </div>
       </div>
 
-      <div className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-white">HP2 factory Wi-Fi signals (separate from MQTT)</h3>
-            <p className="mt-1 text-sm text-slate-300">Only genuinely observed HP2 Wi-Fi signals appear here. A SmartLife pairing signal is not proof of trap activation or MQTT connectivity.</p>
-          </div>
-          <Button size="sm" type="button" onClick={() => loadBase().catch(() => {})} className="bg-slate-700 text-white hover:bg-slate-600">
-            <RefreshCw className="mr-2 h-4 w-4" /> Check signal reports
-          </Button>
-        </div>
-        {!wifiObservations.length ? (
-          <p className="mt-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-sm text-amber-200">
-            No Wi-Fi signal has been reported to this dashboard yet. Use Device Check to record a real HP2 scan,
-            or start the optional authenticated HP2 Ubuntu scanner for automatic updates.
-          </p>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {wifiObservations.slice(0, 12).map((observation: any) => (
-              <div key={observation.id} className="rounded-xl border border-cyan-500/20 bg-slate-900/70 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="break-all font-semibold text-white">{observation.hostname || "Factory Wi-Fi"}</span>
-                  <span className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-cyan-200">
-                    {observation.isWifiRecentlySeen ? "Recently seen" : "Previous Wi-Fi sighting"}
-                  </span>
-                </div>
-                <p className="mt-1 break-all font-mono text-xs text-slate-400">{observation.macAddress || "Unknown BSSID"}</p>
-                <p className="mt-2 text-sm text-cyan-200">
-                  Wi-Fi signal: {observation.wifiSignalPercent == null ? "Not recorded" : observation.wifiSignalPercent + "% at last scan"}
-                </p>
-                <p className="text-sm text-amber-200">MQTT: Not connected / not verified</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {observation.lastSeenAt ? "Last report: " + new Date(observation.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No report time"}
-                  {observation.wifiObservationSource === "admin-entry" ? " · Manually recorded" : " · HP2 scanner"}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="rounded-xl border border-cyan-500/25 bg-slate-900/60 p-4">
+        <p className="text-sm font-semibold text-white">Device discovery is managed in Device Check</p>
+        <p className="mt-1 text-sm text-slate-300">
+          HP2 Wi-Fi sightings, including unregistered SmartLife pairing signals, appear in Device Check.
+          This page lists registered Food Safety owned devices only. A saved sighting does not mean
+          that a mouse is MQTT-connected.
+        </p>
+        <Button type="button" variant="outline" onClick={onOpenDeviceCheck}
+          className="mt-3 border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
+          <Wifi className="mr-2 h-4 w-4" /> View HP2 detected devices
+        </Button>
       </div>
 
       <div>
@@ -886,8 +853,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
             <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Devices</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.registeredDevices ?? ownedDevices.length}</p>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Food Safety devices</p>
+            <p className="mt-1 text-sm font-semibold text-white">{ownedDevices.length}</p>
           </div>
         </div>
       </div>
