@@ -444,6 +444,48 @@ export default function DeviceCheckPanel() {
                 </div>
                 <p className="mt-3 text-xs text-slate-400">Last HP2 report: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}</p>
                 <p className="mt-1 text-xs text-slate-400">{row.wifiObservationSource === "admin-entry" ? "Manually recorded" : "HP2 scanner observation"} · Not assigned automatically</p>
+                <button type="button" onClick={() => setWifiAssignOpenId(wifiAssignOpenId === row.id ? "" : row.id)}
+                  className="mr-2 mt-3 rounded border border-emerald-400/50 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200">
+                  {wifiAssignOpenId === row.id ? "Cancel assignment" : "Assign to selected branch"}
+                </button>
+                {wifiAssignOpenId === row.id && (
+                  <div className="mt-3 space-y-3 rounded-lg border border-cyan-500/40 bg-slate-800 p-3">
+                    <p className="text-sm font-semibold text-white">Assign this mouse to {branches.find(b => b.id === selectedBranchId)?.name || "selected branch"}</p>
+                    <p className="text-xs text-amber-200">Verify the physical mouse first. This records its Wi-Fi AP identity; MQTT is not connected or proven by this action.</p>
+                    <label className="flex items-start gap-2 text-xs text-white">
+                      <input type="checkbox" checked={Boolean(wifiPhysicallyConfirmed[row.id])} onChange={e => setWifiPhysicallyConfirmed(previous => ({ ...previous, [row.id]: e.target.checked }))} className="mt-0.5" />
+                      I have physically confirmed this is the correct mouse for the selected branch.
+                    </label>
+                    <div className="rounded-lg border border-slate-600 p-3">
+                      <p className="mb-2 text-xs font-semibold text-white">Already registered? Link existing FS-MOUSE device</p>
+                      <select aria-label="Registered device in selected branch" value={existingChoice[row.id] || ""} onChange={e => setExistingChoice(old => ({ ...old, [row.id]: e.target.value }))}
+                        className="h-10 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs text-white">
+                        <option value="">Select a registered mouse from this branch...</option>
+                        {registered.filter(device => String(device.branchId) === selectedBranchId && device.deviceId.toUpperCase() !== "FS-MOUSE-000001").map(device => (
+                          <option key={device.id} value={device.deviceId}>{device.deviceName || device.deviceId} — {device.deviceId}</option>
+                        ))}
+                      </select>
+                      <button type="button" disabled={!wifiPhysicallyConfirmed[row.id] || !existingChoice[row.id] || busy === "wifi-link:" + row.id}
+                        onClick={() => assignWifiExisting(row)} className="mt-2 rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                        Link Existing to Branch
+                      </button>
+                    </div>
+                    <div className="rounded-lg border border-slate-600 p-3">
+                      <p className="mb-2 text-xs font-semibold text-white">New mouse? Register and assign to this branch</p>
+                      <Input aria-label="New physical mouse name" placeholder="Device name, e.g. Mouse 10" value={(drafts[row.id] || emptyDraft()).deviceName}
+                        onChange={e => setDraft(row.id, { deviceName: e.target.value, branchId: selectedBranchId })} className="mb-2 border-slate-600 bg-slate-950 text-white" />
+                      <Input aria-label="New mouse installation area" placeholder="Installation area, e.g. Kitchen / Back Door" value={(drafts[row.id] || emptyDraft()).notes}
+                        onChange={e => setDraft(row.id, { notes: e.target.value, branchId: selectedBranchId })} className="mb-2 border-slate-600 bg-slate-950 text-white" />
+                      <Input aria-label="Optional Food Safety device ID" placeholder="Optional unique FS-MOUSE ID (automatically generated if blank)" value={(drafts[row.id] || emptyDraft()).deviceId}
+                        onChange={e => setDraft(row.id, { deviceId: e.target.value.toUpperCase(), branchId: selectedBranchId })} className="border-slate-600 bg-slate-950 text-white" />
+                      <button type="button" onClick={() => registerAndAssign(row)}
+                        disabled={!wifiPhysicallyConfirmed[row.id] || !(drafts[row.id]?.deviceName || "").trim() || !(drafts[row.id]?.notes || "").trim() || busy === "assign:" + row.id}
+                        className="mt-3 rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                        Register & Assign to This Branch
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <button type="button" disabled={busy === "remove:" + row.id} onClick={() => removeWifiSighting(row)} className="mt-3 rounded border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-950/50">Remove Wi-Fi Sighting</button>
               </article>
             ))}
