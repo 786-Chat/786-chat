@@ -400,8 +400,15 @@ export default function DeviceCheckPanel() {
           {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         {selectedBranchId && <>
-          <p className="mt-3 text-sm text-white">MQTT-live identities assigned to this branch ({branchDevices.filter(row => row.isLive).length})</p>
-          {branchDevices.filter(row => row.isLive).slice(0, 10).map(row => <p key={row.id} className="mt-2 rounded bg-slate-800 p-2 text-sm text-white">{row.assignedDeviceId} — {row.assignedDeviceName || row.hostname} — MQTT live</p>)}
+          <p className="mt-3 text-sm font-semibold text-white">Devices assigned to this branch ({branchDevices.length})</p>
+          {branchDevices.length === 0 && <p className="mt-2 text-xs text-slate-400">No physical mouse assigned yet. A confirmed Wi-Fi card moves here after assignment.</p>}
+          {branchDevices.map(row => (
+            <div key={row.id} className="mt-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
+              <p className="text-sm font-semibold text-white">{row.assignedDeviceName || row.hostname || "Mouse"} — {row.assignedDeviceId}</p>
+              <p className="mt-1 font-mono text-xs text-cyan-200">{row.hostname || row.mqttPrefix || "Wi-Fi observation"}{row.macAddress ? " · " + row.macAddress : ""}</p>
+              <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? "Wi-Fi identity assigned · MQTT not verified" : row.isLive ? "MQTT live" : "MQTT last seen / offline"}</p>
+            </div>
+          ))}
           <button type="button" onClick={() => beginMouseScan(selectedBranchId)} className="mt-3 rounded border border-cyan-500/60 px-3 py-2 text-sm text-cyan-100">Start fresh detection for next mouse</button>
           <p className="mt-2 text-xs text-slate-400">Keep other mice OFF. New Wi-Fi signals are candidates, not proof of physical identity or MQTT connectivity.</p>
         </>}
