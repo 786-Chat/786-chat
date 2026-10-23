@@ -96,9 +96,19 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     () => branches.find((branch) => String(branch.id) === String(activeBranchId)) || null,
     [branches, activeBranchId],
   );
+  // Hide the retired offline FS-MOUSE-000001 test card from normal Smart Devices.
+  // Preserve the registered record, backups and MQTT history; a genuinely online
+  // device will reappear rather than being permanently suppressed.
+  const visibleOwnedDevices = useMemo(
+    () => ownedDevices.filter((device: any) =>
+      !(String(device.deviceId || "").toUpperCase() === "FS-MOUSE-000001" && !device.isOnline)),
+    [ownedDevices],
+  );
   const activeBranchDevices = useMemo(
-    () => activeBranchId ? ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)) : ownedDevices,
-    [ownedDevices, activeBranchId],
+    () => activeBranchId
+      ? visibleOwnedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId))
+      : [],
+    [visibleOwnedDevices, activeBranchId],
   );
   const branchSearchResults = useMemo(() => {
     const query = branchSearch.trim().toLowerCase();
@@ -1008,7 +1018,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-slate-600 bg-slate-900/40 p-5 text-sm text-slate-400">
-              All registered devices are shown below. Search and select a branch to filter by shop.
+              Clean device list. Select a customer branch first. Old test devices stay preserved in records, not shown as active mice.
             </div>
           )}
         </div>
@@ -1016,7 +1026,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="flex items-center gap-2 font-semibold text-white">
             <HardDrive className="h-4 w-4 text-emerald-300" />
-            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : `All Registered Devices (${ownedDevices.length})`}
+            {activeBranch ? `${activeBranch.name} Devices (${activeBranchDevices.length})` : "Select a Branch to View Devices"}
           </h3>
           <div className="flex flex-wrap gap-2">
             {activeBranch && (
@@ -1033,7 +1043,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
         {activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+            <p>{activeBranch ? `No current Food Safety MQTT devices are displayed for ${activeBranch.name}. Switch on and identify the mouse in Device Check, then link it after verification.` : "Select Addis Restaurant or another branch above. No old test cards are displayed until you choose a branch."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
