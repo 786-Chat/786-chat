@@ -307,7 +307,43 @@ export default function DeviceCheckPanel() {
       </div>
 
 
-      <div className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
+      <section className="space-y-3" aria-label="HP2 detected Wi-Fi mice">
+        <div>
+          <h3 className="text-lg font-bold text-white">HP2 Detected Wi-Fi Mice</h3>
+          <p className="text-sm text-slate-300">Automatic observations from HP2 Ubuntu. Each MAC gets its own card. Previous sightings are not live MQTT connections.</p>
+        </div>
+        {rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).length === 0 ? (
+          <div className="rounded-xl border border-dashed border-cyan-500/30 bg-slate-900/60 p-5 text-sm text-slate-300">
+            No HP2 Wi-Fi reports yet. Check the Ubuntu scanner and refresh reports above.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).map((row) => (
+              <article key={row.id} className="rounded-2xl border border-cyan-500/35 bg-slate-900/80 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h4 className="break-all text-base font-bold text-white">{row.hostname || "Unidentified Wi-Fi AP"}</h4>
+                    <p className="mt-1 break-all font-mono text-xs text-cyan-200">{row.macAddress || "MAC not reported"}</p>
+                  </div>
+                  <span className={"rounded-full px-3 py-1 text-xs font-semibold " + (row.isWifiRecentlySeen ? "bg-cyan-500/20 text-cyan-200" : "bg-slate-700 text-slate-300")}>
+                    {row.isWifiRecentlySeen ? "Recently detected" : "Previous sighting"}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">Last Wi-Fi signal</p><p className="font-semibold text-white">{row.wifiSignalPercent == null ? "Not reported" : row.wifiSignalPercent + "%"}</p></div>
+                  <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">MQTT</p><p className="font-semibold text-amber-200">Not verified</p></div>
+                </div>
+                <p className="mt-3 text-xs text-slate-400">Last HP2 report: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}</p>
+                <p className="mt-1 text-xs text-slate-400">{row.wifiObservationSource === "admin-entry" ? "Manually recorded" : "HP2 scanner observation"} · Not assigned automatically</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <details className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
+        <summary className="cursor-pointer font-semibold text-amber-200">Advanced: manually record a Wi-Fi sighting</summary>
+        <div className="mt-3">
         <h3 className="font-semibold text-white">Check / record HP2 Wi-Fi signal</h3>
         <p className="mt-1 text-sm text-slate-300">
           Press “Check latest HP2 reports” above to load the most recent automatic scanner reports. Automatic scanning requires the separate HP2 Ubuntu agent to be running; this website cannot scan local Wi-Fi by itself. You can also record a real terminal scan below, even after the green pairing light times out. A sighting is not MQTT connectivity.
@@ -332,17 +368,18 @@ export default function DeviceCheckPanel() {
           <Wifi className="mr-2 h-4 w-4" />
           {busy === "wifi-observation" ? "Recording..." : "Save HP2 Wi-Fi sighting (not MQTT)"}
         </Button>
-      </div>
+        </div>
+      </details>
 
-      {rows.length === 0 ? (
+      {rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
           <Wifi className="mx-auto h-9 w-9 text-slate-500" />
-          <h3 className="mt-3 font-semibold text-white">No physical mouse detected yet</h3>
-          <p className="mt-1 text-sm text-slate-400">No gateway devices or saved HP2 Wi-Fi observations. Factory SmartLife access points do not automatically send MQTT telemetry.</p>
+          <h3 className="mt-3 font-semibold text-white">No MQTT device identities reported</h3>
+          <p className="mt-1 text-sm text-slate-400">Detected Wi-Fi access points are shown above. They are not automatically MQTT devices.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {rows.map((row) => {
+          {rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).map((row) => {
             const wifiOnly = row.hardwareKey.startsWith("wifi-ap:");
             const duplicates = row.ipAddress ? (duplicateIpMap.get(row.ipAddress) || []) : [];
             const hasIpConflict = !wifiOnly && duplicates.length > 1;
