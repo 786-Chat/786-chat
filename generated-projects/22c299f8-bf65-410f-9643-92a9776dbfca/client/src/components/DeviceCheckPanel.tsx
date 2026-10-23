@@ -64,6 +64,15 @@ export default function DeviceCheckPanel() {
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [scanStartedAt, setScanStartedAt] = useState(0);
+  const [baselineWifiKeys, setBaselineWifiKeys] = useState<string[]>([]);
+  const beginMouseScan = (branchId: string) => {
+    setSelectedBranchId(branchId);
+    setBaselineWifiKeys(rows.filter(row =>
+      row.hardwareKey.startsWith("wifi-ap:") && row.isWifiRecentlySeen
+    ).map(row => row.hardwareKey));
+    setScanStartedAt(Date.now());
+  };
   const [busy, setBusy] = useState("");
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
@@ -125,10 +134,17 @@ export default function DeviceCheckPanel() {
 
   const counts = useMemo(() => ({
     live: rows.filter((row) => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
-    wifiSeen: rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).length,
-    unassigned: rows.filter((row) => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:") && !isObsoleteLegacyDevice4(row)).length,
+    wifiSeen: selectedBranchId && scanStartedAt ? rows.filter(row =>
+      row.hardwareKey.startsWith("wifi-ap:") &&
+      row.wifiObservationSource === "hp2-wifi-scan" &&
+      row.isWifiRecentlySeen &&
+      !baselineWifiKeys.includes(row.hardwareKey) &&
+      Boolean(row.lastSeenAt) &&
+      new Date(row.lastSeenAt!).getTime() > scanStartedAt
+    ).length : 0,
+    unassigned: rows.filter(row => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:") && row.isLive).length,
     linked: rows.filter((row) => Boolean(row.assignedDeviceId)).length,
-  }), [rows]);
+  }), [rows, selectedBranchId, scanStartedAt, baselineWifiKeys]);
 
   const duplicateIpMap = useMemo(() => {
     const map = new Map<string, DeviceCheckRow[]>();
@@ -262,8 +278,18 @@ export default function DeviceCheckPanel() {
     }
   };
 
-  const unassignedWifiTotal = rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).length;
-  const unassignedSightings = rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).slice(0, 30);
+  const freshMouseSightings = rows.filter(row =>
+    Boolean(selectedBranchId) &&
+    row.hardwareKey.startsWith("wifi-ap:") &&
+    row.wifiObservationSource === "hp2-wifi-scan" &&
+    row.isWifiRecentlySeen &&
+    !baselineWifiKeys.includes(row.hardwareKey) &&
+    Boolean(row.lastSeenAt) &&
+    new Date(row.lastSeenAt!).getTime() > scanStartedAt &&
+    !row.assignedDeviceId
+  );
+  const unassignedWifiTotal = freshMouseSightings.length;
+  const unassignedSightings = freshMouseSightings.slice(0, 10);
   const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId).slice(0, 30);
   const removeWifiSighting = async (row: DeviceCheckRow) => {
     if (!window.confirm("Remove this Wi-Fi sighting only? Registered devices, assignments and MQTT history will remain.")) return;
@@ -278,7 +304,11 @@ export default function DeviceCheckPanel() {
       toast({ title: "Could not remove sighting", description: err?.message, variant: "destructive" });
     } finally { setBusy(""); }
   };
-  const visibleMqttRows = rows.filter(row => !row.hardwareKey.startsWith("wifi-ap:") && !isObsoleteLegacyDevice4(row));
+  const visibleMqttRows = rows.filter(row =>
+    !row.hardwareKey.startsWith("wifi-ap:") &&
+    row.isLive &&
+    !isObsoleteLegacyDevice4(row)
+  );
   const manualDraft = drafts["manual-registration"] || emptyDraft();
 
   return (
