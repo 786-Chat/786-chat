@@ -1095,6 +1095,16 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
+                  {device.wifiApName && <p className="mt-2 text-xs text-cyan-200">Linked HP2 Wi-Fi: {device.wifiApName}
+                    {device.wifiSignalPercent != null ? " · Last signal " + device.wifiSignalPercent + "%" : ""}
+                    {device.wifiLastSeenAt ? " · Last observed " + new Date(device.wifiLastSeenAt).toLocaleString("en-GB") : ""}</p>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {device.connectionState === "turned_off" ? (
+                      <button type="button" disabled={powerBusyId === String(device.id)} onClick={() => confirmPowerState(device, false)} className="rounded border border-cyan-500/50 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">Clear OFF confirmation</button>
+                    ) : (
+                      <button type="button" disabled={powerBusyId === String(device.id)} onClick={() => confirmPowerState(device, true)} className="rounded border border-red-500/50 px-3 py-2 text-xs text-red-200 disabled:opacity-50">Confirm mouse switched OFF</button>
+                    )}
+                  </div>
 
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
