@@ -257,6 +257,19 @@ export default function DeviceCheckPanel() {
 
   const unassignedSightings = rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).slice(0, 30);
   const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId).slice(0, 30);
+  const removeWifiSighting = async (row: DeviceCheckRow) => {
+    if (!window.confirm("Remove this Wi-Fi sighting only? Registered devices, assignments and MQTT history will remain.")) return;
+    setBusy("remove:" + row.id);
+    try {
+      const response = await fetch("/api/iot/device-check/" + encodeURIComponent(row.id) + "/wifi-sighting", { method: "DELETE", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Sighting could not be removed");
+      await load();
+      toast({ title: "Wi-Fi sighting removed" });
+    } catch (err: any) {
+      toast({ title: "Could not remove sighting", description: err?.message, variant: "destructive" });
+    } finally { setBusy(""); }
+  };
   const manualDraft = drafts["manual-registration"] || emptyDraft();
 
   return (
