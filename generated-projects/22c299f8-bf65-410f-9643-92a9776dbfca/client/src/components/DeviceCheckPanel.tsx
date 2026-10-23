@@ -421,16 +421,15 @@ export default function DeviceCheckPanel() {
         </>}
         {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">Choose a branch to see only that customer’s assigned mice. The unassigned HP2 Wi-Fi queue below is available for identification at any time.</p>}
       </section>
-      {selectedBranchId && (
-      <section className="space-y-3" aria-label="HP2 detected Wi-Fi mice">
+      <section className="space-y-3" aria-label="All unassigned HP2 Wi-Fi mouse sightings">
         <div>
-          <h3 className="text-lg font-bold text-white">New Wi-Fi detections ({unassignedWifiTotal})</h3>
-          <p className="text-sm text-slate-300">Only new HP2 signals since this branch was selected appear here. Old saved sightings stay hidden. Confirm the physical mouse before assigning it; Wi-Fi is not MQTT.</p>
-          {unassignedWifiTotal > 10 && <p className="mt-1 text-xs text-amber-200">Showing the 10 newest of {unassignedWifiTotal} signals to keep this page responsive.</p>}
+          <h3 className="text-lg font-bold text-white">Unassigned HP2 Wi-Fi sightings ({unassignedWifiTotal})</h3>
+          <p className="text-sm text-slate-300">All detected Wi-Fi mouse signals stay here until assigned to a branch. Recently seen and historical signals are labelled separately. Select the customer branch above, physically identify the mouse, then assign. Wi-Fi observation does not prove MQTT.</p>
+          {unassignedWifiTotal > wifiCardLimit && <p className="mt-1 text-xs text-amber-200">Showing {wifiCardLimit} of {unassignedWifiTotal} unassigned sightings; more are available below.</p>}
         </div>
         {unassignedSightings.length === 0 ? (
           <div className="rounded-xl border border-dashed border-cyan-500/30 bg-slate-900/60 p-5 text-sm text-slate-300">
-            No new Wi-Fi signal yet. Switch ON the mouse you want to identify, keeping other mice OFF. This page checks HP2 reports automatically.
+            No unassigned Wi-Fi sightings. Switch ON one mouse and check the HP2 report; it will remain listed here until you assign it.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -498,8 +497,8 @@ export default function DeviceCheckPanel() {
             ))}
           </div>
         )}
+        {unassignedWifiTotal > wifiCardLimit && <button type="button" onClick={() => setWifiCardLimit(n => n + 12)} className="rounded border border-cyan-500/50 px-4 py-2 text-sm text-cyan-100 hover:bg-cyan-700/15">Show 12 more Wi-Fi sightings</button>}
       </section>
-      )}
 
       <details className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
         <summary className="cursor-pointer font-semibold text-amber-200">Advanced: manual Wi-Fi observation</summary>
