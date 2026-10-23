@@ -26,6 +26,8 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import NotificationSidebar from "@/components/NotificationSidebar";
+import DeviceCheckPanel from "@/components/DeviceCheckPanel";
+import IotAdminPanel from "@/components/IotAdminPanel";
 import CodeProtectionPanel from "@/components/CodeProtectionPanel";
 
 import {
@@ -2357,6 +2359,8 @@ export default function AdminDashboard() {
     
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
+      { id: "device-check", label: "Device Check", icon: Radar },
+      { id: "smart-devices", label: "Smart Devices", icon: Zap },
     ]},
     
     // ACCOUNT
@@ -3958,9 +3962,13 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Physical device identification before branch assignment */}
+            {/* Physical HP2 Wi-Fi identification, kept separate from registered MQTT devices */}
+            {activeTab === "device-check" && <DeviceCheckPanel />}
 
-            {/* Smart Devices / Food Safety Owned IoT */}
+            {/* Registered and branch-assigned owned IoT devices */}
+            {activeTab === "smart-devices" && (
+              <IotAdminPanel onOpenDeviceCheck={() => setActiveTab("device-check")} />
+            )}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
