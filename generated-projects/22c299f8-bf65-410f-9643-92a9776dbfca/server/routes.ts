@@ -8417,6 +8417,25 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  app.delete("/api/iot/device-check/:id/wifi-sighting", isAdminAuthenticated, async (req, res) => {
+    const id = String(req.params.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid sighting ID" });
+    try {
+      await ensureOwnedIotDeviceChecks();
+      const removed = await db.execute(sql`
+        DELETE FROM owned_iot_device_checks
+        WHERE id = ${id}::uuid AND hardware_key LIKE 'wifi-ap:%'
+          AND assigned_device_id IS NULL
+        RETURNING id
+      `);
+      const resultRows = Array.isArray(removed) ? removed : removed?.rows || [];
+      if (!resultRows.length) return res.status(404).json({ message: "Unassigned Wi-Fi sighting not found" });
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ message: "Could not remove sighting" });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
