@@ -43,6 +43,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [branchId, setBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lastCreatedId, setLastCreatedId] = useState("");
+  const [deviceBackup, setDeviceBackup] = useState<any>(null);
+  const [backingUpDevices, setBackingUpDevices] = useState(false);
+  const [restoringDevices, setRestoringDevices] = useState(false);
+  const [restoreBackupConfirm, setRestoreBackupConfirm] = useState(false);
   const [allDeviceBackup, setAllDeviceBackup] = useState<any>(null);
   const [branchDeviceBackup, setBranchDeviceBackup] = useState<any>(null);
   const [backupBusyKey, setBackupBusyKey] = useState("");
@@ -73,6 +77,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [editHardwareModel, setEditHardwareModel] = useState("");
   const [savingDevice, setSavingDevice] = useState(false);
   const [pendingRemoveDeviceId, setPendingRemoveDeviceId] = useState("");
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [removingDeviceId, setRemovingDeviceId] = useState("");
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
@@ -372,6 +377,53 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     loadLatestScopedBackup("branch", activeBranchId).then(setBranchDeviceBackup).catch(() => setBranchDeviceBackup(null));
   }, [activeBranchId]);
 
+  const loadDeviceBackup = async () => {
+    const response = await fetch("/api/iot/device-backups/latest", { credentials: "include", cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    setDeviceBackup(data?.backup || null);
+  };
+
+  const backupWorkingDeviceSetup = async () => {
+    setBackingUpDevices(true);
+    try {
+      const response = await fetch("/api/iot/device-backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ label: "Working device setup" }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Backup failed", description: data?.message || "Could not back up devices", variant: "destructive" });
+        return;
+      }
+      setDeviceBackup(data?.backup || null);
+      setRestoreBackupConfirm(false);
+      toast({ title: "Device setup backed up", description: `${data?.backup?.device_count ?? ownedDevices.length} assigned device(s) saved.` });
+    } finally {
+      setBackingUpDevices(false);
+    }
+  };
+
+  const restoreWorkingDeviceSetup = async () => {
+    if (!deviceBackup?.id) return;
+    setRestoringDevices(true);
+    try {
+      const response = await fetch(`/api/iot/device-backups/${deviceBackup.id}/restore`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Restore failed", description: data?.message || "Could not restore device setup", variant: "destructive" });
+        return;
+      }
+      setRestoreBackupConfirm(false);
+      await loadBase();
+      await loadDeviceBackup();
+      toast({ title: "Device setup restored", description: data?.message || "Saved device assignments are back." });
+    } finally {
+      setRestoringDevices(false);
+    }
+  };
   const registerDevice = async () => {
     if (!deviceName.trim() || !branchId) {
       toast({
@@ -436,24 +488,33 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     }
   };
 
-  const removeDevice = async (id: string, name: string) => {
+  const removeDevice = async (id: string, name: string, deviceCode: string) => {
+    if (deleteConfirmationText.trim() !== deviceCode) return;
     setRemovingDeviceId(id);
     try {
-      const response = await fetch(`/api/iot/devices/${id}`, { method: "DELETE", credentials: "include" });
+      const response = await fetch(`/api/iot/devices/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmDeviceId: deviceCode }),
+      });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        toast({ title: "Could not remove device", description: data?.message || "Please try again", variant: "destructive" });
+        toast({ title: "Device was not deleted", description: data?.message || "Please try again", variant: "destructive" });
         return;
       }
       setPendingRemoveDeviceId("");
-      toast({ title: "Device removed from active list", description: `${name} has been archived. Historical records are preserved.` });
+      setDeleteConfirmationText("");
+      toast({ title: "Device deleted", description: `${name} (${deviceCode}) was removed from the device database. The pre-delete device backup remains available.` });
       await loadBase();
+    } catch (error: any) {
+      toast({ title: "Device was not deleted", description: error?.message || "Network error", variant: "destructive" });
     } finally {
       setRemovingDeviceId("");
     }
   };
 
-  const refreshDevice = async (id: string) => {
+    const refreshDevice = async (id: string) => {
     await fetch(`/api/iot/devices/${id}/refresh`, { method: "POST", credentials: "include" });
     await loadBase();
   };
@@ -531,7 +592,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Smart Devices</h2>
-            <p className="text-sm text-slate-400">Registered mice, branch assignments and verified MQTT status</p>
+            <p className="text-sm text-slate-400">Your own Food Safety IoT mouse-trap system</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -545,22 +606,15 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Register Mouse
+          Add Mouse Device
         </Button>
         </div>
       </div>
 
       <div className="rounded-xl border border-cyan-500/25 bg-slate-900/60 p-4">
-        <p className="text-sm font-semibold text-white">Device discovery is managed in Device Check</p>
-        <p className="mt-1 text-sm text-slate-300">
-          HP2 Wi-Fi sightings, including unregistered SmartLife pairing signals, appear in Device Check.
-          This page lists registered Food Safety owned devices only. A saved sighting does not mean
-          that a mouse is MQTT-connected.
-        </p>
-        <Button type="button" variant="outline" onClick={onOpenDeviceCheck}
-          className="mt-3 border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
-          <Wifi className="mr-2 h-4 w-4" /> View HP2 detected devices
-        </Button>
+        <p className="font-semibold text-white">Automatic device discovery: Device Check</p>
+        <p className="mt-1 text-sm text-slate-300">HP2 Wi-Fi sightings are shown in Device Check, separately from registered MQTT mouse traps. A Wi-Fi sighting is not MQTT connectivity.</p>
+        <Button type="button" variant="outline" onClick={onOpenDeviceCheck} className="mt-3 border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10"><Wifi className="mr-2 h-4 w-4" /> View detected mice</Button>
       </div>
 
       <div>
@@ -741,15 +795,15 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       </div>
 
       }
-      <details className="rounded-2xl border border-slate-700 bg-slate-800/65 p-4">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-200">Advanced: Wi-Fi / MQTT technical information (not device activation)</summary>
+      <details className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
+        <summary className="cursor-pointer font-semibold text-white">Advanced Wi-Fi / MQTT technical information (not activation)</summary>
         <div className="mt-4">
-          <div className="mb-4 flex items-center gap-2">
+        <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Wi-Fi / MQTT Reference</h3>
+          <h3 className="font-semibold text-white">Wi-Fi / MQTT technical reference</h3>
         </div>
         <p className="text-sm text-slate-300">
-          Technical reference only. These fields do not configure an unmodified SmartLife/BMAX trap. Choose a registered device only if you have separately verified compatible provisioning.
+          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
           The Wi-Fi password is kept only in this browser session and is never saved in Neon.
         </p>
 
@@ -1139,33 +1193,46 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit / Reassign
                     </Button>
-                    {pendingRemoveDeviceId === String(device.id) && <p className="w-full text-xs text-amber-200">Remove {String(device.deviceName || device.deviceId)} ({String(device.deviceId)}) from {String(device.branchName || "Unassigned branch")}? This archives its registration; reports and history remain saved.</p>}
                     {pendingRemoveDeviceId === String(device.id) ? (
-                      <>
-                        <Button
-                          size="sm"
-                          onClick={() => removeDevice(String(device.id), String(device.deviceName || device.deviceId))}
-                          disabled={removingDeviceId === String(device.id)}
-                          className="bg-red-600 text-white hover:bg-red-500"
-                        >
-                          <Trash2 className="mr-1 h-3 w-3" />
-                          {removingDeviceId === String(device.id) ? "Removing..." : "Confirm Remove"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPendingRemoveDeviceId("")}
-                          disabled={removingDeviceId === String(device.id)}
-                          className="border-slate-600 text-slate-200"
-                        >
-                          Cancel
-                        </Button>
-                      </>
+                      <div className="w-full rounded-lg border border-red-800/70 bg-red-950/20 p-3">
+                        <p className="text-xs text-amber-100">
+                          Permanently delete {String(device.deviceName || device.deviceId)} ({String(device.deviceId)}) from the device database?
+                          This action does not delete customer branches, documents, SmartLife records or backups.
+                          Devices with historical IoT events or an active connection cannot be deleted, to protect their history.
+                          A registration backup will be saved before deletion. Type the exact device ID to confirm.
+                        </p>
+                        <Input
+                          className="my-3 max-w-sm border-red-700/60 bg-slate-950 text-white"
+                          aria-label={`Type ${String(device.deviceId)} to confirm deletion`}
+                          placeholder={String(device.deviceId)}
+                          value={deleteConfirmationText}
+                          onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                          autoComplete="off"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => removeDevice(String(device.id), String(device.deviceName || device.deviceId), String(device.deviceId))}
+                            disabled={removingDeviceId === String(device.id) || deleteConfirmationText.trim() !== String(device.deviceId)}
+                            className="bg-red-700 text-white hover:bg-red-600"
+                          >
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            {removingDeviceId === String(device.id) ? "Deleting..." : "Confirm Delete"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={removingDeviceId === String(device.id)}
+                            onClick={() => { setPendingRemoveDeviceId(""); setDeleteConfirmationText(""); }}
+                            className="border-slate-600 text-slate-200"
+                          >Cancel</Button>
+                        </div>
+                      </div>
                     ) : (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setPendingRemoveDeviceId(String(device.id))}
+                        onClick={() => { setPendingRemoveDeviceId(String(device.id)); setDeleteConfirmationText(""); }}
                         className="border-red-700/60 text-red-300"
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
