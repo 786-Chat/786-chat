@@ -15,8 +15,18 @@ type Alert = {
 };
 const fetchBranch = async (url: string) => {
   const response = await fetch(url, { credentials: "include", cache: "no-store" });
-  if (!response.ok) throw new Error(response.status === 403 ? "This section is hidden." : "Could not load SmartLife information.");
-  return response.json();
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error("SmartLife service returned a page instead of JSON. The service endpoint is unavailable in this preview.");
+  }
+  const data = await response.json().catch(() => {
+    throw new Error("SmartLife service returned invalid JSON. Please refresh or check the server deployment.");
+  });
+  if (!response.ok) {
+    throw new Error(response.status === 403 ? "This section is hidden for this restaurant." : data?.message || "Could not load SmartLife information.");
+  }
+  if (!Array.isArray(data)) throw new Error("SmartLife service returned an unexpected response.");
+  return data;
 };
 const useDevices = (branchKey: string) => useQuery<Device[]>({
   queryKey: ["/api/branch/smartlife/devices",branchKey],
