@@ -8434,6 +8434,7 @@ Generated: ${new Date().toISOString()}
         DELETE FROM owned_iot_device_checks
         WHERE id = ${id}::uuid AND hardware_key LIKE 'wifi-ap:%'
           AND assigned_device_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM owned_iot_wifi_branch_links l WHERE l.sighting_id = owned_iot_device_checks.id)
         RETURNING id
       `);
       const resultRows = Array.isArray(removed) ? removed : removed?.rows || [];
@@ -8461,6 +8462,7 @@ Generated: ${new Date().toISOString()}
           c.wifi_observation_source,
           c.legacy_device_id,
           c.assigned_device_id,
+          wl.device_id AS wifi_linked_device_id,
           c.first_seen_at,
           c.last_seen_at,
           d.friendly_name AS assigned_device_name,
@@ -8468,7 +8470,8 @@ Generated: ${new Date().toISOString()}
           d.installation_location AS assigned_location,
           b.name AS assigned_branch_name
         FROM owned_iot_device_checks c
-        LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
+        LEFT JOIN owned_iot_wifi_branch_links wl ON wl.sighting_id = c.id
+        LEFT JOIN owned_iot_devices d ON d.device_id = COALESCE(c.assigned_device_id, wl.device_id)
         LEFT JOIN branches b ON b.id::text = d.branch_id::text
         ORDER BY c.last_seen_at DESC
         LIMIT 200
@@ -8489,7 +8492,7 @@ Generated: ${new Date().toISOString()}
           row.wifi_observation_source === "hp2-wifi-scan" && Boolean(row.last_seen_at) &&
           (Date.now() - new Date(row.last_seen_at).getTime()) < 75000,
         legacyDeviceId: row.legacy_device_id || null,
-        assignedDeviceId: row.assigned_device_id || null,
+        assignedDeviceId: row.assigned_device_id || row.wifi_linked_device_id || null,
         assignedDeviceName: row.assigned_device_name || null,
         assignedBranchId: row.assigned_branch_id || null,
         assignedBranchName: row.assigned_branch_name || null,
