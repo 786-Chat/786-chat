@@ -466,34 +466,6 @@ function stripDangerousPreviewHtml(html: string): string {
     .replace(/\ssrc=["']javascript:[\s\S]*?["']/gi, "")
 }
 
-function hideIframeScrollbar(iframe: HTMLIFrameElement | null) {
-  if (!iframe) return
-
-  try {
-    const doc = iframe.contentDocument || iframe.contentWindow?.document
-    if (!doc) return
-
-    const style = doc.createElement("style")
-    style.setAttribute("data-mujeebproai-scrollbar-fix", "true")
-    style.innerHTML = `
-      html, body {
-        -ms-overflow-style: none !important;
-        scrollbar-width: none !important;
-      }
-      html::-webkit-scrollbar,
-      body::-webkit-scrollbar,
-      *::-webkit-scrollbar {
-        width: 0 !important;
-        height: 0 !important;
-        display: none !important;
-      }
-    `
-    doc.head?.appendChild(style)
-  } catch {
-    // Cross-origin iframe cannot be styled. Keep preview safe and functional.
-  }
-}
-
 export function WorkspacePreviewPanel({
   project,
   device,
@@ -923,7 +895,6 @@ useEffect(() => {
           <iframe
             {...iframeProps}
             onLoad={(event) => {
-              hideIframeScrollbar(event.currentTarget)
               setPreviewFrameReady(true)
             }}
             className="absolute inset-0 h-full w-full bg-[#08080d]"
@@ -980,8 +951,7 @@ useEffect(() => {
               <iframe
                 {...iframeProps}
                 onLoad={(event) => {
-                  hideIframeScrollbar(event.currentTarget)
-                  setPreviewFrameReady(true)
+                      setPreviewFrameReady(true)
                 }}
                 className="h-full w-full bg-[#08080d] border-0"
               />
