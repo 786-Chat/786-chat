@@ -26,6 +26,13 @@ interface DeviceCheckRow {
   isLive: boolean;
 }
 
+interface IgnoredWifi {
+  hardwareKey: string;
+  hostname?: string | null;
+  macAddress?: string | null;
+  ignoredAt?: string | null;
+}
+
 interface RegisteredDevice {
   id: string;
   deviceId: string;
@@ -63,6 +70,7 @@ export default function DeviceCheckPanel() {
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
   const [loadError, setLoadError] = useState("");
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
+  const [ignoredWifi, setIgnoredWifi] = useState<IgnoredWifi[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
@@ -77,10 +85,11 @@ export default function DeviceCheckPanel() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   const load = async () => {
-    const [checkRes, devicesRes, branchesRes] = await Promise.all([
+    const [checkRes, devicesRes, branchesRes, ignoredRes] = await Promise.all([
       fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" }),
       fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }),
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
+      fetch("/api/iot/device-check/ignored-wifi", { credentials: "include", cache: "no-store" }),
     ]);
 
     if (!checkRes.ok) {
@@ -90,6 +99,10 @@ export default function DeviceCheckPanel() {
       const data = await checkRes.json().catch(() => null);
       if (Array.isArray(data)) { setRows(data); setLoadError(""); }
       else setLoadError("Device Check API returned invalid data.");
+    }
+    if (ignoredRes.ok) {
+      const data = await ignoredRes.json().catch(() => null);
+      if (Array.isArray(data)) setIgnoredWifi(data);
     }
     if (devicesRes.ok) {
       const data = await devicesRes.json();
