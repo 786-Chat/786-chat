@@ -501,7 +501,7 @@ export default function DeviceCheckPanel() {
                           className="h-10 min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
                         >
                           <option value="">Select existing device...</option>
-                          {registered.map((device) => {
+                          {registered.filter((device) => device.deviceId.toUpperCase() !== "FS-MOUSE-000001").map((device) => {
                             const branch = branches.find((item) => String(item.id) === String(device.branchId || ""));
                             return (
                               <option key={device.id} value={device.deviceId}>
