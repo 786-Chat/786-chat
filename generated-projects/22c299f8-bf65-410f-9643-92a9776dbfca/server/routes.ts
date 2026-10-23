@@ -8445,6 +8445,59 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Link a physically confirmed AP sighting to a registered device in the selected branch.
+  // This is admin-only tracking, not proof of MQTT or a matching MQTT station MAC.
+  app.post("/api/iot/device-check/:id/link-wifi", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const sightingId = String(req.params.id || "").trim();
+      const deviceId = String(req.body?.deviceId || "").trim().toUpperCase();
+      const branchId = String(req.body?.branchId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(sightingId) || !deviceId || !branchId) {
+        return res.status(400).json({ message: "Wi-Fi sighting, registered device and branch are required." });
+      }
+      const check: any = await db.execute(sql`
+        SELECT id::text AS id, hardware_key, assigned_device_id FROM owned_iot_device_checks
+        WHERE id::text = ${sightingId} LIMIT 1
+      `);
+      const checkRows = Array.isArray(check) ? check : (check?.rows || []);
+      if (!checkRows.length || !String(checkRows[0].hardware_key).startsWith("wifi-ap:")) {
+        return res.status(404).json({ message: "Wi-Fi sighting was not found." });
+      }
+      if (checkRows[0].assigned_device_id) {
+        return res.status(409).json({ message: "This sighting is already linked to MQTT telemetry." });
+      }
+      const device: any = await db.execute(sql`
+        SELECT device_id, branch_id::text AS branch_id FROM owned_iot_devices
+        WHERE device_id = ${deviceId} LIMIT 1
+      `);
+      const deviceRows = Array.isArray(device) ? device : (device?.rows || []);
+      if (!deviceRows.length || String(deviceRows[0].branch_id) !== branchId) {
+        return res.status(409).json({ message: "Device belongs to another branch or is not registered. Select a device assigned to this customer." });
+      }
+      const inserted: any = await db.execute(sql`
+        INSERT INTO owned_iot_wifi_branch_links (sighting_id, device_id)
+        VALUES (${sightingId}::uuid, ${deviceId})
+        ON CONFLICT DO NOTHING RETURNING device_id
+      `);
+      const insertedRows = Array.isArray(inserted) ? inserted : (inserted?.rows || []);
+      if (!insertedRows.length) {
+        const existing: any = await db.execute(sql`
+          SELECT device_id FROM owned_iot_wifi_branch_links WHERE sighting_id::text = ${sightingId} LIMIT 1
+        `);
+        const existingRows = Array.isArray(existing) ? existing : (existing?.rows || []);
+        if (existingRows[0]?.device_id === deviceId) {
+          return res.json({ success: true, deviceId, branchId, mqttConnected: false });
+        }
+        return res.status(409).json({ message: "The sighting or registered device is already assigned. Check existing customer assignments." });
+      }
+      return res.json({ success: true, deviceId, branchId, mqttConnected: false });
+    } catch (err: any) {
+      console.error("Wi-Fi sighting link failed:", err?.message || err);
+      return res.status(500).json({ message: "Unable to assign this Wi-Fi sighting." });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
