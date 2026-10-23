@@ -8811,6 +8811,31 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Only an administrator who has physically checked the switch may mark a
+  // trap OFF. Mere Wi-Fi/MQTT silence means sleeping or unverified, not OFF.
+  app.post("/api/iot/devices/:id/confirmed-power", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      if (typeof req.body?.off !== "boolean") return res.status(400).json({ message: "off must be true or false." });
+      const id = String(req.params.id || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid device ID." });
+      const response: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET manually_off_at = CASE WHEN ${req.body.off} THEN now() ELSE NULL END,
+            updated_at = now()
+        WHERE id::text = ${id}
+        RETURNING id::text AS id, device_id, branch_id::text AS branch_id, manually_off_at
+      `);
+      const rows = Array.isArray(response) ? response : (response?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "Registered device not found." });
+      return res.json({ success: true, deviceId: rows[0].device_id, branchId: rows[0].branch_id,
+        confirmedOff: Boolean(rows[0].manually_off_at), confirmedAt: rows[0].manually_off_at || null });
+    } catch (err: any) {
+      console.error("Confirmed mouse power status failed:", err?.message || err);
+      return res.status(500).json({ message: "Unable to save power state confirmation." });
+    }
+  });
+
   app.patch("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
