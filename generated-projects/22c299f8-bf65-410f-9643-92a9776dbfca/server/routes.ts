@@ -7804,6 +7804,14 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_ip_idx ON owned_iot_device_checks(ip_address)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS owned_iot_device_checks_assigned_idx ON owned_iot_device_checks(assigned_device_id) WHERE assigned_device_id IS NOT NULL`);
+    // Separate Wi-Fi AP sightings from MQTT device identity. Never mark these as live MQTT.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_wifi_branch_links (
+        sighting_id uuid PRIMARY KEY REFERENCES owned_iot_device_checks(id) ON DELETE CASCADE,
+        device_id text NOT NULL UNIQUE REFERENCES owned_iot_devices(device_id) ON DELETE CASCADE,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
