@@ -8473,23 +8473,70 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Ignore instead of deleting: HP2 continuously reports APs, so a deleted row
+  // immediately reappears. Ignored BSSIDs stay suppressed until restored.
   app.delete("/api/iot/device-check/:id/wifi-sighting", isAdminAuthenticated, async (req, res) => {
     const id = String(req.params.id || "");
     if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid sighting ID" });
     try {
       await ensureOwnedIotSchema();
-      const removed = await db.execute(sql`
-        DELETE FROM owned_iot_device_checks
-        WHERE id = ${id}::uuid AND hardware_key LIKE 'wifi-ap:%'
-          AND assigned_device_id IS NULL
-          AND NOT EXISTS (SELECT 1 FROM owned_iot_wifi_branch_links l WHERE l.sighting_id = owned_iot_device_checks.id)
-        RETURNING id
+      const result: any = await db.execute(sql`
+        INSERT INTO owned_iot_wifi_ignored (hardware_key, mac_address, hostname)
+        SELECT c.hardware_key, c.mac_address, c.hostname
+        FROM owned_iot_device_checks c
+        WHERE c.id::text = ${id} AND c.hardware_key LIKE 'wifi-ap:%'
+          AND c.assigned_device_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM owned_iot_wifi_branch_links w WHERE w.sighting_id = c.id)
+        ON CONFLICT (hardware_key) DO NOTHING
+        RETURNING hardware_key
       `);
-      const resultRows = Array.isArray(removed) ? removed : removed?.rows || [];
-      if (!resultRows.length) return res.status(404).json({ message: "Unassigned Wi-Fi sighting not found" });
-      res.json({ success: true });
-    } catch {
-      res.status(500).json({ message: "Could not remove sighting" });
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) return res.status(409).json({ message: "This sighting is already ignored, assigned, or no longer available." });
+      return res.json({ success: true, ignored: true });
+    } catch (error: any) {
+      console.error("Ignore HP2 Wi-Fi BSSID failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not ignore this Wi-Fi signal." });
+    }
+  });
+
+  app.get("/api/iot/device-check/ignored-wifi", isAdminAuthenticated, async (_req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        SELECT i.hardware_key, i.mac_address, i.hostname, i.ignored_at,
+               c.id::text AS sighting_id
+        FROM owned_iot_wifi_ignored i
+        LEFT JOIN owned_iot_device_checks c ON c.hardware_key = i.hardware_key
+        ORDER BY i.ignored_at DESC LIMIT 500
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return res.json(rows.map((row: any) => ({
+        hardwareKey: row.hardware_key, macAddress: row.mac_address,
+        hostname: row.hostname, ignoredAt: row.ignored_at, sightingId: row.sighting_id,
+      })));
+    } catch (error: any) {
+      console.error("List ignored Wi-Fi BSSIDs failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not load ignored Wi-Fi signals." });
+    }
+  });
+
+  app.post("/api/iot/device-check/restore-wifi", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const hardwareKey = String(req.body?.hardwareKey || "").trim().toUpperCase();
+      if (!/^WIFI-AP:([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(hardwareKey))
+        return res.status(400).json({ message: "Invalid Wi-Fi identity." });
+      const result: any = await db.execute(sql`
+        DELETE FROM owned_iot_wifi_ignored
+        WHERE upper(hardware_key) = ${hardwareKey}
+        RETURNING hardware_key
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "No ignored Wi-Fi signal found." });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Restore ignored Wi-Fi signal failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not restore ignored Wi-Fi signal." });
     }
   });
 
