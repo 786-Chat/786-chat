@@ -531,7 +531,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Smart Devices</h2>
-            <p className="text-sm text-slate-400">Your own Food Safety IoT mouse-trap system</p>
+            <p className="text-sm text-slate-400">Registered mice, branch assignments and verified MQTT status</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -545,7 +545,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
         >
           <Plus className="mr-2 h-4 w-4" />
-          Add Mouse Device
+          Register Mouse
         </Button>
         </div>
       </div>
@@ -741,13 +741,15 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       </div>
 
       }
-      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
-        <div className="mb-4 flex items-center gap-2">
+      <details className="rounded-2xl border border-slate-700 bg-slate-800/65 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-200">Advanced: Wi-Fi / MQTT technical information (not device activation)</summary>
+        <div className="mt-4">
+          <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Step 2 — Enter Shop Wi-Fi Details</h3>
+          <h3 className="font-semibold text-white">Wi-Fi / MQTT Reference</h3>
         </div>
         <p className="text-sm text-slate-300">
-          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
+          Technical reference only. These fields do not configure an unmodified SmartLife/BMAX trap. Choose a registered device only if you have separately verified compatible provisioning.
           The Wi-Fi password is kept only in this browser session and is never saved in Neon.
         </p>
 
@@ -857,7 +859,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
             <p className="mt-1 text-sm font-semibold text-white">{ownedDevices.length}</p>
           </div>
         </div>
-      </div>
+        </div>
+      </details>
 
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4">
