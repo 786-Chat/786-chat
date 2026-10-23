@@ -75,7 +75,6 @@ export default function DeviceCheckPanel() {
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [branchPickerSearch, setBranchPickerSearch] = useState("");
-  const [wifiCardLimit, setWifiCardLimit] = useState(12);
   const [busy, setBusy] = useState("");
   const [wifiAssignOpenId, setWifiAssignOpenId] = useState("");
   const [wifiPhysicallyConfirmed, setWifiPhysicallyConfirmed] = useState<Record<string, boolean>>({});
@@ -321,8 +320,8 @@ export default function DeviceCheckPanel() {
     row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId
   );
   const unassignedWifiTotal = unassignedWifiSightings.length;
-  const unassignedSightings = unassignedWifiSightings.slice(0, wifiCardLimit);
-  const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId).slice(0, 30);
+  const unassignedSightings = unassignedWifiSightings;
+  const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId);
   const removeWifiSighting = async (row: DeviceCheckRow) => {
     if (!window.confirm("Ignore " + (row.hostname || row.macAddress || "this Wi-Fi signal") + " until you restore it? HP2 will continue scanning, but the card will not return. Registered devices, assignments and MQTT remain unchanged.")) return;
     setBusy("remove:" + row.id);
@@ -459,7 +458,6 @@ export default function DeviceCheckPanel() {
         <div>
           <h3 className="text-lg font-bold text-white">Unassigned HP2 Wi-Fi sightings ({unassignedWifiTotal})</h3>
           <p className="text-sm text-slate-300">All detected Wi-Fi mouse signals stay here until assigned to a branch. Recently seen and historical signals are labelled separately. Select the customer branch above, physically identify the mouse, then assign. Wi-Fi observation does not prove MQTT.</p>
-          {unassignedWifiTotal > wifiCardLimit && <p className="mt-1 text-xs text-amber-200">Showing {wifiCardLimit} of {unassignedWifiTotal} unassigned sightings; more are available below.</p>}
         </div>
         {unassignedSightings.length === 0 ? (
           <div className="rounded-xl border border-dashed border-cyan-500/30 bg-slate-900/60 p-5 text-sm text-slate-300">
@@ -531,7 +529,6 @@ export default function DeviceCheckPanel() {
             ))}
           </div>
         )}
-        {unassignedWifiTotal > wifiCardLimit && <button type="button" onClick={() => setWifiCardLimit(n => n + 12)} className="rounded border border-cyan-500/50 px-4 py-2 text-sm text-cyan-100 hover:bg-cyan-700/15">Show 12 more Wi-Fi sightings</button>}
       </section>
 
       <details className="rounded-xl border border-slate-600/60 bg-slate-900/60 p-4">
