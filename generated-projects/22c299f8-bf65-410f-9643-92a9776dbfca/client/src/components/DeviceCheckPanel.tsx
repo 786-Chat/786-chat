@@ -376,12 +376,37 @@ export default function DeviceCheckPanel() {
 
       <section className="rounded-xl border border-blue-500/30 bg-slate-900/70 p-4">
         <h3 className="font-semibold text-white">Select Branch</h3>
-        <select value={selectedBranchId} aria-label="Select branch before viewing devices"
-          onChange={e => beginMouseScan(e.target.value)}
-          className="mt-3 h-10 w-full max-w-md rounded border border-slate-600 bg-slate-950 px-3 text-white">
-          <option value="">Choose branch, then switch ON one mouse...</option>
-          {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
+        <div className="relative mt-3 w-full max-w-md">
+          <button type="button" aria-expanded={branchPickerOpen} aria-controls="device-check-branch-options"
+            onClick={() => setBranchPickerOpen(open => !open)}
+            className="flex h-11 w-full items-center justify-between gap-2 rounded border border-slate-600 bg-slate-950 px-3 text-left text-sm text-white">
+            <span className="truncate">{branches.find(b => String(b.id) === selectedBranchId)?.name || "Select customer branch..."}</span>
+            <span aria-hidden="true" className="text-cyan-300">{branchPickerOpen ? "▲" : "▼"}</span>
+          </button>
+          {branchPickerOpen && (
+            <div id="device-check-branch-options" className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-slate-600 bg-slate-950 p-2 shadow-2xl">
+              <Input autoFocus aria-label="Search customer branch" placeholder="Search shop name or postcode..."
+                value={branchPickerSearch} onChange={e => setBranchPickerSearch(e.target.value)}
+                className="mb-2 h-9 border-slate-600 bg-slate-900 text-white" />
+              <div className="max-h-48 overflow-y-auto">
+                {branches.filter(b => [b.name, b.address, b.postCode].some(v =>
+                  String(v || "").toLowerCase().includes(branchPickerSearch.trim().toLowerCase())
+                )).slice(0, 15).map(b => (
+                  <button key={b.id} type="button"
+                    onClick={() => { setSelectedBranchId(String(b.id)); setBranchPickerOpen(false); setBranchPickerSearch(""); setWifiAssignOpenId(""); }}
+                    className={"block w-full rounded px-3 py-2 text-left text-sm hover:bg-blue-600/25 " + (String(b.id) === selectedBranchId ? "bg-cyan-600/25 text-cyan-100" : "text-white")}>
+                    <span className="block truncate font-medium">{b.name}</span>
+                    {(b.postCode || b.address) && <span className="block truncate text-xs text-slate-400">{[b.address, b.postCode].filter(Boolean).join(" · ")}</span>}
+                  </button>
+                ))}
+                {!branches.some(b => [b.name, b.address, b.postCode].some(v =>
+                  String(v || "").toLowerCase().includes(branchPickerSearch.trim().toLowerCase())
+                )) && <p className="px-3 py-3 text-xs text-slate-400">No matching branch found.</p>}
+              </div>
+              <button type="button" onClick={() => setBranchPickerOpen(false)} className="mt-2 w-full rounded bg-slate-800 px-3 py-2 text-xs text-slate-200">Close</button>
+            </div>
+          )}
+        </div>
         {selectedBranchId && <>
           <p className="mt-3 text-sm font-semibold text-white">Devices assigned to this branch ({branchDevices.length})</p>
           {branchDevices.length === 0 && <p className="mt-2 text-xs text-slate-400">No physical mouse assigned yet. A confirmed Wi-Fi card moves here after assignment.</p>}
@@ -392,10 +417,9 @@ export default function DeviceCheckPanel() {
               <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? (row.isWifiRecentlySeen ? "Wi-Fi recently observed · MQTT unverified" : "Sleeping / No recent Wi-Fi signal · MQTT unverified") : row.isLive ? "MQTT live" : "Sleeping / No recent MQTT signal"}</p>
             </div>
           ))}
-          <button type="button" onClick={() => beginMouseScan(selectedBranchId)} className="mt-3 rounded border border-cyan-500/60 px-3 py-2 text-sm text-cyan-100">Start fresh detection for next mouse</button>
-          <p className="mt-2 text-xs text-slate-400">Keep other mice OFF. New Wi-Fi signals are candidates, not proof of physical identity or MQTT connectivity.</p>
+          <p className="mt-2 text-xs text-slate-400">Assigned mice stay here even when sleeping or switched OFF. Wi-Fi scans alone do not establish MQTT connectivity.</p>
         </>}
-        {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">Clean slate. Select Addis Restaurant or another branch, then switch ON one mouse. Old test sightings stay hidden.</p>}
+        {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">Choose a branch to see only that customer’s assigned mice. The unassigned HP2 Wi-Fi queue below is available for identification at any time.</p>}
       </section>
       {selectedBranchId && (
       <section className="space-y-3" aria-label="HP2 detected Wi-Fi mice">
