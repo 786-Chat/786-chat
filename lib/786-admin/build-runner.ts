@@ -1,3 +1,5 @@
+import { githubRepositoryToken } from "./github-repository-token"
+
 const DEFAULT_REPOSITORY = "786-Chat/786-chat"
 const DEFAULT_WORKFLOW = "generated-project-build.yml"
 
@@ -28,7 +30,6 @@ export async function dispatchGeneratedProjectBuild(input: {
   projectId: string
   baseUrl: string
 }): Promise<BuildDispatchResult> {
-  const token = requiredEnv("GITHUB_BUILD_TOKEN")
   requiredEnv("BUILD_RUNNER_SECRET")
 
   const repository = process.env.GITHUB_BUILD_REPOSITORY?.trim() || DEFAULT_REPOSITORY
@@ -38,6 +39,7 @@ export async function dispatchGeneratedProjectBuild(input: {
     process.env.VERCEL_GIT_COMMIT_REF?.trim() ||
     "main"
   const baseUrl = trustedBaseUrl(input.baseUrl)
+  const token = await githubRepositoryToken(repository)
 
   const response = await fetch(
     `https://api.github.com/repos/${repository}/actions/workflows/${workflow}/dispatches`,
