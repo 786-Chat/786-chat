@@ -50,6 +50,14 @@ type Draft = {
 
 const emptyDraft = (): Draft => ({ deviceId: "", deviceName: "", branchId: "", notes: "" });
 
+// A historical unverified DEVICE4 row is not a real current device. Preserve
+// the database history but do not offer an obsolete identity for linking.
+const isObsoleteLegacyDevice4 = (row: DeviceCheckRow) =>
+  !row.hardwareKey.startsWith("wifi-ap:") &&
+  String(row.mqttPrefix || "").toUpperCase() === "DEVICE4" &&
+  !row.macAddress && !row.ipAddress && !row.assignedDeviceId && !row.isLive &&
+  (!row.lastSeenAt || Date.now() - new Date(row.lastSeenAt).getTime() > 24 * 60 * 60 * 1000);
+
 export default function DeviceCheckPanel() {
   const { toast } = useToast();
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
@@ -118,7 +126,7 @@ export default function DeviceCheckPanel() {
   const counts = useMemo(() => ({
     live: rows.filter((row) => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
     wifiSeen: rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).length,
-    unassigned: rows.filter((row) => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:")).length,
+    unassigned: rows.filter((row) => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:") && !isObsoleteLegacyDevice4(row)).length,
     linked: rows.filter((row) => Boolean(row.assignedDeviceId)).length,
   }), [rows]);
 
@@ -165,7 +173,7 @@ export default function DeviceCheckPanel() {
   };
 
   const linkExisting = async (row: DeviceCheckRow) => {
-    const deviceId = String(existingChoice[row.id] || row.legacyDeviceId || "").trim();
+    const deviceId = String(existingChoice[row.id] || "").trim();
     if (!deviceId) {
       toast({ title: "Choose a device", description: "Select the existing FS-MOUSE device you physically checked.", variant: "destructive" });
       return;
@@ -270,6 +278,7 @@ export default function DeviceCheckPanel() {
       toast({ title: "Could not remove sighting", description: err?.message, variant: "destructive" });
     } finally { setBusy(""); }
   };
+  const visibleMqttRows = rows.filter(row => !row.hardwareKey.startsWith("wifi-ap:") && !isObsoleteLegacyDevice4(row));
   const manualDraft = drafts["manual-registration"] || emptyDraft();
 
   return (
@@ -425,15 +434,15 @@ export default function DeviceCheckPanel() {
       <details className="rounded-2xl border border-slate-700 bg-slate-900/60 p-4">
         <summary className="cursor-pointer font-semibold text-slate-200">Advanced: historical MQTT identities and linking</summary>
         <div className="mt-4">
-      {rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).length === 0 ? (
+      {visibleMqttRows.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
           <Wifi className="mx-auto h-9 w-9 text-slate-500" />
-          <h3 className="mt-3 font-semibold text-white">No physical mouse detected yet</h3>
-          <p className="mt-1 text-sm text-slate-400">No gateway devices or saved HP2 Wi-Fi observations. Factory SmartLife access points do not automatically send MQTT telemetry.</p>
+          <h3 className="mt-3 font-semibold text-white">No verified MQTT identity found</h3>
+          <p className="mt-1 text-sm text-slate-400">No current MQTT identity is available to link. Old unverified DEVICE4 test data is hidden; historic records remain saved.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {rows.filter((row) => !row.hardwareKey.startsWith("wifi-ap:")).map((row) => {
+          {visibleMqttRows.map((row) => {
             const wifiOnly = row.hardwareKey.startsWith("wifi-ap:");
             const duplicates = row.ipAddress ? (duplicateIpMap.get(row.ipAddress) || []) : [];
             const hasIpConflict = !wifiOnly && duplicates.length > 1;
@@ -533,7 +542,7 @@ export default function DeviceCheckPanel() {
                       <p className="mt-1 text-xs text-slate-400">Use this for an existing FS-MOUSE ID after you confirm which physical mouse is switched on.</p>
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                         <select
-                          value={existingChoice[row.id] || row.legacyDeviceId || ""}
+                          value={existingChoice[row.id] || ""}
                           onChange={(event) => setExistingChoice((current) => ({ ...current, [row.id]: event.target.value }))}
                           className="h-10 min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
                         >
@@ -558,7 +567,7 @@ export default function DeviceCheckPanel() {
                         </Button>
                       </div>
                       {row.legacyDeviceId && (
-                        <p className="mt-2 text-xs text-cyan-300">HP2 legacy bridge currently suggests: {row.legacyDeviceId}. Confirm physically before linking.</p>
+                        <p className="mt-2 text-xs text-cyan-300">Historical legacy reference: {row.legacyDeviceId}. Select and verify a current registered device manually; this is not an automatic assignment.</p>
                       )}
                     </div>
 
