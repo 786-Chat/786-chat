@@ -244,7 +244,12 @@ export default function DeviceCheckPanel() {
   };
 
   const registerAndAssign = async (row: DeviceCheckRow) => {
-    const draft = drafts[row.id] || emptyDraft();
+    const wifiOnly = row.hardwareKey.startsWith("wifi-ap:");
+    const draft = { ...(drafts[row.id] || emptyDraft()), branchId: wifiOnly ? selectedBranchId : (drafts[row.id]?.branchId || "") };
+    if (wifiOnly && (!selectedBranchId || !wifiPhysicallyConfirmed[row.id] || !draft.notes.trim())) {
+      toast({ title: "Confirm the mouse first", description: "Confirm the physical mouse identity and add installation area.", variant: "destructive" });
+      return;
+    }
     if (!draft.deviceName.trim() || !draft.branchId) {
       toast({ title: "Name and branch required", description: "Enter the device name and choose the branch after the physical check.", variant: "destructive" });
       return;
@@ -276,11 +281,11 @@ export default function DeviceCheckPanel() {
         return;
       }
 
-      const linkResponse = await fetch("/api/iot/device-check/" + row.id + "/link-existing", {
+      const linkResponse = await fetch("/api/iot/device-check/" + row.id + (wifiOnly ? "/link-wifi" : "/link-existing"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ deviceId: permanentDeviceId }),
+        body: JSON.stringify({ deviceId: permanentDeviceId, branchId: draft.branchId }),
       });
       const linkedData = await linkResponse.json().catch(() => ({}));
       if (!linkResponse.ok) {
@@ -295,8 +300,9 @@ export default function DeviceCheckPanel() {
 
       toast({
         title: "Device registered and assigned",
-        description: permanentDeviceId + " is now tied to this physical mouse and branch.",
+        description: permanentDeviceId + " is now assigned to its branch." + (wifiOnly ? " MQTT is not yet verified." : ""),
       });
+      if (wifiOnly) setWifiAssignOpenId("");
       await load();
     } finally {
       setBusy("");
