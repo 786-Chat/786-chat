@@ -324,16 +324,31 @@ export default function DeviceCheckPanel() {
   const unassignedSightings = unassignedWifiSightings.slice(0, wifiCardLimit);
   const branchDevices = rows.filter(row => selectedBranchId && row.assignedBranchId === selectedBranchId).slice(0, 30);
   const removeWifiSighting = async (row: DeviceCheckRow) => {
-    if (!window.confirm("Remove this Wi-Fi sighting only? Registered devices, assignments and MQTT history will remain.")) return;
+    if (!window.confirm("Ignore " + (row.hostname || row.macAddress || "this Wi-Fi signal") + " until you restore it? HP2 will continue scanning, but the card will not return. Registered devices, assignments and MQTT remain unchanged.")) return;
     setBusy("remove:" + row.id);
     try {
       const response = await fetch("/api/iot/device-check/" + encodeURIComponent(row.id) + "/wifi-sighting", { method: "DELETE", credentials: "include" });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.message || "Sighting could not be removed");
+      if (!response.ok) throw new Error(data?.message || "Could not ignore Wi-Fi sighting");
       await load();
-      toast({ title: "Wi-Fi sighting removed" });
+      toast({ title: "Wi-Fi signal ignored", description: "This BSSID will not reappear on the scanner list until you restore it from Ignored Wi-Fi signals." });
     } catch (err: any) {
-      toast({ title: "Could not remove sighting", description: err?.message, variant: "destructive" });
+      toast({ title: "Could not ignore Wi-Fi signal", description: err?.message, variant: "destructive" });
+    } finally { setBusy(""); }
+  };
+  const restoreIgnoredWifi = async (item: IgnoredWifi) => {
+    setBusy("restore:" + item.hardwareKey);
+    try {
+      const response = await fetch("/api/iot/device-check/restore-wifi", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ hardwareKey: item.hardwareKey }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message || "Could not restore the ignored signal");
+      await load();
+      toast({ title: "Wi-Fi signal restored", description: "It can now appear as an unassigned HP2 Wi-Fi sighting again." });
+    } catch (err: any) {
+      toast({ title: "Restore failed", description: err?.message || "Try again.", variant: "destructive" });
     } finally { setBusy(""); }
   };
   const visibleMqttRows = rows.filter(row =>
@@ -511,7 +526,7 @@ export default function DeviceCheckPanel() {
                     </div>
                   </div>
                 )}
-                <button type="button" disabled={busy === "remove:" + row.id} onClick={() => removeWifiSighting(row)} className="mt-3 rounded border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-950/50">Remove Wi-Fi Sighting</button>
+                <button type="button" disabled={busy === "remove:" + row.id} onClick={() => removeWifiSighting(row)} className="mt-3 rounded border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-950/50">{busy === "remove:" + row.id ? "Ignoring..." : "Ignore Wi-Fi signal"}</button>
               </article>
             ))}
           </div>
