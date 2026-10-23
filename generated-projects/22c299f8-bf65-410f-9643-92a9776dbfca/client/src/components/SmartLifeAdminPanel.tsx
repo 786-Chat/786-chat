@@ -118,9 +118,9 @@ export default function SmartLifeAdminPanel({mode}:{mode:"check"|"devices"}) {
         request(`/api/admin/smartlife/alerts?branchId=${encodeURIComponent(id)}&archived=1`)
       ]);
       if (callId !== loadSequence.current) return;
-      setDevices(deviceRows);
-      setAlerts(alertRows);
-      setArchivedAlerts(archivedRows);
+      setDevices(Array.isArray(deviceRows) ? deviceRows : []);
+      setAlerts(Array.isArray(alertRows) ? alertRows : []);
+      setArchivedAlerts(Array.isArray(archivedRows) ? archivedRows : []);
     }catch(err:any){if(callId === loadSequence.current) setError(err?.message || "Unable to load SmartLife information");}
     finally{if(callId === loadSequence.current) setLoading(false);}
   };
@@ -231,7 +231,7 @@ export default function SmartLifeAdminPanel({mode}:{mode:"check"|"devices"}) {
     finally{setBusy(false);}
   };
   const matches=useMemo(()=>branches.filter(b=>b.name.toLowerCase().includes(branchSearch.trim().toLowerCase())),[branches,branchSearch]);
-  const displayed=devices.filter(d=>[d.name,d.deviceCode,d.installationArea].some(v=>v.toLowerCase().includes(deviceFilter.toLowerCase())));
+  const displayed=devices.filter(d=>[d?.name,d?.deviceCode,d?.installationArea].some(v=>String(v ?? "").toLowerCase().includes(deviceFilter.toLowerCase())));
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-white">
