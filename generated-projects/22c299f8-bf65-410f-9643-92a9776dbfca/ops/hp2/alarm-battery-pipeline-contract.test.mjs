@@ -64,6 +64,6 @@ test('Wi-Fi signal goes through existing scanner API and separate authenticated 
   assert.doesNotMatch(admin, /device\.isOnline \? "MQTT Connected"/);
   assert.match(branch, /Wi-Fi measurements \(last reported; not necessarily live\)/);
   assert.match(branch, /Device-reported Wi-Fi RSSI: Not reported/);
-  assert.match(branch, /Recently reported \(API \/ MQTT\)/);
+  assert.match(branch, /Recent authenticated device report/);
   assert.doesNotMatch(branch, /device\.isOnline \? "MQTT Connected"/);
 });
