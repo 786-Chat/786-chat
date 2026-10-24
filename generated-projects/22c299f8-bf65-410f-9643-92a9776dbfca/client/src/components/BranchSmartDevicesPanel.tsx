@@ -163,6 +163,23 @@ export default function BranchSmartDevicesPanel() {
                         <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Connected (MQTT)" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
                       </div>
                     </div>
+                    <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-900/60 p-3 text-xs text-slate-300">
+                      <p className="font-semibold text-cyan-200">Wi-Fi signal (last reported)</p>
+                      <p className="mt-1">
+                        {device.wifiSignalPercent != null
+                          ? `HP2 setup Wi-Fi: ${device.wifiSignalPercent}%`
+                          : "HP2 setup Wi-Fi: Not reported"}
+                        {device.wifiApName ? ` · ${device.wifiApName}` : ""}
+                        {device.wifiLastSeenAt ? ` · Observed ${new Date(device.wifiLastSeenAt).toLocaleString("en-GB")}` : ""}
+                      </p>
+                      <p className="mt-1">
+                        {Array.isArray(device.lastStatus) && device.lastStatus.some((entry: any) =>
+                          entry?.code === "rssi" && entry.value != null && Number.isFinite(Number(entry.value)))
+                          ? `Last device-reported RSSI: ${device.lastStatus.find((entry: any) => entry?.code === "rssi").value} dBm`
+                          : "Device-reported Wi-Fi RSSI: Not reported"}
+                      </p>
+                      <p className="mt-1 text-slate-500">A saved HP2 pairing signal does not prove the mouse is currently online at this restaurant.</p>
+                    </div>
 
                     {device.connectionState === "turned_off" && (
                       <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3">
