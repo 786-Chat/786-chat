@@ -144,7 +144,7 @@ export default function GlobalIotAlarmListener() {
     };
 
     void poll();
-    const timer = window.setInterval(() => void poll(), 12000);
+    const timer = window.setInterval(() => void poll(), 6000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
