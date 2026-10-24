@@ -124,7 +124,7 @@ export default function BranchSmartDevicesPanel() {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
               const connectionLabel = device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" :
-                device.isOnline ? "MQTT Connected" :
+                device.isOnline ? "Recently reported (API / MQTT)" :
                 device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT not verified)" :
                 device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
                 device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : "Awaiting activation";
@@ -160,7 +160,7 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Connected (MQTT)" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Recent device report" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
                       </div>
                     </div>
                     <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-900/60 p-3 text-xs text-slate-300">
