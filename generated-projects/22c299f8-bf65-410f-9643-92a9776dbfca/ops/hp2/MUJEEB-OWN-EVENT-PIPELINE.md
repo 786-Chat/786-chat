@@ -157,6 +157,71 @@ observer before switching the mouse on. The startup guard is measured from
 observer start, **not synchronised to physical mouse power-on**. Do not treat
 any candidates as genuine mouse catches until independently verified.
 
+
+## Next investigation: factory Smart Life / Tuya device source (READ ONLY)
+
+The preferred Mujeeb event-delivery route does **not** use MQTT, but
+factory W003 firmware still needs a separately authorised source for
+catch, reset, battery and device Wi-Fi reports. Tuya Cloud is a *candidate
+upstream source*, NOT a confirmed BMAX W003 catch integration and NOT a
+free/self-hosted replacement for Tuya firmware.
+
+Official Tuya guidance:
+- Smart Life app devices must first be paired to an account and linked to
+  the correct Tuya Developer Cloud project through an authorised QR scan.
+- UK accounts are generally served by Central Europe, but check the
+  account's region and chosen project's data center.
+- GET /v1.0/iot-03/devices/{device_id}/status returns a snapshot of
+  actual Data Point (DP) codes reported by Tuya, **if** the device is
+  associated with the app account and the project can access it.
+- Snapshot codes/values alone do NOT prove a physical catch, freshness,
+  or a live local Wi-Fi link. Device status/event notifications may
+  require a separately provisioned Tuya message service with costs,
+  access limits and regional availability.
+
+READ-ONLY discovery tool, tested with mock cloud responses:
+
+    ops/hp2/tuya-readonly-status-inspector.mjs
+
+No data is written to Tuya, to Pest Control, or to the mouse. The tool
+does NOT send a catch to Mujeeb API and does NOT need MQTT.
+
+Prerequisites before real testing:
+1. User sees actual Mouse #11 in their authorised Smart Life app and
+   confirms pairing at their chosen 2.4 GHz Wi-Fi.
+2. User configures a Tuya Developer Cloud project linked by QR scan to
+   that app account (do not put passwords/keys in chat or GitHub).
+3. A trusted operator identifies the **native Tuya device ID** (this is
+   neither FS-MOUSE-000003, SmartLife-203B nor BSSID F8:17:2D:BB:20:3A).
+4. The operator places cloud Client ID and Client Secret only into a
+   local private environment / secret manager. Do not enter them on
+   pestcontrol.cat, 786.Chat builder, screenshots or a GitHub file.
+
+With secrets supplied locally (NOT in source code), run:
+
+    TUYA_REGION=eu node ops/hp2/tuya-readonly-status-inspector.mjs
+
+The inspector requires TUYA_CLIENT_ID, TUYA_CLIENT_SECRET and
+TUYA_DEVICE_ID from the private process environment; default output
+lists DP codes and value *types*, not values. With --show-values it
+prints device data locally; avoid sending potentially private values.
+It uses Tuya Cloud HTTPS read-only requests only and never activates
+or changes the mouse. The trap must remain OFF until a deliberate,
+safe pairing session is arranged.
+
+Acceptance of this route REQUIRES proof that a **real catch** changes
+a distinct, consistent device status or produces a signed, authorised
+Tuya event. When verified, implement an allowlisted DP-to-catch adapter
+with event replay protection and a test-only destination first. Never
+treat an arbitrary true/1 or online/offline transition as caught.
+
+References (vendor docs):
+- https://developer.tuya.com/en/docs/iot/link-devices?id=Ka471nu1sfmkl
+- https://developer.tuya.com/en/docs/cloud/1ef1a3044b?id=Kconf2usgnfwo
+- https://developer.tuya.com/en/docs/iot/new-singnature?id=Kbw0q34cs2e5g
+- https://developer.tuya.com/en/docs/iot/manage-messages?id=Ka49p7loog3ze
+
+
 ## Remaining acceptance gates
 
 1. Demonstrate that factory BMAX W003 paired on customer Wi-Fi emits a
