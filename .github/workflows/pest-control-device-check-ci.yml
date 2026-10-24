@@ -35,7 +35,7 @@ jobs:
       - name: Test authenticated Mujeeb relay (fully mocked, no real alarms)
         run: node --test ops/hp2/mujeeb-event-relay.test.mjs
       - name: Validate camera observer JavaScript
-        run: node --check ops/hp2/camera-led-detector.mjs && node --check ops/hp2/camera-led-observer.mjs && node --check ops/hp2/camera-led-detector.test.mjs
+        run: node --check ops/hp2/camera-led-detector.mjs && node --check ops/hp2/camera-led-observer.mjs && node --check ops/hp2/camera-led-detector.test.mjs && node --check ops/hp2/mujeeb-camera-hardware-local.mjs
       - name: Test camera LED detection without hardware or customer alarms
         run: node --test ops/hp2/camera-led-detector.test.mjs
       - name: Test synthetic camera to Mujeeb API using fake gateway only
