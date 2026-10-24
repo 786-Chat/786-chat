@@ -132,7 +132,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || "Unable to save power state");
-      toast({ title: off ? "Mouse confirmed OFF" : "OFF confirmation cleared", description: off ? "Pest Controller Mujeeb contact prompt will appear for the branch." : "Status will follow actual Wi-Fi and MQTT reports." });
+      toast({ title: off ? "Mouse confirmed OFF" : "OFF confirmation cleared", description: off ? "Pest Controller Mujeeb contact prompt will appear for the branch." : "Status will follow verified physical-device reports; setup Wi-Fi observations cannot confirm a mouse is ON." });
       await loadBase();
     } catch (err: any) {
       toast({ title: "Power status not saved", description: err?.message || "Try again", variant: "destructive" });
@@ -627,7 +627,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           <Button type="button" variant="outline" onClick={onOpenDeviceCheck}
             className="border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
             <Wifi className="mr-2 h-4 w-4" />
-            Device Check / Wi-Fi signal
+            Device Check / Setup Wi-Fi sightings
           </Button>
         <Button
           onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
@@ -641,7 +641,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
       <div className="rounded-xl border border-cyan-500/25 bg-slate-900/60 p-4">
         <p className="font-semibold text-white">Automatic device discovery: Device Check</p>
-        <p className="mt-1 text-sm text-slate-300">HP2 Wi-Fi sightings are shown in Device Check, separately from registered MQTT mouse traps. A Wi-Fi sighting is not MQTT connectivity.</p>
+        <p className="mt-1 text-sm text-slate-300">HP2 factory setup Wi-Fi sightings are shown in Device Check, separately from authenticated Mujeeb/legacy gateway reports. A Wi-Fi sighting does not prove the trap joined shop Wi-Fi or can report catches.</p>
         <Button type="button" variant="outline" onClick={onOpenDeviceCheck} className="mt-3 border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10"><Wifi className="mr-2 h-4 w-4" /> View detected mice</Button>
       </div>
 
@@ -658,7 +658,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
               Use this only for a whole-system device setup problem. For one restaurant or one trap, use the safer branch/device buttons below.
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              This never deletes customer branches, reports, alarm history or event history. Connected, battery and signal data always stay live from HP2.
+              This never deletes customer branches, reports, alarm history or event history. Connected, battery and signal data appear only after verified gateway reports; historic Wi-Fi sightings remain separate.
             </p>
             {allDeviceBackup ? (
               <p className="mt-2 text-xs text-emerald-200">
@@ -1061,7 +1061,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
         {activeBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>{activeBranch ? `No current Food Safety MQTT devices are displayed for ${activeBranch.name}. Switch on and identify the mouse in Device Check, then link it after verification.` : "Select Addis Restaurant or another branch above. No old test cards are displayed until you choose a branch."}</p>
+            <p>{activeBranch ? `No registered Food Safety mouse devices are displayed for ${activeBranch.name}. Switch on and identify the mouse in Device Check, then link it after verification.` : "Select Addis Restaurant or another branch above. No old test cards are displayed until you choose a branch."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1076,15 +1076,15 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
                     <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : device.connectionState === "sleeping" ? "bg-amber-500/15 text-amber-200" : "bg-slate-700 text-slate-300"}>
-                      {device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recent device report" : device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (last device report)" : "Awaiting activation"}
+                      {device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recent verified gateway report" : device.connectionState === "wifi_seen" ? "Setup AP seen — gateway unverified" : device.connectionState === "sleeping" ? "No recent device report" : device.connectionState === "disconnected" ? "Last report: disconnected" : "Awaiting activation"}
                     </Badge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "Not reported"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recently reported" : device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (last device report)" : snap.state || "Awaiting activation"}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recent gateway report" : device.connectionState === "wifi_seen" ? "Setup AP seen — gateway unverified" : device.connectionState === "sleeping" ? "No recent device report" : device.connectionState === "disconnected" ? "Last report: disconnected" : snap.state || "Awaiting activation"}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "No catch reported"}</span></div>
                   </div>
 
                   <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-800/70 p-3 text-xs text-slate-200">
@@ -1098,10 +1098,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       Device-reported Wi-Fi RSSI: {snap.mqttRssi == null ? "Not reported" : snap.mqttRssi + " dBm"}
                       {device.lastCheckedAt ? " · Last device report " + new Date(device.lastCheckedAt).toLocaleString("en-GB") : ""}
                     </p>
-                    <p className="mt-1 text-slate-400">HP2 setup-AP sightings are historic and do not prove a live restaurant Wi-Fi connection.</p>
+                    <p className="mt-1 text-slate-400">HP2 setup-AP sightings are historic and do not prove a live restaurant Wi-Fi connection. Smart Life pairing is separate from the Food Safety gateway.</p>
                   </div>
 
-                  <p className="mt-2 text-xs text-slate-400">Installation area: {device.installationArea || "Not recorded"}</p>
+                  <p className="mt-2 text-xs text-slate-400">Recorded installation area: {device.installationArea || "Not recorded"}</p>
+                  {!device.lastCheckedAt && <p className="mt-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2 text-xs text-amber-200">No authenticated report received yet. Smart Life battery/connection readings are not automatically imported into Food Safety. Use Edit to replace a temporary installation area with its real location.</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {device.connectionState === "turned_off" ? (
                       <button type="button" disabled={powerBusyId === String(device.id)} onClick={() => confirmPowerState(device, false)} className="rounded border border-cyan-500/50 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">Clear OFF confirmation</button>
@@ -1292,7 +1293,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-slate-300">
         <div className="flex items-start gap-2">
           <ShieldCheck className="mt-0.5 h-4 w-4 text-cyan-300" />
-          <p>New devices use only your Food Safety device registry and HP2 MQTT/Wi-Fi gateway. Device connection state comes from real gateway events, not a browser setup page.</p>
+          <p>New devices use the Food Safety registry. MQTT is optional legacy transport; the new Mujeeb API uses authenticated gateway events. Device state cannot be inferred from a Wi-Fi setup page.</p>
         </div>
       </div>
 
