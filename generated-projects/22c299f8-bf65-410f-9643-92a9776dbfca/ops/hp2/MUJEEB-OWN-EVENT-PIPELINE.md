@@ -78,11 +78,19 @@ Accepted schema (ONLY real source events, never fabricated Wi-Fi sightings):
   "batteryPct": 83
 }
 
-Allowed types: trap_triggered, trap_reset, or battery_update.
+Allowed types: trap_triggered, trap_reset, battery_update or signal_update.
 - batteryPct (0–100) can accompany a genuine catch/reset report.
 - A standalone battery_update requires a **real device-reported** batteryPct.
   It is forwarded as gateway `heartbeat` and updates the existing Admin
   and Branch Smart Devices battery displays **without setting off an alarm**.
+- A standalone signal_update requires **real device-reported RSSI** (-110 to
+  -1 dBm). It becomes a gateway `heartbeat` and updates the Wi-Fi RSSI on
+  Admin and Branch cards **without setting off an alarm**.
+- HP2 scanner `signalPercent` (0–100%) remains a **separate** report about
+  seeing a factory pairing access point. It has a saved timestamp; the
+  dashboard must not call it proof of live restaurant Wi-Fi.
+- Admin and Branch Smart Devices show the two different signal sources
+  separately, with `Not reported` when genuine readings are absent.
 - HP2's Wi-Fi scanner cannot derive batteryPct from SSID, signal strength,
   green/red LED, or elapsed time. No mock values in customer dashboards.
 - Battery readings are displayed as last reported; sleeping/offline mice may
