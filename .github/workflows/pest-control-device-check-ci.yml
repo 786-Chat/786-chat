@@ -40,6 +40,8 @@ jobs:
         run: node --test ops/hp2/camera-led-detector.test.mjs
       - name: Test synthetic camera to Mujeeb API using fake gateway only
         run: node --test ops/hp2/mujeeb-camera-to-api-local.test.mjs
+      - name: Validate read-only Tuya Cloud device status inspection
+        run: node --check ops/hp2/tuya-readonly-status-inspector.mjs && node --test ops/hp2/tuya-readonly-status-inspector.test.mjs
       - name: Run Mujeeb event through isolated real Admin and Branch handler code (no real database)
         run: node --test ops/hp2/mujeeb-to-admin-branch-isolated.test.mjs
       - name: Protect Admin/Branch alarm and battery wiring
