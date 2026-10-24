@@ -60,6 +60,10 @@ test('Wi-Fi signal goes through existing scanner API and separate authenticated 
   assert.match(relay, /type === "battery_update" \|\| type === "signal_update" \? "heartbeat"/);
   assert.match(admin, /Wi-Fi signal — last reported/);
   assert.match(admin, /Device-reported Wi-Fi RSSI/);
+  assert.match(admin, /Recent device report/);
+  assert.doesNotMatch(admin, /device\.isOnline \? "MQTT Connected"/);
   assert.match(branch, /Wi-Fi signal \(last reported\)/);
   assert.match(branch, /Device-reported Wi-Fi RSSI: Not reported/);
+  assert.match(branch, /Recently reported \(API \/ MQTT\)/);
+  assert.doesNotMatch(branch, /device\.isOnline \? "MQTT Connected"/);
 });
