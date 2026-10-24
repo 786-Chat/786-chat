@@ -38,6 +38,8 @@ jobs:
         run: node --check ops/hp2/camera-led-detector.mjs && node --check ops/hp2/camera-led-observer.mjs && node --check ops/hp2/camera-led-detector.test.mjs
       - name: Test camera LED detection without hardware or customer alarms
         run: node --test ops/hp2/camera-led-detector.test.mjs
+      - name: Test synthetic camera to Mujeeb API using fake gateway only
+        run: node --test ops/hp2/mujeeb-camera-to-api-local.test.mjs
       - name: Protect Admin/Branch alarm and battery wiring
         run: node --test ops/hp2/alarm-battery-pipeline-contract.test.mjs
       - name: Type-check Pest Control
