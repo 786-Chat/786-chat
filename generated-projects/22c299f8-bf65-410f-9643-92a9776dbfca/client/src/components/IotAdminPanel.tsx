@@ -1087,17 +1087,21 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                    <Wifi className="h-3.5 w-3.5" />
-                    Wi-Fi / MQTT
-                    {snap.mqttRssi == null ? " · Gateway signal not yet reported" : " · Last MQTT signal " + snap.mqttRssi + " dBm"}
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
+                  <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-800/70 p-3 text-xs text-slate-200">
+                    <p className="flex items-center gap-2 font-semibold text-cyan-200"><Wifi className="h-3.5 w-3.5" />Wi-Fi signal — last reported</p>
+                    <p className="mt-1">
+                      HP2 setup Wi-Fi: {device.wifiSignalPercent != null ? device.wifiSignalPercent + "%" : "Not reported"}
+                      {device.wifiApName ? " · " + device.wifiApName : ""}
+                      {device.wifiLastSeenAt ? " · Observed " + new Date(device.wifiLastSeenAt).toLocaleString("en-GB") : ""}
+                    </p>
+                    <p className="mt-1">
+                      Device-reported Wi-Fi RSSI: {snap.mqttRssi == null ? "Not reported" : snap.mqttRssi + " dBm"}
+                      {device.lastCheckedAt ? " · Last device report " + new Date(device.lastCheckedAt).toLocaleString("en-GB") : ""}
+                    </p>
+                    <p className="mt-1 text-slate-400">HP2 setup-AP sightings are historic and do not prove a live restaurant Wi-Fi connection.</p>
                   </div>
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
-                  {device.wifiApName && <p className="mt-2 text-xs text-cyan-200">Linked HP2 Wi-Fi: {device.wifiApName}
-                    {device.wifiSignalPercent != null ? " · Last signal " + device.wifiSignalPercent + "%" : ""}
-                    {device.wifiLastSeenAt ? " · Last observed " + new Date(device.wifiLastSeenAt).toLocaleString("en-GB") : ""}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {device.connectionState === "turned_off" ? (
                       <button type="button" disabled={powerBusyId === String(device.id)} onClick={() => confirmPowerState(device, false)} className="rounded border border-cyan-500/50 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">Clear OFF confirmation</button>
