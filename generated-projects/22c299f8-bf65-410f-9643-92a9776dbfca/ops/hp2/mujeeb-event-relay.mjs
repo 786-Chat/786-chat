@@ -2,7 +2,7 @@
 /**
  * Optional Food Safety / Mujeeb API adapter.
  *
- * Accepts EXPLICIT catch/reset events from an authenticated, locally trusted
+ * Accepts EXPLICIT catch/reset and real battery updates from an authenticated, locally trusted
  * integration and forwards them to the existing Pest Control gateway API.
  *
  * IMPORTANT: This is a receiver, NOT a Tuya local protocol client or a
@@ -17,7 +17,7 @@ import { createServer } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const TYPES = new Set(["trap_triggered", "trap_reset"]);
+const TYPES = new Set(["trap_triggered", "trap_reset", "battery_update"]);
 const BODY_LIMIT = 8192;
 
 function tokenEquals(actual, expected) {
@@ -96,7 +96,7 @@ export function createMujeebEventRelay({
       if (!mappedFsId) return send(403, { error: "UNVERIFIED_DEVICE_ID" });
 
       const type = String(body.type || "").trim();
-      if (!TYPES.has(type)) return send(422, { error: "ONLY_VERIFIED_CATCH_OR_RESET" });
+      if (!TYPES.has(type)) return send(422, { error: "UNSUPPORTED_VERIFIED_DEVICE_EVENT" });
 
       // Upstream event ID must be stable across retries. No guessing from Wi-Fi.
       const upstreamEventId = String(body.upstreamEventId || "").trim();
@@ -109,14 +109,19 @@ export function createMujeebEventRelay({
       if (batteryPct !== undefined && (!Number.isInteger(batteryPct) || batteryPct < 0 || batteryPct > 100)) {
         return send(422, { error: "INVALID_BATTERY" });
       }
+      // Battery-only messages must include a REAL device-reported percentage.
+      // Never infer it from Wi-Fi strength, estimated battery age or an LED.
+      if (type === "battery_update" && batteryPct === undefined) {
+        return send(422, { error: "REAL_BATTERY_PERCENT_REQUIRED" });
+      }
 
       // Existing API resolves the assigned branch from its database. Caller
       // cannot select a customer or inject an alternate branch ID.
       const event = {
         eventId,
         deviceId: mappedFsId,
-        type,
-        value: type === "trap_triggered",
+        type: type === "battery_update" ? "heartbeat" : type,
+        ...(type === "battery_update" ? {} : { value: type === "trap_triggered" }),
         source: "mu-authenticated-event-adapter",
         upstreamEventId,
         ...(batteryPct === undefined ? {} : { batteryPct }),
