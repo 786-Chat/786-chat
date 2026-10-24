@@ -14,7 +14,7 @@ test('existing gateway persists real trap alarm and battery percentage separatel
   assert.match(server, /last_alarm_at = now\(\)/);
   assert.match(server, /last_alarm_at = NULL/);
   assert.match(server, /battery_pct = COALESCE\(\$\{batteryPct\}, battery_pct\)/);
-  assert.match(relay, /type === "battery_update" \? "heartbeat" : type/);
+  assert.match(relay, /type === "battery_update" \|\| type === "signal_update" \? "heartbeat" : type/);
 });
 
 test('Admin and branch both receive stored alarms with customer-branch isolation', async () => {
