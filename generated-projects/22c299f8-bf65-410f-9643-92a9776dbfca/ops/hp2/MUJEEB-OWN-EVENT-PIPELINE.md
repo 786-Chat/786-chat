@@ -40,8 +40,10 @@ behaviour; cloud notification mirroring is only a potential experiment.
 - It listens on 127.0.0.1 only. Do NOT expose its HTTP port to the internet.
 - If the event source is remote, use a securely authenticated transport
   terminating locally (e.g. a managed VPN) after access/security review.
-- All incoming events need a separate Bearer token and explicit *native Tuya
-  device ID* -> FS-MOUSE ID binding. Do not bind using an AP BSSID alone.
+- All incoming events need a separate Bearer token and an explicitly verified
+  **event-source identity** -> FS-MOUSE ID binding (e.g. native Tuya device ID
+  for a trustworthy Tuya feed, or a separately verified physical optical
+  installation ID for a camera). Do not bind using an AP BSSID alone.
 - Neither Wi-Fi presence nor an empty notification is interpreted as "caught".
 - Every genuine source event needs a unique stable upstreamEventId so retries
   do not create duplicate alarms; the gateway is responsible for idempotency.
@@ -57,7 +59,7 @@ not put live secrets in a GitHub file or chat:
 PEST_CONTROL_BASE_URL=https://pestcontrol.cat
 FOODSAFETY_IOT_GATEWAY_TOKEN=<existing protected gateway token>
 MUJEEB_INGRESS_TOKEN=<separate 32+ character secret>
-MUJEEB_DEVICE_BINDINGS_JSON={"<verified-native-device-id>":"FS-MOUSE-000003"}
+MUJEEB_DEVICE_BINDINGS_JSON={"<verified-event-source-id>":"FS-MOUSE-000003"}
 MUJEEB_INGRESS_PORT=43117
 
 Start in controlled testing only:
@@ -70,7 +72,7 @@ Content-Type: application/json
 
 Accepted schema (ONLY real source events, never fabricated Wi-Fi sightings):
 {
-  "sourceDeviceId": "<verified-native-device-id>",
+  "sourceDeviceId": "<verified-event-source-id>",
   "type": "trap_triggered",
   "upstreamEventId": "<stable-unique-event-id-from-real-source>",
   "batteryPct": 83
@@ -84,12 +86,54 @@ assign a branch chosen by a caller: the website resolves it.
 Local automated tests (no website/API calls, no customer alarms):
 node --test ops/hp2/mujeeb-event-relay.test.mjs
 
+## Optional camera test for HP2 (no wiring, NO real alarms by default)
+
+The user observed that the mouse may detect an animal before the high-voltage
+pulse. That sequence is not electrically confirmed by the videos. The red LED
+also lights for about three seconds during power-up, so a red pixel or an LED
+turning on is **NOT automatically a genuine catch signal**.
+
+The camera observer `camera-led-observer.mjs` is purely an experimental
+computer-vision input:
+- USB webcam looking **from outside the fully closed trap**, never near
+  exposed trap circuitry. Do not touch LED legs, attach USB GND or do
+  continuity tests on an energised trap.
+- Optional dry-run processing of local video, with no uploads.
+- Samples frames at 2fps (320x240) and checks a chosen region of interest.
+- Requires a persistent red light across several frames and ignores the
+  first 180 seconds of observation after starting.
+- Labels changes `RED_LIGHT_CANDIDATE` only. The on-screen red LED at startup,
+  phone UI red marks, reflections or changing camera angle can create
+  false detections; position and camera ROI need physical verification.
+- **By default it cannot send any event to a customer**.
+- Experimental delivery to the localhost event relay is separately gated
+  behind `--deliver`, a declared verified catch LED, credentials and a
+  physically established optical-source binding. Do NOT enable customer
+  delivery for an unverified indication or unattended tests.
+- A cam connected to HP2 at home does not cover customer restaurants.
+  This approach proves only the optical-to-API pathway, not a reliable
+  worldwide Wi-Fi connection from the original BMAX W003 firmware.
+
+Initial checks for the user's HP2 camera test:
+```sh
+ls -l /dev/video* 2>/dev/null || echo "No camera detected"
+command -v ffmpeg || echo "ffmpeg not installed"
+node --test ops/hp2/camera-led-detector.test.mjs
+# Optional offline prerecorded media dry run, NOT real alarm:
+node ops/hp2/camera-led-observer.mjs --file /path/to/local-test-video.mp4 --roi 100,100,50,50
+```
+The ROI above is an illustrative placeholder: calculate it from the actual
+camera image with known LED position, not from guesses. Start the dry-run
+observer before switching the mouse on. The startup guard is measured from
+observer start, **not synchronised to physical mouse power-on**. Do not treat
+any candidates as genuine mouse catches until independently verified.
+
 ## Remaining acceptance gates
 
 1. Demonstrate that factory BMAX W003 paired on customer Wi-Fi emits a
    real catch/reset indication available from an authorised integration.
    A red LED or audible alarm alone is not a machine-readable event.
-2. Determine the *native* device ID and event type from this verified
+2. Determine the verified event-source identity and event type from this
    source; match it to the existing FS-MOUSE registration.
 3. Confirm protected network route from the customer/shop event source
    to HP2 or the authorised relay location.
