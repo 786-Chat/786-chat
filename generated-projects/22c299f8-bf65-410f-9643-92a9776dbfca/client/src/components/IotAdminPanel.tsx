@@ -168,7 +168,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   useEffect(() => {
     loadBase().catch(() => {});
     loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
-    const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
+    const timer = window.setInterval(() => loadBase().catch(() => {}), 10000);
     return () => window.clearInterval(timer);
   }, []);
 
