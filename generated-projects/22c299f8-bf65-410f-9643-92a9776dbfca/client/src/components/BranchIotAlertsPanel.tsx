@@ -64,7 +64,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 12000);
+    const timer = window.setInterval(() => void load(), 6000);
     return () => window.clearInterval(timer);
   }, []);
 
