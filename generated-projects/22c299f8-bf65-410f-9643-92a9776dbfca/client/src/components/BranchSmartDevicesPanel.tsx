@@ -74,7 +74,7 @@ export default function BranchSmartDevicesPanel() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Smart Devices</h2>
-            <p className="text-sm text-slate-400">Mouse devices assigned to this branch</p>
+            <p className="text-sm text-slate-400">Assigned devices · connection status requires authenticated gateway reports</p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
@@ -123,15 +123,16 @@ export default function BranchSmartDevicesPanel() {
             {devices.map((device: any, index: number) => {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
-              const connectionLabel = device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" :
-                device.isOnline ? "Recent authenticated device report" :
-                device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" :
-                device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
-                device.connectionState === "disconnected" ? "Disconnected (last report)" : "Awaiting activation";
-              const powerLabel = device.connectionState === "turned_off" ? "Turned OFF" :
-                device.connectionState === "wifi_seen" ? "Wi-Fi signal seen" :
-                device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
-                readableStatus(snap.power) || "Awaiting activation";
+              const connectionLabel = device.connectionState === "turned_off" ? "Mouse OFF (admin confirmed)" :
+                device.isOnline ? "Recent verified gateway report" :
+                device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen — API unverified" :
+                device.connectionState === "sleeping" ? "No recent device report" :
+                device.connectionState === "disconnected" ? "Last report: disconnected" : "Not yet reporting";
+              const powerLabel = device.connectionState === "turned_off" ? "OFF confirmed by admin" :
+                device.isOnline ? "Recent verified report" :
+                device.connectionState === "wifi_seen" ? "Setup AP observed only" :
+                device.connectionState === "disconnected" ? "Reported disconnected" :
+                "Not verified";
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
                   <div className={`h-1.5 ${device.connectionState === "turned_off" ? "bg-red-500" : device.isOnline ? "bg-emerald-500" : device.connectionState === "wifi_seen" ? "bg-cyan-500" : "bg-slate-600"}`} />
@@ -140,11 +141,12 @@ export default function BranchSmartDevicesPanel() {
                       <div className="min-w-0">
                         <p className="truncate text-lg font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
                         <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
-                        <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />Installation area: {device.installationArea || "Not recorded"}</p>
+                        <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />Recorded installation area: {device.installationArea || "Not recorded"}</p>
                       </div>
                       <Badge className={device.connectionState === "turned_off" ? "bg-red-500/20 text-red-100" : device.isOnline ? "bg-emerald-500/15 text-emerald-300" : device.connectionState === "wifi_seen" ? "bg-cyan-500/15 text-cyan-200" : device.connectionState === "sleeping" ? "bg-amber-500/15 text-amber-200" : "bg-slate-700 text-slate-300"}>{connectionLabel}</Badge>
                     </div>
 
+                    {!device.lastCheckedAt && <p className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-xs text-amber-100">No authenticated device report received by Food Safety yet. Smart Life pairing is not proof that our own Mujeeb API is connected. The actual mouse power or sleep state is unknown.</p>}
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Battery</span>
@@ -160,11 +162,11 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Recent report (shop Wi-Fi unverified)" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF (admin verified)" : device.connectionState === "wifi_seen" ? "Setup AP only" : device.isOnline ? "Gateway report received" : "Not verified"}</span></div>
                       </div>
                     </div>
                     <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-900/60 p-3 text-xs text-slate-300">
-                      <p className="font-semibold text-cyan-200">Wi-Fi measurements (last reported; not necessarily live)</p>
+                      <p className="font-semibold text-cyan-200">Wi-Fi evidence (last observed; not live proof)</p>
                       <p className="mt-1">
                         {device.wifiSignalPercent != null
                           ? `HP2 setup Wi-Fi: ${device.wifiSignalPercent}%`
@@ -178,13 +180,13 @@ export default function BranchSmartDevicesPanel() {
                           ? `Last device-reported RSSI: ${device.lastStatus.find((entry: any) => entry?.code === "rssi").value} dBm`
                           : "Device-reported Wi-Fi RSSI: Not reported"}
                       </p>
-                      <p className="mt-1 text-slate-500">A saved HP2 pairing signal does not prove the mouse is currently online at this restaurant.</p>
+                      <p className="mt-1 text-slate-400">Smart Life mobile pairing and HP2 setup-AP signals are separate from verified Food Safety gateway reports. A battery-powered trap can sleep without reporting its physical switch state.</p>
                     </div>
 
                     {device.connectionState === "turned_off" && (
                       <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3">
                         <p className="font-semibold text-red-100">Mouse turned OFF — please contact Pest Controller Mujeeb</p>
-                        <p className="mt-1 text-xs text-red-100/80">Your mouse remains assigned to this branch. Ask Mujeeb to check its power before it is used again.</p>
+                        <p className="mt-1 text-xs text-red-100/80">An admin physically confirmed OFF. The mouse remains assigned to this branch. Ask Mujeeb to check its power before use.</p>
                         <button type="button" onClick={() => {
                           const message = "Pest Controller Mujeeb: The mouse trap " + device.deviceName + " (" + device.deviceId + ") at our branch is confirmed turned OFF. Please arrange a check.";
                           void navigator.clipboard?.writeText(message).then(() => window.alert("Message copied. Send it to Pest Controller Mujeeb using your usual contact method.")).catch(() => window.prompt("Copy this message for Mujeeb:", message));
@@ -194,7 +196,7 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                     )}
                     <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last seen: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "Waiting for first check"}
+                      Last verified device report: {device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB") : "None received"}
                     </div>
                   </div>
                 </div>
