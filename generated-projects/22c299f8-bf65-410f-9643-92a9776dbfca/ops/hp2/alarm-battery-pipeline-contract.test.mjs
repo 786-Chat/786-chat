@@ -45,3 +45,21 @@ test('Admin and Branch display measured device battery, not Wi-Fi signal as batt
   assert.match(server, /code: "battery_percentage", value: row\.battery_pct/);
   assert.match(server, /batteryPct/);
 });
+
+test('Wi-Fi signal goes through existing scanner API and separate authenticated device report; Admin and Branch show historical values', async () => {
+  const server = await source('server/routes.ts');
+  const scanner = await source('ops/hp2/foodsafety-wifi-ap-scanner.mjs');
+  const relay = await source('ops/hp2/mujeeb-event-relay.mjs');
+  const admin = await source('client/src/components/IotAdminPanel.tsx');
+  const branch = await source('client/src/components/BranchSmartDevicesPanel.tsx');
+  assert.match(scanner, /\/api\/iot\/gateway\/wifi-observation/);
+  assert.match(server, /app\.post\("\/api\/iot\/gateway\/wifi-observation"/);
+  assert.match(server, /wifiSignalPercent: row\.last_wifi_signal_percent/);
+  assert.match(server, /\{ code: "rssi", value: row\.rssi \}/);
+  assert.match(relay, /signal_update/);
+  assert.match(relay, /type === "battery_update" \|\| type === "signal_update" \? "heartbeat"/);
+  assert.match(admin, /Wi-Fi signal — last reported/);
+  assert.match(admin, /Device-reported Wi-Fi RSSI/);
+  assert.match(branch, /Wi-Fi signal \(last reported\)/);
+  assert.match(branch, /Device-reported Wi-Fi RSSI: Not reported/);
+});
