@@ -130,7 +130,7 @@ export function createMujeebEventRelay({
         eventId,
         deviceId: mappedFsId,
         type: type === "battery_update" || type === "signal_update" ? "heartbeat" : type,
-        ...(type === "battery_update" ? {} : { value: type === "trap_triggered" }),
+        ...(type === "battery_update" || type === "signal_update" ? {} : { value: type === "trap_triggered" }),
         source: "mu-authenticated-event-adapter",
         upstreamEventId,
         ...(batteryPct === undefined ? {} : { batteryPct }),
