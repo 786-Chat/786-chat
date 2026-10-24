@@ -46,12 +46,14 @@ const relay = createMujeebEventRelay({
 });
 await new Promise(resolve => relay.listen(0, "127.0.0.1", resolve));
 
-let done = false, frames = 0, buffer = Buffer.alloc(0), lastError = "";
-const detector = new RedLedEdgeDetector({ startupGuardMs: 0 });
+let done = false, frames = 0, buffer = Buffer.alloc(0), lastError = "", peakRedFraction = 0;
+// LOCAL-ONLY calibration: sample quickly enough for a roughly 2-second startup flash.
+// A detected LED remains just a test signal, never proof of a genuine mouse catch.
+const detector = new RedLedEdgeDetector({ startupGuardMs: 0, minOnFrames: 3, onFraction: 0.012, offFraction: 0.005 });
 const ffmpeg = spawn("ffmpeg", [
   "-nostdin", "-hide_banner", "-loglevel", "error",
   "-f", "v4l2", "-input_format", "mjpeg", "-video_size", "320x240",
-  "-i", device, "-vf", "fps=2", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"
+  "-i", device, "-vf", "fps=5", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"
 ], { stdio: ["ignore", "pipe", "pipe"] });
 ffmpeg.stderr.on("data", part => {
   lastError = (lastError + String(part)).slice(-800);
@@ -59,11 +61,13 @@ ffmpeg.stderr.on("data", part => {
 console.log("[test] REAL CAMERA -> LOCAL MUJEEB API -> FAKE GATEWAY ONLY");
 console.log("[test] No production website requests, no customer alarm, no MQTT");
 console.log("[test] Red indicates a test candidate, NOT proof of a catch");
-console.log("[test] ROI=" + Object.values(roi).join(",") + ". Turn CLOSED trap ON briefly, then OFF.");
+console.log("[test] ROI=" + Object.values(roi).join(",") + ". Turn CLOSED trap ON promptly, then OFF.");
+console.log("[test] Camera samples 5 frames/sec; minimum red fraction 1.2%. This is a local diagnostic only.");
 async function finish(err) {
   if (done) return;
   done = true;
   clearTimeout(timer);
+  console.log("[test] Frames=" + frames + ", highest red fraction in ROI=" + (peakRedFraction * 100).toFixed(2) + "%");
   ffmpeg.kill("SIGTERM");
   await new Promise(resolve => relay.close(resolve));
   if (err) {
@@ -85,7 +89,8 @@ ffmpeg.stdout.on("data", data => {
     buffer = buffer.subarray(FRAME_BYTES);
     frames++;
     const fraction = redPixelFraction(frame, WIDTH, HEIGHT, roi);
-    const candidate = detector.observe(fraction, frames * 500);
+    peakRedFraction = Math.max(peakRedFraction, fraction);
+    const candidate = detector.observe(fraction, frames * 200);
     if (!candidate) continue;
     console.log("[test] RED LIGHT CANDIDATE seen on actual USB camera; checking relay...");
     void (async () => {
