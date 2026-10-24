@@ -148,10 +148,11 @@ export default function DeviceCheckPanel() {
 
   const counts = useMemo(() => ({
     live: rows.filter(row => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
+    gatewayLive: registered.filter(device => Boolean((device as any).isOnline)).length,
     wifiSeen: rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId && row.isWifiRecentlySeen).length,
     unassigned: rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).length,
     linked: rows.filter(row => Boolean(row.assignedDeviceId)).length,
-  }), [rows]);
+  }), [rows, registered]);
 
   const duplicateIpMap = useMemo(() => {
     const map = new Map<string, DeviceCheckRow[]>();
@@ -367,7 +368,7 @@ export default function DeviceCheckPanel() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Device Check</h2>
-            <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
+            <p className="text-sm text-slate-400">Identify physical mice using HP2; verify live status separately through authenticated gateway reports</p>
           </div>
         </div>
         <Button type="button" onClick={() => load().catch(() => {})} className="bg-slate-800 text-white hover:bg-slate-700">
@@ -383,18 +384,18 @@ export default function DeviceCheckPanel() {
           <div>
             <h3 className="font-semibold text-white">Safe physical identification</h3>
             <p className="mt-1 text-sm text-slate-300">
-              HP2 can report MQTT-connected mice and, with the optional Ubuntu scanner, observed factory SmartLife Wi-Fi access points. An AP BSSID may differ from the MQTT device MAC. Pairing LEDs may stop flashing automatically; a saved sighting does not mean the trap is currently online. No branch assignment happens automatically.
+              HP2 records factory SmartLife setup Wi-Fi sightings. After the mouse joins the shop Wi-Fi, its setup AP can disappear, so zero current AP sightings does not mean the mouse is OFF. Smart Life phone pairing is not proof that Mujeeb API receives device reports. Actual LIVE status requires a recent authenticated gateway event. Mouse and branch assignments remain saved.
             </p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
-            <p className="text-2xl font-bold text-emerald-300">{counts.live}</p>
-            <p className="text-xs text-emerald-200">MQTT live now</p>
+            <p className="text-2xl font-bold text-emerald-300">{counts.gatewayLive}</p>
+            <p className="text-xs text-emerald-200">Gateway live (verified)</p>
           </div>
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-cyan-300">{counts.wifiSeen}</p>
-            <p className="text-xs text-cyan-200">Wi-Fi AP sightings</p>
+            <p className="text-xs text-cyan-200">Recent setup Wi-Fi APs</p>
           </div>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-amber-300">{counts.unassigned}</p>
@@ -402,9 +403,10 @@ export default function DeviceCheckPanel() {
           </div>
           <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-blue-300">{counts.linked}</p>
-            <p className="text-xs text-blue-200">Identified</p>
+            <p className="text-xs text-blue-200">Physically linked</p>
           </div>
         </div>
+          <p className="mt-2 text-xs text-emerald-200">Gateway live counts devices reporting recently to Food Safety, not Smart Life. Legacy MQTT live sightings: {counts.live}. Setup AP sightings can disappear normally after pairing.</p>
       </div>
 
 
@@ -448,17 +450,17 @@ export default function DeviceCheckPanel() {
             <div key={row.id} className="mt-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
               <p className="text-sm font-semibold text-white">{row.assignedDeviceName || row.hostname || "Mouse"} — {row.assignedDeviceId}</p>
               <p className="mt-1 font-mono text-xs text-cyan-200">{row.hostname || row.mqttPrefix || "Wi-Fi observation"}{row.macAddress ? " · " + row.macAddress : ""}</p>
-              <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? (row.isWifiRecentlySeen ? "Wi-Fi recently observed · MQTT unverified" : "Sleeping / No recent Wi-Fi signal · MQTT unverified") : row.isLive ? "MQTT live" : "Sleeping / No recent MQTT signal"}</p>
+              <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? (row.isWifiRecentlySeen ? "Setup AP recently observed · gateway unverified" : "No recent setup AP · gateway unverified") : row.isLive ? "Legacy MQTT live" : "No recent legacy gateway report"}</p>
             </div>
           ))}
-          <p className="mt-2 text-xs text-slate-400">Assigned mice stay here even when sleeping or switched OFF. Wi-Fi scans alone do not establish MQTT connectivity.</p>
+          <p className="mt-2 text-xs text-slate-400">Assigned device records remain even when the setup AP disappears or the trap is OFF. Last setup signal is not a live power or catch report.</p>
         </>}
         {!selectedBranchId && <p className="mt-3 text-sm text-cyan-200">Choose a branch to see only that customer’s assigned mice. The unassigned HP2 Wi-Fi queue below is available for identification at any time.</p>}
       </section>
       <section className="space-y-3" aria-label="All unassigned HP2 Wi-Fi mouse sightings">
         <div>
           <h3 className="text-lg font-bold text-white">Unassigned HP2 Wi-Fi sightings ({unassignedWifiTotal})</h3>
-          <p className="text-sm text-slate-300">All detected Wi-Fi mouse signals stay here until assigned to a branch. Recently seen and historical signals are labelled separately. Select the customer branch above, physically identify the mouse, then assign. Wi-Fi observation does not prove MQTT.</p>
+          <p className="text-sm text-slate-300">All detected Wi-Fi mouse signals stay here until assigned to a branch. Recently seen and historical signals are labelled separately. Select the customer branch above, physically identify the mouse, then assign. Wi-Fi observation does not prove a live router connection or Mujeeb API event delivery.</p>
           {unassignedWifiTotal > wifiCardLimit && <p className="mt-1 text-xs text-amber-200">Showing {wifiCardLimit} of {unassignedWifiTotal} unassigned sightings; more are available below.</p>}
         </div>
         {unassignedSightings.length === 0 ? (
@@ -480,7 +482,7 @@ export default function DeviceCheckPanel() {
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">Last Wi-Fi signal</p><p className="font-semibold text-white">{row.wifiSignalPercent == null ? "Not reported" : row.wifiSignalPercent + "%"}</p></div>
-                  <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">MQTT</p><p className="font-semibold text-amber-200">Not verified</p></div>
+                  <div className="rounded-lg bg-slate-800 p-3"><p className="text-xs text-slate-400">Mujeeb API</p><p className="font-semibold text-amber-200">Not verified</p></div>
                 </div>
                 <p className="mt-3 text-xs text-slate-400">Last HP2 report: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}</p>
                 <p className="mt-1 text-xs text-slate-400">{row.wifiObservationSource === "admin-entry" ? "Manually recorded" : "HP2 scanner observation"} · Not assigned automatically</p>
@@ -491,7 +493,7 @@ export default function DeviceCheckPanel() {
                 {wifiAssignOpenId === row.id && (
                   <div className="mt-3 space-y-3 rounded-lg border border-cyan-500/40 bg-slate-800 p-3">
                     <p className="text-sm font-semibold text-white">Assign this mouse to {branches.find(b => b.id === selectedBranchId)?.name || "selected branch"}</p>
-                    <p className="text-xs text-amber-200">Verify the physical mouse first. This records its Wi-Fi AP identity; MQTT is not connected or proven by this action.</p>
+                    <p className="text-xs text-amber-200">Verify the physical mouse first. This only links its setup AP identity; it does not connect the trap's sensor to Mujeeb API.</p>
                     <label className="flex items-start gap-2 text-xs text-white">
                       <input type="checkbox" checked={Boolean(wifiPhysicallyConfirmed[row.id])} onChange={e => setWifiPhysicallyConfirmed(previous => ({ ...previous, [row.id]: e.target.checked }))} className="mt-0.5" />
                       I have physically confirmed this is the correct mouse for the selected branch.
@@ -578,13 +580,13 @@ export default function DeviceCheckPanel() {
           disabled={busy === "wifi-observation" || !wifiObservation.ssid.trim() || !wifiObservation.macAddress.trim()}
           className="mt-3 bg-amber-600 text-white hover:bg-amber-500">
           <Wifi className="mr-2 h-4 w-4" />
-          {busy === "wifi-observation" ? "Recording..." : "Save HP2 Wi-Fi sighting (not MQTT)"}
+          {busy === "wifi-observation" ? "Recording..." : "Save HP2 setup Wi-Fi sighting (not live)"}
         </Button>
       </div>
 
       <div className="rounded-2xl border border-blue-500/25 bg-slate-800/70 p-5 space-y-3">
         <h3 className="font-semibold text-white">Register New Device — Pending Activation</h3>
-        <p className="text-sm text-slate-300">Save a new device ID, customer and installation area even when no Wi-Fi is detected. This does not provision firmware or establish live MQTT. Mouse #7 is already registered to Addis Restaurant; edit it in Smart Devices instead of registering it again.</p>
+        <p className="text-sm text-slate-300">Save a new device ID, customer and installation area even when no Wi-Fi is detected. This does not provision firmware or establish a live Mujeeb API device connection. Mouse #7 is already registered to Addis Restaurant; edit it in Smart Devices instead of registering it again.</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input aria-label="New device ID" placeholder="New unique ID, e.g. FS-MOUSE-000004" value={manualDraft.deviceId} onChange={(e) => setDraft("manual-registration", { deviceId: e.target.value.toUpperCase() })} className="border-slate-600 bg-slate-950 text-white" />
           <Input aria-label="Device name" placeholder="Device name, e.g. Mouse 8" value={manualDraft.deviceName} onChange={(e) => setDraft("manual-registration", { deviceName: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
@@ -606,8 +608,8 @@ export default function DeviceCheckPanel() {
       {visibleMqttRows.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
           <Wifi className="mx-auto h-9 w-9 text-slate-500" />
-          <h3 className="mt-3 font-semibold text-white">No verified MQTT identity found</h3>
-          <p className="mt-1 text-sm text-slate-400">No current MQTT identity is available to link. Old unverified DEVICE4 test data is hidden; historic records remain saved.</p>
+          <h3 className="mt-3 font-semibold text-white">No current legacy MQTT device identity found</h3>
+          <p className="mt-1 text-sm text-slate-400">No current legacy MQTT identity is available. Mujeeb API does not require MQTT; a native verified sensor event source is still needed.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -677,7 +679,7 @@ export default function DeviceCheckPanel() {
                   </div>
                   <div className="mt-3 space-y-3 rounded-xl border border-slate-600 bg-slate-900/60 p-4">
                     <h4 className="font-semibold text-white">Register new customer device (pending activation)</h4>
-                    <p className="text-xs text-slate-300">This records the branch and location only. It does not link the SmartLife MAC, configure firmware or enable MQTT alarms. Use Smart Devices to edit an already registered ID.</p>
+                    <p className="text-xs text-slate-300">This records the branch and location only. It does not provision firmware or enable Mujeeb API alarms. Use Smart Devices to edit an already registered ID.</p>
                     <p className="text-xs text-slate-400">Observed Wi-Fi MAC: {row.macAddress || "Not recorded"}</p>
                     <Input aria-label="New device ID" placeholder="New unique ID, e.g. FS-MOUSE-000004" value={draft.deviceId} onChange={(e) => setDraft(row.id, { deviceId: e.target.value.toUpperCase() })} className="border-slate-600 bg-slate-950 text-white" />
                     <Input aria-label="Device name" placeholder="Device name, e.g. Mouse 8" value={draft.deviceName} onChange={(e) => setDraft(row.id, { deviceName: e.target.value })} className="border-slate-600 bg-slate-950 text-white" />
