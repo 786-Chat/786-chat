@@ -27,6 +27,7 @@ if (!Number.isFinite(startupGuardSec) || startupGuardSec < 0 || startupGuardSec 
   throw new Error('Invalid --startup-guard-seconds');
 }
 if (deliver) {
+  if (!argv.includes('--roi')) throw new Error('Real delivery requires an explicitly calibrated --roi');
   if (process.env.MUJEEB_CAMERA_EVENT_VERIFIED !== 'YES_I_VERIFIED_CATCH_LED' ||
       !process.env.MUJEEB_CAMERA_SOURCE_ID || !process.env.MUJEEB_INGRESS_TOKEN) {
     throw new Error('DELIVERY DISABLED: independently verify catch LED and configure source ID and token');
