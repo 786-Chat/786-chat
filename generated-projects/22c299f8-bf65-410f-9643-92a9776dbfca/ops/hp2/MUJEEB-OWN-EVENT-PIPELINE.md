@@ -78,10 +78,31 @@ Accepted schema (ONLY real source events, never fabricated Wi-Fi sightings):
   "batteryPct": 83
 }
 
-Allowed types: trap_triggered or trap_reset. Rejects unknown device,
-unauthenticated request, missing upstream event identity, unknown event
-type, out-of-range battery data, and invalid content-type. It cannot
-assign a branch chosen by a caller: the website resolves it.
+Allowed types: trap_triggered, trap_reset, or battery_update.
+- batteryPct (0–100) can accompany a genuine catch/reset report.
+- A standalone battery_update requires a **real device-reported** batteryPct.
+  It is forwarded as gateway `heartbeat` and updates the existing Admin
+  and Branch Smart Devices battery displays **without setting off an alarm**.
+- HP2's Wi-Fi scanner cannot derive batteryPct from SSID, signal strength,
+  green/red LED, or elapsed time. No mock values in customer dashboards.
+- Battery readings are displayed as last reported; sleeping/offline mice may
+  have stale readings. The system should not promise continuous reporting.
+
+The receiver rejects unknown device, unauthenticated request, missing
+upstream event identity, unknown event type, out-of-range battery data and
+invalid content-type. A caller cannot assign a branch: the website resolves
+the branch from its existing FS-MOUSE registration.
+
+Current website wiring (already present, not a new feature):
+- Admin GET `/api/iot/alarms`; Branch GET `/api/branch/iot-alarms`
+  scoped by the logged-in branch. Both are read by the global alarm listener.
+- The Admin/Branch alarm listener polls every 6 seconds in this draft.
+- Branch Smart Devices and Branch Alerts also refresh every 6 seconds;
+  Admin Smart Devices refreshes every 10 seconds.
+- The audible browser alarm may require the admin/customer to interact with
+  the webpage first, because browsers can block automatic audio playback.
+- These are browser polling alerts, NOT operating-system push notifications
+  when the user is logged out or the browser is closed.
 
 Local automated tests (no website/API calls, no customer alarms):
 node --test ops/hp2/mujeeb-event-relay.test.mjs
