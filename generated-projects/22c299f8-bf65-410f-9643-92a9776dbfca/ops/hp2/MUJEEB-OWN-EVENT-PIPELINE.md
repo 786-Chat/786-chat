@@ -179,6 +179,21 @@ Official Tuya guidance:
   require a separately provisioned Tuya message service with costs,
   access limits and regional availability.
 
+Important existing-project discovery (2026-10-24):
+- Pest Control already has a legacy `server/tuya-service.ts` with signed
+  Tuya Cloud GET methods. Separate `server/smartlife-routes.ts` stores
+  *admin-entered* SmartLife readings; it does not automatically fetch
+  real native sensor events. Keep these separate from owned FS-MOUSE devices.
+- The linked Vercel project has `TUYA_ACCESS_ID` and
+  `TUYA_ACCESS_SECRET` variable NAMES configured for preview/production.
+  Values were NOT read. Their existence does not prove that Mouse #11 is
+  paired, linked, reporting, or that the cloud project is authorised.
+- Legacy Tuya alarm classification uses broad labels such as motion/shock.
+  DO NOT reuse it to emit catch events for Mouse #11 without verifying
+  its real DP semantics, otherwise false mouse-caught alarms are possible.
+- No additional keys need to be pasted into this chat; secrets stay in
+  their existing environment/credential manager.
+
 READ-ONLY discovery tool, tested with mock cloud responses:
 
     ops/hp2/tuya-readonly-status-inspector.mjs
