@@ -17,7 +17,7 @@ import { createServer } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const TYPES = new Set(["trap_triggered", "trap_reset", "battery_update"]);
+const TYPES = new Set(["trap_triggered", "trap_reset", "battery_update", "signal_update"]);
 const BODY_LIMIT = 8192;
 
 function tokenEquals(actual, expected) {
@@ -114,17 +114,27 @@ export function createMujeebEventRelay({
       if (type === "battery_update" && batteryPct === undefined) {
         return send(422, { error: "REAL_BATTERY_PERCENT_REQUIRED" });
       }
+      // Real device-reported Wi-Fi RSSI uses dBm, unlike HP2 setup-AP
+      // signalPercent. Never infer this reading from sighting/SSID presence.
+      const rssi = body.rssi;
+      if (rssi !== undefined && (!Number.isInteger(rssi) || rssi < -110 || rssi > -1)) {
+        return send(422, { error: "INVALID_DEVICE_RSSI" });
+      }
+      if (type === "signal_update" && rssi === undefined) {
+        return send(422, { error: "REAL_DEVICE_RSSI_REQUIRED" });
+      }
 
       // Existing API resolves the assigned branch from its database. Caller
       // cannot select a customer or inject an alternate branch ID.
       const event = {
         eventId,
         deviceId: mappedFsId,
-        type: type === "battery_update" ? "heartbeat" : type,
+        type: type === "battery_update" || type === "signal_update" ? "heartbeat" : type,
         ...(type === "battery_update" ? {} : { value: type === "trap_triggered" }),
         source: "mu-authenticated-event-adapter",
         upstreamEventId,
         ...(batteryPct === undefined ? {} : { batteryPct }),
+        ...(rssi === undefined ? {} : { rssi }),
       };
       const upstream = await request(baseUrl.replace(/\/+$/, "") + "/api/iot/gateway/events", {
         method: "POST",
