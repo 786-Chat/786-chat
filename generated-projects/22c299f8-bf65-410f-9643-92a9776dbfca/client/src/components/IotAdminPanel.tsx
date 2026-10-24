@@ -817,22 +817,22 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
         {lastCreatedId && (
           <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-            Device created: <span className="font-mono font-semibold">{lastCreatedId}</span>. It becomes Connected when the physical trap connects to your Food Safety gateway using this ID.
+            Device registered: <span className="font-mono font-semibold">{lastCreatedId}</span>. Registration saves the device ID and installation area only. Connected/Live requires a recent authenticated report from the physical trap.
           </div>
         )}
       </div>
 
       }
       <details className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
-        <summary className="cursor-pointer font-semibold text-white">Advanced Wi-Fi / MQTT technical information (not activation)</summary>
+        <summary className="cursor-pointer font-semibold text-white">Wi-Fi setup reference / legacy MQTT (not activation)</summary>
         <div className="mt-4">
         <div className="mb-4 flex items-center gap-2">
           <Wifi className="h-4 w-4 text-cyan-300" />
-          <h3 className="font-semibold text-white">Wi-Fi / MQTT technical reference</h3>
+          <h3 className="font-semibold text-white">Shop Wi-Fi reference and optional legacy MQTT settings</h3>
         </div>
         <p className="text-sm text-slate-300">
-          Admin-only setup for the physical trap. Choose the device and enter the local 2.4 GHz Wi-Fi details.
-          The Wi-Fi password is kept only in this browser session and is never saved in Neon.
+          For reference only: entering the shop's 2.4 GHz Wi-Fi name and password here DOES NOT connect the BMAX W003. A separate verified provisioning method is required.
+          The password remains in this browser session, is not transmitted to the trap, and is not saved in Neon.
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -886,7 +886,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">HP2 / MQTT Host</label>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Legacy MQTT Host (optional)</label>
             <Input
               value={gatewayHost}
               onChange={(event) => setGatewayHost(event.target.value)}
@@ -895,7 +895,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-400">MQTT Port</label>
+            <label className="mb-1 block text-xs font-medium text-slate-400">Legacy MQTT Port (optional)</label>
             <Input
               value={gatewayPort}
               onChange={(event) => setGatewayPort(event.target.value.replace(/[^0-9]/g, ""))}
@@ -915,7 +915,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           <p className="mt-2">
             The trap must first run verified Food Safety-compatible firmware with a documented,
             authenticated provisioning method. Then an activation service can be connected here.
-            Until a real MQTT report is received, the device remains Disconnected.
+            Until a verified physical-device report is received, the device must not be shown as Connected/Live. Mujeeb API event delivery does not require MQTT, but the original trap still needs an authorised sensor-to-API connection.
           </p>
           <p className="mt-2 text-slate-400">
             Do not use the HP2 private address 192.168.0.14 at a different shop without a secure
@@ -925,7 +925,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
 
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Gateway / MQTT Host</p>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Legacy MQTT Host (optional)</p>
             <p className="mt-1 break-all font-mono text-sm font-semibold text-white">{gatewayHost || "192.168.0.14"}</p>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
@@ -934,7 +934,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Transport</p>
-            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "MQTT / Wi-Fi"}</p>
+            <p className="mt-1 text-sm font-semibold text-white">{systemStatus?.transport || "Not reported"}</p>
           </div>
           <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Registered Food Safety devices</p>
@@ -1076,14 +1076,14 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
                     <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : device.connectionState === "sleeping" ? "bg-amber-500/15 text-amber-200" : "bg-slate-700 text-slate-300"}>
-                      {device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recent device report" : device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT unverified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : "Awaiting activation"}
+                      {device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recent device report" : device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (last device report)" : "Awaiting activation"}
                     </Badge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recently reported" : device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT unverified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : snap.state || "Awaiting activation"}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "Not reported"}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "Recently reported" : device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (last device report)" : snap.state || "Awaiting activation"}</span></div>
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
                   </div>
 
@@ -1101,7 +1101,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                     <p className="mt-1 text-slate-400">HP2 setup-AP sightings are historic and do not prove a live restaurant Wi-Fi connection.</p>
                   </div>
 
-                  {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
+                  <p className="mt-2 text-xs text-slate-400">Installation area: {device.installationArea || "Not recorded"}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {device.connectionState === "turned_off" ? (
                       <button type="button" disabled={powerBusyId === String(device.id)} onClick={() => confirmPowerState(device, false)} className="rounded border border-cyan-500/50 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">Clear OFF confirmation</button>
