@@ -30,6 +30,10 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Validate HP2 Wi-Fi scanner JavaScript
         run: node --check ops/hp2/foodsafety-wifi-ap-scanner.mjs
+      - name: Validate Mujeeb relay JavaScript
+        run: node --check ops/hp2/mujeeb-event-relay.mjs && node --check ops/hp2/mujeeb-event-relay.test.mjs
+      - name: Test authenticated Mujeeb relay (fully mocked, no real alarms)
+        run: node --test ops/hp2/mujeeb-event-relay.test.mjs
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server
