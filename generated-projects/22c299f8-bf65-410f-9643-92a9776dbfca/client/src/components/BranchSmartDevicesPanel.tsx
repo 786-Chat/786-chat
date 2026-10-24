@@ -124,10 +124,10 @@ export default function BranchSmartDevicesPanel() {
               const snap = snapshot(device.lastStatus);
               const alarm = Boolean(device.alarmActive);
               const connectionLabel = device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" :
-                device.isOnline ? "Recently reported (API / MQTT)" :
-                device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT not verified)" :
+                device.isOnline ? "Recent authenticated device report" :
+                device.connectionState === "wifi_seen" ? "Setup Wi-Fi seen (shop connection not verified)" :
                 device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
-                device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : "Awaiting activation";
+                device.connectionState === "disconnected" ? "Disconnected (last report)" : "Awaiting activation";
               const powerLabel = device.connectionState === "turned_off" ? "Turned OFF" :
                 device.connectionState === "wifi_seen" ? "Wi-Fi signal seen" :
                 device.connectionState === "sleeping" ? "Sleeping / No recent signal" :
@@ -140,7 +140,7 @@ export default function BranchSmartDevicesPanel() {
                       <div className="min-w-0">
                         <p className="truncate text-lg font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
                         <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
-                        {device.notes && <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />{device.notes}</p>}
+                        <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300"><MapPin className="h-4 w-4 text-cyan-300" />Installation area: {device.installationArea || "Not recorded"}</p>
                       </div>
                       <Badge className={device.connectionState === "turned_off" ? "bg-red-500/20 text-red-100" : device.isOnline ? "bg-emerald-500/15 text-emerald-300" : device.connectionState === "wifi_seen" ? "bg-cyan-500/15 text-cyan-200" : device.connectionState === "sleeping" ? "bg-amber-500/15 text-amber-200" : "bg-slate-700 text-slate-300"}>{connectionLabel}</Badge>
                     </div>
@@ -148,7 +148,7 @@ export default function BranchSmartDevicesPanel() {
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Battery</span>
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5"><Battery className="h-4 w-4 flex-shrink-0 text-emerald-300" /><span className="min-w-0 break-words font-semibold text-white">{snap.battery || "—"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5"><Battery className="h-4 w-4 flex-shrink-0 text-emerald-300" /><span className="min-w-0 break-words font-semibold text-white">{snap.battery || "Not reported"}</span></div>
                       </div>
                       <div className="min-w-0 overflow-hidden rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
@@ -156,15 +156,15 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                       <div className={`min-w-0 rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap</span>
-                        <span className={`mt-1 block break-words text-sm font-semibold leading-tight ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Mouse Caught" : "Ready"}</span>
+                        <span className={`mt-1 block break-words text-sm font-semibold leading-tight ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Mouse Caught" : "No catch reported"}</span>
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
-                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Recent device report" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
+                        <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{device.connectionState === "turned_off" ? "OFF confirmed" : device.connectionState === "wifi_seen" ? "Signal detected (setup AP)" : device.isOnline ? "Recent report (shop Wi-Fi unverified)" : device.connectionState === "sleeping" ? "No recent signal" : "Not verified"}</span></div>
                       </div>
                     </div>
                     <div className="mt-3 rounded-lg border border-cyan-500/20 bg-slate-900/60 p-3 text-xs text-slate-300">
-                      <p className="font-semibold text-cyan-200">Wi-Fi signal (last reported)</p>
+                      <p className="font-semibold text-cyan-200">Wi-Fi measurements (last reported; not necessarily live)</p>
                       <p className="mt-1">
                         {device.wifiSignalPercent != null
                           ? `HP2 setup Wi-Fi: ${device.wifiSignalPercent}%`
