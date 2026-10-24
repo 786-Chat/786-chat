@@ -34,6 +34,10 @@ jobs:
         run: node --check ops/hp2/mujeeb-event-relay.mjs && node --check ops/hp2/mujeeb-event-relay.test.mjs
       - name: Test authenticated Mujeeb relay (fully mocked, no real alarms)
         run: node --test ops/hp2/mujeeb-event-relay.test.mjs
+      - name: Validate camera observer JavaScript
+        run: node --check ops/hp2/camera-led-detector.mjs && node --check ops/hp2/camera-led-observer.mjs && node --check ops/hp2/camera-led-detector.test.mjs
+      - name: Test camera LED detection without hardware or customer alarms
+        run: node --test ops/hp2/camera-led-detector.test.mjs
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server
