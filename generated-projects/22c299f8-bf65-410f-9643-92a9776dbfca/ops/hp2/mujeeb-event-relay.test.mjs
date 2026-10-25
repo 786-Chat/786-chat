@@ -1,0 +1,137 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createMujeebEventRelay, stableEventId } from "./mujeeb-event-relay.mjs";
+
+const NATIVE_ID = "VERIFIED-DEVICE-11";
+const FS_ID = "FS-MOUSE-000003";
+const TOKEN = "local-trusted-source-token-32-characters";
+const GW_TOKEN = "different-existing-gateway-token-value";
+
+async function fixture(callback) {
+  const delivered = [];
+  const server = createMujeebEventRelay({
+    ingressToken: TOKEN,
+    gatewayToken: GW_TOKEN,
+    baseUrl: "https://pestcontrol.cat",
+    bindings: { [NATIVE_ID]: FS_ID },
+    request: async (url, options) => {
+      delivered.push({ url, options, body: JSON.parse(options.body) });
+      return { ok: true, status: 202 };
+    },
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = "http://127.0.0.1:" + server.address().port + "/ingest";
+    async function send(body, token = TOKEN) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + token },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, result: await res.json() };
+    }
+    await callback({ send, delivered });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+test("refuses unauthenticated events even with a known device ID", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const out = await send({ sourceDeviceId: NATIVE_ID, type: "trap_triggered", upstreamEventId: "catch-event-0001" }, "wrong-token");
+    assert.equal(out.status, 401);
+    assert.equal(delivered.length, 0);
+  });
+});
+
+test("never treats an AP sighting as a catch or guesses a device binding", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const badIdentity = await send({ sourceDeviceId: "F8:17:2D:BB:20:3A", type: "trap_triggered", upstreamEventId: "catch-event-0001" });
+    assert.equal(badIdentity.status, 403);
+    const wifiOnly = await send({ sourceDeviceId: NATIVE_ID, type: "wifi_seen", upstreamEventId: "wifi-event-0001" });
+    assert.equal(wifiOnly.status, 422);
+    const noEvent = await send({ sourceDeviceId: NATIVE_ID, type: "trap_triggered" });
+    assert.equal(noEvent.status, 422);
+    assert.equal(delivered.length, 0);
+  });
+});
+
+test("forwards authorised real-event input to existing gateway with stable ID", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const input = { sourceDeviceId: NATIVE_ID, type: "trap_triggered", upstreamEventId: "catch-event-0001", batteryPct: 83, branchId: "FORGED-BRANCH" };
+    const a = await send(input);
+    const b = await send(input);
+    assert.equal(a.status, 202);
+    assert.equal(b.status, 202);
+    assert.equal(a.result.eventId, b.result.eventId);
+    assert.equal(a.result.eventId, stableEventId(NATIVE_ID, "catch-event-0001"));
+    assert.equal(delivered.length, 2);
+    assert.equal(delivered[0].url, "https://pestcontrol.cat/api/iot/gateway/events");
+    assert.equal(delivered[0].body.deviceId, FS_ID);
+    assert.equal(delivered[0].body.type, "trap_triggered");
+    assert.equal(delivered[0].body.value, true);
+    assert.equal(delivered[0].body.batteryPct, 83);
+    assert.equal(delivered[0].body.branchId, undefined);
+    assert.equal(delivered[0].options.headers.authorization, "Bearer " + GW_TOKEN);
+  });
+});
+
+test("battery-only reading updates percentage through heartbeat but NEVER activates a catch alarm", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const data = { sourceDeviceId: NATIVE_ID, type: "battery_update", upstreamEventId: "battery-reading-0001", batteryPct: 67 };
+    const battery = await send(data);
+    assert.equal(battery.status, 202);
+    assert.equal(battery.result.deviceId, FS_ID);
+    assert.equal(delivered.length, 1);
+    assert.equal(delivered[0].body.type, "heartbeat");
+    assert.equal(delivered[0].body.deviceId, FS_ID);
+    assert.equal(delivered[0].body.batteryPct, 67);
+    assert.equal(Object.hasOwn(delivered[0].body, "value"), false);
+    const missing = await send({ sourceDeviceId: NATIVE_ID, type: "battery_update", upstreamEventId: "battery-reading-0002" });
+    const guessed = await send({ sourceDeviceId: NATIVE_ID, type: "battery_update", upstreamEventId: "battery-reading-0003", batteryPct: 105 });
+    assert.equal(missing.status, 422);
+    assert.equal(guessed.status, 422);
+    assert.equal(delivered.length, 1);
+  });
+});
+
+test("real Wi-Fi RSSI updates Admin/Branch device status without a catch alarm", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const signal = await send({
+      sourceDeviceId: NATIVE_ID,
+      type: "signal_update",
+      upstreamEventId: "wifi-rssi-0001",
+      rssi: -63,
+    });
+    assert.equal(signal.status, 202);
+    assert.equal(delivered[0].body.type, "heartbeat");
+    assert.equal(delivered[0].body.deviceId, FS_ID);
+    assert.equal(delivered[0].body.rssi, -63);
+    assert.equal(Object.hasOwn(delivered[0].body, "value"), false);
+    const missing = await send({ sourceDeviceId: NATIVE_ID, type: "signal_update", upstreamEventId: "wifi-rssi-0002" });
+    const guessedPercent = await send({ sourceDeviceId: NATIVE_ID, type: "signal_update", upstreamEventId: "wifi-rssi-0003", rssi: 100 });
+    const signalOutOfRange = await send({ sourceDeviceId: NATIVE_ID, type: "signal_update", upstreamEventId: "wifi-rssi-0004", rssi: -200 });
+    assert.equal(missing.status, 422);
+    assert.equal(guessedPercent.status, 422);
+    assert.equal(signalOutOfRange.status, 422);
+    assert.equal(delivered.length, 1);
+  });
+});
+
+test("reset is explicitly reported; never generated by missing Wi-Fi", async () => {
+  await fixture(async ({ send, delivered }) => {
+    const reset = await send({ sourceDeviceId: NATIVE_ID, type: "trap_reset", upstreamEventId: "reset-event-0001" });
+    assert.equal(reset.status, 202);
+    assert.equal(delivered[0].body.type, "trap_reset");
+    assert.equal(delivered[0].body.value, false);
+  });
+});
+
+test("requires protected HTTPS gateway and distinct tokens", () => {
+  assert.throws(() => createMujeebEventRelay({
+    ingressToken: TOKEN, gatewayToken: TOKEN, baseUrl: "https://pestcontrol.cat", bindings: { [NATIVE_ID]: FS_ID },
+  }), /Separate/);
+  assert.throws(() => createMujeebEventRelay({
+    ingressToken: TOKEN, gatewayToken: GW_TOKEN, baseUrl: "http://localhost", bindings: { [NATIVE_ID]: FS_ID },
+  }), /HTTPS/);
+});

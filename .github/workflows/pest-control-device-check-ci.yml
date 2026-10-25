@@ -30,6 +30,22 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Validate HP2 Wi-Fi scanner JavaScript
         run: node --check ops/hp2/foodsafety-wifi-ap-scanner.mjs
+      - name: Validate Mujeeb relay JavaScript
+        run: node --check ops/hp2/mujeeb-event-relay.mjs && node --check ops/hp2/mujeeb-event-relay.test.mjs
+      - name: Test authenticated Mujeeb relay (fully mocked, no real alarms)
+        run: node --test ops/hp2/mujeeb-event-relay.test.mjs
+      - name: Validate camera observer JavaScript
+        run: node --check ops/hp2/camera-led-detector.mjs && node --check ops/hp2/camera-led-observer.mjs && node --check ops/hp2/camera-led-detector.test.mjs && node --check ops/hp2/mujeeb-camera-hardware-local.mjs
+      - name: Test camera LED detection without hardware or customer alarms
+        run: node --test ops/hp2/camera-led-detector.test.mjs
+      - name: Test synthetic camera to Mujeeb API using fake gateway only
+        run: node --test ops/hp2/mujeeb-camera-to-api-local.test.mjs
+      - name: Validate read-only Tuya Cloud device status inspection
+        run: node --check ops/hp2/tuya-readonly-status-inspector.mjs && node --test ops/hp2/tuya-readonly-status-inspector.test.mjs
+      - name: Run Mujeeb event through isolated real Admin and Branch handler code (no real database)
+        run: node --test ops/hp2/mujeeb-to-admin-branch-isolated.test.mjs
+      - name: Protect Admin/Branch alarm and battery wiring
+        run: node --test ops/hp2/alarm-battery-pipeline-contract.test.mjs
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server

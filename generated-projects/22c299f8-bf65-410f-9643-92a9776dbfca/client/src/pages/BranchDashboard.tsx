@@ -198,7 +198,7 @@ export default function BranchDashboard() {
     },
     retry: false,
     staleTime: 5000,
-    refetchInterval: 12000,
+    refetchInterval: 6000,
     refetchOnWindowFocus: true,
   });
   const branchIotDevices: any[] = Array.isArray(iotDevicesRaw) ? iotDevicesRaw : [];
