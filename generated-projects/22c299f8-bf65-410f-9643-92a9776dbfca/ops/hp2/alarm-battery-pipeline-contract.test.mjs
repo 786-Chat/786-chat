@@ -60,10 +60,24 @@ test('Wi-Fi signal goes through existing scanner API and separate authenticated 
   assert.match(relay, /type === "battery_update" \|\| type === "signal_update" \? "heartbeat"/);
   assert.match(admin, /Wi-Fi signal — last reported/);
   assert.match(admin, /Device-reported Wi-Fi RSSI/);
-  assert.match(admin, /Recent device report/);
+  assert.match(admin, /Recent verified gateway report/);
   assert.doesNotMatch(admin, /device\.isOnline \? "MQTT Connected"/);
-  assert.match(branch, /Wi-Fi measurements \(last reported; not necessarily live\)/);
+  assert.match(branch, /Wi-Fi evidence \(last observed; not live proof\)/);
   assert.match(branch, /Device-reported Wi-Fi RSSI: Not reported/);
-  assert.match(branch, /Recent authenticated device report/);
+  assert.match(branch, /Recent verified gateway report/);
   assert.doesNotMatch(branch, /device\.isOnline \? "MQTT Connected"/);
+});
+
+test('branch does not infer physical power or a ready trap from absent reports', async () => {
+  const branch = await source('client/src/components/BranchSmartDevicesPanel.tsx');
+  const admin = await source('client/src/components/IotAdminPanel.tsx');
+  const check = await source('client/src/components/DeviceCheckPanel.tsx');
+  assert.match(branch, /No authenticated device report received by Food Safety yet/);
+  assert.match(branch, /No catch reported/);
+  assert.match(branch, /Last verified device report/);
+  assert.doesNotMatch(branch, /device\.connectionState === "sleeping" \? "Sleeping \/ No recent signal"/);
+  assert.match(admin, /No catch reported/);
+  assert.doesNotMatch(admin, /device\.alarmActive \? "Mouse Caught" : "Ready"/);
+  assert.match(check, /zero current AP sightings does not mean the mouse is OFF/);
+  assert.match(check, /Gateway live \(verified\)/);
 });
