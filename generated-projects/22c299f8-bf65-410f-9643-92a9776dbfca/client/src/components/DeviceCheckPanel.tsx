@@ -148,7 +148,7 @@ export default function DeviceCheckPanel() {
 
   const counts = useMemo(() => ({
     live: rows.filter(row => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
-    wifiSeen: rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId && row.isWifiRecentlySeen).length,
+    wifiSeen: rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && row.isWifiRecentlySeen).length,
     unassigned: rows.filter(row => row.hardwareKey.startsWith("wifi-ap:") && !row.assignedDeviceId).length,
     linked: rows.filter(row => Boolean(row.assignedDeviceId)).length,
   }), [rows]);
@@ -394,7 +394,7 @@ export default function DeviceCheckPanel() {
           </div>
           <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-cyan-300">{counts.wifiSeen}</p>
-            <p className="text-xs text-cyan-200">Wi-Fi AP sightings</p>
+            <p className="text-xs text-cyan-200">Wi-Fi AP seen recently</p>
           </div>
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
             <p className="text-2xl font-bold text-amber-300">{counts.unassigned}</p>
