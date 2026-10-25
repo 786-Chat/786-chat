@@ -1393,6 +1393,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin authentication check endpoint
+  // Food Safety certificate creation is restricted to the existing admin session.
+  // Register before Vite/production static serving so the maker is never a public file route.
+  app.get(/^\\/certificate-maker-patform(?:\\/index\\.html|\\/)?$/, (req, res) => {
+    const token = req.cookies?.admin_token;
+    if (!token || !adminTokens.has(token)) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(302, "/admin-login");
+    }
+    const certificatePath = process.env.NODE_ENV === "development"
+      ? path.resolve(import.meta.dirname, "../client/public/certificate-maker-patform/index.html")
+      : path.resolve(import.meta.dirname, "public/certificate-maker-patform/index.html");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Content-Security-Policy", "frame-ancestors 'self'");
+    return res.sendFile(certificatePath);
+  });
+
   app.get("/api/admin/auth-check", (req, res) => {
     try {
       const token = req.cookies?.admin_token;
