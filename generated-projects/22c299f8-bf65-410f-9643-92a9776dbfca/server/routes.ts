@@ -996,6 +996,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const rssi = integerOrNull(body.rssi);
       const batteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      // Never place impossible device telemetry in customer dashboards.
+      if (batteryPct !== null && (batteryPct < 0 || batteryPct > 100)) {
+        return res.status(422).json({ message: "Battery reading must be between 0 and 100%.", code: "INVALID_BATTERY" });
+      }
+      if (rssi !== null && (rssi < -110 || rssi > -1)) {
+        return res.status(422).json({ message: "Device Wi-Fi RSSI must be between -110 and -1 dBm.", code: "INVALID_RSSI" });
+      }
       const eventValue = body.value !== undefined
         ? body.value
         : type === "trap_triggered" ? true
@@ -1005,8 +1012,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : null;
       const valueJson = JSON.stringify(eventValue ?? null);
       const rawJson = JSON.stringify({
-        source: "hp2-mqtt-gateway",
         ...body,
+        // The authenticated gateway, not an untrusted payload field, sets origin.
+        source: "food-safety-authenticated-gateway",
         deviceId,
         type,
         eventId,
@@ -8238,9 +8246,11 @@ Generated: ${new Date().toISOString()}
     const manualOffMs = row.manually_off_at ? new Date(row.manually_off_at).getTime() : 0;
     const wifiRecentlySeen = Number.isFinite(observedWifiMs) && observedWifiMs > 0 &&
       Date.now() - observedWifiMs < 75000;
-    // A new genuine MQTT/Wi-Fi observation after manually marking OFF restores
-    // the observed status; otherwise only an admin can confirm power is OFF.
-    if (manualOffMs > 0 && manualOffMs >= Math.max(observedWifiMs, reportMs)) return "turned_off";
+    // A factory setup-AP sighting is NOT an authenticated trap power report.
+    // Keep the admin's physically confirmed OFF state until explicitly cleared
+    // or a newer authenticated gateway device report arrives. This prevents a
+    // Wi-Fi scan from silently overriding confirmed power status.
+    if (manualOffMs > 0 && manualOffMs >= reportMs) return "turned_off";
     if (ownedIotIsOnline(row.is_online, row.last_seen_at)) return "online";
     if (wifiRecentlySeen) return "wifi_seen";
     if (row.last_event_type === "offline") return "disconnected";
