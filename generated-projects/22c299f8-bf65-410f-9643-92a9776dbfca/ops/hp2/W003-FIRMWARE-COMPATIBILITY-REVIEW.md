@@ -33,7 +33,7 @@ Off-without-a-report, asleep, temporarily disconnected, and genuinely turned OFF
 
 ## Current operator instruction
 
-Keep Mouse #11 paired for reversible reference. Do not pay Tuya, upgrade MCU, reset, unpair, flash, or open the trap yet. Next zero-risk check is to locate an existing *local firmware backup filename and size* on HP2, without opening/read-out or uploading backup bytes.
+**Superseded 25 Oct 2026:** Mouse #11 was unpaired from Smart Life and reset by the user, returning to a temporary setup AP. It was then turned OFF. Do not repeat pairing, resetting, Wi-Fi scanning or firmware searches without a specific new reason. Do not flash or open the trap. We have **no verified full original Mouse #11 flash backup**. A small private file named for Mouse #7 exists, but it cannot be reused as Mouse #11's recovery image.
 
 ## Non-MQTT event forwarding lead (research only)
 
@@ -52,3 +52,9 @@ With Mouse #11 in its roughly two-minute post-power-on setup period, HP2's Ather
 - Physical OFF is displayed only if explicitly confirmed by the pest controller; a sleeping or vanished setup AP does not establish OFF.
 - Missing live battery in Food Safety does not mean the app's last displayed Smart Life percentage was imported.
 - Changes are limited to draft PR #1273. No merge/deployment.
+
+## Local-only TuyaMCU protocol checker (25 Oct 2026)
+
+`ops/hp2/tuya-mcu-offline-inspector.mjs` is a **read-only offline** diagnostic prepared for a future *authorised, safely acquired and sanitised* UART hex trace. Its test file `ops/hp2/tuya-mcu-offline-inspector.test.mjs` covers valid DP frames, low-power and ordinary commands, malformed input and checksum rejection. It uses no network, never turns a DP into a mouse-catch event and does not touch Mouse #11.
+
+Even if the tool identifies a numerical DP, its meaning remains **unknown** for BMAX W003 until validated against that exact model and a safe, genuine sensor report. Never upload raw firmware dumps or sensitive UART trace contents. Only a qualified technician may handle hardware near the electric trap's high-voltage components. Sensor detection and secure non-MQTT transmission remain unproven.
