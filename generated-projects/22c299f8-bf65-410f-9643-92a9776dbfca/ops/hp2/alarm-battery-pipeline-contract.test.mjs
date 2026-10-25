@@ -96,3 +96,15 @@ test('offline TuyaMCU decoder verifies checksums without ever creating a catch e
   invalid[invalid.length - 1] ^= 1;
   assert.equal(inspectBytes(invalid).validFrames, 0);
 });
+
+test('Device Check SQL only joins branch aliases that actually exist (production 500 regression)', async () => {
+  const routes = await source('server/routes.ts');
+  const start = routes.indexOf('app.get("/api/iot/device-check"');
+  const end = routes.indexOf('app.post("/api/iot/device-check/:id/link-existing"', start);
+  assert.ok(start >= 0 && end > start, 'Device Check GET route exists');
+  const check = routes.slice(start, end);
+  assert.match(check, /FROM owned_iot_device_checks c/);
+  assert.match(check, /LEFT JOIN owned_iot_devices d ON d\.device_id =/);
+  assert.match(check, /LEFT JOIN branches b ON b\.id::text = d\.branch_id::text/);
+  assert.doesNotMatch(check, /LEFT JOIN branches b ON b\.id::text = e\.branch_id::text/, 'No undefined e table in device-check query');
+});
