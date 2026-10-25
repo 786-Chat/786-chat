@@ -81,3 +81,18 @@ test('branch does not infer physical power or a ready trap from absent reports',
   assert.match(check, /zero current AP sightings does not mean the mouse is OFF/);
   assert.match(check, /Gateway live \(verified\)/);
 });
+
+test('offline TuyaMCU decoder verifies checksums without ever creating a catch event', async () => {
+  const { inspectBytes } = await import('./tuya-mcu-offline-inspector.mjs');
+  const payload = Buffer.from([0x55, 0xaa, 0x00, 0x05, 0x00, 0x05, 0x65, 0x01, 0x00, 0x01, 0x01]);
+  let checksum = 0;
+  for (const byte of payload) checksum = (checksum + byte) & 0xff;
+  const frame = Buffer.concat([payload, Buffer.from([checksum])]);
+  const result = inspectBytes(frame);
+  assert.equal(result.validFrames, 1);
+  assert.deepEqual(result.frames[0].dataPoints, [{ dpId: 101, type: 'bool', dataLength: 1, rawNumber: 1 }]);
+  assert.doesNotMatch(JSON.stringify(result), /"alarmActive"|"eventType"|"mouseCaught"/);
+  const invalid = Buffer.from(frame);
+  invalid[invalid.length - 1] ^= 1;
+  assert.equal(inspectBytes(invalid).validFrames, 0);
+});
