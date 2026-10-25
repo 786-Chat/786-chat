@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+  }
+  body {
+    @apply bg-white text-slate-900 antialiased;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .bg-mesh {
+    background-image: radial-gradient(at 40% 20%, hsla(240,100%,70%,0.15) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsla(270,100%,70%,0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsla(190,100%,70%,0.1) 0px, transparent 50%);
+  }
+}
