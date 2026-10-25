@@ -144,10 +144,27 @@ test("real isolated gateway handlers route Mujeeb catch to Admin and assigned Br
     };
     const branchA = { branchId: BRANCH_A, userType: "branch" };
     const branchB = { branchId: BRANCH_B, userType: "branch" };
+    // The real authenticated gateway handler must reject impossible battery and RSSI
+    // before a customer can see any telemetry or an alarm.
+    const originalEvents = events.size;
+    const invalidBattery = await call("POST", "/api/iot/gateway/events", {
+      headers: { authorization: "Bearer " + TOKEN },
+      body: { deviceId: FS_ID, type: "heartbeat", eventId: "invalid-battery-001", batteryPct: 104 },
+    });
+    assert.equal(invalidBattery.status, 422);
+    const invalidSignal = await call("POST", "/api/iot/gateway/events", {
+      headers: { authorization: "Bearer " + TOKEN },
+      body: { deviceId: FS_ID, type: "heartbeat", eventId: "invalid-signal-001", rssi: 70 },
+    });
+    assert.equal(invalidSignal.status, 422);
+    assert.equal(events.size, originalEvents, "Invalid telemetry must not reach event history");
+    assert.equal(devices[0].last_seen_at, null, "Invalid telemetry must not mark Mouse 11 live");
     const asAdmin = async () => (await call("GET", "/api/iot/alarms")).body;
     const asBranch = async session => call("GET", "/api/branch/iot-alarms", { session });
     assert.equal(await send("trap_triggered", "isolated-catch-001"), 202);
     assert.equal(events.size, 1);
+    const payloadSource = queries.filter(q => q.includes("INSERT INTO owned_iot_events"));
+    assert.equal(payloadSource.length, 1, "Only the verified event can be stored");
     assert.equal((await asAdmin()).length, 1, "Admin sees test mouse alarm");
     assert.equal((await asAdmin())[0].deviceId, FS_ID);
     const a = await asBranch(branchA);
@@ -171,4 +188,27 @@ test("real isolated gateway handlers route Mujeeb catch to Admin and assigned Br
   } finally {
     await new Promise(resolve => receiver.close(resolve));
   }
+});
+
+
+test("Admin physically confirmed OFF cannot be overridden by setup Wi-Fi sightings", () => {
+  const fn = section('const ownedIotConnectionState =', 'const ownedIotDevicesForAdmin =');
+  const context = createContext({
+    Date,
+    ownedIotIsOnline: (isOnline, lastSeenAt) => Boolean(isOnline && lastSeenAt &&
+      Date.now() - new Date(lastSeenAt).getTime() <= 2 * 60 * 1000),
+  });
+  const transpiled = ts.transpileModule(fn, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText;
+  runInContext(transpiled, context, { timeout: 5000 });
+  const ago = secs => new Date(Date.now() - secs * 1000).toISOString();
+  const row = {
+    is_online: false, last_seen_at: ago(180), last_wifi_seen_at: ago(1),
+    manually_off_at: ago(20), last_event_type: null,
+  };
+  const state = row => runInContext('ownedIotConnectionState(' + JSON.stringify(row) + ')', context, { timeout: 5000 });
+  assert.equal(state(row), 'turned_off', 'Recent pairing AP does not undo physical OFF');
+  assert.equal(state({ ...row, manually_off_at: null }), 'wifi_seen', 'Setup Wi-Fi remains a separate observation');
+  assert.equal(state({ ...row, last_seen_at: ago(1), is_online: true }), 'online', 'Newer authenticated device report restores observed online status');
 });
