@@ -34,3 +34,21 @@ Off-without-a-report, asleep, temporarily disconnected, and genuinely turned OFF
 ## Current operator instruction
 
 Keep Mouse #11 paired for reversible reference. Do not pay Tuya, upgrade MCU, reset, unpair, flash, or open the trap yet. Next zero-risk check is to locate an existing *local firmware backup filename and size* on HP2, without opening/read-out or uploading backup bytes.
+
+## Non-MQTT event forwarding lead (research only)
+
+OpenBeken's scripting examples document `addEventHandler OnChannelChange … SendGet …` to relay TuyaMCU sensor readings over **HTTP GET** without MQTT. Source: https://www.elektroda.com/news/news4007790.html . That example is a **battery-powered thermometer**, not BMAX W003. OpenBeken's docs confirm `tmSensor` low-power TuyaMCU support: https://github.com/openshwprojects/OpenBK7231T_App/blob/main/docs/drivers.md . A similar electric mousetrap already uses those drivers: https://github.com/kedube/tuya-smart-mousetrap .
+
+This provides a possible starting point for a non-MQTT **prototype**, but it **does not** establish secure HTTPS support or catch-DP mapping on W003. In particular, **do not** place a long-lived API bearer token or customer-identifying data into unencrypted HTTP GET query strings. Do not forward an unauthenticated trap event to the public Pest Control API. If W003's OpenBeken firmware cannot establish a suitable authenticated encrypted transport within its short awake window, the architecture will need an authorised trusted local forwarding bridge or another supported firmware/transport; sending raw HTTP to an exposed public endpoint is not an acceptable production solution.
+
+### Verified HP2 wireless identification — 25 Oct 2026
+
+With Mouse #11 in its roughly two-minute post-power-on setup period, HP2's Atheros AR9271 at interface `wlx24ec99a65562` observed `SmartLife-203B`, setup BSSID `F8:17:2D:BB:20:3A`, signal **70%**, three consecutive scan results. The user stopped scanning with Ctrl+C. This identifies the factory pairing AP, **not** a Mujeeb API connection, an authenticated catch, or production shop-Wi-Fi health. No further scans/resets needed at this stage.
+
+### Draft Admin + Branch status protections
+
+- Admin count explicitly differentiates verified Food Safety gateway live from setup AP sightings and legacy MQTT.
+- Branch uses "No recent device report" instead of claiming battery sleep, and "No catch reported" rather than "Ready" when a sensor state hasn't been established.
+- Physical OFF is displayed only if explicitly confirmed by the pest controller; a sleeping or vanished setup AP does not establish OFF.
+- Missing live battery in Food Safety does not mean the app's last displayed Smart Life percentage was imported.
+- Changes are limited to draft PR #1273. No merge/deployment.
