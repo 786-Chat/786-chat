@@ -1,6 +1,7 @@
 // @ts-nocheck
 import type { Express } from "express";
 import express from "express";
+import { registerSmartLifeRoutes } from "./smartlife-routes.js";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { setupAuth, isAuthenticated } from "./replitAuth.js";
@@ -1220,6 +1221,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin authentication system - completely separate from staff access
   const adminTokens = new Set<string>();
+  // Device section visibility is per branch; never delete devices or alarms here.
+  const visibilityRows = (result: any): any[] => Array.isArray(result) ? result : result?.rows || [];
+  let visibilityTableInit: Promise<void> | null = null;
+  const ensureSidebarVisibility = () => {
+    if (!visibilityTableInit) {
+      visibilityTableInit = db.execute(sql`
+        CREATE TABLE IF NOT EXISTS pest_branch_sidebar_visibility (
+          branch_id text PRIMARY KEY,
+          device_alerts boolean NOT NULL DEFAULT true,
+          smart_devices boolean NOT NULL DEFAULT true,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `).then(() => undefined).catch((error) => {
+        visibilityTableInit = null;
+        throw error;
+      });
+    }
+    return visibilityTableInit;
+  };
+  const readSidebarVisibility = async (branchId: string) => {
+    await ensureSidebarVisibility();
+    const result = await db.execute(sql`
+      SELECT device_alerts, smart_devices
+      FROM pest_branch_sidebar_visibility WHERE branch_id = ${branchId} LIMIT 1
+    `);
+    const row = visibilityRows(result)[0];
+    return {
+      deviceAlerts: row?.device_alerts !== false,
+      smartDevices: row?.smart_devices !== false,
+    };
+  };
+  const adminForVisibility = (req: any, res: any, next: any) => {
+    const token = req.cookies?.admin_token;
+    if (!token || !adminTokens.has(token)) {
+      return res.status(401).json({ message: "Admin login required" });
+    }
+    next();
+  };
+  app.get("/api/admin/branch-sidebar-visibility", adminForVisibility, async (req, res) => {
+    const branchId = String(req.query.branchId || "").trim();
+    if (!branchId) return res.status(400).json({ message: "Select a branch" });
+    try {
+      res.json({ branchId, ...await readSidebarVisibility(branchId) });
+    } catch {
+      res.status(500).json({ message: "Unable to read branch sidebar setting" });
+    }
+  });
+  app.post("/api/admin/branch-sidebar-visibility", adminForVisibility, async (req, res) => {
+    const branchId = String(req.body?.branchId || "").trim();
+    const sectionKey = String(req.body?.sectionKey || "");
+    const visible = req.body?.visible;
+    if (!branchId || !["device-alerts", "smart-devices"].includes(sectionKey) || typeof visible !== "boolean") {
+      return res.status(400).json({ message: "Select branch, section and Show/Hide" });
+    }
+    try {
+      await ensureSidebarVisibility();
+      if (sectionKey === "device-alerts") {
+        await db.execute(sql`
+          INSERT INTO pest_branch_sidebar_visibility (branch_id, device_alerts)
+          VALUES (${branchId}, ${visible})
+          ON CONFLICT (branch_id) DO UPDATE
+          SET device_alerts = EXCLUDED.device_alerts, updated_at = now()
+        `);
+      } else {
+        await db.execute(sql`
+          INSERT INTO pest_branch_sidebar_visibility (branch_id, smart_devices)
+          VALUES (${branchId}, ${visible})
+          ON CONFLICT (branch_id) DO UPDATE
+          SET smart_devices = EXCLUDED.smart_devices, updated_at = now()
+        `);
+      }
+      res.json({ success: true, branchId, ...await readSidebarVisibility(branchId) });
+    } catch {
+      res.status(500).json({ message: "Unable to save branch sidebar setting" });
+    }
+  });
+  app.get("/api/branch/sidebar-visibility", async (req: any, res) => {
+    const session = req.session;
+    if (session?.userType !== "branch" || !session?.branchId) {
+      return res.status(401).json({ message: "Branch login required" });
+    }
+    try {
+      const branchId = String(session.branchId);
+      const sidebar = await readSidebarVisibility(branchId);
+      // SmartLife visibility is stored separately from owned-IoT visibility.
+      let smartlifeAlert = false;
+      let smartlifeDevices = false;
+      try {
+        const smartlifeSettings = await db.execute(sql`
+          SELECT alert_visible, devices_visible FROM smartlife_branch_visibility
+          WHERE branch_id = ${branchId}::uuid LIMIT 1
+        `);
+        const saved = visibilityRows(smartlifeSettings)[0];
+        smartlifeAlert = saved?.alert_visible === true;
+        smartlifeDevices = saved?.devices_visible === true;
+      } catch {
+        // SmartLife settings cannot be verified; avoid falsely claiming sections enabled.
+      }
+      res.json({ ...sidebar, smartlifeAlert, smartlifeDevices });
+    } catch {
+      res.status(500).json({ message: "Unable to load branch sidebar settings" });
+    }
+  });
+  // Existing manual SmartLife endpoints, with separate branch-scoped data.
+  registerSmartLifeRoutes(app, adminForVisibility);
+
   const ADMIN_USERNAME = "sardar";
   const ADMIN_PASSWORD = "smrptt77";
   
@@ -7630,6 +7737,8 @@ Generated: ${new Date().toISOString()}
         CONSTRAINT owned_iot_devices_battery_pct_check CHECK (battery_pct IS NULL OR battery_pct BETWEEN 0 AND 100)
       )
     `);
+    // Admin-confirmed power state. Silence alone is NOT evidence of OFF.
+    await db.execute(sql`ALTER TABLE owned_iot_devices ADD COLUMN IF NOT EXISTS manually_off_at timestamptz`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS owned_iot_events (
         id bigserial PRIMARY KEY,
@@ -7696,7 +7805,25 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_seen_idx ON owned_iot_device_checks(last_seen_at DESC)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_ip_idx ON owned_iot_device_checks(ip_address)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
+    // Persist admin decisions to ignore unwanted pairing AP BSSIDs.
+    // Never delete telemetry, customer device assignments or real MQTT state.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_wifi_ignored (
+        hardware_key text PRIMARY KEY,
+        mac_address text,
+        hostname text,
+        ignored_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS owned_iot_device_checks_assigned_idx ON owned_iot_device_checks(assigned_device_id) WHERE assigned_device_id IS NOT NULL`);
+    // Separate Wi-Fi AP sightings from MQTT device identity. Never mark these as live MQTT.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_wifi_branch_links (
+        sighting_id uuid PRIMARY KEY REFERENCES owned_iot_device_checks(id) ON DELETE CASCADE,
+        device_id text NOT NULL UNIQUE REFERENCES owned_iot_devices(device_id) ON DELETE CASCADE,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
   };
 
@@ -8096,12 +8223,29 @@ Generated: ${new Date().toISOString()}
 
   // A device is only "Connected" when it has reported recently.
   // This prevents an old MQTT event from leaving a device green for days.
-  const OWNED_IOT_ONLINE_WINDOW_MS = 30 * 60 * 1000;
+  // Sleeping battery traps may stop reporting without an offline event.
+  const OWNED_IOT_ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
   const ownedIotIsOnline = (reportedOnline: unknown, lastSeenAt: unknown) => {
     if (!reportedOnline || !lastSeenAt) return false;
     const lastSeenMs = new Date(String(lastSeenAt)).getTime();
     return Number.isFinite(lastSeenMs) && (Date.now() - lastSeenMs) <= OWNED_IOT_ONLINE_WINDOW_MS;
+  };
+
+  const ownedIotConnectionState = (row: any): string => {
+    const observedWifiMs = row.last_wifi_seen_at ? new Date(row.last_wifi_seen_at).getTime() : 0;
+    const mqttMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
+    const manualOffMs = row.manually_off_at ? new Date(row.manually_off_at).getTime() : 0;
+    const wifiRecentlySeen = Number.isFinite(observedWifiMs) && observedWifiMs > 0 &&
+      Date.now() - observedWifiMs < 75000;
+    // A new genuine MQTT/Wi-Fi observation after manually marking OFF restores
+    // the observed status; otherwise only an admin can confirm power is OFF.
+    if (manualOffMs > 0 && manualOffMs >= Math.max(observedWifiMs, mqttMs)) return "turned_off";
+    if (ownedIotIsOnline(row.is_online, row.last_seen_at)) return "online";
+    if (wifiRecentlySeen) return "wifi_seen";
+    if (row.last_event_type === "offline") return "disconnected";
+    if (mqttMs > 0 || observedWifiMs > 0) return "sleeping";
+    return row.lifecycle_state || "awaiting_activation";
   };
 
   const ownedIotDevicesForAdmin = async () => {
@@ -8120,7 +8264,15 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          manually_off_at,
+          (SELECT c.last_seen_at FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_seen_at,
+          (SELECT c.wifi_signal_percent FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_signal_percent,
+          (SELECT c.hostname FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS wifi_ap_name,
+          (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE COALESCE(lifecycle_state, '') <> 'archived'
         ORDER BY friendly_name NULLS LAST, device_id
@@ -8136,6 +8288,10 @@ Generated: ${new Date().toISOString()}
           notes: row.installation_location || row.hardware_model,
           isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionState: ownedIotConnectionState(row),
+          wifiLastSeenAt: row.last_wifi_seen_at || null,
+          wifiSignalPercent: row.last_wifi_signal_percent == null ? null : Number(row.last_wifi_signal_percent),
+          wifiApName: row.wifi_ap_name || null,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -8144,7 +8300,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotConnectionState(row) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -8253,6 +8409,13 @@ Generated: ${new Date().toISOString()}
       return { status: 400, message: "Only Food Safety pairing networks are accepted from the HP2 scanner." };
     }
     const hardwareKey = "wifi-ap:" + macAddress;
+    // Return success so the HP2 scanner does not retry, but never recreate or
+    // update an ignored BSSID. Admin can restore it whenever needed.
+    const ignoredResult: any = await db.execute(sql`
+      SELECT hardware_key FROM owned_iot_wifi_ignored WHERE hardware_key = ${hardwareKey} LIMIT 1
+    `);
+    const ignoredRows = Array.isArray(ignoredResult) ? ignoredResult : (ignoredResult?.rows || []);
+    if (ignoredRows.length) return { status: 200, ignored: true, message: "Wi-Fi sighting ignored by admin; MQTT unchanged." };
     const existing: any = await db.execute(sql`
       SELECT id FROM owned_iot_device_checks
       WHERE mac_address = ${macAddress} AND hardware_key <> ${hardwareKey}
@@ -8310,6 +8473,126 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Ignore instead of deleting: HP2 continuously reports APs, so a deleted row
+  // immediately reappears. Ignored BSSIDs stay suppressed until restored.
+  app.delete("/api/iot/device-check/:id/wifi-sighting", isAdminAuthenticated, async (req, res) => {
+    const id = String(req.params.id || "");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid sighting ID" });
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        INSERT INTO owned_iot_wifi_ignored (hardware_key, mac_address, hostname)
+        SELECT c.hardware_key, c.mac_address, c.hostname
+        FROM owned_iot_device_checks c
+        WHERE c.id::text = ${id} AND c.hardware_key LIKE 'wifi-ap:%'
+          AND c.assigned_device_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM owned_iot_wifi_branch_links w WHERE w.sighting_id = c.id)
+        ON CONFLICT (hardware_key) DO NOTHING
+        RETURNING hardware_key
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) return res.status(409).json({ message: "This sighting is already ignored, assigned, or no longer available." });
+      return res.json({ success: true, ignored: true });
+    } catch (error: any) {
+      console.error("Ignore HP2 Wi-Fi BSSID failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not ignore this Wi-Fi signal." });
+    }
+  });
+
+  app.get("/api/iot/device-check/ignored-wifi", isAdminAuthenticated, async (_req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const result: any = await db.execute(sql`
+        SELECT i.hardware_key, i.mac_address, i.hostname, i.ignored_at,
+               c.id::text AS sighting_id
+        FROM owned_iot_wifi_ignored i
+        LEFT JOIN owned_iot_device_checks c ON c.hardware_key = i.hardware_key
+        ORDER BY i.ignored_at DESC LIMIT 500
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      return res.json(rows.map((row: any) => ({
+        hardwareKey: row.hardware_key, macAddress: row.mac_address,
+        hostname: row.hostname, ignoredAt: row.ignored_at, sightingId: row.sighting_id,
+      })));
+    } catch (error: any) {
+      console.error("List ignored Wi-Fi BSSIDs failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not load ignored Wi-Fi signals." });
+    }
+  });
+
+  app.post("/api/iot/device-check/restore-wifi", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const hardwareKey = String(req.body?.hardwareKey || "").trim().toUpperCase();
+      if (!/^WIFI-AP:([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(hardwareKey))
+        return res.status(400).json({ message: "Invalid Wi-Fi identity." });
+      const result: any = await db.execute(sql`
+        DELETE FROM owned_iot_wifi_ignored
+        WHERE upper(hardware_key) = ${hardwareKey}
+        RETURNING hardware_key
+      `);
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "No ignored Wi-Fi signal found." });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Restore ignored Wi-Fi signal failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not restore ignored Wi-Fi signal." });
+    }
+  });
+
+  // Link a physically confirmed AP sighting to a registered device in the selected branch.
+  // This is admin-only tracking, not proof of MQTT or a matching MQTT station MAC.
+  app.post("/api/iot/device-check/:id/link-wifi", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      const sightingId = String(req.params.id || "").trim();
+      const deviceId = String(req.body?.deviceId || "").trim().toUpperCase();
+      const branchId = String(req.body?.branchId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(sightingId) || !deviceId || !branchId) {
+        return res.status(400).json({ message: "Wi-Fi sighting, registered device and branch are required." });
+      }
+      const check: any = await db.execute(sql`
+        SELECT id::text AS id, hardware_key, assigned_device_id FROM owned_iot_device_checks
+        WHERE id::text = ${sightingId} LIMIT 1
+      `);
+      const checkRows = Array.isArray(check) ? check : (check?.rows || []);
+      if (!checkRows.length || !String(checkRows[0].hardware_key).startsWith("wifi-ap:")) {
+        return res.status(404).json({ message: "Wi-Fi sighting was not found." });
+      }
+      if (checkRows[0].assigned_device_id) {
+        return res.status(409).json({ message: "This sighting is already linked to MQTT telemetry." });
+      }
+      const device: any = await db.execute(sql`
+        SELECT device_id, branch_id::text AS branch_id FROM owned_iot_devices
+        WHERE device_id = ${deviceId} LIMIT 1
+      `);
+      const deviceRows = Array.isArray(device) ? device : (device?.rows || []);
+      if (!deviceRows.length || String(deviceRows[0].branch_id) !== branchId) {
+        return res.status(409).json({ message: "Device belongs to another branch or is not registered. Select a device assigned to this customer." });
+      }
+      const inserted: any = await db.execute(sql`
+        INSERT INTO owned_iot_wifi_branch_links (sighting_id, device_id)
+        VALUES (${sightingId}::uuid, ${deviceId})
+        ON CONFLICT DO NOTHING RETURNING device_id
+      `);
+      const insertedRows = Array.isArray(inserted) ? inserted : (inserted?.rows || []);
+      if (!insertedRows.length) {
+        const existing: any = await db.execute(sql`
+          SELECT device_id FROM owned_iot_wifi_branch_links WHERE sighting_id::text = ${sightingId} LIMIT 1
+        `);
+        const existingRows = Array.isArray(existing) ? existing : (existing?.rows || []);
+        if (existingRows[0]?.device_id === deviceId) {
+          return res.json({ success: true, deviceId, branchId, mqttConnected: false });
+        }
+        return res.status(409).json({ message: "The sighting or registered device is already assigned. Check existing customer assignments." });
+      }
+      return res.json({ success: true, deviceId, branchId, mqttConnected: false });
+    } catch (err: any) {
+      console.error("Wi-Fi sighting link failed:", err?.message || err);
+      return res.status(500).json({ message: "Unable to assign this Wi-Fi sighting." });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -8327,6 +8610,7 @@ Generated: ${new Date().toISOString()}
           c.wifi_observation_source,
           c.legacy_device_id,
           c.assigned_device_id,
+          wl.device_id AS wifi_linked_device_id,
           c.first_seen_at,
           c.last_seen_at,
           d.friendly_name AS assigned_device_name,
@@ -8334,8 +8618,13 @@ Generated: ${new Date().toISOString()}
           d.installation_location AS assigned_location,
           b.name AS assigned_branch_name
         FROM owned_iot_device_checks c
-        LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
+        LEFT JOIN owned_iot_wifi_branch_links wl ON wl.sighting_id = c.id
+        LEFT JOIN owned_iot_devices d ON d.device_id = COALESCE(c.assigned_device_id, wl.device_id)
         LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        WHERE c.hardware_key NOT LIKE 'wifi-ap:%'
+          OR NOT EXISTS (
+            SELECT 1 FROM owned_iot_wifi_ignored i WHERE i.hardware_key = c.hardware_key
+          )
         ORDER BY c.last_seen_at DESC
         LIMIT 200
       `);
@@ -8355,7 +8644,7 @@ Generated: ${new Date().toISOString()}
           row.wifi_observation_source === "hp2-wifi-scan" && Boolean(row.last_seen_at) &&
           (Date.now() - new Date(row.last_seen_at).getTime()) < 75000,
         legacyDeviceId: row.legacy_device_id || null,
-        assignedDeviceId: row.assigned_device_id || null,
+        assignedDeviceId: row.assigned_device_id || row.wifi_linked_device_id || null,
         assignedDeviceName: row.assigned_device_name || null,
         assignedBranchId: row.assigned_branch_id || null,
         assignedBranchName: row.assigned_branch_name || null,
@@ -8590,6 +8879,31 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Only an administrator who has physically checked the switch may mark a
+  // trap OFF. Mere Wi-Fi/MQTT silence means sleeping or unverified, not OFF.
+  app.post("/api/iot/devices/:id/confirmed-power", isAdminAuthenticated, async (req, res) => {
+    try {
+      await ensureOwnedIotSchema();
+      if (typeof req.body?.off !== "boolean") return res.status(400).json({ message: "off must be true or false." });
+      const id = String(req.params.id || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ message: "Invalid device ID." });
+      const response: any = await db.execute(sql`
+        UPDATE owned_iot_devices
+        SET manually_off_at = CASE WHEN ${req.body.off} THEN now() ELSE NULL END,
+            updated_at = now()
+        WHERE id::text = ${id}
+        RETURNING id::text AS id, device_id, branch_id::text AS branch_id, manually_off_at
+      `);
+      const rows = Array.isArray(response) ? response : (response?.rows || []);
+      if (!rows.length) return res.status(404).json({ message: "Registered device not found." });
+      return res.json({ success: true, deviceId: rows[0].device_id, branchId: rows[0].branch_id,
+        confirmedOff: Boolean(rows[0].manually_off_at), confirmedAt: rows[0].manually_off_at || null });
+    } catch (err: any) {
+      console.error("Confirmed mouse power status failed:", err?.message || err);
+      return res.status(500).json({ message: "Unable to save power state confirmation." });
+    }
+  });
+
   app.patch("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
@@ -8645,7 +8959,7 @@ Generated: ${new Date().toISOString()}
         provider: "food-safety-owned-mqtt",
         lastStatus: [
           { code: "battery_percentage", value: row.battery_pct },
-          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "status", value: ownedIotConnectionState(row) },
           { code: "rssi", value: row.rssi },
           { code: "shock", value: Boolean(row.last_alarm_at) },
         ],
@@ -8850,7 +9164,15 @@ Generated: ${new Date().toISOString()}
           battery_pct,
           rssi,
           last_seen_at,
-          last_alarm_at
+          last_alarm_at,
+          manually_off_at,
+          (SELECT c.last_seen_at FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_seen_at,
+          (SELECT c.wifi_signal_percent FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS last_wifi_signal_percent,
+          (SELECT c.hostname FROM owned_iot_wifi_branch_links w JOIN owned_iot_device_checks c ON c.id = w.sighting_id
+             WHERE w.device_id = owned_iot_devices.device_id LIMIT 1) AS wifi_ap_name,
+          (SELECT event_type FROM owned_iot_events e WHERE e.event_id = owned_iot_devices.last_event_id LIMIT 1) AS last_event_type
         FROM owned_iot_devices
         WHERE branch_id::text = ${String(branchId)}
           AND COALESCE(firmware_version, '') NOT ILIKE '%sim%'
@@ -8867,6 +9189,10 @@ Generated: ${new Date().toISOString()}
           notes: row.installation_location || row.hardware_model,
           isOnline,
           reportedOnline: Boolean(row.is_online),
+          connectionState: ownedIotConnectionState(row),
+          wifiLastSeenAt: row.last_wifi_seen_at || null,
+          wifiSignalPercent: row.last_wifi_signal_percent == null ? null : Number(row.last_wifi_signal_percent),
+          wifiApName: row.wifi_ap_name || null,
           alarmActive: Boolean(row.last_alarm_at),
           lastAlarmAt: row.last_alarm_at,
           lastCheckedAt: row.last_seen_at,
@@ -8875,7 +9201,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotConnectionState(row) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
