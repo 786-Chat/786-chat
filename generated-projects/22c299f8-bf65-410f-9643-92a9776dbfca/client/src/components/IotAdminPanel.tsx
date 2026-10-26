@@ -1084,7 +1084,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{device.connectionState === "turned_off" ? "Mouse turned OFF (confirmed)" : device.isOnline ? "online" : device.connectionState === "wifi_seen" ? "Wi-Fi signal seen (MQTT unverified)" : device.connectionState === "sleeping" ? "Sleeping / No recent signal" : device.connectionState === "disconnected" ? "Disconnected (MQTT reported)" : snap.state || "Awaiting activation"}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.isOnline ? "No catch reported" : "Not verified"}</span></div>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
