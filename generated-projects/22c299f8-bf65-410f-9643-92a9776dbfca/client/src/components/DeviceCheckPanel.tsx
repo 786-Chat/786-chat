@@ -69,6 +69,10 @@ export default function DeviceCheckPanel() {
   const { toast } = useToast();
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
   const [loadError, setLoadError] = useState("");
+  const [refreshingReports, setRefreshingReports] = useState(false);
+  const [refreshColour, setRefreshColour] = useState<"green" | "blue" | null>(null);
+  const [lastManualRefresh, setLastManualRefresh] = useState("");
+  const [manualRefreshError, setManualRefreshError] = useState("");
   const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [ignoredWifi, setIgnoredWifi] = useState<IgnoredWifi[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -114,6 +118,28 @@ export default function DeviceCheckPanel() {
     }
   };
 
+
+  const refreshHp2Reports = async () => {
+    if (refreshingReports) return;
+    setRefreshingReports(true);
+    setManualRefreshError("");
+    try {
+      const response = await fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error(`Device Check API returned ${response.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error("Device Check returned invalid data");
+      setRows(data);
+      setLoadError("");
+      setRefreshColour((previous) => previous === "green" ? "blue" : "green");
+      setLastManualRefresh(new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/London" }));
+      toast({ title: "HP2 reports checked", description: "Latest saved reports loaded. No new signal does not mean the mouse is offline." });
+    } catch (error: any) {
+      setManualRefreshError(error?.message || "Unable to refresh HP2 reports");
+      toast({ title: "HP2 refresh failed", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setRefreshingReports(false);
+    }
+  };
 
   // An admin-entered HP2 scan is a historic Wi-Fi sighting, never MQTT telemetry.
   const recordWifiObservation = async () => {
@@ -370,10 +396,31 @@ export default function DeviceCheckPanel() {
             <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
           </div>
         </div>
-        <Button type="button" onClick={() => load().catch(() => {})} className="bg-slate-800 text-white hover:bg-slate-700">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Check latest HP2 reports
-        </Button>
+        <div className="flex flex-col items-start gap-1 sm:items-end">
+          <Button
+            type="button"
+            onClick={refreshHp2Reports}
+            disabled={refreshingReports}
+            aria-busy={refreshingReports}
+            className={refreshingReports
+              ? "bg-amber-600 text-white cursor-wait"
+              : manualRefreshError
+                ? "bg-red-700 text-white hover:bg-red-600"
+                : refreshColour === "green"
+                  ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                  : refreshColour === "blue"
+                    ? "bg-blue-600 text-white hover:bg-blue-500"
+                    : "bg-slate-800 text-white hover:bg-slate-700"}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshingReports ? "animate-spin" : ""}`} />
+            {refreshingReports ? "Checking HP2 reports..." : "Check latest HP2 reports"}
+          </Button>
+          <span role="status" aria-live="polite" className={`text-xs ${manualRefreshError ? "text-red-300" : "text-slate-300"}`}>
+            {manualRefreshError ? `Refresh failed: ${manualRefreshError}`
+              : lastManualRefresh ? `Checked at ${lastManualRefresh} · ${rows.filter(row => row.hardwareKey.startsWith("wifi-ap:")).length} saved Wi-Fi sighting(s)`
+              : "Click to check saved HP2 reports"}
+          </span>
+        </div>
       </div>
 
       {loadError && <div role="alert" className="rounded-lg border border-red-500/50 bg-red-950/40 p-3 text-sm text-red-100">Device Check loading error: {loadError}. This does not mean a mouse is switched OFF.</div>}
