@@ -8229,15 +8229,17 @@ Generated: ${new Date().toISOString()}
   const ownedIotIsOnline = (reportedOnline: unknown, lastSeenAt: unknown) => {
     if (!reportedOnline || !lastSeenAt) return false;
     const lastSeenMs = new Date(String(lastSeenAt)).getTime();
-    return Number.isFinite(lastSeenMs) && (Date.now() - lastSeenMs) <= OWNED_IOT_ONLINE_WINDOW_MS;
+    const ageMs = Date.now() - lastSeenMs;
+    return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= OWNED_IOT_ONLINE_WINDOW_MS;
   };
 
   const ownedIotConnectionState = (row: any): string => {
     const observedWifiMs = row.last_wifi_seen_at ? new Date(row.last_wifi_seen_at).getTime() : 0;
     const mqttMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
     const manualOffMs = row.manually_off_at ? new Date(row.manually_off_at).getTime() : 0;
-    const wifiRecentlySeen = Number.isFinite(observedWifiMs) && observedWifiMs > 0 &&
-      Date.now() - observedWifiMs < 75000;
+    const wifiAgeMs = Date.now() - observedWifiMs;
+    const wifiRecentlySeen = observedWifiMs > 0 && Number.isFinite(wifiAgeMs) &&
+      wifiAgeMs >= 0 && wifiAgeMs < 75000;
     // A new genuine MQTT/Wi-Fi observation after manually marking OFF restores
     // the observed status; otherwise only an admin can confirm power is OFF.
     if (manualOffMs > 0 && manualOffMs >= Math.max(observedWifiMs, mqttMs)) return "turned_off";
@@ -8642,6 +8644,7 @@ Generated: ${new Date().toISOString()}
         wifiObservationSource: row.wifi_observation_source || null,
         isWifiRecentlySeen: String(row.hardware_key || "").startsWith("wifi-ap:") &&
           row.wifi_observation_source === "hp2-wifi-scan" && Boolean(row.last_seen_at) &&
+          (Date.now() - new Date(row.last_seen_at).getTime()) >= 0 &&
           (Date.now() - new Date(row.last_seen_at).getTime()) < 75000,
         legacyDeviceId: row.legacy_device_id || null,
         assignedDeviceId: row.assigned_device_id || row.wifi_linked_device_id || null,
@@ -8651,7 +8654,8 @@ Generated: ${new Date().toISOString()}
         assignedLocation: row.assigned_location || null,
         firstSeenAt: row.first_seen_at || null,
         lastSeenAt: row.last_seen_at || null,
-        isLive: Boolean(row.connected) && Boolean(row.last_seen_at) && (Date.now() - new Date(row.last_seen_at).getTime()) < 90000,
+        isLive: Boolean(row.connected) && Boolean(row.last_seen_at) && (Date.now() - new Date(row.last_seen_at).getTime()) >= 0 &&
+          (Date.now() - new Date(row.last_seen_at).getTime()) < 90000,
       })));
     } catch (error: any) {
       console.error("Failed to load Device Check:", error?.message || error);
