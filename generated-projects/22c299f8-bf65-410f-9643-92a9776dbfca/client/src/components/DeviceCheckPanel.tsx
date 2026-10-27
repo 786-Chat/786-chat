@@ -60,6 +60,7 @@ export default function DeviceCheckPanel() {
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
+  const [confirmedMac, setConfirmedMac] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   const load = async () => {
@@ -174,6 +175,17 @@ export default function DeviceCheckPanel() {
       toast({ title: "Choose a device", description: "Select the existing FS-MOUSE device you physically checked.", variant: "destructive" });
       return;
     }
+    // Wi-Fi AP sightings are historical observations, not proof of MQTT identity.
+    // Require the administrator to verify the full observed MAC before linking.
+    if (row.hardwareKey.startsWith("wifi-ap:")) {
+      const expectedMac = String(row.macAddress || "").trim().toUpperCase();
+      const enteredMac = String(confirmedMac[row.id] || "").trim().toUpperCase();
+      if (!expectedMac || enteredMac !== expectedMac) {
+        toast({ title: "Confirm physical MAC", description: "Enter the exact Wi-Fi MAC printed above before linking an existing device.", variant: "destructive" });
+        return;
+      }
+    }
+    if (!window.confirm("Link this physical Wi-Fi record to " + deviceId + "? This does not prove MQTT connectivity.")) return;
 
     setBusy("link:" + row.id);
     try {
@@ -402,8 +414,34 @@ export default function DeviceCheckPanel() {
                 {wifiOnly ? (
                   <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
                     Wi-Fi access point detected, but no MQTT device identity or trap events have been verified.
-                    To protect existing shop assignments, this observation cannot be linked or assigned until physical MQTT identity is established.
+                    This saved Wi-Fi observation does not establish MQTT identity. You can link it to an existing registration only after physically checking the full MAC address. MQTT stays unverified until real gateway telemetry arrives.
                     When green pairing flashing times out, the last recorded signal remains visible as historic information.
+                    {!row.assignedDeviceId && row.macAddress && (
+                      <div className="mt-4 space-y-2 rounded-lg border border-cyan-400/25 bg-slate-950/60 p-3">
+                        <p className="font-semibold text-white">Link physical device — existing registration only</p>
+                        <select aria-label="Existing registered device" value={existingChoice[row.id] || ""}
+                          onChange={(event) => setExistingChoice((current) => ({ ...current, [row.id]: event.target.value }))}
+                          className="h-10 w-full rounded-md border border-slate-600 bg-slate-950 px-3 text-white">
+                          <option value="">Select existing registered mouse...</option>
+                          {registered.map((device) => (
+                            <option key={device.id} value={device.deviceId}>
+                              {device.deviceId} — {device.deviceName || "Device"}
+                            </option>
+                          ))}
+                        </select>
+                        <Input aria-label="Confirm observed physical MAC" value={confirmedMac[row.id] || ""}
+                          onChange={(event) => setConfirmedMac((current) => ({ ...current, [row.id]: event.target.value }))}
+                          placeholder={"Type MAC to confirm: " + row.macAddress}
+                          className="border-slate-600 bg-slate-950 text-white" />
+                        <Button type="button" onClick={() => linkExisting(row)}
+                          disabled={busy !== "" || !existingChoice[row.id] || (confirmedMac[row.id] || "").trim().toUpperCase() !== String(row.macAddress).trim().toUpperCase()}
+                          className="bg-blue-600 text-white hover:bg-blue-500">
+                          <Link2 className="mr-2 h-4 w-4" />
+                          {busy === "link:" + row.id ? "Linking..." : "Link Existing Physical Device"}
+                        </Button>
+                        <p className="text-xs text-amber-200">Physical Wi-Fi identity only. MQTT remains unverified; no alarm is sent.</p>
+                      </div>
+                    )}
                   </div>
                 ) : row.assignedDeviceId ? (
                   <div className="mt-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4">
