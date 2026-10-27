@@ -7781,6 +7781,13 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`ALTER TABLE owned_iot_device_backups ADD COLUMN IF NOT EXISTS scope_type text NOT NULL DEFAULT 'all'`);
     await db.execute(sql`ALTER TABLE owned_iot_device_backups ADD COLUMN IF NOT EXISTS scope_id text`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_backups_scope_idx ON owned_iot_device_backups(scope_type, scope_id, created_at DESC)`);
+    // Monotonic, atomic allocator: once issued, an FS-MOUSE number must not be recycled.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS owned_iot_device_id_counters (
+        prefix text PRIMARY KEY,
+        last_issued bigint NOT NULL DEFAULT 0
+      )
+    `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_branch_idx ON owned_iot_devices(branch_id)`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_devices_last_seen_idx ON owned_iot_devices(last_seen_at DESC)`);
     await db.execute(sql`
@@ -8758,16 +8765,43 @@ Generated: ${new Date().toISOString()}
 
       let resolvedDeviceId = String(deviceId || "").trim().toUpperCase();
       if (!resolvedDeviceId) {
+        // Reserve IDs atomically, including IDs found in archived rows and backups.
+        // FS-MOUSE-000003 was retired historically; never issue it again.
+        // A durable counter also prevents reuse if the highest row is removed later.
         const nextResult: any = await db.execute(sql`
-          SELECT COALESCE(
-            MAX((substring(device_id from '([0-9]{6,})$'))::bigint),
-            0
-          ) AS max_id
-          FROM owned_iot_devices
-          WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
+          WITH known_ids AS (
+            SELECT device_id FROM owned_iot_devices
+            UNION ALL SELECT device_id FROM owned_iot_events
+            UNION ALL SELECT assigned_device_id AS device_id FROM owned_iot_device_checks
+            UNION ALL
+            SELECT snapshot_item.item->>'deviceId' AS device_id
+            FROM owned_iot_device_backups backup
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE WHEN jsonb_typeof(backup.snapshot) = 'array'
+                THEN backup.snapshot ELSE '[]'::jsonb END
+            ) AS snapshot_item(item)
+          ), highest_known AS (
+            SELECT GREATEST(
+              3,
+              COALESCE(MAX((substring(device_id from '([0-9]{6,})$'))::bigint), 0)
+            ) AS number
+            FROM known_ids
+            WHERE device_id ~ '^FS-MOUSE-[0-9]{6,}$'
+          )
+          INSERT INTO owned_iot_device_id_counters (prefix, last_issued)
+          SELECT 'FS-MOUSE', number + 1 FROM highest_known
+          ON CONFLICT (prefix) DO UPDATE
+            SET last_issued = GREATEST(
+              owned_iot_device_id_counters.last_issued,
+              EXCLUDED.last_issued - 1
+            ) + 1
+          RETURNING last_issued
         `);
         const nextRows = Array.isArray(nextResult) ? nextResult : (nextResult?.rows || []);
-        const nextNumber = Number(nextRows?.[0]?.max_id || 0) + 1;
+        const nextNumber = Number(nextRows?.[0]?.last_issued);
+        if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) {
+          throw new Error("Unable to allocate a safe Food Safety mouse number");
+        }
         resolvedDeviceId = "FS-MOUSE-" + String(nextNumber).padStart(6, "0");
       }
 
