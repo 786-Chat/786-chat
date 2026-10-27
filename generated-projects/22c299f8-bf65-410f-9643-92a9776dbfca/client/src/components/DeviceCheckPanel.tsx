@@ -86,6 +86,7 @@ export default function DeviceCheckPanel() {
   const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
   const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
+  const [physicalMacInput, setPhysicalMacInput] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
 
   const load = async () => {
@@ -241,6 +242,32 @@ export default function DeviceCheckPanel() {
       await load();
     } catch (err: any) {
       toast({ title: "Assignment failed", description: err?.message || "Please retry", variant: "destructive" });
+    } finally { setBusy(""); }
+  };
+
+  const linkAssignedPhysical = async (row: DeviceCheckRow) => {
+    const expected = String(row.macAddress || "").trim().toUpperCase();
+    const entered = String(physicalMacInput[row.id] || "").trim().toUpperCase();
+    const id = String(row.assignedDeviceId || "").trim();
+    if (!row.hardwareKey.startsWith("wifi-ap:") || !expected || entered !== expected || !id) {
+      toast({ title: "Verify physical MAC", description: "Type the full Wi-Fi MAC shown on this mouse card.", variant: "destructive" });
+      return;
+    }
+    if (!window.confirm("Link physical MAC " + expected + " to " + id + "? This does not verify MQTT or send alarms.")) return;
+    setBusy("physical:" + row.id);
+    try {
+      const response = await fetch("/api/iot/device-check/" + encodeURIComponent(row.id) + "/link-existing", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.message || "Could not link physical record");
+      toast({ title: "Physical record linked", description: id + " remains MQTT unverified." });
+      setPhysicalMacInput(prev => ({ ...prev, [row.id]: "" }));
+      await load();
+    } catch (error: any) {
+      toast({ title: "Physical link failed", description: error?.message || "Please try again", variant: "destructive" });
     } finally { setBusy(""); }
   };
 
@@ -496,6 +523,22 @@ export default function DeviceCheckPanel() {
               <p className="text-sm font-semibold text-white">{row.assignedDeviceName || row.hostname || "Mouse"} — {row.assignedDeviceId}</p>
               <p className="mt-1 font-mono text-xs text-cyan-200">{row.hostname || row.mqttPrefix || "Wi-Fi observation"}{row.macAddress ? " · " + row.macAddress : ""}</p>
               <p className="mt-1 text-xs text-slate-300">{row.hardwareKey.startsWith("wifi-ap:") ? (row.isWifiRecentlySeen ? "Wi-Fi recently observed · MQTT unverified" : "Sleeping / No recent Wi-Fi signal · MQTT unverified") : row.isLive ? "MQTT live" : "Sleeping / No recent MQTT signal"}</p>
+              {row.hardwareKey.startsWith("wifi-ap:") && row.macAddress && row.assignedDeviceId && !row.mqttPrefix && !row.connected && (
+                <div className="mt-3 rounded-lg border border-blue-500/25 bg-slate-900/70 p-3">
+                  <p className="text-xs font-semibold text-blue-200">Link physical Wi-Fi record to existing registration</p>
+                  <p className="mt-1 text-xs text-slate-400">Confirm the observed MAC exactly. This does not establish MQTT connectivity.</p>
+                  <Input aria-label={"Confirm MAC for " + row.assignedDeviceId}
+                    value={physicalMacInput[row.id] || ""}
+                    onChange={event => setPhysicalMacInput(prev => ({ ...prev, [row.id]: event.target.value }))}
+                    placeholder={"Type MAC: " + row.macAddress}
+                    className="mt-2 border-slate-600 bg-slate-950 text-white" />
+                  <Button type="button" onClick={() => linkAssignedPhysical(row)}
+                    disabled={busy !== "" || String(physicalMacInput[row.id] || "").trim().toUpperCase() !== String(row.macAddress).trim().toUpperCase()}
+                    className="mt-2 bg-blue-600 text-white hover:bg-blue-500">
+                    <Link2 className="mr-2 h-4 w-4" /> Link Existing Physical Device
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
           <p className="mt-2 text-xs text-slate-400">Assigned mice stay here even when sleeping or switched OFF. Wi-Fi scans alone do not establish MQTT connectivity.</p>
