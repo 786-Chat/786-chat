@@ -7,11 +7,13 @@
  * Set:
  * PEST_CONTROL_BASE_URL=https://pestcontrol.cat
  * FOODSAFETY_IOT_GATEWAY_TOKEN=<existing HP2 service secret>
- * FOODSAFETY_WIFI_BSSID=F8:17:2D:BB:E0:B7
+ * FOODSAFETY_WIFI_BSSID=F8:17:2D:BB:E0:B7 (optional: restrict to one known mouse)
  * FOODSAFETY_WIFI_INTERFACE=wlx24ec99a65562  (optional)
  *
- * Only the explicitly configured BSSID is reported. This never sends Wi-Fi
- * passwords, does not configure devices, flash firmware or create alarms.
+ * With no BSSID filter, every visible SmartLife-/OpenBK pairing AP is observed
+ * by its unique BSSID. Sightings are NOT proof of ownership or MQTT activity.
+ * This never sends Wi-Fi passwords, configures devices, flashes firmware,
+ * registers customer devices or creates alarms.
  * Missing AP scan is NOT an MQTT offline event; the UI expires observations.
  */
 import { execFile } from "node:child_process";
@@ -25,64 +27,80 @@ const wifiInterface = String(process.env.FOODSAFETY_WIFI_INTERFACE || "wlx24ec99
 const scanIntervalMs = 25000;
 
 if (!/^https:\/\//.test(apiBase) || !gatewayToken ||
-    !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(targetBssid) ||
+    (targetBssid && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(targetBssid)) ||
     !/^[a-zA-Z0-9_-]+$/.test(wifiInterface)) {
-  console.error("[hp2-wifi] Required: HTTPS PEST_CONTROL_BASE_URL, FOODSAFETY_IOT_GATEWAY_TOKEN, FOODSAFETY_WIFI_BSSID; optionally FOODSAFETY_WIFI_INTERFACE.");
+  console.error("[hp2-wifi] Required: HTTPS PEST_CONTROL_BASE_URL, FOODSAFETY_IOT_GATEWAY_TOKEN; optionally FOODSAFETY_WIFI_BSSID and FOODSAFETY_WIFI_INTERFACE.");
   process.exit(1);
 }
+
+const parseScanRow = (line) => {
+  // nmcli -t with '-e no' exposes the BSSID's colons. Parse from the right,
+  // not by splitting the line on ':' (SSID itself can include colons).
+  const match = line.match(/^(.*):((?:[A-F0-9]{2}:){5}[A-F0-9]{2}):(\\d{1,3})$/i);
+  if (!match || !/^(SmartLife-|OpenBK)/i.test(match[1])) return null;
+  const signalPercent = Number(match[3]);
+  if (!Number.isInteger(signalPercent) || signalPercent < 0 || signalPercent > 100) return null;
+  return { ssid: match[1], macAddress: match[2].toUpperCase(), signalPercent };
+};
 
 const scanOnce = async () => {
   const { stdout } = await execFileAsync("nmcli",
     ["-t", "-e", "no", "-f", "SSID,BSSID,SIGNAL", "device", "wifi", "list",
       "ifname", wifiInterface, "--rescan", "yes"],
     { timeout: 18000, maxBuffer: 256 * 1024 });
-  const found = String(stdout || "").split(/\r?\n/).map((line) =>
-    line.match(/^(.*):((?:[A-F0-9]{2}:){5}[A-F0-9]{2}):(\d{1,3})$/i),
-  ).find((match) => match && match[2].toUpperCase() === targetBssid);
-  if (!found) {
-    console.log("[hp2-wifi] Pairing AP not visible; last observation retained as historic.");
+  const sightings = new Map();
+  for (const line of String(stdout || "").split(/\\r?\\n/)) {
+    const row = parseScanRow(line);
+    if (!row || (targetBssid && row.macAddress !== targetBssid)) continue;
+    const prior = sightings.get(row.macAddress);
+    if (!prior || row.signalPercent > prior.signalPercent) {
+      sightings.set(row.macAddress, row);
+    }
+  }
+  if (!sightings.size) {
+    console.log("[hp2-wifi] No matching pairing AP visible; historic observations are not MQTT status.");
     return;
   }
-  const ssid = found[1];
-  if (!/^(SmartLife-|OpenBK)/i.test(ssid)) {
-    console.log("[hp2-wifi] Target BSSID is present but SSID is not a supported pairing AP.");
-    return;
-  }
-  const signalPercent = Number(found[3]);
-
-  // IP4.GATEWAY is only this AP's address when this radio has associated
-  // with the same SSID. Never attribute the home router IP to the trap.
-  let ipAddress = "";
+  // An association does NOT mean MQTT is connected. Only report a gateway IP
+  // if this radio is actually associated with the observed SSID.
+  let currentConnection = "";
+  let gatewayIp = "";
   try {
     const [connection, gateway] = await Promise.all([
       execFileAsync("nmcli", ["-g", "GENERAL.CONNECTION", "device", "show", wifiInterface], { timeout: 3000 }),
       execFileAsync("nmcli", ["-g", "IP4.GATEWAY", "device", "show", wifiInterface], { timeout: 3000 }),
     ]);
-    if (connection.stdout.trim() === ssid) {
-      const value = gateway.stdout.trim();
-      if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) ipAddress = value;
-    }
+    currentConnection = connection.stdout.trim();
+    gatewayIp = gateway.stdout.trim();
+    if (!/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(gatewayIp)) gatewayIp = "";
   } catch (_) {
-    // Scanning a broadcasting AP does not require joining it.
+    // Scanning is read-only; do not join or reconfigure any AP.
   }
-  const response = await fetch(apiBase + "/api/iot/gateway/wifi-observation", {
-    method: "POST",
-    headers: {
-      authorization: "Bearer " + gatewayToken,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ ssid, macAddress: targetBssid, ipAddress, signalPercent }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    throw new Error("Wi-Fi observation was not accepted (" + response.status + ").");
+  for (const row of sightings.values()) {
+    const ipAddress = currentConnection === row.ssid ? gatewayIp : "";
+    try {
+      const response = await fetch(apiBase + "/api/iot/gateway/wifi-observation", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer " + gatewayToken,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...row, ipAddress }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) {
+        throw new Error("Wi-Fi observation rejected (" + response.status + ").");
+      }
+      console.log("[hp2-wifi] Recorded " + row.ssid + " (" + row.macAddress +
+        ") at " + row.signalPercent + "%; MQTT NOT verified.");
+    } catch (error) {
+      console.error("[hp2-wifi] " + row.macAddress + " " + (error?.message || String(error)));
+    }
   }
-  console.log("[hp2-wifi] Recorded " + ssid + " at " + signalPercent +
-    "% for BSSID " + targetBssid + " (MQTT NOT connected).");
 };
 
 console.log("[hp2-wifi] Read-only observer starting on " + wifiInterface +
-  ", BSSID " + targetBssid + "; polling ~25 seconds.");
+  ", scope " + (targetBssid || "all SmartLife-/OpenBK pairing APs") + "; polling ~25 seconds.");
 while (true) {
   try {
     await scanOnce();
