@@ -157,10 +157,10 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" />
             <div>
-              <h3 className="font-bold text-emerald-100">Ready</h3>
+              <h3 className="font-bold text-emerald-100">No catch reported</h3>
               <p className="mt-1 text-sm text-emerald-200/80">
                 {devices.length
-                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
+                  ? `No active catch alarm reported for ${devices.length} assigned device${devices.length === 1 ? "" : "s"}. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " has" : "s have"} no current connection; physical readiness and OFF/sleep status are unverified.` : "This does not independently verify physical trap readiness."}`
                   : "No smart devices are assigned to this branch yet."}
               </p>
             </div>
