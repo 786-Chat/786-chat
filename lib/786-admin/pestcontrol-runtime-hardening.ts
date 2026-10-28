@@ -261,9 +261,19 @@ function patchOwnedIotAssignmentLifecycle(source: string): string {
     ].join("\n"),
   )
 
+  // Scope the history rewrite to the owned_iot_events query only.
+  // A global replacement also rewrites Device Check where alias "e" is absent.
   next = next.replace(
-    "      LEFT JOIN branches b ON b.id::text = d.branch_id::text",
-    "      LEFT JOIN branches b ON b.id::text = e.branch_id::text",
+    [
+      "      FROM owned_iot_events e",
+      "      JOIN owned_iot_devices d ON d.device_id = e.device_id",
+      "      LEFT JOIN branches b ON b.id::text = d.branch_id::text",
+    ].join("\n"),
+    [
+      "      FROM owned_iot_events e",
+      "      JOIN owned_iot_devices d ON d.device_id = e.device_id",
+      "      LEFT JOIN branches b ON b.id::text = e.branch_id::text",
+    ].join("\n"),
   )
 
   next = next.replace(
