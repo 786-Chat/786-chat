@@ -166,10 +166,27 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   };
 
   useEffect(() => {
-    loadBase().catch(() => {});
+    // Live alarms have a separate 12-second listener; admin device details can poll less.
+    // Do not spend Vercel requests when this admin tab is hidden.
+    let stopped = false;
+    let polling = false;
+    const refreshWhenVisible = () => {
+      if (stopped || document.visibilityState !== "visible" || polling) return;
+      polling = true;
+      void loadBase().catch(() => {}).finally(() => { polling = false; });
+    };
+
+    refreshWhenVisible();
     loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
-    const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(refreshWhenVisible, 60000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {

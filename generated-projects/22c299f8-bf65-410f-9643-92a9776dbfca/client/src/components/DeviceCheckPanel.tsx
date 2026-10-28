@@ -168,9 +168,26 @@ export default function DeviceCheckPanel() {
   };
 
   useEffect(() => {
-    load().catch(() => {});
-    const timer = window.setInterval(() => load().catch(() => {}), 5000);
-    return () => window.clearInterval(timer);
+    // Device Check is an admin inspection view, not the safety-critical alarm listener.
+    // Avoid repeated transfer from hidden tabs and overlapping refresh requests.
+    let stopped = false;
+    let polling = false;
+    const refreshWhenVisible = () => {
+      if (stopped || document.visibilityState !== "visible" || polling) return;
+      polling = true;
+      void load().catch(() => {}).finally(() => { polling = false; });
+    };
+
+    refreshWhenVisible();
+    const timer = window.setInterval(refreshWhenVisible, 30000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
   }, []);
 
   const counts = useMemo(() => ({
