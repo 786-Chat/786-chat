@@ -16,6 +16,39 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// A sleeping radio, powered-off device and lost connection all look the same
+// until an authenticated MQTT report arrives. Never label absence as "OFF".
+function getMouseConnectivity(device: any) {
+  if (device.isOnline) {
+    return {
+      badge: "MQTT recently reported",
+      status: "Recently reported — MQTT",
+      detail: "Last authenticated gateway report received. This does not prove that Wi-Fi will stay awake.",
+      active: true,
+    };
+  }
+  if (device.lastCheckedAt) {
+    return {
+      badge: "Sleeping / No recent signal",
+      status: "No recent MQTT signal",
+      detail: "May be sleeping, out of range, or switched off. Power state is not verified; no reset needed.",
+      active: false,
+    };
+  }
+  return {
+    badge: "Awaiting MQTT activation",
+    status: "MQTT not yet verified",
+    detail: "Registration is saved. No physical MQTT report has been verified yet.",
+    active: false,
+  };
+}
+
+// Only correlate observations by an exact factory AP name explicitly present
+// in the saved device's friendly name. This is NOT authenticated identity.
+function namedFactoryWifi(deviceName: unknown) {
+  return String(deviceName || "").match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0].toLowerCase() || "";
+}
+
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -611,7 +644,7 @@ export default function IotAdminPanel() {
       </div>
       <div className="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-4">
         <h3 className="text-lg font-semibold text-white">STEP 1 — DETECT MOUSE</h3>
-        <p className="mt-1 text-sm text-slate-300">Review real SmartLife-XXXX names, BSSID/MAC and last signal from the local scanner. Historical sightings stay labelled historical; this is not global live Wi-Fi discovery.</p>
+        <p className="mt-1 text-sm text-slate-300">Review real SmartLife-XXXX names, BSSID/MAC and last signal from the local scanner. When the mouse's setup Wi-Fi sleeps, the last sighting remains saved. No green light does not prove the mouse is OFF.</p>
       </div>
 
 
@@ -638,14 +671,15 @@ export default function IotAdminPanel() {
                 <div className="flex items-start justify-between gap-2">
                   <span className="break-all font-semibold text-white">{observation.hostname || "Factory Wi-Fi"}</span>
                   <span className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-cyan-200">
-                    {observation.isWifiRecentlySeen ? "Recently seen" : "Previous Wi-Fi sighting"}
+                    {observation.isWifiRecentlySeen ? "Wi-Fi seen recently" : "No recent Wi-Fi signal"}
                   </span>
                 </div>
                 <p className="mt-1 break-all font-mono text-xs text-slate-400">{observation.macAddress || "Unknown BSSID"}</p>
                 <p className="mt-2 text-sm text-cyan-200">
                   Wi-Fi signal: {observation.wifiSignalPercent == null ? "Not recorded" : observation.wifiSignalPercent + "% at last scan"}
                 </p>
-                <p className="text-sm text-amber-200">MQTT: Not connected / not verified</p>
+                <p className="text-sm text-amber-200">MQTT: Not verified by this Wi-Fi sighting</p>
+                {!observation.isWifiRecentlySeen && <p className="mt-1 text-xs text-amber-100/90">May be sleeping or out of range. The green LED turning OFF does not confirm power OFF. Saved sighting is retained.</p>}
                 <p className="mt-1 text-xs text-slate-400">
                   {observation.lastSeenAt ? "Last report: " + new Date(observation.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No report time"}
                   {observation.wifiObservationSource === "admin-entry" ? " · Manually recorded" : " · HP2 scanner"}
@@ -853,7 +887,7 @@ export default function IotAdminPanel() {
       }
       <div className="rounded-xl border border-emerald-500/25 bg-slate-900/50 p-4">
         <h3 className="text-lg font-semibold text-white">STEP 4 — REGISTERED MOUSE CARDS</h3>
-        <p className="mt-1 text-sm text-slate-300">Saved devices remain listed while sleeping, switched off or disconnected. Only actual gateway data confirms online status or a caught-mouse alarm.</p>
+        <p className="mt-1 text-sm text-slate-300">Saved mice remain registered when their Wi-Fi sleeps. No recent signal means sleep, power OFF or network loss is possible — never claim the mouse is switched OFF without proof. Only authenticated MQTT confirms connectivity and catch events.</p>
       </div>
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4">
@@ -980,6 +1014,12 @@ export default function IotAdminPanel() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
+              const connectivity = getMouseConnectivity(device);
+              const setupSsid = namedFactoryWifi(device.deviceName);
+              const matchingWifi = setupSsid
+                ? wifiObservations.find((observation: any) =>
+                    String(observation.hostname || "").trim().toLowerCase() === setupSsid)
+                : undefined;
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -988,24 +1028,37 @@ export default function IotAdminPanel() {
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
-                    <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
-                      {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
+                    <Badge className={connectivity.active ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-200"}>
+                      {connectivity.badge}
                     </Badge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
+                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{connectivity.status}</span></div>
                     <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.isOnline ? "No active alarm" : "Not verified"}</span></div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <p className={`mt-3 text-xs ${connectivity.active ? "text-emerald-200" : "text-amber-200"}`}>
+                    {connectivity.detail}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
                     <Wifi className="h-3.5 w-3.5" />
-                    Wi-Fi / MQTT
-                    {snap.mqttRssi == null ? " · Gateway signal not yet reported" : " · Last MQTT signal " + snap.mqttRssi + " dBm"}
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
+                    MQTT: {snap.mqttRssi == null ? "signal not verified" : "last reported RSSI " + snap.mqttRssi + " dBm"}
+                    {device.lastCheckedAt
+                      ? ` · Last MQTT report ${new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" })}`
+                      : " · No MQTT report yet"}
                   </div>
+                  {matchingWifi && (
+                    <div className="mt-2 rounded-md border border-cyan-600/25 bg-cyan-950/30 p-2 text-xs text-cyan-100">
+                      Factory setup Wi-Fi name match: <strong>{matchingWifi.hostname}</strong>
+                      {" · "}{matchingWifi.isWifiRecentlySeen ? "Recently seen by HP2" : "No recent Wi-Fi signal — may be sleeping"}
+                      {" · "}{matchingWifi.wifiSignalPercent == null ? "Signal unknown" : matchingWifi.wifiSignalPercent + "% at last scan"}
+                      {matchingWifi.lastSeenAt && (" · Last scan " + new Date(matchingWifi.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }))}
+                      <span className="mt-1 block text-slate-300">SSID name match only; physical device identity and MQTT still require independent verification.</span>
+                    </div>
+                  )}
 
                   {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
 
