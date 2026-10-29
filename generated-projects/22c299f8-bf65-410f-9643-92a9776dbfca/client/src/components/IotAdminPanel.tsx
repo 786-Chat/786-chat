@@ -87,7 +87,7 @@ export default function IotAdminPanel() {
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
   const [showEmergencyTools, setShowEmergencyTools] = useState(false);
-  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [showRegisterForm, setShowRegisterForm] = useState(true);
   const [showFactorySignals, setShowFactorySignals] = useState(false);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
 
@@ -767,7 +767,7 @@ export default function IotAdminPanel() {
       </div>
 
 
-      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Register or reassign the mouse and save its customer branch. This does not claim physical Wi-Fi activation.</p></div>
+      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Fill in the mouse name, select its restaurant and installation area, then save. The registration stays saved while the mouse is offline.</p></div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
