@@ -81,6 +81,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [removingDeviceId, setRemovingDeviceId] = useState("");
   const [activeBranchId, setActiveBranchId] = useState("");
   const [branchSearch, setBranchSearch] = useState("");
+  const [deviceSearch, setDeviceSearch] = useState("");
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
   const [showEmergencyTools, setShowEmergencyTools] = useState(false);
@@ -949,7 +950,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         <div className="mb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div className="relative w-full max-w-xl">
-              <label className="mb-1 block text-xs font-medium text-slate-400">Search Branch / Shop</label>
+              <label className="mb-1 block text-sm font-semibold text-white">Select Restaurant / Branch</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <Input
@@ -992,6 +993,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                 </div>
               )}
             </div>
+<select aria-label="Select restaurant" value={activeBranchId} onChange={e => { const id=e.target.value; const branch=branches.find(b => String(b.id)===id); setActiveBranchId(id); setBranchId(id); setBranchSearch(branch?.name || ""); setBranchSearchOpen(false); }} className="h-10 w-full max-w-xs rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"><option value="">All restaurants</option>{branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}</select>
             {activeBranch && (
               <Button
                 type="button"
@@ -1060,13 +1062,14 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
         </div>
 
-        {activeBranchDevices.length === 0 ? (
+        <Input aria-label="Search mouse devices" placeholder="Search mouse name, ID or installation area" value={deviceSearch} onChange={e => setDeviceSearch(e.target.value)} className="mb-4 max-w-sm border-slate-600 bg-slate-950 text-white" />
+        {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
             <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {activeBranchDevices.map((device: any, index: number) => {
+            {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).map((device: any, index: number) => {
               const snap = deviceSnapshot(device.lastStatus);
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
@@ -1081,11 +1084,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
                     </Badge>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
                     <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : "Ready"}</span></div>
+                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.isOnline ? "No active alarm" : "Not verified"}</span></div>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
