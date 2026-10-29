@@ -37,7 +37,7 @@ function snapshot(statusList: any[]) {
     const code = normalize(item?.code || item?.name || item?.dpId);
     const raw = item?.value;
     if (code.includes("battery")) battery = typeof raw === "number" ? `${raw}%` : String(raw ?? "");
-    if (code === "status" || code.includes("switch")) power = String(raw ?? "");
+    if (code.includes("switch") && raw !== null && raw !== undefined && raw !== "") power = String(raw);
   }
   return { battery, power };
 }
@@ -125,8 +125,8 @@ export default function BranchSmartDevicesPanel() {
               const alarm = Boolean(device.alarmActive);
               const lastReport = device.lastCheckedAt ? new Date(device.lastCheckedAt) : null;
               const hasValidReport = Boolean(lastReport && !Number.isNaN(lastReport.getTime()));
-              const powerLabel = readableStatus(snap.power) || (device.isOnline ? "Connected" : hasValidReport ? "Not reporting" : "Awaiting first report");
-              const connectionLabel = device.isOnline ? "Connected" : hasValidReport ? "Not reporting" : "Not verified";
+              const powerLabel = snap.power ? readableStatus(snap.power) + (device.isOnline ? "" : " (last report)") : "Power not verified";
+              const connectionLabel = device.isOnline ? "MQTT recently reported" : hasValidReport ? "Sleeping / No recent signal" : "Awaiting MQTT activation";
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
                   <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
@@ -146,21 +146,21 @@ export default function BranchSmartDevicesPanel() {
                         <div className="mt-1 flex min-w-0 items-center gap-1.5"><Battery className="h-4 w-4 flex-shrink-0 text-emerald-300" /><span className="min-w-0 break-words font-semibold text-white">{snap.battery || "—"}</span></div>
                       </div>
                       <div className="min-w-0 overflow-hidden rounded-xl bg-slate-900/70 p-3">
-                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Device</span>
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Power</span>
                         <span className="mt-1 block min-w-0 break-words text-sm font-semibold leading-tight text-white">{powerLabel}</span>
                       </div>
                       <div className={`min-w-0 rounded-xl p-3 ${alarm ? "bg-red-500/15" : "bg-slate-900/70"}`}>
                         <span className="block text-[11px] uppercase tracking-wide text-slate-500">Trap</span>
-                        <span className={`mt-1 block break-words text-sm font-semibold leading-tight ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Mouse Caught" : "Ready"}</span>
+                        <span className={`mt-1 block break-words text-sm font-semibold leading-tight ${alarm ? "text-red-300" : "text-white"}`}>{alarm ? "Mouse Caught" : device.isOnline ? "No active alarm" : "Not verified"}</span>
                       </div>
                       <div className="min-w-0 rounded-xl bg-slate-900/70 p-3">
-                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">Wi-Fi</span>
+                        <span className="block text-[11px] uppercase tracking-wide text-slate-500">MQTT</span>
                         <div className="mt-1 flex min-w-0 items-start gap-1.5"><Wifi className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-300" /><span className="min-w-0 break-words text-sm font-semibold leading-tight text-white">{connectionLabel}</span></div>
                       </div>
                     </div>
 
                     <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last report: {hasValidReport ? lastReport!.toLocaleString("en-GB") : "Waiting for first device report"} · Sleep cannot be confirmed online without a report.
+                      Last MQTT report: {hasValidReport ? lastReport!.toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Waiting for first device report"} · {device.isOnline ? "Recently received authenticated telemetry." : "No recent telemetry. Mouse may be sleeping, switched OFF or out of range — power state cannot be confirmed; no reset required."}
                     </div>
                   </div>
                 </div>
