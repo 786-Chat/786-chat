@@ -25,6 +25,14 @@ interface DeviceCheckRow {
   isLive: boolean;
 }
 
+interface RegisteredMouse {
+  id: string;
+  deviceId: string;
+  deviceName?: string | null;
+  branchId?: string | null;
+  notes?: string | null;
+}
+
 interface BranchOption {
   id: string;
   name: string;
@@ -33,6 +41,7 @@ interface BranchOption {
 export default function DeviceCheckPanel() {
   const { toast } = useToast();
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
+  const [registered, setRegistered] = useState<RegisteredMouse[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("");
@@ -41,9 +50,10 @@ export default function DeviceCheckPanel() {
   const [refreshStatus, setRefreshStatus] = useState("");
 
   const load = async (showStatus = false) => {
-    const [checkRes, branchRes] = await Promise.all([
+    const [checkRes, branchRes, registeredRes] = await Promise.all([
       fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" }),
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
+      fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }),
     ]);
     if (!checkRes.ok) throw new Error("HP2 Device Check request failed (HTTP " + checkRes.status + ")");
     const data = await checkRes.json();
@@ -52,6 +62,10 @@ export default function DeviceCheckPanel() {
     if (branchRes.ok) {
       const b = await branchRes.json();
       if (Array.isArray(b?.branches)) setBranches(b.branches);
+    }
+    if (registeredRes.ok) {
+      const devices = await registeredRes.json();
+      if (Array.isArray(devices)) setRegistered(devices);
     }
     if (showStatus) setRefreshStatus("Loaded " + data.length + " saved HP2 record(s). A Wi-Fi sighting is not an MQTT connection.");
   };
@@ -90,6 +104,14 @@ export default function DeviceCheckPanel() {
       (!branchFilter || String(row.assignedBranchId || "") === branchFilter);
   }), [rows, search, branchFilter]);
 
+  // Registered mouse cards are permanent records, independent of the HP2 pairing scan.
+  const savedDevices = useMemo(() => registered.filter(device => {
+    const branch = branches.find(b => String(b.id) === String(device.branchId || ""));
+    const haystack = [device.deviceId, device.deviceName, branch?.name, device.notes].filter(Boolean).join(" ").toLowerCase();
+    return haystack.includes(search.trim().toLowerCase()) &&
+      (!branchFilter || String(device.branchId || "") === branchFilter);
+  }), [registered, branches, search, branchFilter]);
+
   return (
     <section className="w-full max-w-full space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -123,6 +145,40 @@ export default function DeviceCheckPanel() {
       </div>
       {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}
       <p className="text-xs text-slate-400">Wi-Fi sightings are historical unless recently observed. They never prove an MQTT connection. Registration, Wi-Fi setup and branch assignment belong in Smart Devices.</p>
+      <div className="rounded-xl border border-cyan-500/25 bg-slate-800/70 p-4">
+        <h3 className="font-semibold text-white">Saved mouse devices ({savedDevices.length})</h3>
+        <p className="mt-1 text-xs text-slate-300">
+          Registered devices stay listed when their Wi-Fi pairing signal stops or they are offline.
+          The status below comes from genuine device reports, not from the power button or a saved sighting.
+        </p>
+        {savedDevices.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">No registered devices match these filters. Register or assign a mouse in Smart Devices.</p>
+        ) : (
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {savedDevices.map(device => {
+              const linked = rows.find(row => row.assignedDeviceId === device.deviceId &&
+                !row.hardwareKey.startsWith("wifi-ap:"));
+              const online = Boolean(linked?.isLive);
+              const branch = branches.find(b => String(b.id) === String(device.branchId || ""));
+              return (
+                <article key={device.id || device.deviceId} className="rounded-lg border border-slate-600 bg-slate-900/65 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="break-words text-white">{device.deviceName || device.deviceId}</strong>
+                    <span className={online ? "text-xs font-semibold text-emerald-300" : "text-xs font-semibold text-amber-300"}>
+                      {online ? "MQTT live" : "No verified live MQTT"}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-all font-mono text-xs text-cyan-200">{device.deviceId}</p>
+                  <p className="mt-2 text-sm text-slate-300">Branch: {branch?.name || "Not assigned"}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {online ? "Live gateway message confirmed." : "Saved registration — may be sleeping, switched off, or disconnected. State not confirmed."}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-6 text-center text-slate-300">
           No matching devices in saved HP2 reports. The website cannot scan nearby Wi-Fi without the HP2 scanner.
