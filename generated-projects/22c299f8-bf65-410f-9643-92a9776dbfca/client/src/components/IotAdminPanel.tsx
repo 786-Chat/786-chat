@@ -85,6 +85,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
   const [showEmergencyTools, setShowEmergencyTools] = useState(false);
   const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [showFactorySignals, setShowFactorySignals] = useState(false);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -610,14 +611,15 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       <div className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-white">HP2 factory Wi-Fi signals (separate from MQTT)</h3>
+            <h3 className="font-semibold text-white">HP2 Wi-Fi sightings — optional</h3>
             <p className="mt-1 text-sm text-slate-300">Only genuinely observed HP2 Wi-Fi signals appear here. A SmartLife pairing signal is not proof of trap activation or MQTT connectivity.</p>
           </div>
           <Button size="sm" type="button" onClick={() => loadBase().catch(() => {})} className="bg-slate-700 text-white hover:bg-slate-600">
-            <RefreshCw className="mr-2 h-4 w-4" /> Check signal reports
+            <RefreshCw className="mr-2 h-4 w-4" /> Refresh HP2 sightings
           </Button>
         </div>
-        {!wifiObservations.length ? (
+        <button type="button" className="mt-2 text-sm text-cyan-300" onClick={() => setShowFactorySignals(!showFactorySignals)}>{showFactorySignals ? "Hide detected signals" : "Show detected signals"}</button>
+        {showFactorySignals && (!wifiObservations.length ? (
           <p className="mt-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-sm text-amber-200">
             No Wi-Fi signal has been reported to this dashboard yet. Use Device Check to record a real HP2 scan,
             or start the optional authenticated HP2 Ubuntu scanner for automatic updates.
@@ -644,7 +646,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
               </div>
             ))}
           </div>
-        )}
+        ))}
       </div>
 
       <div>
@@ -721,7 +723,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
-          <h3 className="font-semibold text-white">Add Mouse Device — Register & Assign to Branch</h3>
+          <h3 className="font-semibold text-white">Add Mouse — Assign to Restaurant (pending activation)</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -814,7 +816,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           className="mt-4 bg-blue-600 hover:bg-blue-500 text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {registering ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          {registering ? "Registering..." : "Register & Assign Device"}
+          {registering ? "Registering..." : "Save Mouse & Branch (Pending)"}
         </Button>
 
         {lastCreatedId && (
