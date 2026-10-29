@@ -611,13 +611,17 @@ export default function IotAdminPanel() {
         </Button>
         </div>
       </div>
+      <div className="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-4">
+        <h3 className="text-lg font-semibold text-white">STEP 1 — DETECT MOUSE</h3>
+        <p className="mt-1 text-sm text-slate-300">Review real SmartLife-XXXX names, BSSID/MAC and last signal from the local scanner. Historical sightings stay labelled historical; this is not global live Wi-Fi discovery.</p>
+      </div>
       {showDiscovery && <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/50 p-4"><DeviceCheckPanel /></div>}
 
 
       <div className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h3 className="font-semibold text-white">HP2 Wi-Fi sightings — optional</h3>
+            <h3 className="font-semibold text-white">Detected SmartLife mouse Wi-Fi names and MAC addresses</h3>
             <p className="mt-1 text-sm text-slate-300">Only genuinely observed HP2 Wi-Fi signals appear here. A SmartLife pairing signal is not proof of trap activation or MQTT connectivity.</p>
           </div>
           <Button size="sm" type="button" onClick={() => loadBase().catch(() => {})} className="bg-slate-700 text-white hover:bg-slate-600">
@@ -726,6 +730,44 @@ export default function IotAdminPanel() {
       </div>
       }
       </div>
+      <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/40 p-4">
+        <h3 className="text-lg font-semibold text-white">STEP 2 — CONNECT RESTAURANT WI-FI</h3>
+        <p className="mt-2 text-sm text-amber-200">Local Wi-Fi search and Connect Mouse cannot be activated until the physical mouse has a verified local provisioning interface. The dashboard will not collect a password it cannot send securely.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button type="button" disabled title="Requires verified local Wi-Fi provisioning" className="bg-slate-700 text-white opacity-60">Search Local Wi-Fi — unavailable</Button>
+          <Button type="button" disabled title="Physical connection not provisioned" className="bg-slate-700 text-white opacity-60">Connect Mouse — unavailable</Button>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-white">Restaurant Wi-Fi connection</h3>
+            <p className="mt-1 text-sm text-amber-200">
+              Awaiting device activation — no Wi-Fi or MQTT connection has been verified.
+            </p>
+          </div>
+          <Button type="button" variant="outline" className="border-cyan-500/40 text-cyan-200"
+            onClick={() => setShowWifiDetails(!showWifiDetails)}>
+            {showWifiDetails ? "Hide connection information" : "View connection information"}
+          </Button>
+        </div>
+        <p className="mt-3 text-sm text-slate-300">
+          The shop's nearby Wi-Fi networks cannot be scanned from this website. The HP2 scanner
+          discovers broadcasting mouse setup networks, not restaurant router passwords or networks
+          at a different location.
+        </p>
+        {showWifiDetails && (
+          <div className="mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
+            <p><strong className="text-white">Selected mouse:</strong> {wifiDeviceId || "Choose a registered mouse in the device cards below"}</p>
+            <p><strong className="text-white">Physical BMAX W003:</strong> Factory firmware does not have a verified provisioning interface for this website. Entering an SSID or password here would not configure the mouse.</p>
+            <p><strong className="text-white">MQTT gateway:</strong> HP2 uses 192.168.0.14:1883 on its local network only. A restaurant needs a separately verified secure route to the gateway.</p>
+            <p>Until authenticated physical MQTT telemetry is received, show the device as awaiting activation or offline, never online merely because its green LED flashes.</p>
+          </div>
+        )}
+      </div>
+
+
+      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Register or reassign the mouse and save its customer branch. This does not claim physical Wi-Fi activation.</p></div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
@@ -833,34 +875,10 @@ export default function IotAdminPanel() {
       </div>
 
       }
-      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="font-semibold text-white">Restaurant Wi-Fi connection</h3>
-            <p className="mt-1 text-sm text-amber-200">
-              Awaiting device activation — no Wi-Fi or MQTT connection has been verified.
-            </p>
-          </div>
-          <Button type="button" variant="outline" className="border-cyan-500/40 text-cyan-200"
-            onClick={() => setShowWifiDetails(!showWifiDetails)}>
-            {showWifiDetails ? "Hide connection information" : "View connection information"}
-          </Button>
-        </div>
-        <p className="mt-3 text-sm text-slate-300">
-          The shop's nearby Wi-Fi networks cannot be scanned from this website. The HP2 scanner
-          discovers broadcasting mouse setup networks, not restaurant router passwords or networks
-          at a different location.
-        </p>
-        {showWifiDetails && (
-          <div className="mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
-            <p><strong className="text-white">Selected mouse:</strong> {wifiDeviceId || "Choose a registered mouse in the device cards below"}</p>
-            <p><strong className="text-white">Physical BMAX W003:</strong> Factory firmware does not have a verified provisioning interface for this website. Entering an SSID or password here would not configure the mouse.</p>
-            <p><strong className="text-white">MQTT gateway:</strong> HP2 uses 192.168.0.14:1883 on its local network only. A restaurant needs a separately verified secure route to the gateway.</p>
-            <p>Until authenticated physical MQTT telemetry is received, show the device as awaiting activation or offline, never online merely because its green LED flashes.</p>
-          </div>
-        )}
+      <div className="rounded-xl border border-emerald-500/25 bg-slate-900/50 p-4">
+        <h3 className="text-lg font-semibold text-white">STEP 4 — REGISTERED MOUSE CARDS</h3>
+        <p className="mt-1 text-sm text-slate-300">Saved devices remain listed while sleeping, switched off or disconnected. Only actual gateway data confirms online status or a caught-mouse alarm.</p>
       </div>
-
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
