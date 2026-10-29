@@ -3,7 +3,6 @@
 // with its own AWS IoT certificate and verified to publish controller status.
 import mqtt from "mqtt";
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
 
 const required = (key) => {
   const value = String(process.env[key] || "").trim();
@@ -36,15 +35,22 @@ client.on("message", async (topic, bytes) => {
     if (!data || typeof data !== "object" || Array.isArray(data)) return;
     const type = String(data.type || "");
     if (!allowedEvents.has(type)) return;
-    if (data.deviceId && data.deviceId !== match[1]) return;
+    if (data.deviceId !== match[1]) return;
+    // AWS IoT policy MUST restrict the publishing device certificate to its own topic.
+    // A field in the JSON payload alone cannot establish the sender identity.
     // This relay does NOT infer caught events from battery voltage changes.
-    // A physical controller-origin catch signal must be verified before enabling alarms.
+    // This flag is only a preliminary safety check, NOT proof of physical sensor validity.
+    // Enable catch alarms only after firmware and AWS device publishing policies are validated.
     if (type === "trap_triggered" && data.sensorVerified !== true) {
       console.warn("[aws-iot-relay] refusing unverified catch event from", match[1]);
       return;
     }
-    const eventId = typeof data.eventId === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(data.eventId)
-      ? data.eventId : randomUUID();
+    // QoS 1 can redeliver events. Require a stable device-origin event ID for deduplication.
+    if (typeof data.eventId !== "string" || !/^[A-Za-z0-9_-]{8,100}$/.test(data.eventId)) {
+      console.warn("[aws-iot-relay] rejecting message without valid stable eventId", match[1]);
+      return;
+    }
+    const eventId = data.eventId;
     const body = {
       deviceId: match[1], eventId, type, source: "aws-iot-relay",
       batteryPct: Number.isInteger(data.batteryPct) && data.batteryPct >= 0 && data.batteryPct <= 100
