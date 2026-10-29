@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import DeviceCheckPanel from "@/components/DeviceCheckPanel";
 import { HardDrive, LockKeyhole, MapPin, Pencil, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Wifi, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,8 +32,9 @@ function deviceSnapshot(statusList: any[]) {
   return { battery, state, mqttRssi };
 }
 
-export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck?: () => void }) {
+export default function IotAdminPanel() {
   const { toast } = useToast();
+  const [showDiscovery, setShowDiscovery] = useState(false);
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [assigned, setAssigned] = useState<any[]>([]);
   const [wifiObservations, setWifiObservations] = useState<any[]>([]);
@@ -595,10 +597,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={onOpenDeviceCheck}
+          <Button type="button" variant="outline" onClick={() => setShowDiscovery(value => !value)}
             className="border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
             <Wifi className="mr-2 h-4 w-4" />
-            Device Check / Wi-Fi signal
+            {showDiscovery ? "Hide mouse discovery" : "Discover mice / Wi-Fi signals"}
           </Button>
         <Button
           onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
@@ -609,6 +611,8 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         </Button>
         </div>
       </div>
+      {showDiscovery && <div className="rounded-2xl border border-cyan-500/25 bg-slate-900/50 p-4"><DeviceCheckPanel /></div>}
+
 
       <div className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -623,7 +627,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         <button type="button" className="mt-2 text-sm text-cyan-300" onClick={() => setShowFactorySignals(!showFactorySignals)}>{showFactorySignals ? "Hide detected signals" : "Show detected signals"}</button>
         {showFactorySignals && (!wifiObservations.length ? (
           <p className="mt-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-sm text-amber-200">
-            No Wi-Fi signal has been reported to this dashboard yet. Use Device Check to record a real HP2 scan,
+            No Wi-Fi signal has been reported yet. Use “Discover mice / Wi-Fi signals” above to review saved reports,
             or start the optional authenticated HP2 Ubuntu scanner for automatic updates.
           </p>
         ) : (
