@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Link2, Radar, RefreshCw, ShieldCheck, Wifi } from "lucide-react";
+import { Radar, RefreshCw, Search, Wifi, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +16,6 @@ interface DeviceCheckRow {
   wifiSignalPercent?: number | null;
   wifiObservationSource?: string | null;
   isWifiRecentlySeen?: boolean;
-  legacyDeviceId?: string | null;
   assignedDeviceId?: string | null;
   assignedDeviceName?: string | null;
   assignedBranchId?: string | null;
@@ -26,114 +25,35 @@ interface DeviceCheckRow {
   isLive: boolean;
 }
 
-interface RegisteredDevice {
-  id: string;
-  deviceId: string;
-  deviceName?: string;
-  branchId?: string | null;
-  notes?: string | null;
-}
-
 interface BranchOption {
   id: string;
   name: string;
-  address?: string | null;
-  postCode?: string | null;
 }
-
-type Draft = {
-  deviceId: string;
-  deviceName: string;
-  branchId: string;
-  notes: string;
-};
-
-const emptyDraft = (): Draft => ({ deviceId: "", deviceName: "", branchId: "", notes: "" });
 
 export default function DeviceCheckPanel() {
   const { toast } = useToast();
   const [rows, setRows] = useState<DeviceCheckRow[]>([]);
-  const [registered, setRegistered] = useState<RegisteredDevice[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
-  const [busy, setBusy] = useState("");
+  const [search, setSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState("");
-  const [wifiObservation, setWifiObservation] = useState({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
 
-  const [existingChoice, setExistingChoice] = useState<Record<string, string>>({});
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-
-  const load = async () => {
-    const [checkRes, devicesRes, branchesRes] = await Promise.all([
+  const load = async (showStatus = false) => {
+    const [checkRes, branchRes] = await Promise.all([
       fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" }),
-      fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }),
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
     ]);
-
-    if (checkRes.ok) {
-      const data = await checkRes.json();
-      setRows(Array.isArray(data) ? data : []);
+    if (!checkRes.ok) throw new Error("HP2 Device Check request failed (HTTP " + checkRes.status + ")");
+    const data = await checkRes.json();
+    if (!Array.isArray(data)) throw new Error("Unexpected Device Check response.");
+    setRows(data);
+    if (branchRes.ok) {
+      const b = await branchRes.json();
+      if (Array.isArray(b?.branches)) setBranches(b.branches);
     }
-    if (devicesRes.ok) {
-      const data = await devicesRes.json();
-      setRegistered(Array.isArray(data) ? data : []);
-    }
-    if (branchesRes.ok) {
-      const data = await branchesRes.json();
-      setBranches(Array.isArray(data?.branches) ? data.branches : []);
-    }
-  };
-
-
-  const refreshReports = async () => {
-    if (busy === "refresh") return;
-    setBusy("refresh");
-    setRefreshStatus("Checking latest HP2 reports...");
-    try {
-      const response = await fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message || "Device Check request failed (HTTP " + response.status + ")");
-      }
-      const data = await response.json();
-      if (!Array.isArray(data)) throw new Error("Unexpected Device Check response.");
-      setRows(data);
-      setRefreshStatus("Loaded " + data.length + " HP2 record(s), including " + data.filter((row: DeviceCheckRow) => row.hardwareKey?.startsWith("wifi-ap:")).length + " Wi-Fi AP sighting(s).");
-      await Promise.allSettled([
-        fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d)) setRegistered(d); } }),
-        fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }).then(async r => { if (r.ok) { const d = await r.json(); if (Array.isArray(d?.branches)) setBranches(d.branches); } }),
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not load HP2 reports.";
-      setRefreshStatus("Refresh failed: " + message);
-      toast({ title: "HP2 reports could not load", description: message, variant: "destructive" });
-    } finally {
-      setBusy("");
-    }
-  };
-
-  // An admin-entered HP2 scan is a historic Wi-Fi sighting, never MQTT telemetry.
-  const recordWifiObservation = async () => {
-    setBusy("wifi-observation");
-    try {
-      const response = await fetch("/api/iot/device-check/wifi-observation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(wifiObservation),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({ title: "Wi-Fi sighting not recorded", description: data?.message || "Please try again.", variant: "destructive" });
-        return;
-      }
-      toast({ title: "HP2 Wi-Fi sighting recorded", description: "Recorded as factory Wi-Fi observed, not MQTT connected." });
-      setWifiObservation({ ssid: "", macAddress: "", ipAddress: "", signalPercent: "" });
-      await load();
-    } catch {
-      toast({ title: "Connection error", description: "Could not save the HP2 Wi-Fi sighting.", variant: "destructive" });
-    } finally {
-      setBusy("");
-    }
+    if (showStatus) setRefreshStatus("Loaded " + data.length + " saved HP2 record(s). A Wi-Fi sighting is not an MQTT connection.");
   };
 
   useEffect(() => {
@@ -142,370 +62,112 @@ export default function DeviceCheckPanel() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const refreshReports = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await load(true);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unable to check HP2 reports.";
+      setRefreshStatus(msg);
+      toast({ title: "Device Check failed", description: msg, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const counts = useMemo(() => ({
-    live: rows.filter((row) => row.isLive && !row.hardwareKey.startsWith("wifi-ap:")).length,
-    wifiSeen: rows.filter((row) => row.hardwareKey.startsWith("wifi-ap:")).length,
-    unassigned: rows.filter((row) => !row.assignedDeviceId && !row.hardwareKey.startsWith("wifi-ap:")).length,
-    linked: rows.filter((row) => Boolean(row.assignedDeviceId)).length,
+    mqtt: rows.filter(r => !r.hardwareKey.startsWith("wifi-ap:") && r.isLive).length,
+    wifi: rows.filter(r => r.hardwareKey.startsWith("wifi-ap:")).length,
+    assigned: rows.filter(r => Boolean(r.assignedDeviceId)).length,
   }), [rows]);
 
-  const duplicateIpMap = useMemo(() => {
-    const map = new Map<string, DeviceCheckRow[]>();
-    for (const row of rows) {
-      const ip = String(row.ipAddress || "").trim();
-      if (!ip) continue;
-      const group = map.get(ip) || [];
-      group.push(row);
-      map.set(ip, group);
-    }
-    return map;
-  }, [rows]);
-
-  const setDraft = (id: string, patch: Partial<Draft>) => {
-    setDrafts((current) => ({
-      ...current,
-      [id]: { ...(current[id] || emptyDraft()), ...patch },
-    }));
-  };
-
-  const linkExisting = async (row: DeviceCheckRow) => {
-    const deviceId = String(existingChoice[row.id] || row.legacyDeviceId || "").trim();
-    if (!deviceId) {
-      toast({ title: "Choose a device", description: "Select the existing FS-MOUSE device you physically checked.", variant: "destructive" });
-      return;
-    }
-
-    setBusy("link:" + row.id);
-    try {
-      const response = await fetch("/api/iot/device-check/" + row.id + "/link-existing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ deviceId }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({ title: "Could not link device", description: data?.message || "Please try again", variant: "destructive" });
-        return;
-      }
-      toast({
-        title: "Physical device identified",
-        description: (data?.deviceId || deviceId) + " is now linked to this MAC / MQTT identity.",
-      });
-      await load();
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const registerAndAssign = async (row: DeviceCheckRow) => {
-    const draft = drafts[row.id] || emptyDraft();
-    if (!draft.deviceName.trim() || !draft.branchId) {
-      toast({ title: "Name and branch required", description: "Enter the device name and choose the branch after the physical check.", variant: "destructive" });
-      return;
-    }
-
-    setBusy("assign:" + row.id);
-    try {
-      const registerResponse = await fetch("/api/iot/devices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          deviceId: draft.deviceId.trim().toUpperCase(),
-          deviceName: draft.deviceName.trim(),
-          branchId: draft.branchId,
-          notes: draft.notes.trim(),
-          hardwareModel: "BK7231N-MOUSE-V1",
-        }),
-      });
-      const registeredData = await registerResponse.json().catch(() => ({}));
-      if (!registerResponse.ok) {
-        toast({ title: "Could not register device", description: registeredData?.message || "Please try again", variant: "destructive" });
-        return;
-      }
-
-      const permanentDeviceId = String(registeredData?.deviceId || "").trim();
-      if (!permanentDeviceId) {
-        toast({ title: "Registration incomplete", description: "The permanent FS-MOUSE ID was not returned.", variant: "destructive" });
-        return;
-      }
-
-      const linkResponse = await fetch("/api/iot/device-check/" + row.id + "/link-existing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ deviceId: permanentDeviceId }),
-      });
-      const linkedData = await linkResponse.json().catch(() => ({}));
-      if (!linkResponse.ok) {
-        toast({
-          title: "Device registered — link needs attention",
-          description: linkedData?.message || (permanentDeviceId + " was created, but the physical MAC could not be linked. Use Link Existing."),
-          variant: "destructive",
-        });
-        await load();
-        return;
-      }
-
-      toast({
-        title: "Device registered and assigned",
-        description: permanentDeviceId + " is now tied to this physical mouse and branch.",
-      });
-      await load();
-    } finally {
-      setBusy("");
-    }
-  };
+  const filtered = useMemo(() => rows.filter(row => {
+    const searchText = [row.hostname, row.mqttPrefix, row.macAddress,
+      row.assignedDeviceId, row.assignedDeviceName, row.assignedBranchName,
+      row.assignedLocation].filter(Boolean).join(" ").toLowerCase();
+    return searchText.includes(search.trim().toLowerCase()) &&
+      (!branchFilter || String(row.assignedBranchId || "") === branchFilter);
+  }), [rows, search, branchFilter]);
 
   return (
-    <div className="space-y-5 w-full max-w-full">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="w-full max-w-full space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600">
-            <Radar className="h-5 w-5 text-white" />
-          </div>
+          <span className="rounded-xl bg-cyan-600 p-3"><Radar className="h-5 w-5 text-white" /></span>
           <div>
             <h2 className="text-xl font-bold text-white">Device Check</h2>
-            <p className="text-sm text-slate-400">Identify mouse Wi-Fi signals first; MQTT connected status requires actual gateway telemetry</p>
+            <p className="text-sm text-slate-300">Find mouse Wi-Fi sightings and verify MQTT status.</p>
           </div>
         </div>
-        <Button type="button" onClick={refreshReports} disabled={busy === "refresh"} className="bg-slate-800 text-white hover:bg-slate-700">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Check latest HP2 reports
+        <Button onClick={refreshReports} disabled={busy} className="bg-slate-800 text-white hover:bg-slate-700">
+          <RefreshCw className="mr-2 h-4 w-4" /> {busy ? "Checking..." : "Check latest HP2 reports"}
         </Button>
       </div>
-
-      {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}\n      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-5 w-5 text-cyan-300" />
-          <div>
-            <h3 className="font-semibold text-white">Safe physical identification</h3>
-            <p className="mt-1 text-sm text-slate-300">
-              HP2 can report MQTT-connected mice and, with the optional Ubuntu scanner, observed factory SmartLife Wi-Fi access points. An AP BSSID may differ from the MQTT device MAC. Pairing LEDs may stop flashing automatically; a saved sighting does not mean the trap is currently online. No branch assignment happens automatically.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-center">
-            <p className="text-2xl font-bold text-emerald-300">{counts.live}</p>
-            <p className="text-xs text-emerald-200">MQTT live now</p>
-          </div>
-          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-center">
-            <p className="text-2xl font-bold text-cyan-300">{counts.wifiSeen}</p>
-            <p className="text-xs text-cyan-200">Wi-Fi AP sightings</p>
-          </div>
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-center">
-            <p className="text-2xl font-bold text-amber-300">{counts.unassigned}</p>
-            <p className="text-xs text-amber-200">Not linked</p>
-          </div>
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-center">
-            <p className="text-2xl font-bold text-blue-300">{counts.linked}</p>
-            <p className="text-xs text-blue-200">Identified</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-200"><strong className="block text-2xl">{counts.mqtt}</strong><span className="text-xs">MQTT live</span></div>
+        <div className="rounded-xl bg-cyan-500/10 p-3 text-cyan-200"><strong className="block text-2xl">{counts.wifi}</strong><span className="text-xs">Wi-Fi sightings</span></div>
+        <div className="rounded-xl bg-blue-500/10 p-3 text-blue-200"><strong className="block text-2xl">{counts.assigned}</strong><span className="text-xs">Linked records</span></div>
       </div>
-
-
-      <div className="rounded-2xl border border-amber-500/25 bg-slate-800/65 p-5">
-        <h3 className="font-semibold text-white">Check / record HP2 Wi-Fi signal</h3>
-        <p className="mt-1 text-sm text-slate-300">
-          Press “Check latest HP2 reports” above to load the most recent automatic scanner reports. Automatic scanning requires the separate HP2 Ubuntu agent to be running; this website cannot scan local Wi-Fi by itself. You can also record a real terminal scan below, even after the green pairing light times out. A sighting is not MQTT connectivity.
-        </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-          <Input aria-label="Observed Wi-Fi name" value={wifiObservation.ssid}
-            onChange={(event) => setWifiObservation((current) => ({ ...current, ssid: event.target.value }))}
-            placeholder="Wi-Fi name, e.g. SmartLife-AB12" className="border-slate-600 bg-slate-950 text-white" />
-          <Input aria-label="Observed Wi-Fi BSSID" value={wifiObservation.macAddress}
-            onChange={(event) => setWifiObservation((current) => ({ ...current, macAddress: event.target.value }))}
-            placeholder="Wi-Fi BSSID / MAC" className="border-slate-600 bg-slate-950 text-white" />
-          <Input aria-label="Observed AP gateway address" value={wifiObservation.ipAddress}
-            onChange={(event) => setWifiObservation((current) => ({ ...current, ipAddress: event.target.value }))}
-            placeholder="AP gateway IP (optional)" className="border-slate-600 bg-slate-950 text-white" />
-          <Input aria-label="Observed signal percentage" value={wifiObservation.signalPercent}
-            onChange={(event) => setWifiObservation((current) => ({ ...current, signalPercent: event.target.value.replace(/[^0-9]/g, "").slice(0, 3) }))}
-            inputMode="numeric" placeholder="Signal % e.g. 75" className="border-slate-600 bg-slate-950 text-white" />
-        </div>
-        <Button type="button" onClick={recordWifiObservation}
-          disabled={busy === "wifi-observation" || !wifiObservation.ssid.trim() || !wifiObservation.macAddress.trim()}
-          className="mt-3 bg-amber-600 text-white hover:bg-amber-500">
-          <Wifi className="mr-2 h-4 w-4" />
-          {busy === "wifi-observation" ? "Recording..." : "Save HP2 Wi-Fi sighting (not MQTT)"}
-        </Button>
+      <div className="grid gap-3 rounded-xl border border-slate-600 bg-slate-800/70 p-3 sm:grid-cols-2">
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          <Input aria-label="Search mice" placeholder="Search mouse ID, Wi-Fi name or MAC" value={search}
+            onChange={e => setSearch(e.target.value)} className="border-slate-600 bg-slate-950 pl-9 text-white" />
+        </label>
+        <select aria-label="Filter customer branch" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}
+          className="h-10 min-w-0 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white">
+          <option value="">All branches (including unassigned)</option>
+          {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+        </select>
       </div>
-
-      {rows.length === 0 ? (
-        <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-10 text-center">
-          <Wifi className="mx-auto h-9 w-9 text-slate-500" />
-          <h3 className="mt-3 font-semibold text-white">No physical mouse detected yet</h3>
-          <p className="mt-1 text-sm text-slate-400">No gateway devices or saved HP2 Wi-Fi observations. Factory SmartLife access points do not automatically send MQTT telemetry.</p>
+      {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}
+      <p className="text-xs text-slate-400">Wi-Fi sightings are historical unless recently observed. They never prove an MQTT connection. Registration, Wi-Fi setup and branch assignment belong in Smart Devices.</p>
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-6 text-center text-slate-300">
+          No matching devices in saved HP2 reports. The website cannot scan nearby Wi-Fi without the HP2 scanner.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {rows.map((row) => {
+        <div className="grid gap-3 lg:grid-cols-2">
+          {filtered.map(row => {
             const wifiOnly = row.hardwareKey.startsWith("wifi-ap:");
-            const duplicates = row.ipAddress ? (duplicateIpMap.get(row.ipAddress) || []) : [];
-            const hasIpConflict = !wifiOnly && duplicates.length > 1;
-            const draft = drafts[row.id] || emptyDraft();
-
+            const mqttLive = !wifiOnly && Boolean(row.isLive);
             return (
-              <div key={row.id} className="rounded-2xl border border-slate-700 bg-slate-800/70 p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-white">{row.hostname || row.mqttPrefix || "Food Safety Mouse"}</h3>
-                      <span className={"rounded-full px-2 py-0.5 text-xs font-semibold " + (row.isLive ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300")}>
-                        {wifiOnly ? (row.isWifiRecentlySeen ? "Wi-Fi seen recently (not MQTT)" : "Wi-Fi sighting saved (not live)") : row.isLive ? "MQTT LIVE" : "Last seen"}
-                      </span>
-                      {row.assignedDeviceId && (
-                        <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-blue-300">IDENTIFIED</span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {wifiOnly ? (row.wifiObservationSource === "hp2-wifi-scan" ? "Last HP2 scanner observation" : "Observation recorded") : "Last seen"}: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}
-                    </p>
+              <article key={row.id} className="min-w-0 rounded-xl border border-slate-700 bg-slate-800/75 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="break-words font-semibold text-white">{row.assignedDeviceName || row.hostname || row.mqttPrefix || "Unidentified mouse"}</h3>
+                    <p className="mt-1 break-all text-xs text-slate-400">{row.assignedDeviceId || row.macAddress || "Identity not verified"}</p>
                   </div>
-                  {row.connected && <CheckCircle2 className="h-5 w-5 text-emerald-300" />}
+                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${mqttLive ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/15 text-amber-200"}`}>
+                    {mqttLive ? "MQTT live" : wifiOnly ? (row.isWifiRecentlySeen ? "Wi-Fi recently seen" : "Wi-Fi last seen") : "MQTT not live"}
+                  </span>
                 </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="rounded-lg bg-slate-900/70 p-3">
-                    <p className="text-[11px] uppercase text-slate-500">Wi-Fi MAC / fingerprint</p>
-                    <p className="mt-1 break-all font-mono text-sm font-semibold text-white">{row.macAddress || "Waiting for MAC"}</p>
-                  </div>
-                  <div className="rounded-lg bg-slate-900/70 p-3">
-                    <p className="text-[11px] uppercase text-slate-500">Current IP</p>
-                    <p className="mt-1 font-mono text-sm font-semibold text-white">{row.ipAddress || (wifiOnly ? "AP IP not recorded" : "Waiting for IP")}</p>
-                  </div>
-                  <div className="rounded-lg bg-slate-900/70 p-3">
-                    <p className="text-[11px] uppercase text-slate-500">MQTT device name</p>
-                    <p className="mt-1 font-mono text-sm font-semibold text-white">{wifiOnly ? "Not connected to MQTT" : row.mqttPrefix || "Unknown"}</p>
-                  </div>
-                  <div className="rounded-lg bg-slate-900/70 p-3">
-                    <p className="text-[11px] uppercase text-slate-500">Signal</p>
-                    <p className="mt-1 text-sm font-semibold text-white">{wifiOnly ? (row.wifiSignalPercent == null ? "Not recorded" : row.wifiSignalPercent + "% (last Wi-Fi scan)") : row.rssi == null ? "Waiting" : row.rssi + " dBm"}</p>
-                  </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-md bg-slate-900/70 p-2"><span className="block text-xs text-slate-400">Wi-Fi signal</span><strong className="text-white">{wifiOnly ? (row.wifiSignalPercent == null ? "Not reported" : row.wifiSignalPercent + "% (last scan)") : "Not independently verified"}</strong></div>
+                  <div className="rounded-md bg-slate-900/70 p-2"><span className="block text-xs text-slate-400">MQTT</span><strong className={mqttLive ? "text-emerald-300" : "text-amber-300"}>{mqttLive ? "Connected" : "Not verified live"}</strong></div>
                 </div>
-
-                {hasIpConflict && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-                    <p>
-                      This IP is also present on another detected record. Match the MAC before assigning.
-                      {duplicates.filter((item) => item.id !== row.id && item.assignedDeviceId).map((item) =>
-                        " " + item.assignedDeviceId + (item.assignedBranchName ? " → " + item.assignedBranchName : "") + "."
-                      ).join("")}
-                    </p>
-                  </div>
-                )}
-
-                {wifiOnly ? (
-                  <div className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
-                    Wi-Fi access point detected, but no MQTT device identity or trap events have been verified.
-                    To protect existing shop assignments, this observation cannot be linked or assigned until physical MQTT identity is established.
-                    When green pairing flashing times out, the last recorded signal remains visible as historic information.
-                  </div>
-                ) : row.assignedDeviceId ? (
-                  <div className="mt-4 rounded-xl border border-blue-500/25 bg-blue-500/10 p-4">
-                    <div className="flex items-start gap-2">
-                      <Link2 className="mt-0.5 h-4 w-4 text-blue-300" />
-                      <div>
-                        <p className="font-semibold text-blue-100">{row.assignedDeviceId} — {row.assignedDeviceName || "Food Safety Mouse"}</p>
-                        <p className="mt-1 text-sm text-blue-200/80">
-                          {row.assignedBranchName ? "Branch: " + row.assignedBranchName : "Not assigned to a branch"}
-                          {row.assignedLocation ? " • " + row.assignedLocation : ""}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 space-y-4">
-                    <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-                      <h4 className="font-semibold text-white">Already registered?</h4>
-                      <p className="mt-1 text-xs text-slate-400">Use this for an existing FS-MOUSE ID after you confirm which physical mouse is switched on.</p>
-                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                        <select
-                          value={existingChoice[row.id] || row.legacyDeviceId || ""}
-                          onChange={(event) => setExistingChoice((current) => ({ ...current, [row.id]: event.target.value }))}
-                          className="h-10 min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
-                        >
-                          <option value="">Select existing device...</option>
-                          {registered.map((device) => {
-                            const branch = branches.find((item) => String(item.id) === String(device.branchId || ""));
-                            return (
-                              <option key={device.id} value={device.deviceId}>
-                                {device.deviceId} — {device.deviceName || "Device"}{branch ? " — " + branch.name : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <Button
-                          type="button"
-                          onClick={() => linkExisting(row)}
-                          disabled={busy === "link:" + row.id}
-                          className="bg-blue-600 text-white hover:bg-blue-500"
-                        >
-                          <Link2 className="mr-2 h-4 w-4" />
-                          {busy === "link:" + row.id ? "Linking..." : "Link Existing"}
-                        </Button>
-                      </div>
-                      {row.legacyDeviceId && (
-                        <p className="mt-2 text-xs text-cyan-300">HP2 legacy bridge currently suggests: {row.legacyDeviceId}. Confirm physically before linking.</p>
-                      )}
-                    </div>
-
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                      <h4 className="font-semibold text-white">New physical mouse</h4>
-                      <p className="mt-1 text-xs text-slate-400">Only after you identify this mouse, give it a permanent ID/name and assign it to the correct shop.</p>
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <Input
-                          value={draft.deviceId}
-                          onChange={(event) => setDraft(row.id, { deviceId: event.target.value.toUpperCase() })}
-                          placeholder="ID optional, e.g. FS-MOUSE-000002"
-                          className="border-slate-600 bg-slate-950 text-white"
-                        />
-                        <Input
-                          value={draft.deviceName}
-                          onChange={(event) => setDraft(row.id, { deviceName: event.target.value })}
-                          placeholder="Name, e.g. Kitchen"
-                          className="border-slate-600 bg-slate-950 text-white"
-                        />
-                        <select
-                          value={draft.branchId}
-                          onChange={(event) => setDraft(row.id, { branchId: event.target.value })}
-                          className="h-10 rounded-md border border-slate-600 bg-slate-950 px-3 text-sm text-white"
-                        >
-                          <option value="">Select branch...</option>
-                          {branches.map((branch) => (
-                            <option key={branch.id} value={branch.id}>
-                              {branch.name}{branch.address ? " — " + branch.address : ""}{branch.postCode ? " " + branch.postCode : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          value={draft.notes}
-                          onChange={(event) => setDraft(row.id, { notes: event.target.value })}
-                          placeholder="Installation area, e.g. Kitchen"
-                          className="border-slate-600 bg-slate-950 text-white"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={() => registerAndAssign(row)}
-                        disabled={busy === "assign:" + row.id || !draft.deviceName.trim() || !draft.branchId}
-                        className="mt-3 bg-emerald-600 text-white hover:bg-emerald-500"
-                      >
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        {busy === "assign:" + row.id ? "Assigning..." : "Register & Assign This Physical Mouse"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                <p className="mt-3 text-xs text-slate-300">Branch: {row.assignedBranchName || "Not assigned"}{row.assignedLocation ? " · " + row.assignedLocation : ""}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button type="button" aria-expanded={Boolean(expanded[row.id])} onClick={() => setExpanded(current => ({ ...current, [row.id]: !current[row.id] }))}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-cyan-300 hover:text-cyan-100">
+                    <ChevronDown className="h-4 w-4" /> {expanded[row.id] ? "Hide details" : "View details"}
+                  </button>
+                  <span className="text-xs text-slate-400">Manage registration and assignment in Smart Devices</span>
+                </div>
+                {expanded[row.id] && <div className="mt-3 space-y-1 rounded-lg bg-slate-900/70 p-3 text-xs text-slate-300">
+                  <p>Wi-Fi BSSID / MAC: {row.macAddress || "Not recorded"}</p>
+                  <p>AP / device IP: {row.ipAddress || "Not recorded"}</p>
+                  <p>MQTT prefix: {wifiOnly ? "Not established" : row.mqttPrefix || "Not recorded"}</p>
+                  <p>Last HP2 report: {row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Never"}</p>
+                  <p>Source: {wifiOnly ? "Wi-Fi sighting only" : "Gateway record"}</p>
+                  <p className="flex items-center gap-1"><Wifi className="h-3 w-3" /> Device identity and alarms require actual authenticated MQTT telemetry.</p>
+                </div>}
+              </article>
             );
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
