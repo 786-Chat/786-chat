@@ -1173,7 +1173,7 @@ export default function IotAdminPanel() {
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                      <p className="truncate font-semibold text-white">{device.deviceName || device.deviceId}</p>
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
@@ -1182,35 +1182,21 @@ export default function IotAdminPanel() {
                     </Badge>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{connectivity.status}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.isOnline ? "No active alarm" : "Not verified"}</span></div>
-                  </div>
-
-                  <p className={`mt-3 text-xs ${connectivity.active ? "text-emerald-200" : "text-amber-200"}`}>
-                    {connectivity.detail}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <Wifi className="h-3.5 w-3.5" />
-                    MQTT: {snap.mqttRssi == null ? "signal not verified" : "last reported RSSI " + snap.mqttRssi + " dBm"}
-                    {device.lastCheckedAt
-                      ? ` · Last MQTT report ${new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" })}`
-                      : " · No MQTT report yet"}
-                  </div>
-                  {matchingWifi && (
-                    <div className="mt-2 rounded-md border border-cyan-600/25 bg-cyan-950/30 p-2 text-xs text-cyan-100">
-                      Factory setup Wi-Fi name match: <strong>{matchingWifi.hostname}</strong>
-                      {" · "}{matchingWifi.isWifiRecentlySeen ? "Recently seen by HP2" : "No recent Wi-Fi signal — may be sleeping"}
-                      {" · "}{matchingWifi.wifiSignalPercent == null ? "Signal unknown" : matchingWifi.wifiSignalPercent + "% at last scan"}
-                      {matchingWifi.lastSeenAt && (" · Last scan " + new Date(matchingWifi.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }))}
-                      <span className="mt-1 block text-slate-300">SSID name match only; physical device identity and MQTT still require independent verification.</span>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Connection</p>
+                      <p className={connectivity.active ? "font-semibold text-emerald-300" : "font-semibold text-amber-200"}>{connectivity.active ? "MQTT recently reported" : "MQTT not verified live"}</p>
                     </div>
-                  )}
-
-                  {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
-
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Sensor</p>
+                      <p className={device.alarmActive ? "font-semibold text-red-300" : "font-semibold text-slate-200"}>{device.alarmActive ? "🔴 Mouse caught" : "No verified active catch"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Last report</p>
+                      <p className="text-sm text-white">{device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No MQTT report yet"}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400">Wi-Fi setup sightings are managed in Smart Check. {device.notes ? "Installation: " + device.notes : ""}</p>
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
                       <div className="mb-3 flex items-center justify-between gap-2">
