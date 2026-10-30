@@ -9,6 +9,8 @@ export default function OwnedSetupPanel() {
   const [devices, setDevices] = useState<any[]>([]);
   const [branchId, setBranchId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [installerMethod, setInstallerMethod] = useState<"hp2" | "remote">("hp2");
+  const [localWifiName, setLocalWifiName] = useState("");
   const load = async () => {
     const [br, dv] = await Promise.all([
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
@@ -53,8 +55,23 @@ export default function OwnedSetupPanel() {
   return <main className="space-y-5 text-white">
     <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/70 p-5">
       <h2 className="text-2xl font-bold">Smart Devices · New Setup</h2>
-      <p className="mt-2 text-sm text-slate-300">Select a mouse in Smart Check first. Existing records are kept, but old device cards are not reused.</p>
+      <p className="mt-2 text-sm text-slate-300">Identify a physical mouse, select its customer branch, then verify local Wi-Fi provisioning and MQTT before marking it connected. Existing records are preserved.</p>
     </header>
+    <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-3">
+      <h3 className="font-semibold">Installation location · UK or worldwide</h3>
+      <p className="text-sm text-slate-300">A remote website cannot scan nearby Wi-Fi networks. The scanner must run at the restaurant, on a computer or mobile installer physically near the mouse.</p>
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        <label className="flex cursor-pointer gap-3 rounded-lg border border-slate-600 bg-slate-950/70 p-3">
+          <input type="radio" name="installerMethod" checked={installerMethod === "hp2"} onChange={() => setInstallerMethod("hp2")}/>
+          <span><strong className="block">HP2 local scanner</strong><small className="text-slate-300">Available at HP2's physical location. Select a mouse from Smart Check.</small></span>
+        </label>
+        <label className="flex cursor-pointer gap-3 rounded-lg border border-slate-600 bg-slate-950/70 p-3">
+          <input type="radio" name="installerMethod" checked={installerMethod === "remote"} onChange={() => setInstallerMethod("remote")}/>
+          <span><strong className="block">Other country · local installer</strong><small className="text-slate-300">Requires a compatible mobile or on-site scanner/provisioning app; not connected yet.</small></span>
+        </label>
+      </fieldset>
+      {installerMethod === "remote" && <p role="status" className="rounded-lg bg-amber-900/20 p-3 text-sm text-amber-200">Worldwide scanning is not available from this browser alone. Do not register an arbitrary mouse from a historical HP2 observation. On-site installer integration and physical firmware validation are required.</p>}
+    </section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-4">
       <h3 className="font-semibold">1 · Selected mouse</h3>
       {selected ? <div className="rounded-xl bg-slate-800 p-4">
@@ -68,13 +85,17 @@ export default function OwnedSetupPanel() {
           {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
       </label>
-      <button disabled={!selected || !branchId || !!alreadyRegistered || busy} onClick={save} className="rounded-lg bg-cyan-600 px-5 py-3 font-semibold disabled:opacity-40">{busy ? "Saving..." : "Save device and assign branch"}</button>
+      <button disabled={installerMethod !== "hp2" || !selected || !branchId || !!alreadyRegistered || busy} onClick={save} className="rounded-lg bg-cyan-600 px-5 py-3 font-semibold disabled:opacity-40">{busy ? "Saving..." : "Save registration and branch (not connected)"}</button>
     </section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-3">
       <h3 className="font-semibold">3 · Restaurant Wi-Fi and physical MQTT verification</h3>
-      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">HP2 detects factory pairing Wi-Fi but cannot send restaurant SSID/password to the mouse. Wi-Fi credential collection is disabled until a secure, tested provisioning protocol is implemented. Do not enter passwords here.</p>
+      <label className="block text-sm">Local 2.4 GHz Wi-Fi name (planning only)
+        <input type="text" value={localWifiName} onChange={e=>setLocalWifiName(e.target.value)} autoComplete="off" placeholder="Enter name manually; browser cannot scan" className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
+      </label>
+      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Network name stays in this page and is not sent to the mouse or server. Do not enter Wi-Fi passwords. A secure local installer must first establish a supported connection to the physical mouse. The existing factory SmartLife AP is discovery only.</p>
       <p className="text-sm text-slate-300">Next hardware check: verify mouse firmware compatibility, provisioning transport, and authenticated MQTT telemetry before enabling Connect.</p>
-      <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Verify MQTT — awaiting real device connection</button>
+      <div className="grid gap-2 text-sm text-slate-300"><p>1. Discovery: verified only when a nearby Wi-Fi AP is observed.</p><p>2. Branch registration: a database record, not a Wi-Fi connection.</p><p>3. Local Wi-Fi provisioning: not yet supported for this factory firmware.</p><p>4. Authenticated MQTT and real trap sensor: not yet verified.</p></div>
+      <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Connect and verify MQTT — unavailable until device protocol is tested</button>
     </section>
   </main>;
 }
