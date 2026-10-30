@@ -1,59 +1,69 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Radar, RefreshCw, Wifi } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 type Observation = {
- id: string; hardwareKey: string; hostname?: string | null; macAddress?: string | null;
- wifiSignalPercent?: number | null; lastSeenAt?: string | null;
- isWifiRecentlySeen?: boolean; wifiObservationSource?: string | null;
+  id: string; hardwareKey: string; hostname?: string | null; macAddress?: string | null;
+  wifiSignalPercent?: number | null; lastSeenAt?: string | null;
+  isWifiRecentlySeen?: boolean;
 };
-const macPattern = /^([\da-f]{2}:){5}[\da-f]{2}$/i;
+const macPattern = /^([\\da-f]{2}:){5}[\\da-f]{2}$/i;
 export default function FreshSmartCheck() {
- const [rows,setRows]=useState<Observation[]>([]);
- const [search,setSearch]=useState("");
- const [error,setError]=useState("");
- const [loading,setLoading]=useState(false);
- const refresh=useCallback(async()=>{
-   setLoading(true);
-   try {
-     const response=await fetch("/api/iot/device-check",{credentials:"include",cache:"no-store"});
-     if(!response.ok) throw new Error("HP2 observation API HTTP "+response.status);
-     const data=await response.json();
-     if(!Array.isArray(data)) throw new Error("Unexpected observation response");
-     setRows(data);setError("");
-   }catch(e:any){setError(e?.message||"Could not load HP2 observations");}
-   finally{setLoading(false);}
- },[]);
- useEffect(()=>{refresh();const timer=window.setInterval(refresh,15000);return()=>window.clearInterval(timer);},[refresh]);
- const sightings=useMemo(()=>rows.filter(r=>r.hardwareKey?.startsWith("wifi-ap:") && r.hostname?.toLowerCase().startsWith("smartlife-") && macPattern.test(r.macAddress||"")).filter(r=>(r.hostname+" "+r.macAddress).toLowerCase().includes(search.toLowerCase())),[rows,search]);
- const recentCount=sightings.filter(row=>row.isWifiRecentlySeen).length;
- const next=(row:Observation)=>{
-   sessionStorage.setItem("pest-smart-check-selected-v1",JSON.stringify({ssid:row.hostname,mac:row.macAddress,observedAt:row.lastSeenAt}));
-   window.dispatchEvent(new Event("pest:open-owned-smart-devices"));
- };
- return <main className="space-y-5 text-white">
-  <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
-   <div className="flex flex-wrap items-center justify-between gap-3">
-    <div><h2 className="flex items-center gap-2 text-2xl font-bold"><Radar className="text-cyan-300"/>Smart Check</h2>
-    <p className="mt-2 text-sm text-slate-300">HP2 reports nearby Wi-Fi APs. This page reads stored reports; Refresh does not start a scan on HP2. A Wi-Fi sighting is not MQTT.</p></div>
-    <button type="button" onClick={refresh} disabled={loading} className="flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm disabled:opacity-50"><RefreshCw size={16}/>{loading?"Checking":"Refresh HP2"}</button>
-   </div>
-  </header>
-  <section className="rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
-   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <h3 className="font-semibold">SmartLife Wi-Fi observations ({sightings.length}) · Recent: {recentCount}</h3>
-    <input aria-label="Search Wi-Fi mouse" placeholder="Search SmartLife name or MAC" value={search} onChange={e=>setSearch(e.target.value)} className="w-full max-w-xs rounded-lg border border-slate-600 bg-slate-950 p-2 text-sm"/>
-   </div>
-   {error&&<p role="alert" className="mb-3 rounded bg-red-950 p-3 text-red-200">{error}</p>}
-   {!sightings.length&&<p className="rounded-lg bg-slate-800 p-4 text-slate-300">No matching HP2 Wi-Fi observations. Switch on a nearby mouse and refresh. Historical sightings are kept by the server.</p>}
-   <div className="grid gap-3 md:grid-cols-2">{sightings.map(row=><article key={row.id} className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
-    <h4 className="flex items-center gap-2 font-semibold"><Wifi size={16} className="text-cyan-300"/>{row.hostname}</h4>
-    <p className="mt-2 font-mono text-xs text-cyan-200">MAC: {row.macAddress}</p>
-    <p className="mt-2 text-sm text-slate-300">Signal: {row.wifiSignalPercent == null?"Not measured":row.wifiSignalPercent+"% (last scan)"}</p>
-    <p className="mt-1 text-sm text-slate-300">{row.isWifiRecentlySeen?"Recently observed":"Historical observation — mouse not currently confirmed in range"}</p>
-    <p className="mt-1 text-xs text-slate-400">Last observation: {row.lastSeenAt?new Date(row.lastSeenAt).toLocaleString("en-GB"):"Unknown"}</p>
-    <p className="mt-2 text-xs text-amber-200">MQTT unverified · Next selects this SSID/MAC, it does not connect the mouse</p>
-    <button type="button" onClick={()=>next(row)} className="mt-3 rounded-lg bg-cyan-600 px-5 py-2 font-semibold hover:bg-cyan-500">Next →</button>
-   </article>)}</div>
-  </section>
- </main>;
+  const [rows, setRows] = useState<Observation[]>([]);
+  const [search, setSearch] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/iot/device-check", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw Error("Could not read HP2 observations");
+      const observations = await response.json();
+      if (!Array.isArray(observations)) throw Error("Invalid HP2 observations");
+      setRows(observations);
+      setError("");
+    } catch (e: any) { setError(e?.message || "Scan report unavailable"); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => {
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+  const valid = useMemo(() => rows.filter(row =>
+    row.hardwareKey?.startsWith("wifi-ap:") &&
+    row.hostname?.toLowerCase().startsWith("smartlife-") &&
+    macPattern.test(row.macAddress || "")
+  ), [rows]);
+  const visible = valid.filter(row =>
+    (showHistory || row.isWifiRecentlySeen) &&
+    (row.hostname + " " + row.macAddress).toLowerCase().includes(search.toLowerCase())
+  );
+  const count = valid.filter(row => row.isWifiRecentlySeen).length;
+  const next = (row: Observation) => {
+    if (!row.isWifiRecentlySeen) return;
+    sessionStorage.setItem("pest-smart-check-selected-v1", JSON.stringify({
+      ssid: row.hostname, mac: row.macAddress, observedAt: row.lastSeenAt
+    }));
+    window.dispatchEvent(new Event("pest:open-owned-smart-devices"));
+  };
+  return <main className="mx-auto max-w-4xl text-white">
+    <section className="space-y-5 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5 md:p-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-2xl font-bold">Smart Check</h2><p className="mt-1 text-sm text-slate-300">Nearby mouse traps · {count} recently detected</p></div>
+        <button type="button" onClick={refresh} disabled={loading} className="flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 disabled:opacity-50"><RefreshCw size={16}/>{loading ? "Checking..." : "Refresh"}</button>
+      </div>
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search mouse or MAC" aria-label="Search mouse or MAC" className="w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
+      {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+      {visible.length === 0 && <p className="rounded-lg bg-slate-950 p-4 text-slate-300">{showHistory ? "No matching observations." : "No nearby mouse reported recently. Turn on the mouse near HP2, then refresh."}</p>}
+      <div className="grid gap-3 md:grid-cols-2">{visible.map(row => <article key={row.id} className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2"><strong>{row.hostname}</strong><span className={row.isWifiRecentlySeen ? "text-xs text-emerald-300" : "text-xs text-amber-300"}>{row.isWifiRecentlySeen ? "Recently seen" : "Old sighting"}</span></div>
+        <p className="mt-2 font-mono text-xs text-cyan-200">{row.macAddress}</p>
+        <p className="mt-2 text-sm text-slate-300">Wi-Fi signal: {row.wifiSignalPercent == null ? "Unknown" : row.wifiSignalPercent + "%"}</p>
+        <button type="button" disabled={!row.isWifiRecentlySeen} onClick={() => next(row)} className="mt-3 rounded-lg bg-cyan-600 px-5 py-2 font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:opacity-50">NEXT →</button>
+      </article>)}</div>
+      <button type="button" onClick={() => setShowHistory(v => !v)} className="text-sm text-slate-300 underline">{showHistory ? "Hide old sightings" : "Show old sightings"}</button>
+      <p className="text-xs text-slate-400">HP2 Wi-Fi sightings only. This does not confirm internet or MQTT connection.</p>
+    </section>
+  </main>;
 }
