@@ -1739,6 +1739,8 @@ export default function BranchDashboard() {
         { id: "monthly-reports", label: "Monthly Reports", icon: Calendar },
         { id: "yearly-docs", label: "Yearly Docs", icon: Archive },
         { id: "useful-links", label: "Useful Links", icon: LinkIcon },
+        ...(branchDeviceAlertsShown ? [{ id: "device-alerts", label: "Device Alerts", icon: Bell }] : []),
+        ...(branchSmartDevicesShown ? [{ id: "smart-devices", label: "Smart Devices", icon: Shield }] : []),
         ...(branchSmartLifeAlertShown
           ? [{ id: "smartlife-alert", label: "SmartLife Alert", icon: Bell }]
           : []),
@@ -2517,8 +2519,9 @@ export default function BranchDashboard() {
         );
 
       case "device-alerts":
+        return <BranchIotAlertsPanel onOpenDevices={() => setActiveSection("smart-devices")} />;
       case "smart-devices":
-        return <p className="p-5 text-slate-300">New Food Safety device design is being prepared. Existing data is preserved.</p>;
+        return <BranchSmartDevicesPanel />;
 
       case "smartlife-alert":
         return branchSmartLifeAlertShown ? <SmartLifeBranchAlerts branchKey={currentBranch?.id || ""} /> : null;
