@@ -209,6 +209,12 @@ export default function DeviceCheckPanel() {
                     className="inline-flex items-center gap-1 text-sm font-medium text-cyan-300 hover:text-cyan-100">
                     <ChevronDown className="h-4 w-4" /> {expanded[row.id] ? "Hide details" : "View details"}
                   </button>
+                  {wifiOnly && !row.assignedDeviceId && <Button type="button" size="sm" className="bg-cyan-600 text-white hover:bg-cyan-500" onClick={() => {
+                    // Handoff only: never register, assign, or claim MQTT activation from an AP sighting.
+                    const identity = { ssid: row.hostname || "", mac: row.macAddress || "", observedAt: row.lastSeenAt || "" };
+                    window.sessionStorage.setItem("pest-smart-check-selected-v1", JSON.stringify(identity));
+                    toast({ title: "Mouse selected for onboarding", description: "Open Smart Devices to select the customer branch and complete registration." });
+                  }}>Next — Smart Devices</Button>}
                   <span className="text-xs text-slate-400">Manage registration and assignment in Smart Devices</span>
                 </div>
                 {expanded[row.id] && <div className="mt-3 space-y-1 rounded-lg bg-slate-900/70 p-3 text-xs text-slate-300">
