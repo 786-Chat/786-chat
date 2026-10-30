@@ -56,8 +56,8 @@ import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import PDFViewer from "@/components/PDFViewer";
 import BranchNotificationPanel from "@/components/BranchNotificationPanel";
 import BranchChartPage from "@/pages/BranchChartPage";
-import BranchSmartDevicesPanel from "@/components/BranchSmartDevicesPanel";
-import BranchIotAlertsPanel from "@/components/BranchIotAlertsPanel";
+import NewBranchOwnedPanel from "@/components/NewBranchOwnedPanel";
+
 import { SmartLifeBranchDevices, SmartLifeBranchAlerts, SmartLifeAlarmListener } from "@/components/SmartLifeBranchPanels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -2519,9 +2519,9 @@ export default function BranchDashboard() {
         );
 
       case "device-alerts":
-        return <BranchIotAlertsPanel onOpenDevices={() => setActiveSection("smart-devices")} />;
+        return <NewBranchOwnedPanel mode="alerts" />;
       case "smart-devices":
-        return <BranchSmartDevicesPanel />;
+        return <NewBranchOwnedPanel mode="devices" />;
 
       case "smartlife-alert":
         return branchSmartLifeAlertShown ? <SmartLifeBranchAlerts branchKey={currentBranch?.id || ""} /> : null;
