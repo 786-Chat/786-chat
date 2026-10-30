@@ -8,8 +8,6 @@ export default function OwnedSetupPanel() {
   const [branches, setBranches] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [branchId, setBranchId] = useState("");
-  const [ssid, setSsid] = useState("");
-  const [wifiPassword, setWifiPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const load = async () => {
     const [br, dv] = await Promise.all([
@@ -21,11 +19,16 @@ export default function OwnedSetupPanel() {
   };
   useEffect(() => {
     load().catch(() => {});
-    try {
-      const raw = sessionStorage.getItem("pest-smart-check-selected-v1");
-      const item = raw ? JSON.parse(raw) : null;
-      if (typeof item?.ssid === "string" && typeof item?.mac === "string") setSelected({ ssid: item.ssid, mac: item.mac });
-    } catch (_) {}
+    const syncSelection = () => {
+      try {
+        const raw = sessionStorage.getItem("pest-smart-check-selected-v1");
+        const item = raw ? JSON.parse(raw) : null;
+        setSelected(typeof item?.ssid === "string" && typeof item?.mac === "string" ? { ssid: item.ssid, mac: item.mac } : null);
+      } catch (_) { setSelected(null); }
+    };
+    syncSelection();
+    window.addEventListener("pest:open-owned-smart-devices", syncSelection);
+    return () => window.removeEventListener("pest:open-owned-smart-devices", syncSelection);
   }, []);
   const alreadyRegistered = selected && devices.find((device) => String(device.deviceName || "").toLowerCase().includes(selected.ssid.toLowerCase()));
   const save = async () => {
@@ -69,15 +72,9 @@ export default function OwnedSetupPanel() {
     </section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-3">
       <h3 className="font-semibold">3 · Restaurant Wi-Fi and physical MQTT verification</h3>
-      <label className="block text-sm">2.4 GHz network (manual entry)<input value={ssid} onChange={e=>setSsid(e.target.value)} className="mt-2 block w-full rounded-lg bg-slate-950 p-3" placeholder="Restaurant Wi-Fi name" /></label>
-      <label className="block text-sm">Wi-Fi password (not saved or transmitted)<input type="password" value={wifiPassword} onChange={e=>setWifiPassword(e.target.value)} className="mt-2 block w-full rounded-lg bg-slate-950 p-3" /></label>
-      <p className="text-sm text-amber-200">Connect is unavailable until compatible mouse firmware and a secure provisioning protocol are physically verified. Entering credentials here does not connect the mouse.</p>
+      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">HP2 detects factory pairing Wi-Fi but cannot send restaurant SSID/password to the mouse. Wi-Fi credential collection is disabled until a secure, tested provisioning protocol is implemented. Do not enter passwords here.</p>
+      <p className="text-sm text-slate-300">Next hardware check: verify mouse firmware compatibility, provisioning transport, and authenticated MQTT telemetry before enabling Connect.</p>
       <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Verify MQTT — awaiting real device connection</button>
-    </section>
-    <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5">
-      <h3 className="font-semibold">Registered devices · {devices.length}</h3>
-      <p className="mb-3 text-xs text-slate-400">Existing customer records are retained. This is a simple list, not the old cards.</p>
-      <div className="space-y-2">{devices.map(d=><div key={d.id || d.deviceId} className="flex flex-wrap justify-between gap-2 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm"><span>{d.deviceName || d.deviceId}</span><span className="font-mono text-xs text-slate-400">{d.deviceId}</span><span className={d.isOnline ? "text-emerald-300" : "text-amber-300"}>{d.isOnline ? "MQTT reported" : "No verified live MQTT"}</span></div>)}</div>
     </section>
   </main>;
 }
