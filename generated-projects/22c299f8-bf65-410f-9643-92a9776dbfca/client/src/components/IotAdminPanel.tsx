@@ -121,7 +121,7 @@ export default function IotAdminPanel() {
   const [showRegisterForm, setShowRegisterForm] = useState(true);
   const [showFactorySignals, setShowFactorySignals] = useState(true);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
-  const [nearbyWifiNames, setNearbyWifiNames] = useState<string[]>([]);
+  const [nearbyWifiNetworks, setNearbyWifiNetworks] = useState<Array<{ ssid: string; frequency: number | null; signal: number | null }>>([]);
   const [wifiScanPaste, setWifiScanPaste] = useState("");
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
@@ -798,31 +798,62 @@ export default function IotAdminPanel() {
             </div>
             <div>
               <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Select local Wi-Fi network (SSID)</label>
-              <select id="owned-wifi-network" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNames.includes(wifiSsid) ? wifiSsid : ""} onChange={event => setWifiSsid(event.target.value)}>
-                <option value="">Enter SSID manually below or import an HP2 scan...</option>
-                {nearbyWifiNames.map(name => <option key={name} value={name}>{name}</option>)}
+              <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNetworks.some(network => network.ssid === wifiSsid && (network.frequency == null || network.frequency < 2500)) ? wifiSsid : ""} onChange={event => setWifiSsid(event.target.value)}>
+                <option value="">{nearbyWifiNetworks.length ? "Select one of the scanned 2.4 GHz networks..." : "No router scan imported — see HP2 scan below"}</option>
+                {nearbyWifiNetworks.map(network => (
+                  <option key={network.ssid} value={network.ssid} disabled={network.frequency != null && network.frequency >= 2500}>
+                    {network.ssid} {network.frequency == null ? "(band not verified)" : network.frequency < 2500 ? "(2.4 GHz)" : "(5 GHz — not selectable)"}{network.signal == null ? "" : " — " + network.signal + "%"}
+                  </option>
+                ))}
               </select>
-              <Input className="mt-2 border-slate-600 bg-slate-900 text-white" aria-label="Enter 2.4 GHz Wi-Fi network name manually" placeholder="2.4 GHz Wi-Fi name (SSID)" maxLength={64} value={wifiSsid} onChange={event => setWifiSsid(event.target.value)} />
+              <input type="search" id="food-safety-router-ssid-manual" name="food-safety-router-ssid-manual" autoComplete="off" autoCorrect="off" spellCheck={false}
+                data-lpignore="true" data-1p-ignore="true" className="mt-2 h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400"
+                aria-label="2.4 GHz router Wi-Fi name (not an email address)" placeholder="Enter Wi-Fi network name, e.g. VM1530649 (not email)" maxLength={64}
+                value={wifiSsid} onChange={event => setWifiSsid(event.target.value)} />
+              <p className="mt-1 text-xs text-slate-400">This field is a router Wi-Fi name, not an email or account login. Firefox's saved-login popup is not a Wi-Fi scan.</p>
             </div>
           </div>
           <details className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/65 p-3">
             <summary className="cursor-pointer text-sm font-medium text-cyan-200">Scan nearby Wi-Fi using HP2 Ubuntu (read-only)</summary>
             <p className="mt-2 text-xs text-slate-300">A remote website cannot scan the Wi-Fi networks around HP2 directly. On HP2, this command lists nearby SSIDs and frequencies without showing passwords. Choose a 2.4 GHz network (around 2400 MHz). Do not select SmartLife-203B as the restaurant network.</p>
             <code className="mt-2 block overflow-x-auto rounded bg-black/40 p-2 text-xs text-emerald-200">nmcli -f SSID,FREQ,SIGNAL device wifi list ifname wlxe4fac420a7a9 --rescan yes</code>
-            <p className="mt-2 text-xs text-slate-300">Copy only the 2.4 GHz SSID names from the output and paste them below, one network name per line.</p>
-            <textarea aria-label="Paste nearby Wi-Fi network names, one per line" className="mt-2 min-h-20 w-full rounded-md border border-slate-600 bg-slate-950 p-2 text-sm text-white" placeholder={"ExampleNetwork\nRestaurantRouter"} value={wifiScanPaste} onChange={event => setWifiScanPaste(event.target.value)} maxLength={4000} />
+            <p className="mt-2 text-xs text-slate-300">Copy and paste the <strong>entire HP2 terminal Wi-Fi scan</strong> below (including MHz and signal). The list is parsed automatically; 2.4 GHz networks are selectable, while 5 GHz is displayed but blocked. No password is included.</p>
+            <textarea aria-label="Paste complete HP2 Wi-Fi scan output" name="foodsafety-wifi-scan-import" autoComplete="off" className="mt-2 min-h-24 w-full rounded-md border border-slate-600 bg-slate-950 p-2 font-mono text-xs text-white" placeholder={"SSID               FREQ      SIGNAL\nVM1530649          2437 MHz  100\nVM1530649          5540 MHz  100"} value={wifiScanPaste} onChange={event => setWifiScanPaste(event.target.value)} maxLength={8000} />
             <Button type="button" variant="outline" className="mt-2 border-cyan-500/40 text-cyan-100" onClick={() => {
-              const names = Array.from(new Set(wifiScanPaste.split(/\r?\n/).map(name => name.trim()).filter(name =>
-                name.length > 0 && name.length <= 64 && !/^(SmartLife-|OpenBK)/i.test(name)
-              ))).slice(0, 30);
-              setNearbyWifiNames(names);
-              toast({ title: names.length ? "Wi-Fi network choices loaded" : "No router SSIDs found", description: names.length ? "Choose one above. These are entered scan results, not confirmed device connections." : "Paste 2.4 GHz SSID names, one on each line." });
-            }}>Load scanned Wi-Fi names</Button>
+              const networks: Array<{ ssid: string; frequency: number | null; signal: number | null }> = [];
+              const seen = new Set<string>();
+              for (const line of wifiScanPaste.split(/\r?\n/)) {
+                const cleaned = line.trim().replace(/^\*\s+/, "");
+                const match = cleaned.match(/^(.*?)\s+(\d{4})\s*MHz\s+(\d{1,3})\s*$/i);
+                const ssid = match ? match[1].trim() : cleaned;
+                if (!ssid || /^SSID\b/i.test(ssid) || /^--?$/.test(ssid) || ssid.length > 64 ||
+                    /^(SmartLife-|OpenBK)/i.test(ssid) || seen.has(ssid)) continue;
+                // Require MHz frequency when importing a terminal scan. A plain
+                // SSID can still be typed manually, without guessing its band.
+                if (!match) continue;
+                const frequency = Number(match[2]);
+                const signal = Number(match[3]);
+                if (!Number.isFinite(frequency) || frequency < 2300 || frequency > 5900 ||
+                    !Number.isFinite(signal) || signal > 100) continue;
+                seen.add(ssid);
+                networks.push({ ssid, frequency, signal });
+                if (networks.length >= 60) break;
+              }
+              // Prefer 2.4 GHz results for dual-band SSIDs.
+              networks.sort((a, b) => Number((a.frequency || 0) >= 2500) - Number((b.frequency || 0) >= 2500) || (b.signal || 0) - (a.signal || 0));
+              setNearbyWifiNetworks(networks);
+              toast({
+                title: networks.length ? networks.length + " router networks loaded" : "No Wi-Fi scan rows recognised",
+                description: networks.length ? "Select your local 2.4 GHz Wi-Fi above. This does not connect or reconfigure the mouse." : "Copy the entire nmcli output including SSID, MHz frequency and signal, then paste it here.",
+                variant: networks.length ? undefined : "destructive",
+              });
+            }}>Import HP2 Wi-Fi scan into selector</Button>
+            {nearbyWifiNetworks.length > 0 && <p className="mt-2 text-xs text-emerald-200">Imported {nearbyWifiNetworks.length} router network names from your HP2 terminal. Passwords and device settings have not been read or changed.</p>}
           </details>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
-              <Input id="owned-wifi-password" type="password" disabled value="" placeholder="Available after supported device setup is verified" className="border-slate-600 bg-slate-900 text-slate-400 disabled:opacity-65" />
+              <div id="owned-wifi-password" role="note" className="flex min-h-10 items-center rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-slate-400" aria-label="Wi-Fi password entry unavailable until secure provisioning is implemented">Password entry locked — no device provisioning yet</div>
               <p className="mt-1 text-xs text-slate-400">For safety, this page does not collect or save router passwords until an actual secure local provisioning method exists.</p>
             </div>
             <div className="flex flex-col justify-end gap-2">
