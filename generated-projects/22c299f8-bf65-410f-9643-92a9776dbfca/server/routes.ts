@@ -8458,6 +8458,82 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // A separate HP2 router scan; NEVER treat router SSIDs as mouse-pairing
+  // sightings or as proof of a device connection. No credentials are accepted.
+  // Latest snapshot only: avoid customer router histories and stale listings.
+  const ensureHp2RouterScanTable = async () => {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS hp2_router_wifi_scans (
+        source_key TEXT PRIMARY KEY,
+        networks JSONB NOT NULL,
+        reported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+  };
+  app.post("/api/iot/gateway/router-wifi-scan", async (req, res) => {
+    try {
+      if (!process.env.FOODSAFETY_IOT_GATEWAY_TOKEN?.trim()) {
+        return res.status(503).json({ message: "Gateway authentication unavailable" });
+      }
+      if (!isFoodSafetyGatewayAuthorized(req)) {
+        return res.status(401).json({ message: "Unauthorized HP2 router scan" });
+      }
+      if (!Array.isArray(req.body?.networks) || req.body.networks.length > 100) {
+        return res.status(400).json({ message: "Expected at most 100 network observations" });
+      }
+      const networks: Array<{ssid: string; frequency: number; signal: number}> = [];
+      const seen = new Set<string>();
+      for (const raw of req.body.networks) {
+        if (!raw || typeof raw !== "object" || typeof raw.ssid !== "string") continue;
+        const ssid = raw.ssid.trim();
+        const frequency = raw.frequency;
+        const signal = raw.signal;
+        if (!ssid || ssid.length > 64 || /[\x00-\x1F\x7F]/.test(ssid) ||
+          /^(SmartLife-|OpenBK)/i.test(ssid) || ssid === "--" ||
+          !Number.isInteger(frequency) || frequency < 2400 || frequency > 5900 ||
+          !Number.isInteger(signal) || signal < 0 || signal > 100) continue;
+        const key = ssid + ":" + frequency;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        networks.push({ ssid, frequency, signal });
+        if (networks.length >= 64) break;
+      }
+      // Browser must never send, receive or store router passwords through this API.
+      await ensureHp2RouterScanTable();
+      await db.execute(sql`
+        INSERT INTO hp2_router_wifi_scans (source_key, networks, reported_at)
+        VALUES ('hp2-gateway', CAST(${JSON.stringify(networks)} AS jsonb), now())
+        ON CONFLICT (source_key) DO UPDATE
+          SET networks = EXCLUDED.networks, reported_at = EXCLUDED.reported_at
+      `);
+      res.set("Cache-Control", "no-store");
+      return res.json({ success: true, saved: networks.length, source: "hp2-gateway" });
+    } catch (error: any) {
+      console.error("HP2 router scan save error:", error?.message || error);
+      return res.status(500).json({ message: "Could not accept HP2 router scan" });
+    }
+  });
+
+  app.get("/api/iot/router-wifi-networks", isAdminAuthenticated, async (_req, res) => {
+    try {
+      res.set("Cache-Control", "private, no-store");
+      await ensureHp2RouterScanTable();
+      const result: any = await db.execute(sql`
+        SELECT networks, reported_at FROM hp2_router_wifi_scans
+        WHERE source_key = 'hp2-gateway' LIMIT 1
+      `);
+      const row = (Array.isArray(result) ? result : result?.rows || [])[0];
+      const timestamp = row?.reported_at ? new Date(row.reported_at).getTime() : 0;
+      const fresh = timestamp > 0 && Date.now() - timestamp < 180000 &&
+        timestamp < Date.now() + 30000;
+      const networks = fresh && Array.isArray(row.networks) ? row.networks : [];
+      return res.json({ source: "hp2-gateway", fresh, reportedAt: timestamp ? new Date(timestamp).toISOString() : null, networks });
+    } catch (error: any) {
+      console.error("HP2 router scan read error:", error?.message || error);
+      return res.status(500).json({ message: "Could not read HP2 router Wi-Fi scan" });
+    }
+  });
+
   app.get("/api/iot/device-check", isAdminAuthenticated, async (_req, res) => {
     try {
       await ensureOwnedIotSchema();
