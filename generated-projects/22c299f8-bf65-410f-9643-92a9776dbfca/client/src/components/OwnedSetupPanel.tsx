@@ -16,6 +16,7 @@ export default function OwnedSetupPanel() {
   // In-memory only: never persist, log or submit Wi-Fi credentials before provisioning is verified.
   const [wifiPassword, setWifiPassword] = useState("");
   const [showWifiPassword, setShowWifiPassword] = useState(false);
+  const [wifiChoiceSaved, setWifiChoiceSaved] = useState(false);
   const [scan, setScan] = useState<RouterScan | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -123,7 +124,7 @@ export default function OwnedSetupPanel() {
         {scan?.fresh && <p className="text-xs text-cyan-200">Report received: {scan.reportedAt ? new Date(scan.reportedAt).toLocaleString("en-GB") : "time unavailable"} · {nearby24.length} nearby 2.4 GHz networks</p>}
         {scan?.fresh && nearby24.length === 0 && <p className="text-sm text-amber-200">No 2.4 GHz networks found in the latest scan.</p>}
         {nearby24.length > 0 && <label className="block text-sm">Choose a detected 2.4 GHz network
-          <select value={nearby24.some(n=>n.ssid===localWifiName)?localWifiName:""} onChange={e=>{setLocalWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);}} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
+          <select value={nearby24.some(n=>n.ssid===localWifiName)?localWifiName:""} onChange={e=>{setLocalWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiChoiceSaved(false);}} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
             <option value="">Select a nearby network</option>
             {nearby24.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}% · {n.frequency} MHz</option>)}
           </select>
@@ -140,7 +141,21 @@ export default function OwnedSetupPanel() {
         </div>
         <p className="text-xs text-amber-200">Password stays in this open browser form only; it is not sent, saved, or used to connect yet. Closing or reloading the page clears it. Mouse provisioning is not active.</p>
       </div>
-      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Network and password entry does not provision the factory mouse. Connect remains disabled until a secure, tested provisioning protocol and compatible firmware are available.</p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" disabled={!localWifiName.trim()} onClick={() => {
+          // Retain ONLY the network name, never the password, in this browser tab.
+          sessionStorage.setItem("pest-owned-wifi-name-v1", localWifiName.trim());
+          setWifiChoiceSaved(true);
+          toast({ title: "Wi-Fi choice saved in this browser", description: "Password not saved or sent. Mouse is NOT connected." });
+        }} className="rounded-lg bg-cyan-600 px-5 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-40">
+          Save Wi-Fi selection (no password)
+        </button>
+        <button type="button" disabled className="rounded-lg bg-slate-700 px-5 py-3 font-semibold opacity-60" title="Physical mouse provisioning not implemented">
+          Connect Mouse — not available yet
+        </button>
+      </div>
+      {wifiChoiceSaved && <p role="status" className="text-sm text-cyan-200">Saved locally: {localWifiName}. Your password was not saved; Mouse #11 is not connected.</p>}
+      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Saving the Wi-Fi name does not provision the factory mouse. The password stays only in this browser form and is cleared on reload. Connection requires a secure, tested physical provisioning protocol and compatible firmware.</p>
       <p className="text-sm text-slate-300">Next hardware check: verify mouse firmware compatibility, provisioning transport, and authenticated MQTT telemetry before enabling Connect.</p>
       <div className="grid gap-2 text-sm text-slate-300"><p>1. Discovery: verified only when a nearby Wi-Fi AP is observed.</p><p>2. Branch registration: a database record, not a Wi-Fi connection.</p><p>3. Local Wi-Fi provisioning: not yet supported for this factory firmware.</p><p>4. Authenticated MQTT and real trap sensor: not yet verified.</p></div>
       <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Connect and verify MQTT — unavailable until device protocol is tested</button>
