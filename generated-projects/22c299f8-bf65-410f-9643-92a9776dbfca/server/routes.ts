@@ -9072,7 +9072,36 @@ Generated: ${new Date().toISOString()}
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
+      // A factory pairing AP sighting is distinct from authenticated MQTT.
+      // Match an exact saved SSID in this branch's device name; the SSID
+      // is not proof of physical identity, activation or alarm readiness.
+      const wifiResult: any = await db.execute(sql`
+        SELECT hostname, wifi_signal_percent, last_seen_at
+        FROM owned_iot_device_checks
+        WHERE wifi_observation_source = 'hp2-wifi-scan'
+          AND hardware_key LIKE 'wifi-ap:%'
+        ORDER BY last_seen_at DESC
+        LIMIT 200
+      `);
+      const wifiRows = Array.isArray(wifiResult) ? wifiResult : (wifiResult?.rows || []);
+      const sightingByName = new Map<string, any>();
+      for (const observation of wifiRows) {
+        const key = String(observation.hostname || "").trim().toLowerCase();
+        if (key && !sightingByName.has(key)) sightingByName.set(key, observation);
+      }
       return rows.map((row: any) => {
+        const name = String(row.friendly_name || "");
+        const factoryName = name.match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0]?.toLowerCase();
+        const sighting = factoryName ? sightingByName.get(factoryName) : null;
+        const sightingTime = sighting?.last_seen_at ? new Date(sighting.last_seen_at).getTime() : 0;
+        const wifiSetupSighting = sighting && Number.isFinite(sightingTime) ? {
+          ssid: String(sighting.hostname),
+          signalPercent: sighting.wifi_signal_percent == null ? null : Number(sighting.wifi_signal_percent),
+          lastSeenAt: sighting.last_seen_at,
+          recentlySeen: sightingTime > 0 && Date.now() - sightingTime >= 0 && Date.now() - sightingTime < 75000,
+          identityVerified: false,
+          mqttVerified: false,
+        } : null;
         const isOnline = ownedIotIsOnline(row.is_online, row.last_seen_at);
         return {
           id: row.id,
@@ -9080,6 +9109,7 @@ Generated: ${new Date().toISOString()}
           deviceName: row.friendly_name || row.device_id,
           branchId: row.branch_id,
           notes: row.installation_location || row.hardware_model,
+          wifiSetupSighting,
           isOnline,
           reportedOnline: Boolean(row.is_online),
           alarmActive: Boolean(row.last_alarm_at),
