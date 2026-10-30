@@ -125,6 +125,19 @@ export default function IotAdminPanel() {
   const [routerScanStatus, setRouterScanStatus] = useState("No automatic HP2 router scan received yet.");
   const [routerScanReportedAt, setRouterScanReportedAt] = useState<string | null>(null);
 
+  // Read the Smart Check handoff. This is only a temporary selection, not proof
+  // of physical Wi-Fi provisioning, authenticated MQTT, or device ownership.
+  const [smartCheckSelection, setSmartCheckSelection] = useState<{ ssid: string; mac: string } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("pest-smart-check-selected-v1");
+      if (!raw) return;
+      const value = JSON.parse(raw);
+      if (typeof value?.ssid !== "string" || typeof value?.mac !== "string") return;
+      setSmartCheckSelection({ ssid: value.ssid, mac: value.mac });
+    } catch (_) { /* Invalid handoff is ignored, never trusted */ }
+  }, []);
+
   // Show each nearby 2.4 GHz router once, using the strongest reported signal.
   const local24Networks = useMemo(() => {
     const results = new Map<string, { ssid: string; frequency: number; signal: number }>();
@@ -930,6 +943,24 @@ export default function IotAdminPanel() {
         </details>
       </section>
 
+      {smartCheckSelection && (
+        <div className="rounded-xl border border-cyan-500/40 bg-cyan-950/30 p-4 text-sm text-white" role="status">
+          <strong className="block text-base">Selected in Smart Check: {smartCheckSelection.ssid || "Wi-Fi mouse"}</strong>
+          <p className="mt-1 font-mono text-xs text-cyan-200">Observed MAC: {smartCheckSelection.mac || "Unavailable"}</p>
+          <p className="mt-2 text-slate-300">Wi-Fi discovery only. Choose the correct customer branch and register the device below. Wi-Fi provisioning and MQTT must be verified separately.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" type="button" onClick={() => {
+              setDeviceName(smartCheckSelection.ssid);
+              setShowRegisterForm(true);
+              window.setTimeout(() => document.getElementById("pest-add-device")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+            }} className="bg-cyan-600 text-white hover:bg-cyan-500">Next — Select branch</Button>
+            <Button size="sm" type="button" variant="outline" onClick={() => {
+              window.sessionStorage.removeItem("pest-smart-check-selected-v1");
+              setSmartCheckSelection(null);
+            }} className="border-slate-600 text-white">Clear selection</Button>
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
