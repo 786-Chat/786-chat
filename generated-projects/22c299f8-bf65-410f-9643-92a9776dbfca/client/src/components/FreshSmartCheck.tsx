@@ -25,6 +25,7 @@ export default function FreshSmartCheck() {
  },[]);
  useEffect(()=>{refresh();const timer=window.setInterval(refresh,15000);return()=>window.clearInterval(timer);},[refresh]);
  const sightings=useMemo(()=>rows.filter(r=>r.hardwareKey?.startsWith("wifi-ap:") && r.hostname?.toLowerCase().startsWith("smartlife-") && macPattern.test(r.macAddress||"")).filter(r=>(r.hostname+" "+r.macAddress).toLowerCase().includes(search.toLowerCase())),[rows,search]);
+ const recentCount=sightings.filter(row=>row.isWifiRecentlySeen).length;
  const next=(row:Observation)=>{
    sessionStorage.setItem("pest-smart-check-selected-v1",JSON.stringify({ssid:row.hostname,mac:row.macAddress,observedAt:row.lastSeenAt}));
    window.dispatchEvent(new Event("pest:open-owned-smart-devices"));
@@ -33,13 +34,13 @@ export default function FreshSmartCheck() {
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="flex items-center gap-2 text-2xl font-bold"><Radar className="text-cyan-300"/>Smart Check</h2>
-    <p className="mt-2 text-sm text-slate-300">HP2 nearby Wi-Fi discovery only. A detected pairing signal is not a verified MQTT connection.</p></div>
+    <p className="mt-2 text-sm text-slate-300">HP2 reports nearby Wi-Fi APs. This page reads stored reports; Refresh does not start a scan on HP2. A Wi-Fi sighting is not MQTT.</p></div>
     <button type="button" onClick={refresh} disabled={loading} className="flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm disabled:opacity-50"><RefreshCw size={16}/>{loading?"Checking":"Refresh HP2"}</button>
    </div>
   </header>
   <section className="rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <h3 className="font-semibold">Detected SmartLife Wi-Fi ({sightings.length})</h3>
+    <h3 className="font-semibold">SmartLife Wi-Fi observations ({sightings.length}) · Recent: {recentCount}</h3>
     <input aria-label="Search Wi-Fi mouse" placeholder="Search SmartLife name or MAC" value={search} onChange={e=>setSearch(e.target.value)} className="w-full max-w-xs rounded-lg border border-slate-600 bg-slate-950 p-2 text-sm"/>
    </div>
    {error&&<p role="alert" className="mb-3 rounded bg-red-950 p-3 text-red-200">{error}</p>}
@@ -48,9 +49,9 @@ export default function FreshSmartCheck() {
     <h4 className="flex items-center gap-2 font-semibold"><Wifi size={16} className="text-cyan-300"/>{row.hostname}</h4>
     <p className="mt-2 font-mono text-xs text-cyan-200">MAC: {row.macAddress}</p>
     <p className="mt-2 text-sm text-slate-300">Signal: {row.wifiSignalPercent == null?"Not measured":row.wifiSignalPercent+"% (last scan)"}</p>
-    <p className="mt-1 text-sm text-slate-300">{row.isWifiRecentlySeen?"Recently observed":"No recent Wi-Fi signal"}</p>
+    <p className="mt-1 text-sm text-slate-300">{row.isWifiRecentlySeen?"Recently observed":"Historical observation — mouse not currently confirmed in range"}</p>
     <p className="mt-1 text-xs text-slate-400">Last observation: {row.lastSeenAt?new Date(row.lastSeenAt).toLocaleString("en-GB"):"Unknown"}</p>
-    <p className="mt-2 text-xs text-amber-200">MQTT not established by Wi-Fi detection</p>
+    <p className="mt-2 text-xs text-amber-200">MQTT unverified · Next selects this SSID/MAC, it does not connect the mouse</p>
     <button type="button" onClick={()=>next(row)} className="mt-3 rounded-lg bg-cyan-600 px-5 py-2 font-semibold hover:bg-cyan-500">Next →</button>
    </article>)}</div>
   </section>
