@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 type Selection = { ssid: string; mac: string };
+type NearbyNetwork = { ssid: string; frequency: number; signal: number };
+type RouterScan = { source: string; fresh: boolean; reportedAt: string | null; networks: NearbyNetwork[] };
 export default function OwnedSetupPanel() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Selection | null>(null);
@@ -11,6 +13,22 @@ export default function OwnedSetupPanel() {
   const [busy, setBusy] = useState(false);
   const [installerMethod, setInstallerMethod] = useState<"hp2" | "remote">("hp2");
   const [localWifiName, setLocalWifiName] = useState("");
+  const [scan, setScan] = useState<RouterScan | null>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const fetchNearbyNetworks = async () => {
+    setScanBusy(true);
+    try {
+      const response = await fetch("/api/iot/router-wifi-networks", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error("Wi-Fi network report unavailable (HTTP " + response.status + ")");
+      const data = await response.json() as RouterScan;
+      setScan(data);
+      setScanError("");
+    } catch (error: any) {
+      setScanError(String(error?.message || error));
+      setScan(null);
+    } finally { setScanBusy(false); }
+  };
   const load = async () => {
     const [br, dv] = await Promise.all([
       fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
@@ -32,6 +50,8 @@ export default function OwnedSetupPanel() {
     window.addEventListener("pest:open-owned-smart-devices", syncSelection);
     return () => window.removeEventListener("pest:open-owned-smart-devices", syncSelection);
   }, []);
+  useEffect(() => { if (installerMethod === "hp2") fetchNearbyNetworks(); }, [installerMethod]);
+  const nearby24 = scan?.fresh ? (scan.networks || []).filter(n => n.frequency >= 2400 && n.frequency < 2500).sort((a,b) => b.signal-a.signal) : [];
   const alreadyRegistered = selected && devices.find((device) => String(device.deviceName || "").toLowerCase().includes(selected.ssid.toLowerCase()));
   const save = async () => {
     if (!selected || !branchId || alreadyRegistered) return;
@@ -89,10 +109,27 @@ export default function OwnedSetupPanel() {
     </section>
     <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-3">
       <h3 className="font-semibold">3 · Restaurant Wi-Fi and physical MQTT verification</h3>
-      <label className="block text-sm">Local 2.4 GHz Wi-Fi name (planning only)
-        <input type="text" value={localWifiName} onChange={e=>setLocalWifiName(e.target.value)} autoComplete="off" placeholder="Enter name manually; browser cannot scan" className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
+      {installerMethod === "hp2" && <div className="space-y-3 rounded-lg border border-cyan-500/30 bg-slate-950/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <strong>Nearby 2.4 GHz networks reported by HP2</strong>
+          <button type="button" onClick={fetchNearbyNetworks} disabled={scanBusy} className="rounded-lg bg-cyan-700 px-4 py-2 text-sm disabled:opacity-50">{scanBusy ? "Loading..." : "Refresh network list"}</button>
+        </div>
+        <p className="text-xs text-slate-400">HP2 scans using its local Wi-Fi adapter and uploads a time-limited network list. Refresh retrieves that report; it does not command HP2 to rescan. This is not available when installing abroad without a local installer.</p>
+        {scanError && <p role="alert" className="text-sm text-red-300">{scanError}</p>}
+        {scan && !scan.fresh && <p role="status" className="text-sm text-amber-200">No recent HP2 router scan. Network selection from old scans is disabled. Check the HP2 router-scanner process and its report destination.</p>}
+        {scan?.fresh && <p className="text-xs text-cyan-200">Report received: {scan.reportedAt ? new Date(scan.reportedAt).toLocaleString("en-GB") : "time unavailable"} · {nearby24.length} nearby 2.4 GHz networks</p>}
+        {scan?.fresh && nearby24.length === 0 && <p className="text-sm text-amber-200">No 2.4 GHz networks found in the latest scan.</p>}
+        {nearby24.length > 0 && <label className="block text-sm">Choose a detected 2.4 GHz network
+          <select value={nearby24.some(n=>n.ssid===localWifiName)?localWifiName:""} onChange={e=>setLocalWifiName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
+            <option value="">Select a nearby network</option>
+            {nearby24.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}% · {n.frequency} MHz</option>)}
+          </select>
+        </label>}
+      </div>}
+      <label className="block text-sm">2.4 GHz Wi-Fi name (manual entry for planning only)
+        <input type="text" value={localWifiName} onChange={e=>setLocalWifiName(e.target.value)} autoComplete="off" placeholder="Restaurant Wi-Fi name" className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
       </label>
-      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Network name stays in this page and is not sent to the mouse or server. Do not enter Wi-Fi passwords. A secure local installer must first establish a supported connection to the physical mouse. The existing factory SmartLife AP is discovery only.</p>
+      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Selecting a network does not provision the factory mouse. No Wi-Fi password is requested, stored or transmitted. Connecting requires a verified local provisioning protocol and compatible firmware.</p>
       <p className="text-sm text-slate-300">Next hardware check: verify mouse firmware compatibility, provisioning transport, and authenticated MQTT telemetry before enabling Connect.</p>
       <div className="grid gap-2 text-sm text-slate-300"><p>1. Discovery: verified only when a nearby Wi-Fi AP is observed.</p><p>2. Branch registration: a database record, not a Wi-Fi connection.</p><p>3. Local Wi-Fi provisioning: not yet supported for this factory firmware.</p><p>4. Authenticated MQTT and real trap sensor: not yet verified.</p></div>
       <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Connect and verify MQTT — unavailable until device protocol is tested</button>
