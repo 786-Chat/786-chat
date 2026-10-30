@@ -6,11 +6,10 @@ type Observation = {
   wifiSignalPercent?: number | null; lastSeenAt?: string | null;
   isWifiRecentlySeen?: boolean;
 };
-const macPattern = /^([\\da-f]{2}:){5}[\\da-f]{2}$/i;
+const macPattern = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 export default function FreshSmartCheck() {
   const [rows, setRows] = useState<Observation[]>([]);
   const [search, setSearch] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
@@ -36,7 +35,7 @@ export default function FreshSmartCheck() {
     macPattern.test(row.macAddress || "")
   ), [rows]);
   const visible = valid.filter(row =>
-    (showHistory || row.isWifiRecentlySeen) &&
+    row.isWifiRecentlySeen &&
     (row.hostname + " " + row.macAddress).toLowerCase().includes(search.toLowerCase())
   );
   const count = valid.filter(row => row.isWifiRecentlySeen).length;
@@ -55,14 +54,13 @@ export default function FreshSmartCheck() {
       </div>
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search mouse or MAC" aria-label="Search mouse or MAC" className="w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
-      {visible.length === 0 && <p className="rounded-lg bg-slate-950 p-4 text-slate-300">{showHistory ? "No matching observations." : "No nearby mouse reported recently. Turn on the mouse near HP2, then refresh."}</p>}
+      {visible.length === 0 && <p className="rounded-lg bg-slate-950 p-4 text-slate-300">"No nearby mouse reported recently. Turn on the mouse near HP2, then refresh."</p>}
       <div className="grid gap-3 md:grid-cols-2">{visible.map(row => <article key={row.id} className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><strong>{row.hostname}</strong><span className={row.isWifiRecentlySeen ? "text-xs text-emerald-300" : "text-xs text-amber-300"}>{row.isWifiRecentlySeen ? "Recently seen" : "Old sighting"}</span></div>
         <p className="mt-2 font-mono text-xs text-cyan-200">{row.macAddress}</p>
         <p className="mt-2 text-sm text-slate-300">Wi-Fi signal: {row.wifiSignalPercent == null ? "Unknown" : row.wifiSignalPercent + "%"}</p>
         <button type="button" disabled={!row.isWifiRecentlySeen} onClick={() => next(row)} className="mt-3 rounded-lg bg-cyan-600 px-5 py-2 font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:opacity-50">NEXT →</button>
       </article>)}</div>
-      <button type="button" onClick={() => setShowHistory(v => !v)} className="text-sm text-slate-300 underline">{showHistory ? "Hide old sightings" : "Show old sightings"}</button>
       <p className="text-xs text-slate-400">HP2 Wi-Fi sightings only. This does not confirm internet or MQTT connection.</p>
     </section>
   </main>;
