@@ -118,7 +118,7 @@ export default function DeviceCheckPanel() {
         <div className="flex items-center gap-3">
           <span className="rounded-xl bg-cyan-600 p-3"><Radar className="h-5 w-5 text-white" /></span>
           <div>
-            <h2 className="text-xl font-bold text-white">Device Check</h2>
+            <h2 className="text-xl font-bold text-white">Smart Check</h2>
             <p className="text-sm text-slate-300">Find mouse Wi-Fi sightings and verify MQTT status.</p>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function DeviceCheckPanel() {
         </select>
       </div>
       {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}
-      <p className="text-xs text-slate-400">Wi-Fi sightings are historical unless recently observed. They never prove an MQTT connection. Registration, Wi-Fi setup and branch assignment belong in Smart Devices.</p>
+      <p className="text-xs text-slate-400">Select a real HP2 Wi-Fi sighting, then choose Next to continue in Smart Devices. A sighting does not prove MQTT connectivity.</p>
       <div className="rounded-xl border border-cyan-500/25 bg-slate-800/70 p-4">
         <h3 className="font-semibold text-white">Saved mouse devices ({savedDevices.length})</h3>
         <p className="mt-1 text-xs text-slate-300">
