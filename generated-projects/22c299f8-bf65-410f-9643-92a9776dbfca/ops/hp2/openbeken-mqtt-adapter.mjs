@@ -25,7 +25,6 @@ import { randomUUID } from "node:crypto";
 import readline from "node:readline";
 
 function parseReport(topic, payload, permittedPrefixes) {
-  const m = String(topic || "").match(/^([A-Za-z0-9_-]+)\/(1|get|2)\/get$/);
   // Strictly require only OpenBeken channel 1 (catch) or 2 (battery).
   const parts = String(topic || "").match(/^([A-Za-z0-9_-]+)\/(1|2)\/get$/);
   if (!parts || !permittedPrefixes.has(parts[1])) return null;
