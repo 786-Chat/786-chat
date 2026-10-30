@@ -213,6 +213,7 @@ export default function DeviceCheckPanel() {
                     // Handoff only: never register, assign, or claim MQTT activation from an AP sighting.
                     const identity = { ssid: row.hostname || "", mac: row.macAddress || "", observedAt: row.lastSeenAt || "" };
                     window.sessionStorage.setItem("pest-smart-check-selected-v1", JSON.stringify(identity));
+                    window.dispatchEvent(new Event("pest:open-owned-smart-devices"));
                     toast({ title: "Mouse selected for onboarding", description: "Open Smart Devices to select the customer branch and complete registration." });
                   }}>Next — Smart Devices</Button>}
                   <span className="text-xs text-slate-400">Manage registration and assignment in Smart Devices</span>
