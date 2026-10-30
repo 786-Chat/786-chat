@@ -123,6 +123,8 @@ export default function IotAdminPanel() {
   const [showWifiDetails, setShowWifiDetails] = useState(false);
   const [nearbyWifiNetworks, setNearbyWifiNetworks] = useState<Array<{ ssid: string; frequency: number | null; signal: number | null }>>([]);
   const [wifiScanPaste, setWifiScanPaste] = useState("");
+  const [routerScanStatus, setRouterScanStatus] = useState("No automatic HP2 router scan received yet.");
+  const [routerScanReportedAt, setRouterScanReportedAt] = useState<string | null>(null);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -148,6 +150,33 @@ export default function IotAdminPanel() {
       .slice(0, 20);
   }, [branches, branchSearch]);
 
+
+  const loadHp2RouterNetworks = async () => {
+    try {
+      const response = await fetch("/api/iot/router-wifi-networks", { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        setRouterScanStatus("HP2 router scan service is not available on this preview (" + response.status + ").");
+        return;
+      }
+      const data = await response.json();
+      if (!data?.fresh || !Array.isArray(data.networks) || !data.networks.length) {
+        setRouterScanStatus("No recent automatic HP2 router scan. You can still import the Ubuntu scan below.");
+        setRouterScanReportedAt(data?.reportedAt || null);
+        return;
+      }
+      const networks = data.networks.filter((item: any) =>
+        typeof item?.ssid === "string" && item.ssid.length > 0 && item.ssid.length <= 64 &&
+        Number.isInteger(item.frequency) && item.frequency >= 2400 && item.frequency <= 5900 &&
+        Number.isInteger(item.signal) && item.signal >= 0 && item.signal <= 100 &&
+        !/^(SmartLife-|OpenBK)/i.test(item.ssid)
+      ).slice(0, 64);
+      setNearbyWifiNetworks(networks);
+      setRouterScanStatus("HP2 router scan received — " + networks.length + " networks. Choose a 2.4 GHz router below.");
+      setRouterScanReportedAt(data.reportedAt || null);
+    } catch {
+      setRouterScanStatus("Cannot reach HP2 router scan data. Manual SSID entry remains available.");
+    }
+  };
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes, wifiCheckRes] = await Promise.all([
@@ -183,7 +212,11 @@ export default function IotAdminPanel() {
   useEffect(() => {
     loadBase().catch(() => {});
     loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
-    const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
+    loadHp2RouterNetworks().catch(() => {});
+    const timer = window.setInterval(() => {
+      loadBase().catch(() => {});
+      loadHp2RouterNetworks().catch(() => {});
+    }, 20000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -788,7 +821,7 @@ export default function IotAdminPanel() {
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div>
               <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse to set up</label>
-              <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={wifiDeviceId} onChange={event => setWifiDeviceId(event.target.value)}>
+              <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={wifiDeviceId} onChange={event => { setWifiDeviceId(event.target.value); setWifiPassword(""); }}>
                 <option value="">Select registered mouse...</option>
                 {ownedDevices.map((device: any) => (
                   <option key={device.deviceId} value={String(device.deviceId)}>{device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}</option>
@@ -798,8 +831,8 @@ export default function IotAdminPanel() {
             </div>
             <div>
               <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Select local Wi-Fi network (SSID)</label>
-              <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNetworks.some(network => network.ssid === wifiSsid && (network.frequency == null || network.frequency < 2500)) ? wifiSsid : ""} onChange={event => setWifiSsid(event.target.value)}>
-                <option value="">{nearbyWifiNetworks.length ? "Select one of the scanned 2.4 GHz networks..." : "No router scan imported — see HP2 scan below"}</option>
+              <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNetworks.some(network => network.ssid === wifiSsid && (network.frequency == null || network.frequency < 2500)) ? wifiSsid : ""} onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }}>
+                <option value="">{nearbyWifiNetworks.length ? "Select one of the scanned 2.4 GHz networks..." : "No recent scan — import below or enter SSID"}</option>
                 {nearbyWifiNetworks.map(network => (
                   <option key={network.ssid} value={network.ssid} disabled={network.frequency != null && network.frequency >= 2500}>
                     {network.ssid} {network.frequency == null ? "(band not verified)" : network.frequency < 2500 ? "(2.4 GHz)" : "(5 GHz — not selectable)"}{network.signal == null ? "" : " — " + network.signal + "%"}
@@ -811,6 +844,11 @@ export default function IotAdminPanel() {
                 aria-label="2.4 GHz router Wi-Fi name (not an email address)" placeholder="Enter Wi-Fi network name, e.g. VM1530649 (not email)" maxLength={64}
                 value={wifiSsid} onChange={event => setWifiSsid(event.target.value)} />
               <p className="mt-1 text-xs text-slate-400">This field is a router Wi-Fi name, not an email or account login. Firefox's saved-login popup is not a Wi-Fi scan.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => loadHp2RouterNetworks()} className="border-cyan-600/50 text-cyan-100">Refresh HP2 router list</Button>
+              </div>
+              <p role="status" aria-live="polite" className="mt-2 text-xs text-cyan-200">{routerScanStatus}{routerScanReportedAt ? " Last report: " + new Date(routerScanReportedAt).toLocaleString("en-GB", {timeZone:"Europe/London"}) : ""}</p>
+              <p className="mt-1 text-xs text-slate-400">Automatic listing works only after the separate read-only HP2 router scanner is enabled. These networks are near HP2, not necessarily near the restaurant.</p>
             </div>
           </div>
           <details className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/65 p-3">
@@ -853,8 +891,16 @@ export default function IotAdminPanel() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
-              <div id="owned-wifi-password" role="note" className="flex min-h-10 items-center rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-slate-400" aria-label="Wi-Fi password entry unavailable until secure provisioning is implemented">Password entry locked — no device provisioning yet</div>
-              <p className="mt-1 text-xs text-slate-400">For safety, this page does not collect or save router passwords until an actual secure local provisioning method exists.</p>
+              <input id="owned-wifi-password" name="foodsafety-router-password-local-only" type="password" autoComplete="new-password"
+                data-lpignore="true" data-1p-ignore="true" aria-label="Restaurant Wi-Fi password (temporary local entry only)"
+                className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400"
+                placeholder="Enter password (kept in this tab only)" value={wifiPassword} maxLength={128}
+                onChange={event => setWifiPassword(event.target.value)} />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-300">{wifiPassword ? "Password entered locally — NOT sent to any device." : "Password is optional until supported firmware is verified."}</p>
+                {wifiPassword && <Button type="button" variant="outline" onClick={() => setWifiPassword("")} className="border-slate-500 text-xs text-slate-200">Clear password</Button>}
+              </div>
+              <p className="mt-1 text-xs text-amber-200">This input is temporary browser state only. It is not saved, transmitted, or used to connect the mouse. Clear it or refresh the page to discard it. Do not put passwords in chat.</p>
             </div>
             <div className="flex flex-col justify-end gap-2">
               <Button type="button" disabled className="w-full bg-slate-600 text-white disabled:opacity-75">Connect Mouse to Wi-Fi — unavailable for factory Tuya firmware</Button>
