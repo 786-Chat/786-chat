@@ -143,8 +143,8 @@ export default function BranchDashboard() {
     refetchOnWindowFocus: true,
     refetchInterval: 20000,
   });
-  const branchDeviceAlertsShown = branchSidebarVisibility?.deviceAlerts !== false;
-  const branchSmartDevicesShown = branchSidebarVisibility?.smartDevices !== false;
+  const branchDeviceAlertsShown = true; // Owned-device navigation, independent of SmartLife visibility
+  const branchSmartDevicesShown = true; // Owned-device navigation, independent of SmartLife visibility
 
   // SmartLife data remains in its own database table.
   // Read its visibility using the existing proven branch sidebar refresh.
