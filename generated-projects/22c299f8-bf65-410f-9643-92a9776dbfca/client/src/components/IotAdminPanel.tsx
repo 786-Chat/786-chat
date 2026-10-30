@@ -775,6 +775,21 @@ export default function IotAdminPanel() {
             <p className="mt-1 text-xs text-slate-400">HP2 → AWS test passed; physical mouse → AWS and AWS → Admin events are not yet verified.</p>
           </div>
         </div>
+        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
+          <h4 className="font-semibold text-amber-100">Why Smart Life pairing and Food Safety Admin behave differently</h4>
+          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-lg bg-slate-950/60 p-3">
+              <strong className="text-cyan-200">Factory Smart Life / Tuya firmware</strong>
+              <p className="mt-1 text-slate-200">The SmartLife-XXXX network is a temporary pairing access point. After successful pairing, it may disappear. A green LED that stops flashing, including after an OFF/ON cycle, does not prove the trap is OFF or online.</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/60 p-3">
+              <strong className="text-cyan-200">Your Food Safety Wi-Fi / MQTT system</strong>
+              <p className="mt-1 text-slate-200">Detecting SmartLife-XXXX confirms only a nearby pairing signal. This Admin cannot yet send Wi-Fi settings into the factory Tuya firmware. It must not claim Wi-Fi provisioning or MQTT success.</p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-amber-100">Power cycling to make the LED flash again only repeats the pairing broadcast test; it does not complete our MQTT connection. Leave the mouse ON and keep its last Wi-Fi sighting saved. An authenticated physical MQTT report is required before the Admin or restaurant card says Connected.</p>
+          <p className="mt-2 text-xs text-slate-300">A compatible local firmware or verified integration is needed for owned MQTT. The published Neo Coolcam/OpenBeken low-power solution is not yet verified for this exact BMAX W003 hardware revision.</p>
+        </div>
       </section>
 
       <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Fill in the mouse name, select its restaurant and installation area, then save. The registration stays saved while the mouse is offline.</p></div>
