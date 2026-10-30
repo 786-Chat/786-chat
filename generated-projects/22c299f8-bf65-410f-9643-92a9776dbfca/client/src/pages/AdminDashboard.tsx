@@ -157,7 +157,7 @@ import UsefulLinksSection from "@/components/UsefulLinksSection";
 import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
 import OwnedSetupPanel from "@/components/OwnedSetupPanel";
-import DeviceCheckPanel from "@/components/DeviceCheckPanel";
+import FreshSmartCheck from "@/components/FreshSmartCheck";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
@@ -4093,7 +4093,7 @@ export default function AdminDashboard() {
             
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {activeTab === "device-check" && <DeviceCheckPanel />}
+            {activeTab === "device-check" && <FreshSmartCheck />}
             {activeTab === "iot-cloud" && <OwnedSetupPanel />}
 
             {/* Rule 2: isolated SmartLife management — never shares owned IoT tables. */}
