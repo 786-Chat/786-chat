@@ -701,11 +701,7 @@ export default function IotAdminPanel() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => { setShowFactorySignals(true); loadBase().catch(() => {}); document.getElementById("mouse-discovery")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-            className="border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
-            <Wifi className="mr-2 h-4 w-4" />
-            Discover mice / Wi-Fi signals
-          </Button>
+
         <Button
           onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
@@ -715,52 +711,9 @@ export default function IotAdminPanel() {
         </Button>
         </div>
       </div>
-      <div className="rounded-xl border border-cyan-500/30 bg-slate-900/50 p-4">
-        <h3 className="text-lg font-semibold text-white">STEP 1 — DETECT MOUSE</h3>
-        <p className="mt-1 text-sm text-slate-300">Review real SmartLife-XXXX names, BSSID/MAC and last signal from the local scanner. When the mouse's setup Wi-Fi sleeps, the last sighting remains saved. No green light does not prove the mouse is OFF.</p>
-      </div>
-
-
-      <div id="mouse-discovery" className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-white">Detected SmartLife mouse Wi-Fi names and MAC addresses</h3>
-            <p className="mt-1 text-sm text-slate-300">Only genuinely observed HP2 Wi-Fi signals appear here. A SmartLife pairing signal is not proof of trap activation or MQTT connectivity.</p>
-          </div>
-          <Button size="sm" type="button" onClick={() => loadBase().catch(() => {})} className="bg-slate-700 text-white hover:bg-slate-600">
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh HP2 sightings
-          </Button>
-        </div>
-        <button type="button" className="mt-2 text-sm text-cyan-300" onClick={() => setShowFactorySignals(!showFactorySignals)}>{showFactorySignals ? "Hide detected signals" : "Show detected signals"}</button>
-        {showFactorySignals && (!wifiObservations.length ? (
-          <p className="mt-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-sm text-amber-200">
-            No Wi-Fi signal has been reported yet. Use “Discover mice / Wi-Fi signals” above to review saved reports,
-            or start the optional authenticated HP2 Ubuntu scanner for automatic updates.
-          </p>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {wifiObservations.slice(0, 12).map((observation: any) => (
-              <div key={observation.id} className="rounded-xl border border-cyan-500/20 bg-slate-900/70 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="break-all font-semibold text-white">{observation.hostname || "Factory Wi-Fi"}</span>
-                  <span className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-cyan-200">
-                    {observation.isWifiRecentlySeen ? "Wi-Fi seen recently" : "No recent Wi-Fi signal"}
-                  </span>
-                </div>
-                <p className="mt-1 break-all font-mono text-xs text-slate-400">{observation.macAddress || "Unknown BSSID"}</p>
-                <p className="mt-2 text-sm text-cyan-200">
-                  Wi-Fi signal: {observation.wifiSignalPercent == null ? "Not recorded" : observation.wifiSignalPercent + "% at last scan"}
-                </p>
-                <p className="text-sm text-amber-200">MQTT: Not verified by this Wi-Fi sighting</p>
-                {!observation.isWifiRecentlySeen && <p className="mt-1 text-xs text-amber-100/90">May be sleeping or out of range. The green LED turning OFF does not confirm power OFF. Saved sighting is retained.</p>}
-                <p className="mt-1 text-xs text-slate-400">
-                  {observation.lastSeenAt ? "Last report: " + new Date(observation.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No report time"}
-                  {observation.wifiObservationSource === "admin-entry" ? " · Manually recorded" : " · HP2 scanner"}
-                </p>
-              </div>
-            ))}
-          </div>
-        ))}
+      <div className="rounded-xl border border-cyan-500/30 bg-slate-900/55 p-4">
+        <h3 className="font-semibold text-white">Owned mouse setup and branch assignment</h3>
+        <p className="mt-1 text-sm text-slate-300">Select a real Wi-Fi observation in Smart Check first. Then complete customer branch registration here. A saved sighting does not prove physical Wi-Fi provisioning or MQTT connectivity.</p>
       </div>
 
       <div>
