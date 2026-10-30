@@ -409,6 +409,14 @@ export default function AdminDashboard() {
 
   // States
   const [activeTab, setActiveTab] = useState("dashboard");
+  // Smart Check passes only a temporary AP observation; registration and MQTT
+  // verification remain separate tasks in Smart Devices.
+  useEffect(() => {
+    const openOwnedSetup = () => setActiveTab("iot-cloud");
+    window.addEventListener("pest:open-owned-smart-devices", openOwnedSetup);
+    return () => window.removeEventListener("pest:open-owned-smart-devices", openOwnedSetup);
+  }, []);
+
   const [showNotificationSidebar, setShowNotificationSidebar] = useState(false);
 
   // Rule 1: Admin-only per-branch visibility controls, independent for both sections.
