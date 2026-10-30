@@ -126,7 +126,10 @@ export default function BranchSmartDevicesPanel() {
               const lastReport = device.lastCheckedAt ? new Date(device.lastCheckedAt) : null;
               const hasValidReport = Boolean(lastReport && !Number.isNaN(lastReport.getTime()));
               const powerLabel = snap.power ? readableStatus(snap.power) + (device.isOnline ? "" : " (last report)") : "Power not verified";
-              const connectionLabel = device.isOnline ? "MQTT recently reported" : hasValidReport ? "Sleeping / No recent signal" : "Awaiting MQTT activation";
+              const connectionLabel = device.isOnline ? "MQTT recently reported" : hasValidReport ? "No recent MQTT signal" : "MQTT not yet verified";
+              const wifiSighting = device.wifiSetupSighting;
+              const wifiSightingValid = wifiSighting && typeof wifiSighting.ssid === "string" &&
+                wifiSighting.lastSeenAt && !Number.isNaN(new Date(wifiSighting.lastSeenAt).getTime());
               return (
                 <div key={device.id} className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60">
                   <div className={`h-1.5 ${device.isOnline ? "bg-emerald-500" : "bg-slate-600"}`} />
@@ -159,8 +162,20 @@ export default function BranchSmartDevicesPanel() {
                       </div>
                     </div>
 
-                    <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-500">
-                      Last MQTT report: {hasValidReport ? lastReport!.toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Waiting for first device report"} · {device.isOnline ? "Recently received authenticated telemetry." : "No recent telemetry. Mouse may be sleeping, switched OFF or out of range — power state cannot be confirmed; no reset required."}
+                    {wifiSightingValid && (
+                      <div className="mt-3 rounded-xl border border-cyan-700/40 bg-cyan-950/20 p-3 text-xs text-cyan-100">
+                        <div className="flex items-center gap-2 font-semibold"><Wifi className="h-4 w-4 shrink-0" />HP2 pairing Wi-Fi observed — {wifiSighting.ssid}</div>
+                        <p className="mt-1">
+                          {wifiSighting.signalPercent == null ? "Signal unknown" : wifiSighting.signalPercent + "% last observed"}
+                          {" · "}{wifiSighting.recentlySeen ? "Recently visible to HP2" : "No recent pairing signal (saved)"}
+                          {" · "}{new Date(wifiSighting.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" })}
+                        </p>
+                        <p className="mt-1 text-slate-300">Factory AP name match only. This does not verify the physical trap, a restaurant Wi-Fi connection, MQTT, power state, or alarm readiness.</p>
+                      </div>
+                    )}
+                    <div className="mt-4 border-t border-slate-700/70 pt-3 text-xs text-slate-400">
+                      Last verified MQTT report: {hasValidReport ? lastReport!.toLocaleString("en-GB", { timeZone: "Europe/London" }) : "None yet"}
+                      {" · "}{device.isOnline ? "Recently received authenticated telemetry." : "Not currently verified. Sleeping, OFF, or out of range are all possible; no reset required."}
                     </div>
                   </div>
                 </div>
@@ -170,7 +185,7 @@ export default function BranchSmartDevicesPanel() {
         </>
       )}
 
-      <p className="text-center text-xs text-slate-600">Powered by Food Safety Owned IoT • Live pest monitoring</p>
+      <p className="text-center text-xs text-slate-600">Food Safety Owned IoT • Only authenticated device reports confirm live monitoring</p>
     </div>
   );
 }
