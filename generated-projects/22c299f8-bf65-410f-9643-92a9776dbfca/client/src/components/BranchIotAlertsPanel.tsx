@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, CheckCircle2, MapPin, RefreshCw, ShieldCheck, Trash2, VolumeX, Wifi } from "lucide-react";
+import { BellRing, CheckCircle2, MapPin, RefreshCw, ShieldAlert, ShieldCheck, Trash2, VolumeX, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -70,6 +70,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
 
   const onlineCount = useMemo(() => devices.filter((device) => device?.isOnline).length, [devices]);
   const offlineCount = devices.length - onlineCount;
+  const allMonitored = devices.length > 0 && onlineCount === devices.length;
   const visibleHistory = useMemo(
     () => history.filter((event) => !hiddenHistoryIds.has(String(event.id))),
     [history, hiddenHistoryIds],
@@ -122,8 +123,8 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
     <div className="space-y-6 min-h-screen">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${alarms.length ? "bg-red-500/20 ring-1 ring-red-400/40" : "bg-emerald-500/20 ring-1 ring-emerald-400/30"}`}>
-            {alarms.length ? <BellRing className="h-5 w-5 text-red-300" /> : <ShieldCheck className="h-5 w-5 text-emerald-300" />}
+          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${alarms.length ? "bg-red-500/20 ring-1 ring-red-400/40" : allMonitored ? "bg-emerald-500/20 ring-1 ring-emerald-400/30" : "bg-amber-500/15 ring-1 ring-amber-400/25"}`}>
+            {alarms.length ? <BellRing className="h-5 w-5 text-red-300" /> : allMonitored ? <ShieldCheck className="h-5 w-5 text-emerald-300" /> : <ShieldAlert className="h-5 w-5 text-amber-300" />}
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Device Alerts</h2>
@@ -153,16 +154,21 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
       {loading ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center text-slate-400">Checking device alarms…</div>
       ) : alarms.length === 0 ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6">
+        <div className={`rounded-2xl border p-5 ${allMonitored ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/35 bg-amber-500/10"}`}>
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" />
+            {allMonitored ? <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" /> : <ShieldAlert className="mt-0.5 h-6 w-6 flex-shrink-0 text-amber-300" />}
             <div>
-              <h3 className="font-bold text-emerald-100">Ready</h3>
-              <p className="mt-1 text-sm text-emerald-200/80">
-                {devices.length
-                  ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
-                  : "No smart devices are assigned to this branch yet."}
+              <h3 className={`font-bold ${allMonitored ? "text-emerald-100" : "text-amber-100"}`}>
+                {allMonitored ? "No active catch alarms reported" : "Monitoring not yet fully active"}
+              </h3>
+              <p className={`mt-1 text-sm ${allMonitored ? "text-emerald-100/80" : "text-amber-100/85"}`}>
+                {devices.length === 0
+                  ? "No smart devices are assigned to this branch."
+                  : allMonitored
+                    ? `All ${devices.length} registered devices have reported recently. No active catch events have been received.`
+                    : `${onlineCount} of ${devices.length} assigned devices recently reported authenticated MQTT. ${offlineCount} have no recent verified connection; a mouse-caught alarm cannot be assumed to work until the device reports.`}
               </p>
+              {!allMonitored && <Button type="button" size="sm" variant="outline" onClick={onOpenDevices} className="mt-3 border-amber-500/40 text-amber-100">View device connection status</Button>}
             </div>
           </div>
         </div>
