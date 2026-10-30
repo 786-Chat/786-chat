@@ -13,6 +13,9 @@ export default function OwnedSetupPanel() {
   const [busy, setBusy] = useState(false);
   const [installerMethod, setInstallerMethod] = useState<"hp2" | "remote">("hp2");
   const [localWifiName, setLocalWifiName] = useState("");
+  // In-memory only: never persist, log or submit Wi-Fi credentials before provisioning is verified.
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [showWifiPassword, setShowWifiPassword] = useState(false);
   const [scan, setScan] = useState<RouterScan | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -120,7 +123,7 @@ export default function OwnedSetupPanel() {
         {scan?.fresh && <p className="text-xs text-cyan-200">Report received: {scan.reportedAt ? new Date(scan.reportedAt).toLocaleString("en-GB") : "time unavailable"} · {nearby24.length} nearby 2.4 GHz networks</p>}
         {scan?.fresh && nearby24.length === 0 && <p className="text-sm text-amber-200">No 2.4 GHz networks found in the latest scan.</p>}
         {nearby24.length > 0 && <label className="block text-sm">Choose a detected 2.4 GHz network
-          <select value={nearby24.some(n=>n.ssid===localWifiName)?localWifiName:""} onChange={e=>setLocalWifiName(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
+          <select value={nearby24.some(n=>n.ssid===localWifiName)?localWifiName:""} onChange={e=>{setLocalWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);}} className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
             <option value="">Select a nearby network</option>
             {nearby24.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}% · {n.frequency} MHz</option>)}
           </select>
@@ -129,7 +132,15 @@ export default function OwnedSetupPanel() {
       <label className="block text-sm">2.4 GHz Wi-Fi name (manual entry for planning only)
         <input type="text" value={localWifiName} onChange={e=>setLocalWifiName(e.target.value)} autoComplete="off" placeholder="Restaurant Wi-Fi name" className="mt-2 w-full rounded-lg border border-slate-600 bg-slate-950 p-3"/>
       </label>
-      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Selecting a network does not provision the factory mouse. No Wi-Fi password is requested, stored or transmitted. Connecting requires a verified local provisioning protocol and compatible firmware.</p>
+      <div className="space-y-2 rounded-lg border border-slate-600 bg-slate-950/60 p-4">
+        <label htmlFor="owned-mouse-wifi-password" className="block text-sm font-medium">2.4 GHz Wi-Fi password (local entry only)</label>
+        <div className="flex gap-2">
+          <input id="owned-mouse-wifi-password" type={showWifiPassword ? "text" : "password"} value={wifiPassword} onChange={e => setWifiPassword(e.target.value)} autoComplete="new-password" autoCapitalize="none" spellCheck={false} placeholder={localWifiName ? "Enter password for " + localWifiName : "Select your Wi-Fi network first"} disabled={!localWifiName} className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-900 p-3 disabled:opacity-50" />
+          <button type="button" onClick={() => setShowWifiPassword(v => !v)} disabled={!wifiPassword} className="rounded-lg bg-slate-700 px-4 py-2 text-sm disabled:opacity-50" aria-label={showWifiPassword ? "Hide Wi-Fi password" : "Show Wi-Fi password"}>{showWifiPassword ? "Hide" : "Show"}</button>
+        </div>
+        <p className="text-xs text-amber-200">Password stays in this open browser form only; it is not sent, saved, or used to connect yet. Closing or reloading the page clears it. Mouse provisioning is not active.</p>
+      </div>
+      <p className="rounded-lg bg-slate-950/80 p-4 text-sm text-amber-200">Network and password entry does not provision the factory mouse. Connect remains disabled until a secure, tested provisioning protocol and compatible firmware are available.</p>
       <p className="text-sm text-slate-300">Next hardware check: verify mouse firmware compatibility, provisioning transport, and authenticated MQTT telemetry before enabling Connect.</p>
       <div className="grid gap-2 text-sm text-slate-300"><p>1. Discovery: verified only when a nearby Wi-Fi AP is observed.</p><p>2. Branch registration: a database record, not a Wi-Fi connection.</p><p>3. Local Wi-Fi provisioning: not yet supported for this factory firmware.</p><p>4. Authenticated MQTT and real trap sensor: not yet verified.</p></div>
       <button disabled className="rounded-lg bg-slate-700 px-5 py-3 opacity-60">Connect and verify MQTT — unavailable until device protocol is tested</button>
