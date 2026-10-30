@@ -409,6 +409,12 @@ export default function AdminDashboard() {
 
   // States
   const [activeTab, setActiveTab] = useState("dashboard");
+  useEffect(() => {
+    const showOwnedSetup = () => setActiveTab("iot-cloud");
+    window.addEventListener("pest:open-owned-smart-devices", showOwnedSetup);
+    return () => window.removeEventListener("pest:open-owned-smart-devices", showOwnedSetup);
+  }, []);
+
   // Smart Check passes only a temporary AP observation; registration and MQTT
   // verification remain separate tasks in Smart Devices.
   useEffect(() => {
