@@ -2453,7 +2453,6 @@ export default function AdminDashboard() {
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
       
-      { id: "iot-cloud", label: "Smart Devices", icon: Zap },
       { id: "smartlife-check", label: "SmartLife Check", icon: Wifi },
       { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }
     ]},
@@ -4077,7 +4076,7 @@ export default function AdminDashboard() {
             
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {(activeTab === "iot-cloud" || activeTab === "device-check") && <IotAdminPanel />}
+            {false && (activeTab === "iot-cloud" || activeTab === "device-check") && <IotAdminPanel />}
 
             {/* Rule 2: isolated SmartLife management — never shares owned IoT tables. */}
             {activeTab === "smartlife-check" && <SmartLifeAdminPanel mode="check" />}
