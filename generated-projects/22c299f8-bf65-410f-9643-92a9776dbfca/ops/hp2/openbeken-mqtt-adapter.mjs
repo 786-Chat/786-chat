@@ -21,17 +21,27 @@
  * is REQUIRED. Do not guess FS-MOUSE IDs from mouse numbers or MAC addresses.
  * This adapter uses mosquitto_sub -R to IGNORE replayed retained MQTT messages,
  * preventing stale retained catch alerts from being re-sent at startup.
+ * Genuine OpenBeken /connected "online" and "offline" messages can update
+ * last seen and sleeping status. "offline" is NOT a physical switch reading.
+ * A saved factory SmartLife Wi-Fi sighting never emits an MQTT event.
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import readline from "node:readline";
 
 function parseReport(topic, payload, permittedPrefixes) {
-  // Strictly require only OpenBeken channel 1 (catch) or 2 (battery).
-  const parts = String(topic || "").match(/^([A-Za-z0-9_-]+)\/(1|2)\/get$/);
+  // Only permit physically mapped OpenBeken channels and MQTT availability.
+  // The "offline" LWT is radio sleep/disconnect, NOT proof of switch OFF.
+  const parts = String(topic || "").match(/^([A-Za-z0-9_-]+)\/(connected|1\/get|2\/get)$/);
   if (!parts || !permittedPrefixes.has(parts[1])) return null;
   const value = String(payload || "").trim();
-  if (parts[2] === "1") {
+  if (parts[2] === "connected") {
+    const availability = value.toLowerCase();
+    return availability === "online" ? { prefix: parts[1], type: "online" }
+      : availability === "offline" ? { prefix: parts[1], type: "offline" }
+      : null;
+  }
+  if (parts[2] === "1/get") {
     return value === "1" ? { prefix: parts[1], type: "trap_triggered" }
       : value === "0" ? { prefix: parts[1], type: "trap_reset" }
       : null;
@@ -53,6 +63,10 @@ if (process.argv.includes("--self-test")) {
   assert(!parseReport("Mouse_Trap_1/1/get", "-1", allow), "unknown trap value refused");
   assert(!parseReport("Mouse_Trap_1/2/get", "-1", allow), "battery sentinel refused");
   assert(!parseReport("Mouse_Trap_1/2/get", "130", allow), "battery overflow refused");
+  assert(parseReport("Mouse_Trap_1/connected", "online", allow)?.type === "online", "physical OpenBeken online wake");
+  assert(parseReport("Mouse_Trap_1/connected", "offline", allow)?.type === "offline", "sleep / LWT offline");
+  assert(!parseReport("Mouse_Trap_1/connected", "unknown", allow), "invalid availability refused");
+  assert(!parseReport("Mouse_Trap_2/connected", "online", allow), "unmapped availability refused");
   assert(!parseReport("Mouse_Trap_1/trap", "1", allow), "legacy trap topic refused");
   console.log("PASS: OpenBeken topic parsing, strict allowlist, and battery validation");
   process.exit(0);
@@ -79,14 +93,14 @@ if (!/^https:\/\//.test(base) || !token ||
   process.exit(2);
 }
 const devices = new Map(entries);
-const topics = entries.flatMap(([prefix]) => [prefix + "/1/get", prefix + "/2/get"]);
+const topics = entries.flatMap(([prefix]) => [prefix + "/connected", prefix + "/1/get", prefix + "/2/get"]);
 const args = ["-h", mqttHost, "-p", mqttPort, "-R", "-v"];
 for (const topic of topics) args.push("-t", topic);
 if (mqttUser) args.push("-u", mqttUser);
 if (mqttPassword) args.push("-P", mqttPassword);
 
 console.log("[openbeken] OPTIONAL verified sensor adapter active, prefixes: " + entries.map(x => x[0]).join(", "));
-console.log("[openbeken] Retained messages ignored; no factory Wi-Fi or firmware controls.");
+console.log("[openbeken] Retained messages ignored; /connected LWT means radio sleep, not physical OFF.");
 const sub = spawn("mosquitto_sub", args, { stdio: ["ignore", "pipe", "inherit"], env: process.env });
 const rl = readline.createInterface({ input: sub.stdout });
 let chain = Promise.resolve();
