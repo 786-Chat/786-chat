@@ -30,6 +30,8 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Validate HP2 Wi-Fi scanner JavaScript
         run: node --check ops/hp2/foodsafety-wifi-ap-scanner.mjs
+      - name: Validate optional OpenBeken bridge parser (no hardware access)
+        run: node --check ops/hp2/openbeken-mqtt-adapter.mjs && node ops/hp2/openbeken-mqtt-adapter.mjs --self-test
       - name: Type-check Pest Control
         run: npm run check
       - name: Build Pest Control client and server
