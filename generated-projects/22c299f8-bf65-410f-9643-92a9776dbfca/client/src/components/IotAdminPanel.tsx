@@ -122,9 +122,24 @@ export default function IotAdminPanel() {
   const [showFactorySignals, setShowFactorySignals] = useState(true);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
   const [nearbyWifiNetworks, setNearbyWifiNetworks] = useState<Array<{ ssid: string; frequency: number | null; signal: number | null }>>([]);
-  const [wifiScanPaste, setWifiScanPaste] = useState("");
   const [routerScanStatus, setRouterScanStatus] = useState("No automatic HP2 router scan received yet.");
   const [routerScanReportedAt, setRouterScanReportedAt] = useState<string | null>(null);
+
+  // Show each nearby 2.4 GHz router once, using the strongest reported signal.
+  const local24Networks = useMemo(() => {
+    const results = new Map<string, { ssid: string; frequency: number; signal: number }>();
+    for (const observation of nearbyWifiNetworks) {
+      if (!observation || typeof observation.ssid !== "string" ||
+          typeof observation.frequency !== "number" ||
+          observation.frequency < 2400 || observation.frequency >= 2500) continue;
+      const signal = typeof observation.signal === "number" ? observation.signal : 0;
+      const previous = results.get(observation.ssid);
+      if (!previous || previous.signal < signal) {
+        results.set(observation.ssid, { ssid: observation.ssid, frequency: observation.frequency, signal });
+      }
+    }
+    return [...results.values()].sort((a, b) => b.signal - a.signal || a.ssid.localeCompare(b.ssid));
+  }, [nearbyWifiNetworks]);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -160,7 +175,7 @@ export default function IotAdminPanel() {
       }
       const data = await response.json();
       if (!data?.fresh || !Array.isArray(data.networks) || !data.networks.length) {
-        setRouterScanStatus("No recent automatic HP2 router scan. You can still import the Ubuntu scan below.");
+        setRouterScanStatus("No recent HP2 router scan. Use Refresh, or enter the SSID manually.");
         setRouterScanReportedAt(data?.reportedAt || null);
         return;
       }
@@ -174,7 +189,7 @@ export default function IotAdminPanel() {
       setRouterScanStatus("HP2 router scan received — " + networks.length + " networks. Choose a 2.4 GHz router below.");
       setRouterScanReportedAt(data.reportedAt || null);
     } catch {
-      setRouterScanStatus("Cannot reach HP2 router scan data. Manual SSID entry remains available.");
+      setRouterScanStatus("Cannot reach HP2 router scan service. You may enter the SSID manually.");
     }
   };
 
@@ -796,133 +811,78 @@ export default function IotAdminPanel() {
       </div>
       }
       </div>
-      <section className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-5">
-        <h3 className="text-lg font-semibold text-white">STEP 2 — CONNECT RESTAURANT WI-FI</h3>
-        <p className="mt-2 text-sm text-slate-300">Install once locally: pair a compatible mouse with the restaurant's 2.4 GHz Wi-Fi, then verify authenticated remote MQTT. HP2 in the UK cannot scan overseas restaurant Wi-Fi.</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg bg-slate-950/60 p-3">
-            <strong className="text-sm text-cyan-200">Local Wi-Fi setup</strong>
-            <p className="mt-1 text-sm text-amber-200">Not provisioned. The factory BMAX W003 does not have a verified connection interface for this Admin. A nonworking password form has been removed.</p>
+      <section className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-4 sm:p-5" id="owned-local-wifi-setup">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-white sm:text-lg">STEP 2 — RESTAURANT WI-FI</h3>
+            <p className="mt-1 text-xs text-slate-300">Choose your 2.4 GHz router near HP2. This is a real Wi-Fi scan, not a mouse connection.</p>
           </div>
-          <div className="rounded-lg bg-slate-950/60 p-3">
-            <strong className="text-sm text-cyan-200">Cloud connection route</strong>
-            <p className="mt-1 text-sm text-white">Mouse → Restaurant Wi-Fi → AWS IoT → Pest Control Admin</p>
-            <p className="mt-1 text-xs text-slate-400">HP2 → AWS test passed; physical mouse → AWS and AWS → Admin events are not yet verified.</p>
+          <Button type="button" variant="outline" onClick={() => loadHp2RouterNetworks()} className="h-9 border-cyan-500/40 text-cyan-100">
+            Refresh Wi-Fi list
+          </Button>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse</label>
+            <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={wifiDeviceId} onChange={event => { setWifiDeviceId(event.target.value); setWifiPassword(""); }}>
+              <option value="">Select registered mouse...</option>
+              {ownedDevices.map((device: any) => (
+                <option key={device.deviceId} value={String(device.deviceId)}>
+                  {device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi network (2.4 GHz)</label>
+            <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off"
+              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={local24Networks.some(network => network.ssid === wifiSsid) ? wifiSsid : ""}
+              onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }}>
+              <option value="">{local24Networks.length ? "Select a nearby 2.4 GHz Wi-Fi network..." : "No recent HP2 scan — refresh or enter manually"}</option>
+              {local24Networks.map(network => (
+                <option key={network.ssid} value={network.ssid}>
+                  {network.ssid} — {network.signal}% signal
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
+            <input id="owned-wifi-password" name="foodsafety-router-password-local-only" type="password"
+              autoComplete="new-password" data-lpignore="true" data-1p-ignore="true"
+              aria-label="Wi-Fi password — temporary local browser entry"
+              placeholder="Password (not saved or sent)" value={wifiPassword} maxLength={128}
+              onChange={event => setWifiPassword(event.target.value)}
+              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400" />
+          </div>
+          <div className="flex items-end">
+            <Button type="button" disabled className="h-10 w-full bg-slate-600 text-white disabled:opacity-75"
+              title="The physical BMAX W003 still has factory Tuya firmware. No verified local provisioning method exists.">
+              Connect mouse — not available yet
+            </Button>
           </div>
         </div>
-        <div className="mt-4 rounded-xl border border-cyan-500/35 bg-slate-950/45 p-4" id="owned-local-wifi-setup">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h4 className="font-semibold text-white">Restaurant Wi-Fi network selector</h4>
-              <p className="mt-1 text-sm text-slate-300">Select a nearby <strong>2.4 GHz router network</strong> for future verified setup. The factory SmartLife-XXXX network is a pairing AP, not the restaurant network.</p>
-            </div>
-            <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-100">Physical provisioning not supported yet</span>
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse to set up</label>
-              <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={wifiDeviceId} onChange={event => { setWifiDeviceId(event.target.value); setWifiPassword(""); }}>
-                <option value="">Select registered mouse...</option>
-                {ownedDevices.map((device: any) => (
-                  <option key={device.deviceId} value={String(device.deviceId)}>{device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}</option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-400">Selection does not change the mouse's saved restaurant assignment.</p>
-            </div>
-            <div>
-              <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Select local Wi-Fi network (SSID)</label>
-              <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNetworks.some(network => network.ssid === wifiSsid && (network.frequency == null || network.frequency < 2500)) ? wifiSsid : ""} onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }}>
-                <option value="">{nearbyWifiNetworks.length ? "Select one of the scanned 2.4 GHz networks..." : "No recent scan — import below or enter SSID"}</option>
-                {nearbyWifiNetworks.map(network => (
-                  <option key={network.ssid} value={network.ssid} disabled={network.frequency != null && network.frequency >= 2500}>
-                    {network.ssid} {network.frequency == null ? "(band not verified)" : network.frequency < 2500 ? "(2.4 GHz)" : "(5 GHz — not selectable)"}{network.signal == null ? "" : " — " + network.signal + "%"}
-                  </option>
-                ))}
-              </select>
-              <input type="search" id="food-safety-router-ssid-manual" name="food-safety-router-ssid-manual" autoComplete="off" autoCorrect="off" spellCheck={false}
-                data-lpignore="true" data-1p-ignore="true" className="mt-2 h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400"
-                aria-label="2.4 GHz router Wi-Fi name (not an email address)" placeholder="Enter Wi-Fi network name, e.g. VM1530649 (not email)" maxLength={64}
-                value={wifiSsid} onChange={event => setWifiSsid(event.target.value)} />
-              <p className="mt-1 text-xs text-slate-400">This field is a router Wi-Fi name, not an email or account login. Firefox's saved-login popup is not a Wi-Fi scan.</p>
-              <div className="mt-2 flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => loadHp2RouterNetworks()} className="border-cyan-600/50 text-cyan-100">Refresh HP2 router list</Button>
-              </div>
-              <p role="status" aria-live="polite" className="mt-2 text-xs text-cyan-200">{routerScanStatus}{routerScanReportedAt ? " Last report: " + new Date(routerScanReportedAt).toLocaleString("en-GB", {timeZone:"Europe/London"}) : ""}</p>
-              <p className="mt-1 text-xs text-slate-400">Automatic listing works only after the separate read-only HP2 router scanner is enabled. These networks are near HP2, not necessarily near the restaurant.</p>
-            </div>
-          </div>
-          <details className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/65 p-3">
-            <summary className="cursor-pointer text-sm font-medium text-cyan-200">Scan nearby Wi-Fi using HP2 Ubuntu (read-only)</summary>
-            <p className="mt-2 text-xs text-slate-300">A remote website cannot scan the Wi-Fi networks around HP2 directly. On HP2, this command lists nearby SSIDs and frequencies without showing passwords. Choose a 2.4 GHz network (around 2400 MHz). Do not select SmartLife-203B as the restaurant network.</p>
-            <code className="mt-2 block overflow-x-auto rounded bg-black/40 p-2 text-xs text-emerald-200">nmcli -f SSID,FREQ,SIGNAL device wifi list ifname wlxe4fac420a7a9 --rescan yes</code>
-            <p className="mt-2 text-xs text-slate-300">Copy and paste the <strong>entire HP2 terminal Wi-Fi scan</strong> below (including MHz and signal). The list is parsed automatically; 2.4 GHz networks are selectable, while 5 GHz is displayed but blocked. No password is included.</p>
-            <textarea aria-label="Paste complete HP2 Wi-Fi scan output" name="foodsafety-wifi-scan-import" autoComplete="off" className="mt-2 min-h-24 w-full rounded-md border border-slate-600 bg-slate-950 p-2 font-mono text-xs text-white" placeholder={"SSID               FREQ      SIGNAL\nVM1530649          2437 MHz  100\nVM1530649          5540 MHz  100"} value={wifiScanPaste} onChange={event => setWifiScanPaste(event.target.value)} maxLength={8000} />
-            <Button type="button" variant="outline" className="mt-2 border-cyan-500/40 text-cyan-100" onClick={() => {
-              const networks: Array<{ ssid: string; frequency: number | null; signal: number | null }> = [];
-              const seen = new Set<string>();
-              for (const line of wifiScanPaste.split(/\r?\n/)) {
-                const cleaned = line.trim().replace(/^\*\s+/, "");
-                const match = cleaned.match(/^(.*?)\s+(\d{4})\s*MHz\s+(\d{1,3})\s*$/i);
-                const ssid = match ? match[1].trim() : cleaned;
-                if (!ssid || /^SSID\b/i.test(ssid) || /^--?$/.test(ssid) || ssid.length > 64 ||
-                    /^(SmartLife-|OpenBK)/i.test(ssid) || seen.has(ssid)) continue;
-                // Require MHz frequency when importing a terminal scan. A plain
-                // SSID can still be typed manually, without guessing its band.
-                if (!match) continue;
-                const frequency = Number(match[2]);
-                const signal = Number(match[3]);
-                if (!Number.isFinite(frequency) || frequency < 2300 || frequency > 5900 ||
-                    !Number.isFinite(signal) || signal > 100) continue;
-                seen.add(ssid);
-                networks.push({ ssid, frequency, signal });
-                if (networks.length >= 60) break;
-              }
-              // Prefer 2.4 GHz results for dual-band SSIDs.
-              networks.sort((a, b) => Number((a.frequency || 0) >= 2500) - Number((b.frequency || 0) >= 2500) || (b.signal || 0) - (a.signal || 0));
-              setNearbyWifiNetworks(networks);
-              toast({
-                title: networks.length ? networks.length + " router networks loaded" : "No Wi-Fi scan rows recognised",
-                description: networks.length ? "Select your local 2.4 GHz Wi-Fi above. This does not connect or reconfigure the mouse." : "Copy the entire nmcli output including SSID, MHz frequency and signal, then paste it here.",
-                variant: networks.length ? undefined : "destructive",
-              });
-            }}>Import HP2 Wi-Fi scan into selector</Button>
-            {nearbyWifiNetworks.length > 0 && <p className="mt-2 text-xs text-emerald-200">Imported {nearbyWifiNetworks.length} router network names from your HP2 terminal. Passwords and device settings have not been read or changed.</p>}
-          </details>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
-              <input id="owned-wifi-password" name="foodsafety-router-password-local-only" type="password" autoComplete="new-password"
-                data-lpignore="true" data-1p-ignore="true" aria-label="Restaurant Wi-Fi password (temporary local entry only)"
-                className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400"
-                placeholder="Enter password (kept in this tab only)" value={wifiPassword} maxLength={128}
-                onChange={event => setWifiPassword(event.target.value)} />
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-xs text-slate-300">{wifiPassword ? "Password entered locally — NOT sent to any device." : "Password is optional until supported firmware is verified."}</p>
-                {wifiPassword && <Button type="button" variant="outline" onClick={() => setWifiPassword("")} className="border-slate-500 text-xs text-slate-200">Clear password</Button>}
-              </div>
-              <p className="mt-1 text-xs text-amber-200">This input is temporary browser state only. It is not saved, transmitted, or used to connect the mouse. Clear it or refresh the page to discard it. Do not put passwords in chat.</p>
-            </div>
-            <div className="flex flex-col justify-end gap-2">
-              <Button type="button" disabled className="w-full bg-slate-600 text-white disabled:opacity-75">Connect Mouse to Wi-Fi — unavailable for factory Tuya firmware</Button>
-              <p className="text-xs text-amber-200">No network configuration or MQTT command will be sent. After verified OpenBeken installation, the physical device must be configured locally before this becomes available.</p>
-            </div>
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className="text-cyan-200" role="status" aria-live="polite">
+            {local24Networks.length ? local24Networks.length + " nearby 2.4 GHz routers" : routerScanStatus}
+          </span>
+          {routerScanReportedAt && <span className="text-slate-400">HP2 last scan: {new Date(routerScanReportedAt).toLocaleTimeString("en-GB", { timeZone: "Europe/London" })}</span>}
+          {wifiPassword && <button type="button" onClick={() => setWifiPassword("")} className="text-cyan-200 underline">Clear password</button>}
         </div>
-        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
-          <h4 className="font-semibold text-amber-100">Why Smart Life pairing and Food Safety Admin behave differently</h4>
-          <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg bg-slate-950/60 p-3">
-              <strong className="text-cyan-200">Factory Smart Life / Tuya firmware</strong>
-              <p className="mt-1 text-slate-200">The SmartLife-XXXX network is a temporary pairing access point. After successful pairing, it may disappear. A green LED that stops flashing, including after an OFF/ON cycle, does not prove the trap is OFF or online.</p>
-            </div>
-            <div className="rounded-lg bg-slate-950/60 p-3">
-              <strong className="text-cyan-200">Your Food Safety Wi-Fi / MQTT system</strong>
-              <p className="mt-1 text-slate-200">Detecting SmartLife-XXXX confirms only a nearby pairing signal. This Admin cannot yet send Wi-Fi settings into the factory Tuya firmware. It must not claim Wi-Fi provisioning or MQTT success.</p>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-amber-100">Power cycling to make the LED flash again only repeats the pairing broadcast test; it does not complete our MQTT connection. Leave the mouse ON and keep its last Wi-Fi sighting saved. An authenticated physical MQTT report is required before the Admin or restaurant card says Connected.</p>
-          <p className="mt-2 text-xs text-slate-300">A compatible local firmware or verified integration is needed for owned MQTT. The published Neo Coolcam/OpenBeken low-power solution is not yet verified for this exact BMAX W003 hardware revision.</p>
+        <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+          <strong>Not provisioned:</strong> Mouse #11 uses factory Tuya firmware. Selecting Wi-Fi and typing a password does not send them to the mouse or establish MQTT.
+          The password stays in this tab only and is cleared on refresh.
         </div>
+        <details className="mt-2 text-xs text-slate-300">
+          <summary className="cursor-pointer text-cyan-200">Network missing? Enter SSID manually / Why Connect is unavailable</summary>
+          <label htmlFor="food-safety-router-ssid-manual" className="mt-2 block text-slate-300">Other or hidden 2.4 GHz Wi-Fi network name</label>
+          <input id="food-safety-router-ssid-manual" type="search" name="food-safety-router-ssid-manual" autoComplete="off" data-lpignore="true" data-1p-ignore="true"
+            className="mt-1 h-9 w-full max-w-md rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+            placeholder="Enter SSID, not an email" value={wifiSsid} maxLength={64} onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }} />
+          <p className="mt-2">HP2 scans routers physically near HP2, not at distant restaurants. SmartLife-XXXX is a temporary factory pairing network. A verified device-side firmware or integration is needed before the Connect button can safely work.</p>
+        </details>
       </section>
 
       <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Fill in the mouse name, select its restaurant and installation area, then save. The registration stays saved while the mouse is offline.</p></div>
