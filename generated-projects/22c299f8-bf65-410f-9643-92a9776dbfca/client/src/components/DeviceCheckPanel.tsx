@@ -97,6 +97,7 @@ export default function DeviceCheckPanel() {
   }), [rows]);
 
   const filtered = useMemo(() => rows.filter(row => {
+    if (!row.hardwareKey.startsWith("wifi-ap:")) return false;
     const searchText = [row.hostname, row.mqttPrefix, row.macAddress,
       row.assignedDeviceId, row.assignedDeviceName, row.assignedBranchName,
       row.assignedLocation].filter(Boolean).join(" ").toLowerCase();
@@ -145,43 +146,9 @@ export default function DeviceCheckPanel() {
       </div>
       {refreshStatus && <p role="status" aria-live="polite" className="text-sm text-cyan-200">{refreshStatus}</p>}
       <p className="text-xs text-slate-400">Select a real HP2 Wi-Fi sighting, then choose Next to continue in Smart Devices. A sighting does not prove MQTT connectivity.</p>
-      <div className="rounded-xl border border-cyan-500/25 bg-slate-800/70 p-4">
-        <h3 className="font-semibold text-white">Saved mouse devices ({savedDevices.length})</h3>
-        <p className="mt-1 text-xs text-slate-300">
-          Registered devices stay listed when their Wi-Fi pairing signal stops or they are offline.
-          The status below comes from genuine device reports, not from the power button or a saved sighting.
-        </p>
-        {savedDevices.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">No registered devices match these filters. Register or assign a mouse in Smart Devices.</p>
-        ) : (
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            {savedDevices.map(device => {
-              const linked = rows.find(row => row.assignedDeviceId === device.deviceId &&
-                !row.hardwareKey.startsWith("wifi-ap:"));
-              const online = Boolean(linked?.isLive);
-              const branch = branches.find(b => String(b.id) === String(device.branchId || ""));
-              return (
-                <article key={device.id || device.deviceId} className="rounded-lg border border-slate-600 bg-slate-900/65 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <strong className="break-words text-white">{device.deviceName || device.deviceId}</strong>
-                    <span className={online ? "text-xs font-semibold text-emerald-300" : "text-xs font-semibold text-amber-300"}>
-                      {online ? "MQTT live" : "No verified live MQTT"}
-                    </span>
-                  </div>
-                  <p className="mt-1 break-all font-mono text-xs text-cyan-200">{device.deviceId}</p>
-                  <p className="mt-2 text-sm text-slate-300">Branch: {branch?.name || "Not assigned"}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {online ? "Live gateway message confirmed." : "Saved registration — may be sleeping, switched off, or disconnected. State not confirmed."}
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-700 bg-slate-800/70 p-6 text-center text-slate-300">
-          No matching devices in saved HP2 reports. The website cannot scan nearby Wi-Fi without the HP2 scanner.
+          No matching Wi-Fi AP observations. HP2 can only detect devices within local radio range; historical observations remain recorded.
         </div>
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
@@ -192,8 +159,8 @@ export default function DeviceCheckPanel() {
               <article key={row.id} className="min-w-0 rounded-xl border border-slate-700 bg-slate-800/75 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="break-words font-semibold text-white">{row.assignedDeviceName || row.hostname || row.mqttPrefix || "Unidentified mouse"}</h3>
-                    <p className="mt-1 break-all text-xs text-slate-400">{row.assignedDeviceId || row.macAddress || "Identity not verified"}</p>
+                    <h3 className="break-words font-semibold text-white">{row.hostname || "Unidentified Wi-Fi AP"}</h3>
+                    <p className="mt-1 break-all text-xs text-slate-400">{row.macAddress || "MAC not recorded"}</p>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${mqttLive ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/15 text-amber-200"}`}>
                     {mqttLive ? "MQTT live" : wifiOnly ? (row.isWifiRecentlySeen ? "Wi-Fi recently seen" : "Wi-Fi last seen") : "MQTT not live"}
@@ -209,7 +176,7 @@ export default function DeviceCheckPanel() {
                     className="inline-flex items-center gap-1 text-sm font-medium text-cyan-300 hover:text-cyan-100">
                     <ChevronDown className="h-4 w-4" /> {expanded[row.id] ? "Hide details" : "View details"}
                   </button>
-                  {wifiOnly && !row.assignedDeviceId && <Button type="button" size="sm" className="bg-cyan-600 text-white hover:bg-cyan-500" onClick={() => {
+                  {wifiOnly && Boolean(row.macAddress) && <Button type="button" size="sm" className="bg-cyan-600 text-white hover:bg-cyan-500" onClick={() => {
                     // Handoff only: never register, assign, or claim MQTT activation from an AP sighting.
                     const identity = { ssid: row.hostname || "", mac: row.macAddress || "", observedAt: row.lastSeenAt || "" };
                     window.sessionStorage.setItem("pest-smart-check-selected-v1", JSON.stringify(identity));
