@@ -10,7 +10,9 @@
  * Environment:
  *   PEST_CONTROL_BASE_URL=https://pestcontrol.cat
  *   FOODSAFETY_IOT_GATEWAY_TOKEN=<existing protected gateway token>
- *   FOODSAFETY_OPENBEKEN_DEVICE_MAP='{"Mouse_Trap_1":"FS-MOUSE-000003"}'
+ *   FOODSAFETY_OPENBEKEN_DEVICE_MAP='{"<verified-MQTT-prefix>":"<actual-registered-FS-MOUSE-ID>"}'
+ *   Replace BOTH placeholders only after checking the real mouse's MQTT
+ *   prefix and its existing device registry assignment. No guessed IDs.
  *   MQTT_HOST=127.0.0.1 [optional]
  *   MQTT_PORT=1883 [optional]
  *   MQTT_USERNAME / MQTT_PASSWORD [optional]
