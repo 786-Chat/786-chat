@@ -118,7 +118,7 @@ export default function IotAdminPanel() {
   const [branchSearchOpen, setBranchSearchOpen] = useState(false);
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
   const [showEmergencyTools, setShowEmergencyTools] = useState(false);
-  const [showRegisterForm, setShowRegisterForm] = useState(true);
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [showFactorySignals, setShowFactorySignals] = useState(true);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
   const [nearbyWifiNetworks, setNearbyWifiNetworks] = useState<Array<{ ssid: string; frequency: number | null; signal: number | null }>>([]);
@@ -155,6 +155,16 @@ export default function IotAdminPanel() {
     () => activeBranchId ? ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)) : ownedDevices,
     [ownedDevices, activeBranchId],
   );
+  const matchedBranchDevices = useMemo(() => {
+    const term = deviceSearch.trim().toLowerCase().replace(/\.{3}$/, "").replace(/…$/, "");
+    if (!term) return activeBranchDevices;
+    return activeBranchDevices.filter((device: any, index: number) =>
+      [`Device ${index + 1} — ${device.deviceName || ""}`, device.deviceName, device.deviceId, device.notes]
+        .some((value) => String(value || "").toLowerCase().includes(term)));
+  }, [activeBranchDevices, deviceSearch]);
+  const selectedWifiMouse = useMemo(() =>
+    ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId)) || null,
+    [ownedDevices, wifiDeviceId]);
   const branchSearchResults = useMemo(() => {
     const query = branchSearch.trim().toLowerCase();
     if (!query) return branches.slice(0, 12);
@@ -821,13 +831,27 @@ export default function IotAdminPanel() {
             Refresh Wi-Fi list
           </Button>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div>
+            <label htmlFor="owned-wifi-branch" className="mb-1 block text-xs font-medium text-cyan-100">Restaurant / branch</label>
+            <select id="owned-wifi-branch" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={activeBranchId}
+              onChange={event => {
+                const id = event.target.value;
+                const b = branches.find(branch => String(branch.id) === id);
+                setActiveBranchId(id); setBranchId(id); setBranchSearch(b?.name || "");
+                setBranchSearchOpen(false); setWifiDeviceId(""); setWifiPassword("");
+              }}>
+              <option value="">All branches (select restaurant)</option>
+              {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+            </select>
+          </div>
           <div>
             <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse</label>
             <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
               value={wifiDeviceId} onChange={event => { setWifiDeviceId(event.target.value); setWifiPassword(""); }}>
               <option value="">Select registered mouse...</option>
-              {ownedDevices.map((device: any) => (
+              {activeBranchDevices.map((device: any) => (
                 <option key={device.deviceId} value={String(device.deviceId)}>
                   {device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}
                 </option>
@@ -875,6 +899,27 @@ export default function IotAdminPanel() {
           <strong>Not provisioned:</strong> Mouse #11 uses factory Tuya firmware. Selecting Wi-Fi and typing a password does not send them to the mouse or establish MQTT.
           The password stays in this tab only and is cleared on refresh.
         </div>
+        {selectedWifiMouse && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-500/25 bg-slate-900/50 p-3">
+            <div className="min-w-0 text-xs text-slate-200">
+              <strong className="text-cyan-100">Already registered:</strong> {selectedWifiMouse.deviceName || selectedWifiMouse.deviceId}
+              {" · "}{branchById.get(String(selectedWifiMouse.branchId)) || selectedWifiMouse.branchName || "Assigned branch"}
+              <p className="mt-1 text-amber-200">Next opens the saved device. It does not send Wi-Fi credentials or establish MQTT.</p>
+            </div>
+            <Button type="button" variant="outline" className="border-cyan-500/50 text-cyan-100"
+              onClick={() => {
+                const id = String(selectedWifiMouse.branchId || "");
+                const b = branches.find(x => String(x.id) === id);
+                setActiveBranchId(id);
+                setBranchSearch(b?.name || "");
+                setBranchSearchOpen(false);
+                setDeviceSearch("");
+                document.getElementById("pest-registered-mice")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}>
+              Next → View saved mouse
+            </Button>
+          </div>
+        )}
         <details className="mt-2 text-xs text-slate-300">
           <summary className="cursor-pointer text-cyan-200">Network missing? Enter SSID manually / Why Connect is unavailable</summary>
           <label htmlFor="food-safety-router-ssid-manual" className="mt-2 block text-slate-300">Other or hidden 2.4 GHz Wi-Fi network name</label>
@@ -885,7 +930,17 @@ export default function IotAdminPanel() {
         </details>
       </section>
 
-      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4"><h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN TO RESTAURANT</h3><p className="mt-1 text-sm text-slate-300">Fill in the mouse name, select its restaurant and installation area, then save. The registration stays saved while the mouse is offline.</p></div>
+      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN NEW MOUSE (ONLY IF NEEDED)</h3>
+            <p className="mt-1 text-sm text-slate-300">Already registered? Skip this step. Do not create another record for the same physical mouse.</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => setShowRegisterForm(value => !value)} className="border-blue-500/40 text-blue-100">
+            {showRegisterForm ? "Hide new mouse form" : "Add a different, unregistered mouse"}
+          </Button>
+        </div>
+      </div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4 text-blue-300" />
@@ -993,7 +1048,7 @@ export default function IotAdminPanel() {
       </div>
 
       }
-      <div className="rounded-xl border border-emerald-500/25 bg-slate-900/50 p-4">
+      <div id="pest-registered-mice" className="scroll-mt-28 rounded-xl border border-emerald-500/25 bg-slate-900/50 p-4">
         <h3 className="text-lg font-semibold text-white">STEP 4 — REGISTERED MOUSE CARDS</h3>
         <p className="mt-1 text-sm text-slate-300">Saved mice remain registered when their Wi-Fi sleeps. No recent signal means sleep, power OFF or network loss is possible — never claim the mouse is switched OFF without proof. Only authenticated MQTT confirms connectivity and catch events.</p>
       </div>
@@ -1114,13 +1169,15 @@ export default function IotAdminPanel() {
         </div>
 
         <Input aria-label="Search mouse devices" placeholder="Search mouse name, ID or installation area" value={deviceSearch} onChange={e => setDeviceSearch(e.target.value)} className="mb-4 max-w-sm border-slate-600 bg-slate-950 text-white" />
-        {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).length === 0 ? (
+        {matchedBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+            <p>{activeBranchDevices.length ? "No devices match this search. Your assigned mice are unchanged." : activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+             {deviceSearch && <Button type="button" size="sm" variant="outline" className="border-slate-600 text-slate-200" onClick={() => setDeviceSearch("")}>Clear search</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).map((device: any, index: number) => {
+            {matchedBranchDevices.map((device: any) => {
+               const index = activeBranchDevices.indexOf(device);
               const snap = deviceSnapshot(device.lastStatus);
               const connectivity = getMouseConnectivity(device);
               const setupSsid = namedFactoryWifi(device.deviceName);
