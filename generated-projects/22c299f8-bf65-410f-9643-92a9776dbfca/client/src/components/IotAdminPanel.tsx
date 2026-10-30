@@ -121,6 +121,8 @@ export default function IotAdminPanel() {
   const [showRegisterForm, setShowRegisterForm] = useState(true);
   const [showFactorySignals, setShowFactorySignals] = useState(true);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
+  const [nearbyWifiNames, setNearbyWifiNames] = useState<string[]>([]);
+  const [wifiScanPaste, setWifiScanPaste] = useState("");
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -773,6 +775,60 @@ export default function IotAdminPanel() {
             <strong className="text-sm text-cyan-200">Cloud connection route</strong>
             <p className="mt-1 text-sm text-white">Mouse → Restaurant Wi-Fi → AWS IoT → Pest Control Admin</p>
             <p className="mt-1 text-xs text-slate-400">HP2 → AWS test passed; physical mouse → AWS and AWS → Admin events are not yet verified.</p>
+          </div>
+        </div>
+        <div className="mt-4 rounded-xl border border-cyan-500/35 bg-slate-950/45 p-4" id="owned-local-wifi-setup">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="font-semibold text-white">Restaurant Wi-Fi network selector</h4>
+              <p className="mt-1 text-sm text-slate-300">Select a nearby <strong>2.4 GHz router network</strong> for future verified setup. The factory SmartLife-XXXX network is a pairing AP, not the restaurant network.</p>
+            </div>
+            <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs text-amber-100">Physical provisioning not supported yet</span>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse to set up</label>
+              <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={wifiDeviceId} onChange={event => setWifiDeviceId(event.target.value)}>
+                <option value="">Select registered mouse...</option>
+                {ownedDevices.map((device: any) => (
+                  <option key={device.deviceId} value={String(device.deviceId)}>{device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Selection does not change the mouse's saved restaurant assignment.</p>
+            </div>
+            <div>
+              <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Select local Wi-Fi network (SSID)</label>
+              <select id="owned-wifi-network" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white" value={nearbyWifiNames.includes(wifiSsid) ? wifiSsid : ""} onChange={event => setWifiSsid(event.target.value)}>
+                <option value="">Enter SSID manually below or import an HP2 scan...</option>
+                {nearbyWifiNames.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+              <Input className="mt-2 border-slate-600 bg-slate-900 text-white" aria-label="Enter 2.4 GHz Wi-Fi network name manually" placeholder="2.4 GHz Wi-Fi name (SSID)" maxLength={64} value={wifiSsid} onChange={event => setWifiSsid(event.target.value)} />
+            </div>
+          </div>
+          <details className="mt-3 rounded-lg border border-slate-700/70 bg-slate-900/65 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-cyan-200">Scan nearby Wi-Fi using HP2 Ubuntu (read-only)</summary>
+            <p className="mt-2 text-xs text-slate-300">A remote website cannot scan the Wi-Fi networks around HP2 directly. On HP2, this command lists nearby SSIDs and frequencies without showing passwords. Choose a 2.4 GHz network (around 2400 MHz). Do not select SmartLife-203B as the restaurant network.</p>
+            <code className="mt-2 block overflow-x-auto rounded bg-black/40 p-2 text-xs text-emerald-200">nmcli -f SSID,FREQ,SIGNAL device wifi list ifname wlxe4fac420a7a9 --rescan yes</code>
+            <p className="mt-2 text-xs text-slate-300">Copy only the 2.4 GHz SSID names from the output and paste them below, one network name per line.</p>
+            <textarea aria-label="Paste nearby Wi-Fi network names, one per line" className="mt-2 min-h-20 w-full rounded-md border border-slate-600 bg-slate-950 p-2 text-sm text-white" placeholder={"ExampleNetwork\nRestaurantRouter"} value={wifiScanPaste} onChange={event => setWifiScanPaste(event.target.value)} maxLength={4000} />
+            <Button type="button" variant="outline" className="mt-2 border-cyan-500/40 text-cyan-100" onClick={() => {
+              const names = Array.from(new Set(wifiScanPaste.split(/\r?\n/).map(name => name.trim()).filter(name =>
+                name.length > 0 && name.length <= 64 && !/^(SmartLife-|OpenBK)/i.test(name)
+              ))).slice(0, 30);
+              setNearbyWifiNames(names);
+              toast({ title: names.length ? "Wi-Fi network choices loaded" : "No router SSIDs found", description: names.length ? "Choose one above. These are entered scan results, not confirmed device connections." : "Paste 2.4 GHz SSID names, one on each line." });
+            }}>Load scanned Wi-Fi names</Button>
+          </details>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
+              <Input id="owned-wifi-password" type="password" disabled value="" placeholder="Available after supported device setup is verified" className="border-slate-600 bg-slate-900 text-slate-400 disabled:opacity-65" />
+              <p className="mt-1 text-xs text-slate-400">For safety, this page does not collect or save router passwords until an actual secure local provisioning method exists.</p>
+            </div>
+            <div className="flex flex-col justify-end gap-2">
+              <Button type="button" disabled className="w-full bg-slate-600 text-white disabled:opacity-75">Connect Mouse to Wi-Fi — unavailable for factory Tuya firmware</Button>
+              <p className="text-xs text-amber-200">No network configuration or MQTT command will be sent. After verified OpenBeken installation, the physical device must be configured locally before this becomes available.</p>
+            </div>
           </div>
         </div>
         <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4">
