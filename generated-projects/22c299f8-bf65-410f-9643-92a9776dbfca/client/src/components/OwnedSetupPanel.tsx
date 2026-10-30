@@ -47,7 +47,9 @@ export default function OwnedSetupPanel() {
       try {
         const raw = sessionStorage.getItem("pest-smart-check-selected-v1");
         const item = raw ? JSON.parse(raw) : null;
-        setSelected(typeof item?.ssid === "string" && typeof item?.mac === "string" ? { ssid: item.ssid, mac: item.mac } : null);
+        const recent = item?.observedAt && Date.now() - new Date(item.observedAt).getTime() >= 0 && Date.now() - new Date(item.observedAt).getTime() < 180000;
+        if (!recent) sessionStorage.removeItem("pest-smart-check-selected-v1");
+        setSelected(recent && typeof item?.ssid === "string" && typeof item?.mac === "string" ? { ssid: item.ssid, mac: item.mac } : null);
       } catch (_) { setSelected(null); }
     };
     syncSelection();
