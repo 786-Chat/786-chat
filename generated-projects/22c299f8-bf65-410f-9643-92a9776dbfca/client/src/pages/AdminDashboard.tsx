@@ -157,6 +157,7 @@ import UsefulLinksSection from "@/components/UsefulLinksSection";
 import PaymentTrackerSection from "@/components/PaymentTrackerSection";
 import YearlyDocsAdminSection from "@/components/YearlyDocsAdminSection";
 import IotAdminPanel from "@/components/IotAdminPanel";
+import DeviceCheckPanel from "@/components/DeviceCheckPanel";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
@@ -2453,6 +2454,8 @@ export default function AdminDashboard() {
     // DEVELOPER TOOLS
     { section: "DEVELOPER TOOLS", items: [
       
+      { id: "device-check", label: "Smart Check", icon: Wifi },
+      { id: "iot-cloud", label: "Smart Devices", icon: Zap },
       { id: "smartlife-check", label: "SmartLife Check", icon: Wifi },
       { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }
     ]},
@@ -4076,7 +4079,8 @@ export default function AdminDashboard() {
             
 
             {/* Smart Devices / Food Safety Owned IoT */}
-            {false && (activeTab === "iot-cloud" || activeTab === "device-check") && <IotAdminPanel />}
+            {activeTab === "device-check" && <DeviceCheckPanel />}
+            {activeTab === "iot-cloud" && <IotAdminPanel />}
 
             {/* Rule 2: isolated SmartLife management — never shares owned IoT tables. */}
             {activeTab === "smartlife-check" && <SmartLifeAdminPanel mode="check" />}
