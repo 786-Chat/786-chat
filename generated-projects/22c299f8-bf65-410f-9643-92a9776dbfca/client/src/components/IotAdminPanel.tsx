@@ -16,6 +16,39 @@ function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// A sleeping radio, powered-off device and lost connection all look the same
+// until an authenticated MQTT report arrives. Never label absence as "OFF".
+function getMouseConnectivity(device: any) {
+  if (device.isOnline) {
+    return {
+      badge: "MQTT recently reported",
+      status: "Recently reported — MQTT",
+      detail: "Last authenticated gateway report received. This does not prove that Wi-Fi will stay awake.",
+      active: true,
+    };
+  }
+  if (device.lastCheckedAt) {
+    return {
+      badge: "Sleeping / No recent signal",
+      status: "No recent MQTT signal",
+      detail: "May be sleeping, out of range, or switched off. Power state is not verified; no reset needed.",
+      active: false,
+    };
+  }
+  return {
+    badge: "Awaiting MQTT activation",
+    status: "MQTT not yet verified",
+    detail: "Registration is saved. No physical MQTT report has been verified yet.",
+    active: false,
+  };
+}
+
+// Only correlate observations by an exact factory AP name explicitly present
+// in the saved device's friendly name. This is NOT authenticated identity.
+function namedFactoryWifi(deviceName: unknown) {
+  return String(deviceName || "").match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0].toLowerCase() || "";
+}
+
 function deviceSnapshot(statusList: any[]) {
   const list = Array.isArray(statusList) ? statusList : [];
   let battery: string | null = null;
@@ -31,7 +64,7 @@ function deviceSnapshot(statusList: any[]) {
   return { battery, state, mqttRssi };
 }
 
-export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck?: () => void }) {
+export default function IotAdminPanel() {
   const { toast } = useToast();
   const [systemStatus, setSystemStatus] = useState<any>(null);
   const [assigned, setAssigned] = useState<any[]>([]);
@@ -86,8 +119,40 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   const [advancedDeviceId, setAdvancedDeviceId] = useState("");
   const [showEmergencyTools, setShowEmergencyTools] = useState(false);
   const [showRegisterForm, setShowRegisterForm] = useState(false);
-  const [showFactorySignals, setShowFactorySignals] = useState(false);
+  const [showFactorySignals, setShowFactorySignals] = useState(true);
   const [showWifiDetails, setShowWifiDetails] = useState(false);
+  const [nearbyWifiNetworks, setNearbyWifiNetworks] = useState<Array<{ ssid: string; frequency: number | null; signal: number | null }>>([]);
+  const [routerScanStatus, setRouterScanStatus] = useState("No automatic HP2 router scan received yet.");
+  const [routerScanReportedAt, setRouterScanReportedAt] = useState<string | null>(null);
+
+  // Read the Smart Check handoff. This is only a temporary selection, not proof
+  // of physical Wi-Fi provisioning, authenticated MQTT, or device ownership.
+  const [smartCheckSelection, setSmartCheckSelection] = useState<{ ssid: string; mac: string } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("pest-smart-check-selected-v1");
+      if (!raw) return;
+      const value = JSON.parse(raw);
+      if (typeof value?.ssid !== "string" || typeof value?.mac !== "string") return;
+      setSmartCheckSelection({ ssid: value.ssid, mac: value.mac });
+    } catch (_) { /* Invalid handoff is ignored, never trusted */ }
+  }, []);
+
+  // Show each nearby 2.4 GHz router once, using the strongest reported signal.
+  const local24Networks = useMemo(() => {
+    const results = new Map<string, { ssid: string; frequency: number; signal: number }>();
+    for (const observation of nearbyWifiNetworks) {
+      if (!observation || typeof observation.ssid !== "string" ||
+          typeof observation.frequency !== "number" ||
+          observation.frequency < 2400 || observation.frequency >= 2500) continue;
+      const signal = typeof observation.signal === "number" ? observation.signal : 0;
+      const previous = results.get(observation.ssid);
+      if (!previous || previous.signal < signal) {
+        results.set(observation.ssid, { ssid: observation.ssid, frequency: observation.frequency, signal });
+      }
+    }
+    return [...results.values()].sort((a, b) => b.signal - a.signal || a.ssid.localeCompare(b.ssid));
+  }, [nearbyWifiNetworks]);
 
   const branchById = useMemo(() => new Map(branches.map((branch) => [branch.id, branch.name])), [branches]);
   const ownedDevices = useMemo(
@@ -103,6 +168,16 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
     () => activeBranchId ? ownedDevices.filter((device: any) => String(device.branchId) === String(activeBranchId)) : ownedDevices,
     [ownedDevices, activeBranchId],
   );
+  const matchedBranchDevices = useMemo(() => {
+    const term = deviceSearch.trim().toLowerCase().replace(/\.{3}$/, "").replace(/…$/, "");
+    if (!term) return activeBranchDevices;
+    return activeBranchDevices.filter((device: any, index: number) =>
+      [`Device ${index + 1} — ${device.deviceName || ""}`, device.deviceName, device.deviceId, device.notes]
+        .some((value) => String(value || "").toLowerCase().includes(term)));
+  }, [activeBranchDevices, deviceSearch]);
+  const selectedWifiMouse = useMemo(() =>
+    ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId)) || null,
+    [ownedDevices, wifiDeviceId]);
   const branchSearchResults = useMemo(() => {
     const query = branchSearch.trim().toLowerCase();
     if (!query) return branches.slice(0, 12);
@@ -113,6 +188,33 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       .slice(0, 20);
   }, [branches, branchSearch]);
 
+
+  const loadHp2RouterNetworks = async () => {
+    try {
+      const response = await fetch("/api/iot/router-wifi-networks", { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        setRouterScanStatus("HP2 router scan service is not available on this preview (" + response.status + ").");
+        return;
+      }
+      const data = await response.json();
+      if (!data?.fresh || !Array.isArray(data.networks) || !data.networks.length) {
+        setRouterScanStatus("No recent HP2 router scan. Use Refresh, or enter the SSID manually.");
+        setRouterScanReportedAt(data?.reportedAt || null);
+        return;
+      }
+      const networks = data.networks.filter((item: any) =>
+        typeof item?.ssid === "string" && item.ssid.length > 0 && item.ssid.length <= 64 &&
+        Number.isInteger(item.frequency) && item.frequency >= 2400 && item.frequency <= 5900 &&
+        Number.isInteger(item.signal) && item.signal >= 0 && item.signal <= 100 &&
+        !/^(SmartLife-|OpenBK)/i.test(item.ssid)
+      ).slice(0, 64);
+      setNearbyWifiNetworks(networks);
+      setRouterScanStatus("HP2 router scan received — " + networks.length + " networks. Choose a 2.4 GHz router below.");
+      setRouterScanReportedAt(data.reportedAt || null);
+    } catch {
+      setRouterScanStatus("Cannot reach HP2 router scan service. You may enter the SSID manually.");
+    }
+  };
 
   const loadBase = async () => {
     const [statusRes, assignedRes, branchRes, wifiCheckRes] = await Promise.all([
@@ -148,7 +250,11 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
   useEffect(() => {
     loadBase().catch(() => {});
     loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
-    const timer = window.setInterval(() => loadBase().catch(() => {}), 20000);
+    loadHp2RouterNetworks().catch(() => {});
+    const timer = window.setInterval(() => {
+      loadBase().catch(() => {});
+      loadHp2RouterNetworks().catch(() => {});
+    }, 20000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -595,11 +701,7 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={onOpenDeviceCheck}
-            className="border-cyan-500/50 text-cyan-200 hover:bg-cyan-500/10">
-            <Wifi className="mr-2 h-4 w-4" />
-            Device Check / Wi-Fi signal
-          </Button>
+
         <Button
           onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
@@ -609,46 +711,9 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         </Button>
         </div>
       </div>
-
-      <div className="rounded-2xl border border-cyan-500/25 bg-slate-800/65 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-semibold text-white">HP2 Wi-Fi sightings — optional</h3>
-            <p className="mt-1 text-sm text-slate-300">Only genuinely observed HP2 Wi-Fi signals appear here. A SmartLife pairing signal is not proof of trap activation or MQTT connectivity.</p>
-          </div>
-          <Button size="sm" type="button" onClick={() => loadBase().catch(() => {})} className="bg-slate-700 text-white hover:bg-slate-600">
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh HP2 sightings
-          </Button>
-        </div>
-        <button type="button" className="mt-2 text-sm text-cyan-300" onClick={() => setShowFactorySignals(!showFactorySignals)}>{showFactorySignals ? "Hide detected signals" : "Show detected signals"}</button>
-        {showFactorySignals && (!wifiObservations.length ? (
-          <p className="mt-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-sm text-amber-200">
-            No Wi-Fi signal has been reported to this dashboard yet. Use Device Check to record a real HP2 scan,
-            or start the optional authenticated HP2 Ubuntu scanner for automatic updates.
-          </p>
-        ) : (
-          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {wifiObservations.slice(0, 12).map((observation: any) => (
-              <div key={observation.id} className="rounded-xl border border-cyan-500/20 bg-slate-900/70 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="break-all font-semibold text-white">{observation.hostname || "Factory Wi-Fi"}</span>
-                  <span className="shrink-0 rounded bg-slate-700 px-2 py-1 text-xs text-cyan-200">
-                    {observation.isWifiRecentlySeen ? "Recently seen" : "Previous Wi-Fi sighting"}
-                  </span>
-                </div>
-                <p className="mt-1 break-all font-mono text-xs text-slate-400">{observation.macAddress || "Unknown BSSID"}</p>
-                <p className="mt-2 text-sm text-cyan-200">
-                  Wi-Fi signal: {observation.wifiSignalPercent == null ? "Not recorded" : observation.wifiSignalPercent + "% at last scan"}
-                </p>
-                <p className="text-sm text-amber-200">MQTT: Not connected / not verified</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {observation.lastSeenAt ? "Last report: " + new Date(observation.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No report time"}
-                  {observation.wifiObservationSource === "admin-entry" ? " · Manually recorded" : " · HP2 scanner"}
-                </p>
-              </div>
-            ))}
-          </div>
-        ))}
+      <div className="rounded-xl border border-cyan-500/30 bg-slate-900/55 p-4">
+        <h3 className="font-semibold text-white">Owned mouse setup and branch assignment</h3>
+        <p className="mt-1 text-sm text-slate-300">Select a real Wi-Fi observation in Smart Check first. Then complete customer branch registration here. A saved sighting does not prove physical Wi-Fi provisioning or MQTT connectivity.</p>
       </div>
 
       <div>
@@ -721,6 +786,144 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         </div>
       </div>
       }
+      </div>
+      <section className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-4 sm:p-5" id="owned-local-wifi-setup">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-white sm:text-lg">STEP 2 — RESTAURANT WI-FI</h3>
+            <p className="mt-1 text-xs text-slate-300">Choose your 2.4 GHz router near HP2. This is a real Wi-Fi scan, not a mouse connection.</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => loadHp2RouterNetworks()} className="h-9 border-cyan-500/40 text-cyan-100">
+            Refresh Wi-Fi list
+          </Button>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div>
+            <label htmlFor="owned-wifi-branch" className="mb-1 block text-xs font-medium text-cyan-100">Restaurant / branch</label>
+            <select id="owned-wifi-branch" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={activeBranchId}
+              onChange={event => {
+                const id = event.target.value;
+                const b = branches.find(branch => String(branch.id) === id);
+                setActiveBranchId(id); setBranchId(id); setBranchSearch(b?.name || "");
+                setBranchSearchOpen(false); setWifiDeviceId(""); setWifiPassword("");
+              }}>
+              <option value="">All branches (select restaurant)</option>
+              {branches.map(b => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="owned-wifi-device" className="mb-1 block text-xs font-medium text-cyan-100">Mouse</label>
+            <select id="owned-wifi-device" className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={wifiDeviceId} onChange={event => { setWifiDeviceId(event.target.value); setWifiPassword(""); }}>
+              <option value="">Select registered mouse...</option>
+              {activeBranchDevices.map((device: any) => (
+                <option key={device.deviceId} value={String(device.deviceId)}>
+                  {device.deviceName || device.deviceId} — {branchById.get(String(device.branchId)) || "Unassigned"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="owned-wifi-network" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi network (2.4 GHz)</label>
+            <select id="owned-wifi-network" name="foodsafety-router-ssid-choice" autoComplete="off"
+              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+              value={local24Networks.some(network => network.ssid === wifiSsid) ? wifiSsid : ""}
+              onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }}>
+              <option value="">{local24Networks.length ? "Select a nearby 2.4 GHz Wi-Fi network..." : "No recent HP2 scan — refresh or enter manually"}</option>
+              {local24Networks.map(network => (
+                <option key={network.ssid} value={network.ssid}>
+                  {network.ssid} — {network.signal}% signal
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="owned-wifi-password" className="mb-1 block text-xs font-medium text-cyan-100">Wi-Fi password</label>
+            <input id="owned-wifi-password" name="foodsafety-router-password-local-only" type="password"
+              autoComplete="new-password" data-lpignore="true" data-1p-ignore="true"
+              aria-label="Wi-Fi password — temporary local browser entry"
+              placeholder="Password (not saved or sent)" value={wifiPassword} maxLength={128}
+              onChange={event => setWifiPassword(event.target.value)}
+              className="h-10 w-full rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-400" />
+          </div>
+          <div className="flex items-end">
+            <Button type="button" disabled className="h-10 w-full bg-slate-600 text-white disabled:opacity-75"
+              title="The physical BMAX W003 still has factory Tuya firmware. No verified local provisioning method exists.">
+              Connect mouse — not available yet
+            </Button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className="text-cyan-200" role="status" aria-live="polite">
+            {local24Networks.length ? local24Networks.length + " nearby 2.4 GHz routers" : routerScanStatus}
+          </span>
+          {routerScanReportedAt && <span className="text-slate-400">HP2 last scan: {new Date(routerScanReportedAt).toLocaleTimeString("en-GB", { timeZone: "Europe/London" })}</span>}
+          {wifiPassword && <button type="button" onClick={() => setWifiPassword("")} className="text-cyan-200 underline">Clear password</button>}
+        </div>
+        <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+          <strong>Not provisioned:</strong> Mouse #11 uses factory Tuya firmware. Selecting Wi-Fi and typing a password does not send them to the mouse or establish MQTT.
+          The password stays in this tab only and is cleared on refresh.
+        </div>
+        {selectedWifiMouse && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-500/25 bg-slate-900/50 p-3">
+            <div className="min-w-0 text-xs text-slate-200">
+              <strong className="text-cyan-100">Already registered:</strong> {selectedWifiMouse.deviceName || selectedWifiMouse.deviceId}
+              {" · "}{branchById.get(String(selectedWifiMouse.branchId)) || selectedWifiMouse.branchName || "Assigned branch"}
+              <p className="mt-1 text-amber-200">Next opens the saved device. It does not send Wi-Fi credentials or establish MQTT.</p>
+            </div>
+            <Button type="button" variant="outline" className="border-cyan-500/50 text-cyan-100"
+              onClick={() => {
+                const id = String(selectedWifiMouse.branchId || "");
+                const b = branches.find(x => String(x.id) === id);
+                setActiveBranchId(id);
+                setBranchSearch(b?.name || "");
+                setBranchSearchOpen(false);
+                setDeviceSearch("");
+                document.getElementById("pest-registered-mice")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}>
+              Next → View saved mouse
+            </Button>
+          </div>
+        )}
+        <details className="mt-2 text-xs text-slate-300">
+          <summary className="cursor-pointer text-cyan-200">Network missing? Enter SSID manually / Why Connect is unavailable</summary>
+          <label htmlFor="food-safety-router-ssid-manual" className="mt-2 block text-slate-300">Other or hidden 2.4 GHz Wi-Fi network name</label>
+          <input id="food-safety-router-ssid-manual" type="search" name="food-safety-router-ssid-manual" autoComplete="off" data-lpignore="true" data-1p-ignore="true"
+            className="mt-1 h-9 w-full max-w-md rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+            placeholder="Enter SSID, not an email" value={wifiSsid} maxLength={64} onChange={event => { setWifiSsid(event.target.value); setWifiPassword(""); }} />
+          <p className="mt-2">HP2 scans routers physically near HP2, not at distant restaurants. SmartLife-XXXX is a temporary factory pairing network. A verified device-side firmware or integration is needed before the Connect button can safely work.</p>
+        </details>
+      </section>
+
+      {smartCheckSelection && (
+        <div className="rounded-xl border border-cyan-500/40 bg-cyan-950/30 p-4 text-sm text-white" role="status">
+          <strong className="block text-base">Selected in Smart Check: {smartCheckSelection.ssid || "Wi-Fi mouse"}</strong>
+          <p className="mt-1 font-mono text-xs text-cyan-200">Observed MAC: {smartCheckSelection.mac || "Unavailable"}</p>
+          <p className="mt-2 text-slate-300">Wi-Fi discovery only. Choose the correct customer branch and register the device below. Wi-Fi provisioning and MQTT must be verified separately.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" type="button" onClick={() => {
+              setDeviceName(smartCheckSelection.ssid);
+              setShowRegisterForm(true);
+              window.setTimeout(() => document.getElementById("pest-add-device")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+            }} className="bg-cyan-600 text-white hover:bg-cyan-500">Next — Select branch</Button>
+            <Button size="sm" type="button" variant="outline" onClick={() => {
+              window.sessionStorage.removeItem("pest-smart-check-selected-v1");
+              setSmartCheckSelection(null);
+            }} className="border-slate-600 text-white">Clear selection</Button>
+          </div>
+        </div>
+      )}
+      <div className="rounded-xl border border-blue-500/30 bg-slate-900/50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-lg font-semibold text-white">STEP 3 — ASSIGN NEW MOUSE (ONLY IF NEEDED)</h3>
+            <p className="mt-1 text-sm text-slate-300">Already registered? Skip this step. Do not create another record for the same physical mouse.</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => setShowRegisterForm(value => !value)} className="border-blue-500/40 text-blue-100">
+            {showRegisterForm ? "Hide new mouse form" : "Add a different, unregistered mouse"}
+          </Button>
+        </div>
       </div>
       {showRegisterForm && <div id="pest-add-device" className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4 flex items-center gap-2">
@@ -829,34 +1032,10 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
       </div>
 
       }
-      <div className="rounded-2xl border border-cyan-500/30 bg-slate-800/65 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="font-semibold text-white">Restaurant Wi-Fi connection</h3>
-            <p className="mt-1 text-sm text-amber-200">
-              Awaiting device activation — no Wi-Fi or MQTT connection has been verified.
-            </p>
-          </div>
-          <Button type="button" variant="outline" className="border-cyan-500/40 text-cyan-200"
-            onClick={() => setShowWifiDetails(!showWifiDetails)}>
-            {showWifiDetails ? "Hide connection information" : "View connection information"}
-          </Button>
-        </div>
-        <p className="mt-3 text-sm text-slate-300">
-          The shop's nearby Wi-Fi networks cannot be scanned from this website. The HP2 scanner
-          discovers broadcasting mouse setup networks, not restaurant router passwords or networks
-          at a different location.
-        </p>
-        {showWifiDetails && (
-          <div className="mt-4 space-y-3 rounded-xl border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
-            <p><strong className="text-white">Selected mouse:</strong> {wifiDeviceId || "Choose a registered mouse in the device cards below"}</p>
-            <p><strong className="text-white">Physical BMAX W003:</strong> Factory firmware does not have a verified provisioning interface for this website. Entering an SSID or password here would not configure the mouse.</p>
-            <p><strong className="text-white">MQTT gateway:</strong> HP2 uses 192.168.0.14:1883 on its local network only. A restaurant needs a separately verified secure route to the gateway.</p>
-            <p>Until authenticated physical MQTT telemetry is received, show the device as awaiting activation or offline, never online merely because its green LED flashes.</p>
-          </div>
-        )}
+      <div id="pest-registered-mice" className="scroll-mt-28 rounded-xl border border-emerald-500/25 bg-slate-900/50 p-4">
+        <h3 className="text-lg font-semibold text-white">STEP 4 — REGISTERED MOUSE CARDS</h3>
+        <p className="mt-1 text-sm text-slate-300">Saved mice remain registered when their Wi-Fi sleeps. No recent signal means sleep, power OFF or network loss is possible — never claim the mouse is switched OFF without proof. Only authenticated MQTT confirms connectivity and catch events.</p>
       </div>
-
       <div className="rounded-2xl border border-slate-700 bg-slate-800/65 p-5">
         <div className="mb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -974,43 +1153,50 @@ export default function IotAdminPanel({ onOpenDeviceCheck }: { onOpenDeviceCheck
         </div>
 
         <Input aria-label="Search mouse devices" placeholder="Search mouse name, ID or installation area" value={deviceSearch} onChange={e => setDeviceSearch(e.target.value)} className="mb-4 max-w-sm border-slate-600 bg-slate-950 text-white" />
-        {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).length === 0 ? (
+        {matchedBranchDevices.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center text-slate-400">
-            <p>{activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+            <p>{activeBranchDevices.length ? "No devices match this search. Your assigned mice are unchanged." : activeBranch ? `No devices are assigned to ${activeBranch.name} yet.` : "No registered devices found."}</p>
+             {deviceSearch && <Button type="button" size="sm" variant="outline" className="border-slate-600 text-slate-200" onClick={() => setDeviceSearch("")}>Clear search</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {activeBranchDevices.filter((d: any) => [d.deviceName, d.deviceId, d.notes].some(v => String(v || "").toLowerCase().includes(deviceSearch.toLowerCase()))).map((device: any, index: number) => {
+            {matchedBranchDevices.map((device: any) => {
+               const index = activeBranchDevices.indexOf(device);
               const snap = deviceSnapshot(device.lastStatus);
+              const connectivity = getMouseConnectivity(device);
+              const setupSsid = namedFactoryWifi(device.deviceName);
+              const matchingWifi = setupSsid
+                ? wifiObservations.find((observation: any) =>
+                    String(observation.hostname || "").trim().toLowerCase() === setupSsid)
+                : undefined;
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">Device {index + 1} — {device.deviceName}</p>
+                      <p className="truncate font-semibold text-white">{device.deviceName || device.deviceId}</p>
                       <p className="mt-0.5 text-xs text-slate-400">{branchById.get(device.branchId) || device.branchName || "Assigned branch"}</p>
                       <p className="mt-1 break-all font-mono text-[11px] text-slate-500">{device.deviceId}</p>
                     </div>
-                    <Badge className={device.isOnline ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300"}>
-                      {device.isOnline ? "Connected" : (snap.state === "awaiting_activation" ? "Awaiting activation" : "Disconnected")}
+                    <Badge className={connectivity.active ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-200"}>
+                      {connectivity.badge}
                     </Badge>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">System</span><span className="text-white">Food Safety Owned</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Battery</span><span className="text-white">{snap.battery || "—"}</span></div>
-                    <div className="rounded-lg bg-slate-800 p-2"><span className="block text-slate-500">Status</span><span className="text-white">{snap.state || (device.isOnline ? "Connected" : "Disconnected")}</span></div>
-                    <div className={`rounded-lg p-2 ${device.alarmActive ? "bg-red-500/20" : "bg-slate-800"}`}><span className="block text-slate-500">Trap</span><span className={device.alarmActive ? "font-bold text-red-300" : "text-white"}>{device.alarmActive ? "Mouse Caught" : device.isOnline ? "No active alarm" : "Not verified"}</span></div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Connection</p>
+                      <p className={connectivity.active ? "font-semibold text-emerald-300" : "font-semibold text-amber-200"}>{connectivity.active ? "MQTT recently reported" : "MQTT not verified live"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Sensor</p>
+                      <p className={device.alarmActive ? "font-semibold text-red-300" : "font-semibold text-slate-200"}>{device.alarmActive ? "🔴 Mouse caught" : "No verified active catch"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-700 bg-slate-950/45 p-3">
+                      <p className="text-xs text-slate-400">Last report</p>
+                      <p className="text-sm text-white">{device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No MQTT report yet"}</p>
+                    </div>
                   </div>
-
-                  <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                    <Wifi className="h-3.5 w-3.5" />
-                    Wi-Fi / MQTT
-                    {snap.mqttRssi == null ? " · Gateway signal not yet reported" : " · Last MQTT signal " + snap.mqttRssi + " dBm"}
-                    {device.lastCheckedAt ? ` • Last seen ${new Date(device.lastCheckedAt).toLocaleString("en-GB")}` : ""}
-                  </div>
-
-                  {device.notes && <p className="mt-2 text-xs text-slate-400">Installation area: {device.notes}</p>}
-
+                  <p className="mt-3 text-xs text-slate-400">Wi-Fi setup sightings are managed in Smart Check. {device.notes ? "Installation: " + device.notes : ""}</p>
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
                       <div className="mb-3 flex items-center justify-between gap-2">
