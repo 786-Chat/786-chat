@@ -9177,7 +9177,7 @@ Generated: ${new Date().toISOString()}
       const {deviceId, branchId, miceCount, instruction, message} = req.body || {};
       const count = Number(miceCount);
       const textMessage = String(message || "").trim();
-      if (!/^FS-MOUSE-\\d{6,}$/.test(String(deviceId || "")) ||
+      if (!/^FS-MOUSE-\d{6,}$/.test(String(deviceId || "")) ||
           !/^[0-9a-f-]{36}$/i.test(String(branchId || "")) ||
           !Number.isInteger(count) || count < 1 || count > 99 ||
           !textMessage || textMessage.length > 200 ||
