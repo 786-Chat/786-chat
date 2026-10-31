@@ -99,11 +99,12 @@ export default function FreshSmartCheck(){
   </section>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
    <h3 className="text-lg font-semibold">2 · Register Mouse</h3>
+    <div className={"rounded-lg border p-3 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600 bg-emerald-950/30 text-emerald-100":"border-slate-700 bg-slate-950 text-slate-300")}><strong>Live HP2 mouse discovery: </strong>{observation?.isWifiRecentlySeen?(observation.hostname||MOUSE_SSID)+" · "+(observation.macAddress||MOUSE_MAC)+" · "+(observation.wifiSignalPercent??"Unknown")+"% signal":"No mouse pairing network detected recently."}<p className="mt-1 text-xs">Registered mouse cards below remain saved when a mouse is switched off. Pairing Wi-Fi discovery is not an MQTT connection.</p></div>
    <div className="grid gap-4 sm:grid-cols-2">
     <label>Mouse number / Device name<input className={"mt-2 "+input} value={deviceName} onChange={e=>setDeviceName(e.target.value)} maxLength={120}/></label>
     <label>Installation area<input className={"mt-2 "+input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Kitchen"/></label>
-    <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Device Wi-Fi ID · Auto</p><strong>{observation?.hostname||MOUSE_SSID}</strong></div>
-    <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Mouse MAC · Auto</p><strong className="font-mono text-sm">{observation?.macAddress||MOUSE_MAC}</strong></div>
+     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Currently detected mouse Wi-Fi ID</p><strong>{observation?.isWifiRecentlySeen?observation.hostname||"Unknown":"No mouse AP currently detected"}</strong></div>
+     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Currently detected mouse MAC</p><strong className="font-mono text-sm">{observation?.isWifiRecentlySeen?observation.macAddress||"Unknown":"—"}</strong></div>
    </div>
     <p role="status" aria-live="polite" className={"rounded-lg border px-3 py-2 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600/50 bg-emerald-950/30 text-emerald-200":"border-amber-500/40 bg-amber-950/20 text-amber-200")}>{observation?.isWifiRecentlySeen?"HP2 detected the pairing Wi-Fi recently — not yet connected":observation?"No recent pairing Wi-Fi sighting. Mouse may be off, sleeping or no longer broadcasting.":"No HP2 Wi-Fi sighting for this mouse yet."}</p>
     <p className="text-sm text-slate-300">Last physical HP2 Wi-Fi sighting: <strong>{observation?.lastSeenAt?new Date(observation.lastSeenAt).toLocaleString("en-GB"):"Never recorded"}</strong> (separate from website refresh time).</p>
