@@ -9,7 +9,7 @@ type Branch = {id:string;name:string};
 type Device = {id:string;deviceId?:string;deviceName?:string;branchId?:string;branchName?:string;location?:string;installationLocation?:string;batteryPercent?:number|null;batteryPct?:number|null;wifiSignal?:number|null;rssi?:number|null;isOnline?:boolean;lastSeenAt?:string|null;lastCheckedAt?:string|null;trapCondition?:string|null;notes?:string|null;lastStatus?:Array<{code:string;value:any}>};
 const MOUSE_SSID="SmartLife-203B";
 const MOUSE_MAC="F8:17:2D:BB:20:3A";
-const savedArea=(d:Device)=>{const raw=String(d.notes||d.location||d.installationLocation||"");const match=raw.match(/Installation area:\\s*(.*?)\\.\\s*SmartLife AP:/i);return match?match[1].trim():(raw&&raw!=="BK7231N-MOUSE-V1"?raw:"");};
+const savedArea=(d:Device)=>{const raw=String(d.notes||d.location||d.installationLocation||"");const match=raw.match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i);return match?match[1].trim():(raw&&raw!=="BK7231N-MOUSE-V1"?raw:"");};
 const input="w-full rounded-lg border border-slate-600 bg-slate-950 p-3 text-white";
 export default function FreshSmartCheck(){
  const {toast}=useToast();
