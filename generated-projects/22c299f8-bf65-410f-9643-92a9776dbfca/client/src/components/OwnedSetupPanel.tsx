@@ -1,134 +1,75 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-type Selection = { ssid: string; mac: string };
-type NearbyNetwork = { ssid: string; frequency: number; signal: number };
-type RouterScan = { source: string; fresh: boolean; reportedAt: string | null; networks: NearbyNetwork[] };
-export default function OwnedSetupPanel() {
-  const { toast } = useToast();
-  const [selected, setSelected] = useState<Selection | null>(null);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [devices, setDevices] = useState<any[]>([]);
-  const [branchId, setBranchId] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [installerMethod, setInstallerMethod] = useState<"hp2" | "remote">("hp2");
-  const [localWifiName, setLocalWifiName] = useState("");
-  // In-memory only: never persist, log or submit Wi-Fi credentials before provisioning is verified.
-  const [wifiPassword, setWifiPassword] = useState("");
-  const [showWifiPassword, setShowWifiPassword] = useState(false);
-  const [wifiChoiceSaved, setWifiChoiceSaved] = useState(false);
-  const [scan, setScan] = useState<RouterScan | null>(null);
-  const [scanBusy, setScanBusy] = useState(false);
-  const [scanError, setScanError] = useState("");
-  const fetchNearbyNetworks = async () => {
-    setScanBusy(true);
-    try {
-      const response = await fetch("/api/iot/router-wifi-networks", { credentials: "include", cache: "no-store" });
-      if (!response.ok) throw new Error("Wi-Fi network report unavailable (HTTP " + response.status + ")");
-      const data = await response.json() as RouterScan;
-      setScan(data);
-      setScanError("");
-    } catch (error: any) {
-      setScanError(String(error?.message || error));
-      setScan(null);
-    } finally { setScanBusy(false); }
-  };
-  const load = async () => {
-    const [br, dv] = await Promise.all([
-      fetch("/api/branches?page=1&limit=5000", { credentials: "include", cache: "no-store" }),
-      fetch("/api/iot/devices", { credentials: "include", cache: "no-store" }),
-    ]);
-    if (br.ok) { const x = await br.json(); setBranches(Array.isArray(x?.branches) ? x.branches : []); }
-    if (dv.ok) { const x = await dv.json(); setDevices(Array.isArray(x) ? x : []); }
-  };
-  useEffect(() => {
-    load().catch(() => {});
-    const syncSelection = () => {
-      try {
-        const raw = sessionStorage.getItem("pest-smart-check-selected-v1");
-        const item = raw ? JSON.parse(raw) : null;
-        const recent = item?.observedAt && Date.now() - new Date(item.observedAt).getTime() >= 0 && Date.now() - new Date(item.observedAt).getTime() < 180000;
-        if (!recent) sessionStorage.removeItem("pest-smart-check-selected-v1");
-        setSelected(recent && typeof item?.ssid === "string" && typeof item?.mac === "string" ? { ssid: item.ssid, mac: item.mac } : null);
-      } catch (_) { setSelected(null); }
-    };
-    syncSelection();
-    window.addEventListener("pest:open-owned-smart-devices", syncSelection);
-    return () => window.removeEventListener("pest:open-owned-smart-devices", syncSelection);
-  }, []);
-  useEffect(() => { if (installerMethod === "hp2") fetchNearbyNetworks(); }, [installerMethod]);
-  const nearby24 = scan?.fresh ? (scan.networks || []).filter(n => n.frequency >= 2400 && n.frequency < 2500).sort((a,b) => b.signal-a.signal) : [];
-  const alreadyRegistered = selected && devices.find((device) => String(device.deviceName || "").toLowerCase().includes(selected.ssid.toLowerCase()));
-  const save = async () => {
-    if (!selected || !branchId || alreadyRegistered) return;
-    setBusy(true);
-    try {
-      const res = await fetch("/api/iot/devices", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId: "", deviceName: selected.ssid, branchId, notes: "Wi-Fi AP observed: " + selected.mac + ". MQTT identity not yet verified.", hardwareModel: "BK7231N-MOUSE-V1" }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Registration failed");
-      toast({ title: "Registration saved", description: "Branch assigned in the database. Physical Wi-Fi and MQTT are not yet verified." });
-      sessionStorage.removeItem("pest-smart-check-selected-v1");
-      setSelected(null);
-      await load();
-    } catch (error: any) {
-      toast({ title: "Could not register", description: String(error?.message || error), variant: "destructive" });
-    } finally { setBusy(false); }
-  };
-  return <main className="text-white">
-    <section className="mx-auto max-w-3xl space-y-5 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5 md:p-7">
-      <div>
-        <h2 className="text-2xl font-bold">Set Up Mouse</h2>
-        <p className="mt-1 text-sm text-slate-300">One simple setup card. Connect becomes available only when physical mouse pairing is supported.</p>
-      </div>
-      <div>
-        <label className="mb-2 block font-medium">1. Mouse</label>
-        {selected ? <div className="rounded-lg border border-cyan-700 bg-slate-950 p-3">
-          <strong>{selected.ssid}</strong><span className="ml-3 font-mono text-xs text-cyan-300">{selected.mac}</span>
-        </div> : <div className="rounded-lg border border-amber-700/50 bg-slate-950 p-3 text-sm text-amber-200">No mouse selected. Open <strong>Smart Check</strong> and press <strong>NEXT</strong> on the correct mouse, then return here.</div>}
-        <p className="mt-1 text-xs text-slate-400">Check the MAC address before assigning. A Wi-Fi sighting does not mean MQTT is connected.</p>
-      </div>
-      <label className="block font-medium">2. Restaurant
-        <select className="mt-2 block w-full rounded-lg border border-slate-600 bg-slate-950 p-3" value={branchId} onChange={e=>setBranchId(e.target.value)}>
-          <option value="">Choose restaurant</option>
-          {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor="easy-mouse-wifi" className="font-medium">3. Restaurant 2.4 GHz Wi-Fi</label>
-          <button type="button" onClick={fetchNearbyNetworks} disabled={scanBusy} className="rounded-lg bg-cyan-700 px-3 py-2 text-sm disabled:opacity-50">{scanBusy ? "Checking..." : "Refresh Wi-Fi"}</button>
-        </div>
-        {scanError && <p role="alert" className="text-sm text-rose-300">{scanError}</p>}
-        {scan && !scan.fresh && <p className="text-sm text-amber-200">No recent HP2 network scan. Scan data must be fresh.</p>}
-        <select id="easy-mouse-wifi" value={localWifiName} onChange={e=>{setLocalWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiChoiceSaved(false);}} className="w-full rounded-lg border border-slate-600 bg-slate-950 p-3">
-          <option value="">Select nearby Wi-Fi</option>
-          {nearby24.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}%</option>)}
-        </select>
-        <p className="text-xs text-slate-400">Networks are reported by HP2 near its location, not your browser. Installations abroad need an on-site installer.</p>
-      </div>
-      <div>
-        <label htmlFor="easy-mouse-password" className="mb-2 block font-medium">4. Wi-Fi password</label>
-        <div className="flex gap-2">
-          <input id="easy-mouse-password" type={showWifiPassword ? "text" : "password"} value={wifiPassword} onChange={e=>setWifiPassword(e.target.value)} autoComplete="new-password" disabled={!localWifiName} placeholder="Enter Wi-Fi password" className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-950 p-3 disabled:opacity-40" />
-          <button type="button" disabled={!wifiPassword} onClick={()=>setShowWifiPassword(v=>!v)} className="rounded-lg bg-slate-700 px-4 disabled:opacity-40">{showWifiPassword ? "Hide" : "Show"}</button>
-        </div>
-        <p className="mt-1 text-xs text-amber-200">Password is only in this browser form. It is not saved or sent to the mouse. Please do not enter a real password until pairing is ready.</p>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <button type="button" disabled={!localWifiName} onClick={()=>{
-          sessionStorage.setItem("pest-owned-wifi-name-v1",localWifiName);
-          setWifiChoiceSaved(true);
-          toast({ title:"Wi-Fi name saved in this tab",description:"Password not saved; mouse not connected." });
-        }} className="rounded-lg bg-cyan-700 px-5 py-3 font-semibold disabled:opacity-40">Save Wi-Fi name</button>
-        <button type="button" disabled className="rounded-lg bg-slate-700 px-5 py-3 font-semibold opacity-50">Connect Mouse · Not ready</button>
-      </div>
-      {wifiChoiceSaved && <p role="status" className="text-sm text-cyan-200">Wi-Fi name saved locally. The mouse is not connected.</p>}
-      {alreadyRegistered && <p className="text-sm text-amber-200">This mouse name is already registered. It will not be duplicated.</p>}
-      <p className="rounded-lg bg-slate-950 p-3 text-sm text-slate-300">Physical connection requires compatible mouse firmware and a tested local pairing method. No fake connected status or alarm will be shown.</p>
-    </section>
-  </main>;
+type Branch = {id:string;name:string};
+type Device = {id:string;deviceId?:string;deviceName?:string;branchId?:string;branchName?:string;notes?:string;isOnline?:boolean;lastCheckedAt?:string|null;lastStatus?:Array<{code:string;value:any}>;alarmActive?:boolean};
+const area=(d:Device)=>{const raw=String(d.notes||"");const m=raw.match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i);return m?m[1]:raw};
+export default function OwnedSetupPanel(){
+ const {toast}=useToast();
+ const [branches,setBranches]=useState<Branch[]>([]);
+ const [devices,setDevices]=useState<Device[]>([]);
+ const [assignment,setAssignment]=useState<Record<string,string>>({});
+ const [saving,setSaving]=useState("");
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState("");
+ const refresh=useCallback(async()=>{
+  setLoading(true);
+  try{
+   const [b,d]=await Promise.all([
+    fetch("/api/branches?page=1&limit=5000",{credentials:"include",cache:"no-store"}),
+    fetch("/api/iot/devices",{credentials:"include",cache:"no-store"})
+   ]);
+   if(!b.ok||!d.ok)throw Error("Unable to load registered devices or restaurants");
+   const br=await b.json();const dv=await d.json();
+   setBranches(Array.isArray(br.branches)?br.branches:[]);
+   const records=Array.isArray(dv)?dv:[];
+   setDevices(records);
+   setAssignment(prev=>Object.fromEntries(records.map((x:Device)=>[x.id,prev[x.id]??x.branchId??""])));
+   setError("");
+  }catch(e:any){setError(String(e?.message||e))}
+  finally{setLoading(false)}
+ },[]);
+ useEffect(()=>{refresh();const timer=window.setInterval(refresh,15000);return()=>window.clearInterval(timer)},[refresh]);
+ const assign=async(d:Device)=>{
+  const target=assignment[d.id];if(!target)return;
+  setSaving(d.id);
+  try{
+   const response=await fetch("/api/iot/devices/"+encodeURIComponent(d.id),{
+    method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({deviceName:d.deviceName||d.deviceId,branchId:target,notes:d.notes||"",hardwareModel:"BK7231N-MOUSE-V1"})
+   });
+   if(!response.ok)throw Error((await response.json().catch(()=>({})).message||"Could not assign restaurant");
+   toast({title:"Restaurant assignment saved",description:"The device is assigned in records. Physical MQTT connectivity must still be verified."});
+   await refresh();
+  }catch(e:any){setError(String(e?.message||e))}
+  finally{setSaving("")}
+ };
+ return <main className="mx-auto max-w-5xl space-y-5 text-white">
+  <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/75 p-5">
+   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-bold">Smart Devices</h2><p className="mt-1 text-sm text-slate-300">Registered Food Safety mouse traps · real device records only</p></div><button type="button" disabled={loading} onClick={refresh} className="flex items-center gap-2 rounded-xl border-b-4 border-cyan-950 bg-cyan-600 px-5 py-3 font-semibold shadow-[0_6px_0_rgba(8,47,73,.7)] transition-all hover:-translate-y-0.5 active:translate-y-1 active:shadow-none disabled:opacity-60"><RefreshCw size={18} className={loading?"animate-spin":""}/>{loading?"Refreshing...":"Refresh"}</button></div>
+  </header>
+  {error&&<p role="alert" className="rounded-lg bg-red-950 p-3 text-red-200">{error}</p>}
+  {devices.length===0&&<p className="rounded-xl bg-slate-900 p-5">No registered Food Safety mouse devices. Register a mouse in Smart Check first.</p>}
+  <div className="grid gap-5 lg:grid-cols-2">{devices.map(d=>{
+   const status=d.lastStatus||[];
+   const battery=status.find(x=>x.code==="battery_percentage")?.value;
+   const signal=status.find(x=>x.code==="rssi")?.value;
+   const last=d.lastCheckedAt;
+   const connected=Boolean(d.isOnline&&last&&Date.now()-new Date(last).getTime()<180000);
+   const trap=connected&&d.alarmActive?"Mouse Caught":connected?"":"";
+   return <article key={d.id} className="space-y-4 rounded-2xl border border-cyan-500/25 bg-slate-950 p-5">
+    <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</p><p className="text-xs text-slate-400">📍 {area(d)||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":"Not connected"}</span></div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[
+      ["SYSTEM","Food Safety IoT"],
+      ["BATTERY",battery==null?"—":String(battery)+"%"],
+      ["STATUS",connected?"Online":"Not confirmed"],
+      ["TRAP",trap||"—"]
+     ].map(([label,value])=><div key={label} className="rounded-xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><strong className="mt-1 block text-sm">{value}</strong></div>)}</div>
+    {signal!=null&&<p className="text-sm text-slate-300">📶 Wi-Fi RSSI: {signal}</p>}
+    {last&&<p className="text-xs text-slate-400">Last device report: {new Date(last).toLocaleString("en-GB")}</p>}
+    <div className="space-y-2 border-t border-slate-700 pt-4"><label className="block text-sm font-semibold">Assign to Branch</label><div className="flex flex-wrap gap-2"><select className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-900 p-3" value={assignment[d.id]??d.branchId??""} onChange={e=>setAssignment(v=>({...v,[d.id]:e.target.value}))}><option value="">Choose restaurant</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select><button type="button" disabled={saving===d.id||!assignment[d.id]||assignment[d.id]===d.branchId} onClick={()=>assign(d)} className="rounded-lg bg-cyan-600 px-4 py-3 font-semibold disabled:opacity-40">{saving===d.id?"Saving...":"Assign"}</button></div><p className="text-xs text-slate-400">Assignment updates customer records; it does not mean physical Wi-Fi or MQTT is connected.</p></div>
+   </article>
+  })}</div>
+ </main>;
 }
