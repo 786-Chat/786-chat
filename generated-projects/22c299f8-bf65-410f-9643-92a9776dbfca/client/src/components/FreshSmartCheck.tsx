@@ -6,9 +6,10 @@ type Observation = {id:string;hardwareKey:string;hostname?:string|null;macAddres
 type Network = {ssid:string;frequency:number;signal:number};
 type Scan = {fresh:boolean;reportedAt:string|null;networks:Network[]};
 type Branch = {id:string;name:string};
-type Device = {id:string;deviceId?:string;deviceName?:string;branchId?:string;branchName?:string;location?:string;installationLocation?:string;batteryPercent?:number|null;batteryPct?:number|null;wifiSignal?:number|null;rssi?:number|null;isOnline?:boolean;lastSeenAt?:string|null;trapCondition?:string|null;notes?:string|null};
+type Device = {id:string;deviceId?:string;deviceName?:string;branchId?:string;branchName?:string;location?:string;installationLocation?:string;batteryPercent?:number|null;batteryPct?:number|null;wifiSignal?:number|null;rssi?:number|null;isOnline?:boolean;lastSeenAt?:string|null;lastCheckedAt?:string|null;trapCondition?:string|null;notes?:string|null;lastStatus?:Array<{code:string;value:any}>};
 const MOUSE_SSID="SmartLife-203B";
 const MOUSE_MAC="F8:17:2D:BB:20:3A";
+const savedArea=(d:Device)=>{const raw=String(d.notes||d.location||d.installationLocation||"");const match=raw.match(/Installation area:\\s*(.*?)\\.\\s*SmartLife AP:/i);return match?match[1].trim():(raw&&raw!=="BK7231N-MOUSE-V1"?raw:"");};
 const input="w-full rounded-lg border border-slate-600 bg-slate-950 p-3 text-white";
 export default function FreshSmartCheck(){
  const {toast}=useToast();
@@ -124,22 +125,24 @@ export default function FreshSmartCheck(){
    <h3 className="text-lg font-semibold">Registered Mouse Cards</h3>
    {matching.length===0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">No registered Mouse #11 card yet.</p>}
    {matching.map(d=>{
-    const battery=d.batteryPercent??d.batteryPct;const signal=d.wifiSignal??d.rssi;
+    const battery=d.batteryPercent??d.batteryPct??d.lastStatus?.find(x=>x.code==="battery_percentage")?.value;
+    const signal=d.wifiSignal??d.rssi??d.lastStatus?.find(x=>x.code==="rssi")?.value;
+    const lastReport=d.lastCheckedAt||d.lastSeenAt;
     return <article key={d.id} className="rounded-xl border border-cyan-500/30 bg-slate-950 p-4">
      <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h4 className="text-lg font-bold">{d.deviceName||"Mouse #11"}</h4><p className="font-mono text-xs text-cyan-200">{d.deviceId||"ID not available"}</p><p className="mt-1 text-sm">Wi-Fi ID: {MOUSE_SSID} · MAC: {MOUSE_MAC}</p></div>
       <div className="flex gap-2">
-       <button type="button" onClick={()=>{setEditing(d.id);setDeviceName(d.deviceName||"Mouse #11");setBranchId(d.branchId||"");setLocation(d.location||d.installationLocation||"");window.scrollTo({top:0,behavior:"smooth"})}} className="rounded-lg bg-slate-700 p-3" aria-label="Edit mouse"><Pencil size={17}/></button>
+       <button type="button" onClick={()=>{setEditing(d.id);setDeviceName(d.deviceName||"Mouse #11");setBranchId(d.branchId||"");setLocation(savedArea(d));window.scrollTo({top:0,behavior:"smooth"})}} className="rounded-lg bg-slate-700 p-3" aria-label="Edit mouse"><Pencil size={17}/></button>
        <button type="button" onClick={()=>remove(d)} disabled={busy} className="rounded-lg bg-red-900/70 p-3 disabled:opacity-40" aria-label="Delete mouse"><Trash2 size={17}/></button>
       </div>
      </div>
      <p className="mt-3 text-sm">Restaurant: {d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Not assigned"}</p>
-     <p className="text-sm">Installation area: {d.location||d.installationLocation||"Not set"}</p>
+     <p className="text-sm">Installation area: {savedArea(d)||"Not set"}</p>
      {battery!=null&&<p className="text-sm">Battery: {battery}%</p>}
      {signal!=null&&<p className="text-sm">Wi-Fi signal: {signal}</p>}
-     <p className="text-sm">{d.isOnline&&d.lastSeenAt&&Date.now()-new Date(d.lastSeenAt).getTime()<180000?"🟢 Connected (recent MQTT report)":"Connection not confirmed"}</p>
+     <p className="text-sm">{d.isOnline&&lastReport&&Date.now()-new Date(lastReport).getTime()<180000?"🟢 Connected (recent MQTT report)":"Connection not confirmed"}</p>
      {d.trapCondition&&["ready","caught","service_required"].includes(d.trapCondition.toLowerCase())&&<p className="text-sm">Trap: {d.trapCondition}</p>}
-     {d.lastSeenAt&&<p className="text-xs text-slate-400">Last updated: {new Date(d.lastSeenAt).toLocaleString("en-GB")}</p>}
+     {lastReport&&<p className="text-xs text-slate-400">Last updated: {new Date(lastReport).toLocaleString("en-GB")}</p>}
     </article>
    })}
   </section>
