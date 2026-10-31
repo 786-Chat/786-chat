@@ -39,7 +39,7 @@ export default function OwnedSetupPanel(){
     method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({deviceName:d.deviceName||d.deviceId,branchId:target,notes:d.notes||"",hardwareModel:"BK7231N-MOUSE-V1"})
    });
-   if(!response.ok)throw Error((await response.json().catch(()=>({})).message||"Could not assign restaurant");
+   if(!response.ok)throw Error((await response.json().catch(()=>({}))).message||"Could not assign restaurant");
    toast({title:"Restaurant assignment saved",description:"The device is assigned in records. Physical MQTT connectivity must still be verified."});
    await refresh();
   }catch(e:any){setError(String(e?.message||e))}
