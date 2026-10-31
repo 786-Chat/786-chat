@@ -891,6 +891,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           LIMIT 1
         `);
       } else {
+        // OpenBeken can publish directly under its registered FS-MOUSE ID.
+        // Resolve only an exact registered and branch-assigned ID; never
+        // infer identity from a SmartLife AP name or unlinked MQTT prefix.
+        if (/^FS-MOUSE-[0-9]{6}$/.test(mqttPrefix)) {
+          const direct: any = await db.execute(sql`
+            SELECT device_id AS assigned_device_id
+            FROM owned_iot_devices
+            WHERE device_id = ${mqttPrefix}
+              AND branch_id IS NOT NULL
+            LIMIT 1
+          `);
+          const directRows = Array.isArray(direct) ? direct : (direct?.rows || []);
+          if (directRows.length) {
+            return res.json({ deviceId: directRows[0].assigned_device_id });
+          }
+        }
         result = await db.execute(sql`
           SELECT assigned_device_id
           FROM owned_iot_device_checks
