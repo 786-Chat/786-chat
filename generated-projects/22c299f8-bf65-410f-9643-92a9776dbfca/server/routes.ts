@@ -1011,7 +1011,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const rssi = integerOrNull(body.rssi);
-      const batteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      const rawBatteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      // Only store genuine 0–100% telemetry; never turn a Tuya DP enum or
+      // Wi-Fi signal reading into a battery percentage.
+      const batteryPct = rawBatteryPct !== null && rawBatteryPct >= 0 && rawBatteryPct <= 100 ? rawBatteryPct : null;
       const eventValue = body.value !== undefined
         ? body.value
         : type === "trap_triggered" ? true
