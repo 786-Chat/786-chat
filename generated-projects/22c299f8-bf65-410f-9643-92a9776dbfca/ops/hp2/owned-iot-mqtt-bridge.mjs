@@ -33,6 +33,14 @@ const eventForPayload = (raw) => {
   return null;
 };
 
+// Battery reports are usable only when the firmware explicitly sends a percentage.
+// Tuya DP enums are hardware-specific and must never be treated as percentages.
+const batteryPercent = (value) => {
+  if (typeof value === 'string' && !/^\d{1,3}$/.test(value.trim())) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
+};
+
 const normalizeMac = (value) => {
   const raw = String(value || '').trim().replace(/-/g, ':').toUpperCase();
   return /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(raw) ? raw : '';
@@ -160,6 +168,11 @@ const topics = Array.from(new Set([
   '+/host',
   '+/ip',
   '+/rssi',
+  '+/battery',
+  '+/battery_pct',
+  '+/battery_percentage',
+  'fs/v1/device/+/status',
+  'fs/v1/device/+/telemetry',
 ]));
 
 const args = ['-h', mqttHost, '-p', mqttPort, '-v'];
@@ -183,9 +196,21 @@ rl.on('line', (line) => {
   const topic = space >= 0 ? line.slice(0, space) : '';
   const payload = space >= 0 ? line.slice(space + 1) : line;
   const parts = topic.split('/');
-  const prefix = String(parts[0] || '').trim();
+  const structuredDeviceTopic = parts.length === 5 && parts[0] === 'fs' && parts[1] === 'v1' && parts[2] === 'device';
+  const prefix = String(structuredDeviceTopic ? parts[3] : parts[0] || '').trim();
   const leaf = String(parts[parts.length - 1] || '').trim().toLowerCase();
   if (!prefix) return;
+  let explicitBattery = null;
+  if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
+    explicitBattery = batteryPercent(payload);
+  } else if (structuredDeviceTopic && (leaf === 'status' || leaf === 'telemetry')) {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && typeof parsed === 'object' && (!parsed.deviceId || parsed.deviceId === prefix)) {
+        explicitBattery = batteryPercent(parsed.batteryPct ?? parsed.batteryPercentage ?? parsed.battery_percent);
+      }
+    } catch (_) { /* Ignore malformed and unverified payloads. */ }
+  }
 
   const state = states.get(prefix) || {};
   if (leaf === 'ip') state.ipAddress = String(payload || '').trim();
@@ -206,6 +231,16 @@ rl.on('line', (line) => {
   }
 
   chain = chain.then(async () => {
+    if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) || structuredDeviceTopic && ['status', 'telemetry'].includes(leaf)) {
+      if (explicitBattery === null) return;
+      const id = await resolveAssignedDevice(prefix);
+      if (!id) {
+        console.log('[bridge] battery ignored until ' + prefix + ' resolves to a registered FS-MOUSE ID');
+        return;
+      }
+      await postEvent(id, 'heartbeat', topic, payload, { batteryPct: explicitBattery });
+      return;
+    }
     if (leaf === 'connected') {
       const id = await resolveAssignedDevice(prefix);
       if (id) {
