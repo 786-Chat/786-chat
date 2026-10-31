@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 export default function NewBranchOwnedPanel({ mode }: { mode: "devices" | "alerts" }) {
   const [devices,setDevices]=useState<any[]>([]);
   const [alerts,setAlerts]=useState<any[]>([]);
+  const [instructions,setInstructions]=useState<any[]>([]);
   const [error,setError]=useState("");
   const load=async()=>{
     try {
@@ -12,6 +13,10 @@ export default function NewBranchOwnedPanel({ mode }: { mode: "devices" | "alert
       const data=await res.json();
       if(mode==="devices")setDevices(Array.isArray(data)?data:[]);
       else setAlerts(Array.isArray(data)?data:[]);
+      if(mode==="alerts") {
+        const manual=await fetch("/api/branch/iot-manual-instructions",{credentials:"include",cache:"no-store"});
+        if(manual.ok){const items=await manual.json();setInstructions(Array.isArray(items)?items:[]);}
+      }
       setError("");
     }catch(e:any){setError(String(e?.message||e));}
   };
@@ -44,5 +49,6 @@ export default function NewBranchOwnedPanel({ mode }: { mode: "devices" | "alert
        <p className="mt-1">{a.deviceName||a.friendlyName||a.deviceId||"Assigned mouse"}</p>
        <p className="mt-1 text-xs text-slate-300">{a.lastAlarmAt?new Date(a.lastAlarmAt).toLocaleString("en-GB"):"Event timestamp unavailable"}</p>
      </article>)}</div>:<p className="rounded-xl bg-slate-900/70 p-5 text-slate-300">No active verified mouse-caught alarms.</p>)}
+    {mode==="alerts"&&<section className="space-y-3 rounded-xl border border-cyan-500/30 bg-slate-900/75 p-5"><h3 className="text-lg font-bold text-white">Instructions from Pest Controller</h3>{instructions.length===0?<p className="text-sm text-slate-400">No manual instructions received.</p>:instructions.map(m=><article key={m.id} className="rounded-lg bg-slate-950 p-4 text-white"><strong>{m.friendly_name||m.device_id}</strong><p className="mt-1 text-sm font-semibold text-cyan-200">{m.instruction}</p><p className="mt-1">{m.message}</p><p className="mt-2 text-xs text-slate-400">Manual message · {new Date(m.created_at).toLocaleString("en-GB")} · Reported mice: {m.mice_count}</p></article>)}</section>}
   </section>;
 }
