@@ -25,9 +25,12 @@ export default function FreshSmartCheck(){
  const [showPassword,setShowPassword]=useState(false);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
+ const [refreshing,setRefreshing]=useState(false);
+ const [refreshedAt,setRefreshedAt]=useState<string|null>(null);
  const [editing,setEditing]=useState<string|null>(null);
  const [searchBranch,setSearchBranch]=useState("");
  const refresh=useCallback(async()=>{
+  setRefreshing(true);
   try{
    const [o,b,d,n]=await Promise.all([
     fetch("/api/iot/device-check",{credentials:"include",cache:"no-store"}),
@@ -45,7 +48,9 @@ export default function FreshSmartCheck(){
    setObservation(Array.isArray(sightings)?sightings.find(x=>x.hostname?.toLowerCase()===MOUSE_SSID.toLowerCase()&&x.macAddress?.toLowerCase()===MOUSE_MAC.toLowerCase())||null:null);
    setScan(networkData);
    setError("");
+   setRefreshedAt(new Date().toLocaleTimeString("en-GB"));
   }catch(e:any){setError(String(e?.message||e));}
+  finally{setRefreshing(false)}
  },[]);
  useEffect(()=>{refresh();const timer=window.setInterval(refresh,15000);return()=>window.clearInterval(timer)},[refresh]);
  const nearWifi=useMemo(()=>scan?.fresh?(scan.networks||[]).filter(n=>n.frequency>=2400&&n.frequency<2500):[],[scan]);
@@ -82,7 +87,8 @@ export default function FreshSmartCheck(){
  };
  return <main className="mx-auto max-w-5xl space-y-5 text-white">
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
-   <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">Smart Check</h2><button className="flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2" onClick={refresh}><RefreshCw size={17}/> Refresh</button></div>
+   <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">Smart Check</h2><button type="button" disabled={refreshing} aria-busy={refreshing} className="flex items-center gap-2 rounded-xl border-b-4 border-cyan-950 bg-cyan-600 px-5 py-3 font-semibold shadow-[0_6px_0_rgba(8,47,73,.7)] transition-all duration-150 hover:bg-cyan-500 hover:-translate-y-0.5 active:translate-y-1 active:border-b-0 active:shadow-none disabled:opacity-70" onClick={()=>void refresh()}><RefreshCw size={18} className={refreshing?"animate-spin":""}/>{refreshing?"Refreshing...":"Refresh"}</button></div>
+   <p role="status" aria-live="polite" className="mt-2 text-xs text-cyan-200">{refreshing?"Checking latest saved HP2 and device reports...":refreshedAt?"Last refreshed at "+refreshedAt+" · This reads existing HP2 reports; it does not trigger a new scan.": "Refreshing reports when the page opens..."}</p>
    <p className="mt-2 text-sm text-slate-300">Mouse installation · select the restaurant, detect the mouse, choose Wi-Fi, save the mouse card.</p>
   </header>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
