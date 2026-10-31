@@ -31,14 +31,15 @@ export default function NewBranchOwnedPanel({ mode }: { mode: "devices" | "alert
     {mode==="devices" ? (devices.length ? <div className="grid gap-4 md:grid-cols-2">{devices.map(d=>{
       const last=d.lastCheckedAt;
       const connected=Boolean(d.isOnline&&last&&Date.now()-new Date(last).getTime()<180000);
+      const hadReport=Boolean(last);
       const battery=d.lastStatus?.find((s:any)=>s.code==="battery_percentage")?.value;
       const signal=d.lastStatus?.find((s:any)=>s.code==="rssi")?.value;
       const raw=String(d.notes||"");
       const locationMatch=raw.match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i);
       const area=locationMatch?locationMatch[1]:raw;
       return <article key={d.id||d.deviceId} className="space-y-3 rounded-2xl border border-cyan-500/25 bg-slate-950 p-5 text-white">
-        <div className="flex items-start justify-between gap-2"><div><h3 className="font-bold">{d.deviceName||d.deviceId||"Registered mouse"}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||"This restaurant"}</p><p className="text-xs text-slate-400">📍 {area||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":"Not connected"}</span></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([["SYSTEM","Food Safety IoT"],["BATTERY",battery==null?"—":String(battery)+"%"],["STATUS",connected?"Online":"Not confirmed"],["TRAP",d.alarmActive?"Mouse caught":"—"]] as [string,string][]).map(([label,value])=><div key={label} className="rounded-lg bg-slate-800 p-3"><div className="text-xs text-slate-400">{label}</div><div className="mt-1 text-sm font-semibold">{value}</div></div>)}</div>
+        <div className="flex items-start justify-between gap-2"><div><h3 className="font-bold">{d.deviceName||d.deviceId||"Registered mouse"}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||"This restaurant"}</p><p className="text-xs text-slate-400">📍 {area||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":hadReport?"Sleeping / no recent MQTT":"Not connected"}</span></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([["SYSTEM","Food Safety IoT"],["BATTERY",battery==null?"Not reported":String(battery)+"% (last report)"],["STATUS",connected?"Online":hadReport?"No recent MQTT":"Not confirmed"],["TRAP",d.alarmActive?"Mouse caught":"—"]] as [string,string][]).map(([label,value])=><div key={label} className="rounded-lg bg-slate-800 p-3"><div className="text-xs text-slate-400">{label}</div><div className="mt-1 text-sm font-semibold">{value}</div></div>)}</div>
         {signal!=null&&<p className="text-xs text-slate-300">Wi-Fi RSSI: {signal}</p>}
         {last&&<p className="text-xs text-slate-400">Last device report: {new Date(last).toLocaleString("en-GB")}</p>}
         {d.alarmActive&&<p className="rounded-lg bg-red-950 p-3 font-bold text-red-200">Mouse caught — active verified alert</p>}
