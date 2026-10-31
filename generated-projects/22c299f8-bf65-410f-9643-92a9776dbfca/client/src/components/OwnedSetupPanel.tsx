@@ -95,13 +95,14 @@ export default function OwnedSetupPanel(){
    const signal=status.find(x=>x.code==="rssi")?.value;
    const last=d.lastCheckedAt;
    const connected=Boolean(d.isOnline&&last&&Date.now()-new Date(last).getTime()<180000);
+   const hadReport=Boolean(last);
    const trap=connected&&d.alarmActive?"Mouse Caught":connected?"":"";
    return <article key={d.id} className="space-y-4 rounded-2xl border border-cyan-500/25 bg-slate-950 p-5">
-    <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</p><p className="text-xs text-slate-400">📍 {area(d)||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":"Not connected"}</span></div>
+    <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</p><p className="text-xs text-slate-400">📍 {area(d)||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":hadReport?"Sleeping / no recent MQTT":"Not connected"}</span></div>
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[
       ["SYSTEM","Food Safety IoT"],
-      ["BATTERY",battery==null?"—":String(battery)+"%"],
-      ["STATUS",connected?"Online":"Not confirmed"],
+      ["BATTERY",battery==null?"Not reported":String(battery)+"% (last report)"],
+      ["STATUS",connected?"Online":hadReport?"No recent MQTT":"Not confirmed"],
       ["TRAP",trap||"—"]
      ].map(([label,value])=><div key={label} className="rounded-xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><strong className="mt-1 block text-sm">{value}</strong></div>)}</div>
     {signal!=null&&<p className="text-sm text-slate-300">📶 Wi-Fi RSSI: {signal}</p>}
