@@ -9143,6 +9143,60 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Manual technician instructions are distinct from sensor-originated catches.
+  // Never set alarmActive or insert a trap_triggered event here.
+  const ensureOwnedInstructions = async () => db.execute(sql`
+    CREATE TABLE IF NOT EXISTS owned_iot_manual_instructions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      device_id TEXT NOT NULL,
+      branch_id UUID NOT NULL,
+      mice_count INTEGER NOT NULL DEFAULT 1,
+      instruction TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  app.post("/api/iot/manual-instructions", isAdminAuthenticated, async (req, res) => {
+    try {
+      const {deviceId, branchId, miceCount, instruction, message} = req.body || {};
+      const count = Number(miceCount);
+      const textMessage = String(message || "").trim();
+      if (!/^FS-MOUSE-\\d{6,}$/.test(String(deviceId || "")) ||
+          !/^[0-9a-f-]{36}$/i.test(String(branchId || "")) ||
+          !Number.isInteger(count) || count < 1 || count > 99 ||
+          !textMessage || textMessage.length > 200 ||
+          !String(instruction || "").trim() || String(instruction).length > 100)
+        return res.status(400).json({message:"Select a registered mouse, a valid instruction and message (max 200 characters)."});
+      const result:any = await db.execute(sql`SELECT id FROM owned_iot_devices
+        WHERE device_id = ${String(deviceId)} AND branch_id::text = ${String(branchId)}
+        AND COALESCE(firmware_version,'') NOT ILIKE '%sim%' LIMIT 1`);
+      if (!(Array.isArray(result)?result:result?.rows||[]).length)
+        return res.status(404).json({message:"This mouse is not assigned to the selected restaurant."});
+      await ensureOwnedInstructions();
+      await db.execute(sql`INSERT INTO owned_iot_manual_instructions
+        (device_id,branch_id,mice_count,instruction,message)
+        VALUES (${String(deviceId)},${String(branchId)}::uuid,${count},${String(instruction)},${textMessage})`);
+      return res.json({success:true,kind:"manual-instruction",message:"Instruction sent to the assigned branch. No sensor catch was generated."});
+    } catch (error:any) {
+      console.error("Manual mouse instruction failed",error?.message||error);
+      return res.status(500).json({message:"Could not send instruction."});
+    }
+  });
+  app.get("/api/branch/iot-manual-instructions", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session.branchId || session.userType !== "branch") return res.status(401).json({message:"Not authenticated"});
+      await ensureOwnedInstructions();
+      const result:any = await db.execute(sql`SELECT m.id,m.device_id,m.mice_count,m.instruction,m.message,m.created_at,d.friendly_name
+        FROM owned_iot_manual_instructions m
+        JOIN owned_iot_devices d ON d.device_id=m.device_id
+        WHERE m.branch_id::text=${String(session.branchId)}
+          AND d.branch_id::text=${String(session.branchId)}
+        ORDER BY m.created_at DESC LIMIT 30`);
+      return res.json(Array.isArray(result)?result:result?.rows||[]);
+    } catch (error:any) {return res.status(500).json({message:"Could not load manual instructions"});}
+  });
+
   app.get("/api/branch/iot-devices", async (req, res) => {
     try {
       const session = req.session as any;
