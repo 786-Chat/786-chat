@@ -53,6 +53,10 @@ export default function OwnedSetupPanel(){
   finally{setSaving("")}
  };
  const visible=devices.filter(d=>(!filterBranch||d.branchId===filterBranch)&&[d.deviceName,d.deviceId].some(t=>String(t||"").toLowerCase().includes(deviceSearch.toLowerCase())));
+ // Manual instructions can be sent to any genuinely registered and assigned mouse.
+ // The restaurant card filter and text search must not silently disable the picker.
+ const instructionDevices=devices.filter(d=>Boolean(d.branchId)&&/^FS-MOUSE-\d{6,}$/.test(String(d.deviceId||""))&&(!filterBranch||d.branchId===filterBranch));
+ const selectedInstructionDevice=instructionDevices.find(d=>d.id===alertDevice);
  const templates=[
  ["Safe removal and reset","Please safely remove the catch and reset the trap."],
  ["Kitchen hygiene","Keep food and utensils away from the affected area. Please clean and sanitise, then reset the trap."],
@@ -66,8 +70,8 @@ export default function OwnedSetupPanel(){
  ["Request technician visit","Please request a technician visit."]
  ];
  const sendInstruction=async()=>{
-  const d=devices.find(d=>d.id===alertDevice);
-  if(!d||!filterBranch||d.branchId!==filterBranch||!message.trim())return;
+  const d=selectedInstructionDevice;
+  if(!d?.branchId||!message.trim())return;
   setSending(true);
   try{
    const res=await fetch("/api/iot/manual-instructions",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({deviceId:d.deviceId,branchId:d.branchId,miceCount:count,instruction:instruction||"Custom message",message:message.trim()})});
@@ -109,13 +113,14 @@ export default function OwnedSetupPanel(){
     <h3 className="text-lg font-bold">Send Mouse Instruction to Restaurant</h3>
     <p className="text-sm text-slate-300">Manual technician message only. Actual mouse-caught alerts come automatically from verified sensor events.</p>
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="text-sm">Device<select className="mt-2 w-full rounded-lg bg-slate-950 p-3" value={alertDevice} onChange={e=>setAlertDevice(e.target.value)} disabled={!filterBranch}><option value="">Select mouse</option>{visible.filter(d=>d.branchId===filterBranch).map(d=><option key={d.id} value={d.id}>{d.deviceName||d.deviceId} · {d.deviceId}</option>)}</select></label>
+      <label className="text-sm">Device<select className="mt-2 w-full rounded-lg bg-slate-950 p-3" value={alertDevice} onChange={e=>setAlertDevice(e.target.value)} disabled={instructionDevices.length===0}><option value="">Select registered mouse</option>{instructionDevices.map(d=><option key={d.id} value={d.id}>{d.deviceName||d.deviceId} · {d.deviceId} · {d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Assigned branch"}</option>)}</select></label>
       <label className="text-sm">Mice reported in this manual instruction<input type="number" min={1} max={99} value={count} onChange={e=>setCount(Math.max(1,Math.min(99,Number(e.target.value)||1)))} className="mt-2 w-full rounded-lg bg-slate-950 p-3"/></label>
     </div>
+    <p className="text-xs text-cyan-200">{selectedInstructionDevice?("Send to: "+(selectedInstructionDevice.branchName||branches.find(b=>b.id===selectedInstructionDevice.branchId)?.name||"Assigned restaurant")+" · "+selectedInstructionDevice.deviceId):instructionDevices.length?"Select a mouse to choose its assigned restaurant automatically.":"No branch-assigned registered mice available for this selection."}</p>
     <label className="block text-sm">Ready-made instruction (10 options)<select value={instruction} onChange={e=>{setInstruction(e.target.value);setMessage(templates.find(t=>t[0]===e.target.value)?.[1]||"")}} className="mt-2 w-full rounded-lg bg-slate-950 p-3"><option value="">Choose instruction or type below</option>{templates.map(([label])=><option key={label} value={label}>{label}</option>)}</select></label>
     <label className="block text-sm">Optional message to restaurant<textarea maxLength={200} value={message} onChange={e=>setMessage(e.target.value)} rows={4} className="mt-2 w-full rounded-lg bg-slate-950 p-3"/></label>
     <p className="text-right text-xs text-slate-400">{message.length}/200 characters</p>
-    <button type="button" disabled={!filterBranch||!alertDevice||!message.trim()||sending} onClick={sendInstruction} className="rounded-lg bg-red-700 px-5 py-3 font-semibold disabled:opacity-40">{sending?"Sending...":"Send Instruction to Restaurant"}</button>
+    <button type="button" disabled={!selectedInstructionDevice||!message.trim()||sending} onClick={sendInstruction} className="rounded-lg bg-red-700 px-5 py-3 font-semibold disabled:opacity-40">{sending?"Sending...":"Send Instruction to Restaurant"}</button>
   </section>
  </main>;
 }
