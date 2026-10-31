@@ -105,8 +105,10 @@ export default function FreshSmartCheck(){
     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Device Wi-Fi ID · Auto</p><strong>{observation?.hostname||MOUSE_SSID}</strong></div>
     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Mouse MAC · Auto</p><strong className="font-mono text-sm">{observation?.macAddress||MOUSE_MAC}</strong></div>
    </div>
-   <p className="text-sm text-cyan-200">{observation?.isWifiRecentlySeen?"HP2 detected Mouse #11 recently": "Mouse #11 is not currently detected. Switch on the mouse near HP2 to scan."}</p>
-   {observation?.wifiSignalPercent!=null&&<p className="text-sm">HP2 Wi-Fi signal: {observation.wifiSignalPercent}% (access-point scan, not connected signal)</p>}
+    <p role="status" aria-live="polite" className={"rounded-lg border px-3 py-2 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600/50 bg-emerald-950/30 text-emerald-200":"border-amber-500/40 bg-amber-950/20 text-amber-200")}>{observation?.isWifiRecentlySeen?"HP2 detected the pairing Wi-Fi recently — not yet connected":observation?"No recent pairing Wi-Fi sighting. Mouse may be off, sleeping or no longer broadcasting.":"No HP2 Wi-Fi sighting for this mouse yet."}</p>
+    <p className="text-sm text-slate-300">Last physical HP2 Wi-Fi sighting: <strong>{observation?.lastSeenAt?new Date(observation.lastSeenAt).toLocaleString("en-GB"):"Never recorded"}</strong> (separate from website refresh time).</p>
+    {observation?.wifiSignalPercent!=null&&<p className="text-sm">Last observed HP2 Wi-Fi AP signal: {observation.wifiSignalPercent}% ({observation.isWifiRecentlySeen?"recent sighting":"historical reading"})</p>}
+    <p className="text-xs text-amber-200">Pairing Wi-Fi sightings cannot confirm the mouse's power state, restaurant Wi-Fi or secure MQTT. Only genuine authenticated device reports confirm connection.</p>
    <p className="text-xs text-slate-400">Battery and trap condition appear only after the physical mouse reports them. No guessed status.</p>
    <h3 className="text-lg font-semibold">3 · Restaurant 2.4 GHz Wi-Fi</h3>
    <select className={input} value={wifiName} onChange={e=>{setWifiName(e.target.value);setPassword("");}}><option value="">Select nearby Wi-Fi</option>{nearWifi.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}%</option>)}</select>
