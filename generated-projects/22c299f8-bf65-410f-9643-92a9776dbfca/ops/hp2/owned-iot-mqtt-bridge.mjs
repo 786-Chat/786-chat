@@ -175,7 +175,9 @@ const topics = Array.from(new Set([
   'fs/v1/device/+/telemetry',
 ]));
 
-const args = ['-h', mqttHost, '-p', mqttPort, '-v'];
+// Ignore retained MQTT values on startup: old battery/online reports must not
+// fabricate a fresh heartbeat or physical connection after a bridge restart.
+const args = ['-h', mqttHost, '-p', mqttPort, '-v', '-R'];
 for (const topic of topics) args.push('-t', topic);
 if (mqttUsername) args.push('-u', mqttUsername);
 if (mqttPassword) args.push('-P', mqttPassword);
