@@ -48,6 +48,9 @@ export default function FreshSmartCheck(){
  const [branchId,setBranchId]=useState("");
  const [searchBranch,setSearchBranch]=useState("");
  const [wifiName,setWifiName]=useState("");
+ const [wifiPassword,setWifiPassword]=useState("");
+ const [showWifiPassword,setShowWifiPassword]=useState(false);
+ const [wifiListOpen,setWifiListOpen]=useState(false);
  const [deviceName,setDeviceName]=useState("");
  const [location,setLocation]=useState("");
  const [notes,setNotes]=useState("");
@@ -88,7 +91,15 @@ export default function FreshSmartCheck(){
   finally{setRefreshing(false);}
  },[]);
 
- const nearbyWifi=useMemo(()=>scan?.fresh?(scan.networks||[]).filter(n=>n.frequency>=2400&&n.frequency<2500&&!/^(SmartLife-|OpenBK)/i.test(n.ssid)):[],[scan]);
+ const nearbyWifi=useMemo(()=>{
+  if(!scan?.fresh)return [] as Network[];
+  const strongest=new Map<string,Network>();
+  for(const n of scan.networks||[]){
+   if(n.frequency<2400||n.frequency>=2500||/^(SmartLife-|OpenBK)/i.test(n.ssid)||!n.ssid.trim())continue;
+   if(!strongest.has(n.ssid)||strongest.get(n.ssid)!.signal<n.signal)strongest.set(n.ssid,n);
+  }
+  return [...strongest.values()].sort((a,b)=>b.signal-a.signal||a.ssid.localeCompare(b.ssid));
+ },[scan]);
  const currentMice=useMemo(()=>observations.filter(o=>o.isWifiRecentlySeen&&o.macAddress&&o.lastSeenAt&&Date.now()-new Date(o.lastSeenAt).getTime()>=0&&Date.now()-new Date(o.lastSeenAt).getTime()<75000),[observations]);
  const selected=currentMice.find(o=>normalizedMac(o.macAddress)===selectedMac);
  const selectedRegistered=devices.find(d=>Boolean(selectedMac)&&savedMac(d)===selectedMac);
@@ -96,7 +107,7 @@ export default function FreshSmartCheck(){
  const editingSaved=editing?devices.find(d=>d.id===editing):null;
  const formValid=Boolean(branchId&&(wifiName.trim()||editingSaved)&&deviceName.trim()&&location.trim()&&(selected||(editingSaved&&savedMac(editingSaved)&&savedAp(editingSaved))));
  const resetForm=()=>{
-  setDeviceName("");setLocation("");setNotes("");setSelectedMac("");setWifiName("");setEditing(null);
+  setDeviceName("");setLocation("");setNotes("");setSelectedMac("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setEditing(null);
   setJustSaved(null);setError("");
  };
  const save=async()=>{
@@ -123,6 +134,7 @@ export default function FreshSmartCheck(){
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(data.message||"Could not save mouse registration.");
    setEditing(null);
+   setWifiPassword("");setShowWifiPassword(false);
    setJustSaved(mac);
    toast({title:"Mouse registration saved",description:"Saved to the selected restaurant. Wi-Fi/MQTT connection is NOT yet verified."});
    await refresh();
@@ -132,7 +144,7 @@ export default function FreshSmartCheck(){
  const edit=(d:Device)=>{
   const mac=savedMac(d);
   setEditing(d.id);setBranchId(d.branchId||"");setDeviceName(d.deviceName||"");
-  setLocation(savedArea(d));setNotes("");setWifiName("");setSelectedMac(mac);
+  setLocation(savedArea(d));setNotes("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setSelectedMac(mac);
   setJustSaved(null);window.scrollTo({top:0,behavior:"smooth"});
  };
  const remove=async(d:Device)=>{
@@ -159,13 +171,33 @@ export default function FreshSmartCheck(){
      <input className={input} placeholder="Search registered restaurants" value={searchBranch} onChange={e=>setSearchBranch(e.target.value)}/>
      <select className={"mt-2 "+input} value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Choose restaurant</option>{branches.filter(b=>b.name.toLowerCase().includes(searchBranch.toLowerCase())).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
     </label>
-    <label><span className="mb-2 block font-semibold">Restaurant 2.4 GHz Wi-Fi</span><select className={input} value={nearbyWifi.some(n=>n.ssid===wifiName)?wifiName:""} onChange={e=>setWifiName(e.target.value)}><option value="">Choose nearby Wi-Fi</option>{nearbyWifi.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}% · {n.frequency} MHz</option>)}</select></label>
-    <label><span className="mb-2 block font-semibold">Home / hotspot / local Wi-Fi name</span><input className={input} placeholder="Or enter a 2.4 GHz Wi-Fi name" value={wifiName} onChange={e=>setWifiName(e.target.value)}/></label>
-    <div className="sm:col-span-2 rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm text-slate-300">
-     <p className="font-medium text-white">Wi-Fi password · Connection setup not yet available</p>
-     <input type="password" className={"mt-2 "+input+" cursor-not-allowed opacity-60"} placeholder="Disabled until compatible provisioning is verified" disabled value=""/>
-     <p className="mt-2 text-amber-200">Do not enter a real Wi-Fi password yet. The current BMAX W003 firmware has no verified remote provisioning method. Saving registers a mouse; it cannot connect the physical mouse to Wi-Fi.</p>
-     {scan&&!scan.fresh&&<p className="mt-2">No recent 2.4 GHz router scan from HP2. You can still type the network name above.</p>}
+    <div className="relative sm:col-span-2">
+     <label htmlFor="mouse-install-wifi" className="mb-2 block font-semibold">2.4 GHz Wi-Fi — Restaurant / Home / Hotspot</label>
+     <div className="flex gap-2">
+      <input id="mouse-install-wifi" role="combobox" aria-controls="mouse-install-wifi-list" aria-expanded={wifiListOpen} aria-autocomplete="list" className={input+" min-w-0 flex-1"} placeholder="Select a scanned network or type Wi-Fi name" value={wifiName}
+       onFocus={()=>setWifiListOpen(true)}
+       onChange={e=>{setWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(true)}}/>
+      <button type="button" aria-label="Show scanned 2.4 GHz Wi-Fi networks" aria-expanded={wifiListOpen} className="rounded-xl border border-cyan-500/40 bg-cyan-950 px-4 py-3 text-sm font-semibold text-cyan-100"
+       onClick={()=>setWifiListOpen(open=>!open)}>{wifiListOpen?"Close list":"Wi-Fi list ▾"}</button>
+     </div>
+     {wifiListOpen&&<div id="mouse-install-wifi-list" role="listbox" aria-label="Nearby 2.4 GHz Wi-Fi networks" className="relative z-10 mt-2 max-h-56 overflow-y-auto rounded-xl border border-slate-600 bg-slate-950 shadow-xl">
+      {nearbyWifi.filter(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase())).map(n=>
+       <button type="button" role="option" aria-selected={wifiName===n.ssid} key={n.ssid} className="flex w-full items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 text-left text-sm hover:bg-cyan-950 focus:bg-cyan-950"
+        onClick={()=>{setWifiName(n.ssid);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false)}}>
+        <span className="truncate font-semibold">{n.ssid}</span><span className="shrink-0 text-xs text-cyan-200">{n.signal}% · 2.4 GHz</span>
+       </button>)}
+      {nearbyWifi.length===0&&<p className="p-4 text-sm text-slate-400">No recent 2.4 GHz networks reported by HP2. Press Refresh above, or type the Wi-Fi name manually.</p>}
+      {nearbyWifi.length>0&&!nearbyWifi.some(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase()))&&<p className="p-4 text-sm text-slate-400">No scanned match. You can keep the Wi-Fi name you typed.</p>}
+     </div>}
+     {wifiName.trim()&&<div className="mt-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
+      <label htmlFor="mouse-install-wifi-password" className="mb-2 block text-sm font-semibold">Wi-Fi password <span className="text-xs font-normal text-slate-400">(local form only)</span></label>
+      <div className="flex gap-2">
+       <input id="mouse-install-wifi-password" type={showWifiPassword?"text":"password"} autoComplete="new-password" spellCheck={false} className={input+" min-w-0 flex-1"} value={wifiPassword} onChange={e=>setWifiPassword(e.target.value)} placeholder="Password — not sent or saved"/>
+       <button type="button" onClick={()=>setShowWifiPassword(x=>!x)} className="rounded-lg bg-slate-700 px-4 py-2 text-sm">{showWifiPassword?"Hide":"Show"}</button>
+      </div>
+      <p className="mt-2 text-xs text-amber-200">Physical Wi-Fi setup is not yet available on the BMAX W003. Do not enter a real password for installation yet. This field is local-only; its value is never sent to the server or mouse, and is cleared on Save. Saving registers a mouse, not its Wi-Fi connection.</p>
+     </div>}
+     {scan&&!scan.fresh&&<p className="mt-2 text-xs text-slate-400">HP2 has not reported a recent 2.4 GHz Wi-Fi scan. Press Refresh to check its saved report.</p>}
     </div>
     <label><span className="mb-2 block font-semibold">Mouse number / Device name</span><input className={input} value={deviceName} onChange={e=>setDeviceName(e.target.value)} placeholder="e.g. Mouse #13" maxLength={120}/></label>
     <label><span className="mb-2 block font-semibold">Installation area</span><input className={input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Kitchen, storage room, etc." maxLength={120}/></label>
