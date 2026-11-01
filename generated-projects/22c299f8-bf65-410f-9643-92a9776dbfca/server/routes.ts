@@ -925,9 +925,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/iot/gateway/events", async (req, res) => {
+  // AWS IoT HTTP-rule ingestion is opt-in and requires a separate cloud token.
+// It does NOT provision Wi-Fi or imply that a mouse is physically connected.
+app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) => {
     try {
-      const expectedToken = String(process.env.FOODSAFETY_IOT_GATEWAY_TOKEN || "").trim();
+      const cloudRule = req.path === "/api/iot/cloud/events";
+      const expectedToken = String((cloudRule
+        ? process.env.FOODSAFETY_IOT_CLOUD_WEBHOOK_TOKEN
+        : process.env.FOODSAFETY_IOT_GATEWAY_TOKEN) || "").trim();
       if (!expectedToken) {
         return res.status(503).json({
           message: "Food Safety IoT gateway token is not configured",
@@ -935,11 +940,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const headerToken = String(req.get("x-foodsafety-gateway-token") || "").trim();
+      const headerToken = String(req.get(cloudRule ? "x-foodsafety-cloud-token" : "x-foodsafety-gateway-token") || "").trim();
       const authorization = String(req.get("authorization") || "").trim();
-      const providedToken = headerToken || (/^Bearer\s+/i.test(authorization)
-        ? authorization.replace(/^Bearer\s+/i, "").trim()
-        : "");
+      // Cloud rules never inherit the local HP2 token; AWS HTTP actions
+      // must present the distinct x-foodsafety-cloud-token header.
+      const providedToken = cloudRule ? headerToken
+        : headerToken || (/^Bearer\s+/i.test(authorization)
+          ? authorization.replace(/^Bearer\s+/i, "").trim()
+          : "");
       const providedBuffer = Buffer.from(providedToken);
       const expectedBuffer = Buffer.from(expectedToken);
       const authorized = providedBuffer.length === expectedBuffer.length &&
@@ -957,7 +965,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const deviceId = String(body.deviceId || body.device_id || "").trim();
-      const type = String(body.type || body.eventType || body.event_type || "").trim();
+      const cloudTopicDeviceId = String(body.mqttDeviceId || "").trim();
+      if (cloudRule && (!/^FS-MOUSE-\d{6,}$/.test(cloudTopicDeviceId) || cloudTopicDeviceId !== deviceId)) {
+        return res.status(400).json({ message: "AWS MQTT topic device ID must match the registered firmware device ID", code: "CLOUD_DEVICE_ID_MISMATCH" });
+      }
+      const rawType = String(body.type || body.eventType || body.event_type || (cloudRule ? body.event : "") || "").trim();
+      // A boot/status message is only a heartbeat. It must never fabricate
+      // a trap alarm. Actual catch events require trap_triggered/trap_reset.
+      const type = cloudRule && (!rawType || rawType === "boot" || rawType === "status")
+        ? (body.online === false ? "offline" : "heartbeat")
+        : rawType;
       const allowedTypes = new Set(["trap_triggered", "trap_reset", "heartbeat", "online", "offline"]);
 
       if (!deviceId) {
@@ -1024,8 +1041,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : null;
       const valueJson = JSON.stringify(eventValue ?? null);
       const rawJson = JSON.stringify({
-        source: "hp2-mqtt-gateway",
         ...body,
+        source: cloudRule ? "aws-iot-http-rule" : "hp2-mqtt-gateway",
         deviceId,
         type,
         eventId,
