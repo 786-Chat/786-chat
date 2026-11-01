@@ -925,6 +925,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AWS IoT's HTTP rule destination sends a confirmation challenge before
+  // it can forward real MQTT reports. Only the AWS IoT region used by this
+  // project can be confirmed; never fetch an arbitrary client-provided URL.
+  app.post("/api/iot/cloud", async (req, res) => {
+    try {
+      if (req.get("x-amz-rules-engine-message-type") !== "DestinationConfirmation" ||
+          req.body?.messageType !== "DestinationConfirmation") {
+        return res.status(400).json({ message: "Not an AWS IoT destination confirmation" });
+      }
+      const token = String(req.body?.confirmationToken || "");
+      const suppliedUrl = String(req.body?.enableUrl || "");
+      if (!/^[A-Za-z0-9_-]{20,512}$/.test(token)) return res.status(400).json({ message: "Invalid confirmation token" });
+      const confirmation = new URL(suppliedUrl);
+      if (confirmation.protocol !== "https:" ||
+          confirmation.hostname !== "iot.eu-north-1.amazonaws.com" ||
+          confirmation.pathname !== "/confirmdestination/" + token ||
+          confirmation.search || confirmation.hash) {
+        return res.status(400).json({ message: "Untrusted destination confirmation URL" });
+      }
+      const response = await fetch(confirmation.toString(), { method: "GET", signal: AbortSignal.timeout(8000) });
+      if (!response.ok) return res.status(502).json({ message: "AWS IoT destination confirmation failed" });
+      return res.status(204).end();
+    } catch (error: any) {
+      console.error("AWS IoT endpoint confirmation:", error?.message || error);
+      return res.status(500).json({ message: "AWS IoT destination confirmation unavailable" });
+    }
+  });
+
   // AWS IoT HTTP-rule ingestion is opt-in and requires a separate cloud token.
 // It does NOT provision Wi-Fi or imply that a mouse is physically connected.
 app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) => {
