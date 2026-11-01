@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { RefreshCw, Trash2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -53,7 +53,8 @@ export default function FreshSmartCheck(){
   }catch(e:any){setError(String(e?.message||e));}
   finally{setRefreshing(false)}
  },[]);
- useEffect(()=>{refresh();const timer=window.setInterval(refresh,15000);return()=>window.clearInterval(timer)},[refresh]);
+ // Do not poll or auto-load this screen. The top Refresh button explicitly
+ // reads saved HP2/restaurant/device reports when the admin requests them.
  const nearWifi=useMemo(()=>scan?.fresh?(scan.networks||[]).filter(n=>n.frequency>=2400&&n.frequency<2500):[],[scan]);
  const matching=useMemo(()=>devices.filter(d=>String(d.deviceName||"").toLowerCase().includes(MOUSE_SSID.toLowerCase())||String(d.notes||d.location||d.installationLocation||"").toLowerCase().includes(MOUSE_MAC.toLowerCase())),[devices]);
  const registered=matching[0];
@@ -89,7 +90,7 @@ export default function FreshSmartCheck(){
  return <main className="mx-auto max-w-5xl space-y-5 text-white">
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">Smart Check</h2><button type="button" disabled={refreshing} aria-busy={refreshing} className="flex items-center gap-2 rounded-xl border-b-4 border-cyan-950 bg-cyan-600 px-5 py-3 font-semibold shadow-[0_6px_0_rgba(8,47,73,.7)] transition-all duration-150 hover:bg-cyan-500 hover:-translate-y-0.5 active:translate-y-1 active:border-b-0 active:shadow-none disabled:opacity-70" onClick={()=>void refresh()}><RefreshCw size={18} className={refreshing?"animate-spin":""}/>{refreshing?"Refreshing...":"Refresh"}</button></div>
-   <p role="status" aria-live="polite" className="mt-2 text-xs text-cyan-200">{refreshing?"Checking latest saved HP2 and device reports...":refreshedAt?"Last refreshed at "+refreshedAt+" · This reads existing HP2 reports; it does not trigger a new scan.": "Refreshing reports when the page opens..."}</p>
+   <p role="status" aria-live="polite" className="mt-2 text-xs text-cyan-200">{refreshing?"Checking latest saved HP2 and device reports...":refreshedAt?"Last checked at "+refreshedAt+" · Auto-refresh OFF. This reads saved HP2 reports; it does not trigger a new scan.": "Auto-refresh OFF · Click Refresh above to load saved HP2 reports and registered devices."}</p>
    <p className="mt-2 text-sm text-slate-300">Mouse installation · select the restaurant, detect the mouse, choose Wi-Fi, save the mouse card.</p>
   </header>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
@@ -99,22 +100,22 @@ export default function FreshSmartCheck(){
   </section>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
    <h3 className="text-lg font-semibold">2 · Register Mouse</h3>
-    <div className={"rounded-lg border p-3 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600 bg-emerald-950/30 text-emerald-100":"border-slate-700 bg-slate-950 text-slate-300")}><strong>Live HP2 mouse discovery: </strong>{observation?.isWifiRecentlySeen?(observation.hostname||MOUSE_SSID)+" · "+(observation.macAddress||MOUSE_MAC)+" · "+(observation.wifiSignalPercent??"Unknown")+"% signal":"No mouse pairing network detected recently."}<p className="mt-1 text-xs">Registered mouse cards below remain saved when a mouse is switched off. Pairing Wi-Fi discovery is not an MQTT connection.</p></div>
+    <div className={"rounded-lg border p-3 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600 bg-emerald-950/30 text-emerald-100":"border-slate-700 bg-slate-950 text-slate-300")}><strong>Live HP2 mouse discovery: </strong>{observation?.isWifiRecentlySeen?(observation.hostname||MOUSE_SSID)+" · "+(observation.macAddress||MOUSE_MAC)+" · "+(observation.wifiSignalPercent??"Unknown")+"% signal":refreshedAt?"No mouse pairing network detected recently.":"Not checked yet — click Refresh above."}<p className="mt-1 text-xs">Registered mouse cards below remain saved when a mouse is switched off. Pairing Wi-Fi discovery is not an MQTT connection.</p></div>
    <div className="grid gap-4 sm:grid-cols-2">
     <label>Mouse number / Device name<input className={"mt-2 "+input} value={deviceName} onChange={e=>setDeviceName(e.target.value)} maxLength={120}/></label>
     <label>Installation area<input className={"mt-2 "+input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Kitchen"/></label>
-     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Currently detected mouse Wi-Fi ID</p><strong>{observation?.isWifiRecentlySeen?observation.hostname||"Unknown":"No mouse AP currently detected"}</strong></div>
+     <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Currently detected mouse Wi-Fi ID</p><strong>{observation?.isWifiRecentlySeen?observation.hostname||"Unknown":refreshedAt?"No mouse AP currently detected":"Not checked yet"}</strong></div>
      <div className="rounded-lg bg-slate-950 p-3"><p className="text-sm text-slate-400">Currently detected mouse MAC</p><strong className="font-mono text-sm">{observation?.isWifiRecentlySeen?observation.macAddress||"Unknown":"—"}</strong></div>
    </div>
-    <p role="status" aria-live="polite" className={"rounded-lg border px-3 py-2 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600/50 bg-emerald-950/30 text-emerald-200":"border-amber-500/40 bg-amber-950/20 text-amber-200")}>{observation?.isWifiRecentlySeen?"HP2 detected the pairing Wi-Fi recently — not yet connected":observation?"No recent pairing Wi-Fi sighting. Mouse may be off, sleeping or no longer broadcasting.":"No HP2 Wi-Fi sighting for this mouse yet."}</p>
-    <p className="text-sm text-slate-300">Last physical HP2 Wi-Fi sighting: <strong>{observation?.lastSeenAt?new Date(observation.lastSeenAt).toLocaleString("en-GB"):"Never recorded"}</strong> (separate from website refresh time).</p>
+    <p role="status" aria-live="polite" className={"rounded-lg border px-3 py-2 text-sm "+(observation?.isWifiRecentlySeen?"border-emerald-600/50 bg-emerald-950/30 text-emerald-200":"border-amber-500/40 bg-amber-950/20 text-amber-200")}>{observation?.isWifiRecentlySeen?"HP2 detected the pairing Wi-Fi recently — not yet connected":observation?"No recent pairing Wi-Fi sighting. Mouse may be off, sleeping or no longer broadcasting.":refreshedAt?"No HP2 Wi-Fi sighting for this mouse yet.":"Not checked yet — click Refresh above."}</p>
+    <p className="text-sm text-slate-300">Last physical HP2 Wi-Fi sighting: <strong>{observation?.lastSeenAt?new Date(observation.lastSeenAt).toLocaleString("en-GB"):refreshedAt?"Never recorded":"Not checked yet"}</strong> (separate from website refresh time).</p>
     {observation?.wifiSignalPercent!=null&&<p className="text-sm">Last observed HP2 Wi-Fi AP signal: {observation.wifiSignalPercent}% ({observation.isWifiRecentlySeen?"recent sighting":"historical reading"})</p>}
     <p className="text-xs text-amber-200">Pairing Wi-Fi sightings cannot confirm the mouse's power state, restaurant Wi-Fi or secure MQTT. Only genuine authenticated device reports confirm connection.</p>
    <p className="text-xs text-slate-400">Battery and trap condition appear only after the physical mouse reports them. No guessed status.</p>
    <h3 className="text-lg font-semibold">3 · Restaurant 2.4 GHz Wi-Fi</h3>
    <select className={input} value={wifiName} onChange={e=>{setWifiName(e.target.value);setPassword("");}}><option value="">Select nearby Wi-Fi</option>{nearWifi.map(n=><option key={n.ssid+":"+n.frequency} value={n.ssid}>{n.ssid} · {n.signal}%</option>)}</select>
    <input className={input} value={wifiName} onChange={e=>{setWifiName(e.target.value);setPassword("");}} placeholder="Or enter Wi-Fi name manually"/>
-   {!scan?.fresh&&<p className="text-sm text-amber-200">HP2 has not reported a recent router scan.</p>}
+   {!scan?.fresh&&<p className="text-sm text-amber-200">{refreshedAt?"HP2 has not reported a recent router scan.":"Click Refresh above to check saved nearby Wi-Fi reports."}</p>}
    <div className="flex gap-2"><input type={showPassword?"text":"password"} className={input} value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" placeholder="Wi-Fi password (local entry only)"/><button type="button" onClick={()=>setShowPassword(v=>!v)} className="rounded-lg bg-slate-700 px-4">{showPassword?"Hide":"Show"}</button></div>
    <p className="text-xs text-amber-200">Password is never uploaded or saved. Save only registers the mouse; physical provisioning is not implemented. Please do not enter your real password until Connect is operational.</p>
    <label className="block">Internal notes<textarea className={"mt-2 "+input} rows={2} value={notes} onChange={e=>setNotes(e.target.value)} /></label>
@@ -126,7 +127,7 @@ export default function FreshSmartCheck(){
   </section>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
    <h3 className="text-lg font-semibold">Registered Mouse Cards</h3>
-   {matching.length===0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">No registered Mouse #11 card yet.</p>}
+   {matching.length===0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">{refreshedAt?"No registered Mouse #11 card yet.":"Click Refresh above to load saved Mouse #11 cards."}</p>}
    {matching.map(d=>{
     const battery=d.batteryPercent??d.batteryPct??d.lastStatus?.find(x=>x.code==="battery_percentage")?.value;
     const signal=d.wifiSignal??d.rssi??d.lastStatus?.find(x=>x.code==="rssi")?.value;
