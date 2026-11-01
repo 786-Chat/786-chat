@@ -119,7 +119,12 @@ export default function OwnedSetupPanel(){
    const hadReport=hasReport;
    const trap=d.alarmActive?"Mouse caught (recorded)":connected?"No active alarm":"Not verified";
    const mac=recordedMouseMac(d);
-   const sighting=mac?observations.find(o=>String(o.macAddress||"").toUpperCase()===mac):undefined;
+   const savedFactoryId=String(d.deviceName||"").match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0]?.toLowerCase();
+   // If MAC was not stored, correlate only an exact factory SSID in the
+   // saved device name. This pairing observation never proves MQTT identity.
+   const sighting=mac
+    ? observations.find(o=>String(o.macAddress||"").toUpperCase()===mac)
+    : savedFactoryId ? observations.find(o=>String(o.hostname||"").toLowerCase()===savedFactoryId) : undefined;
    return <article key={d.id} className="space-y-4 rounded-2xl border border-cyan-500/25 bg-slate-950 p-5">
     <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</p><p className="text-xs text-slate-400">📍 {area(d)||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":hadReport?"Sleeping / no recent MQTT":"Not connected"}</span></div>
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[
