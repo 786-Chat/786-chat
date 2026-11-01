@@ -24,7 +24,7 @@ export function ownedMouseReadings(lastStatus: unknown, lastCheckedAt: unknown) 
 
   // DO NOT treat the generic "status" field as ON/OFF. The server uses it
   // for online/offline/awaiting_activation, not for the physical switch.
-  const powerRaw = get(/^(?:switch(?:_?\\d+)?|power|power_state|device_power|on_off)$/);
+  const powerRaw = get(/^(?:switch(?:_?\d+)?|power|power_state|device_power|on_off)$/);
   const normalized = typeof powerRaw === "boolean" ? String(powerRaw) : String(powerRaw ?? "").trim().toLowerCase();
   const powerValue = ["on", "true", "1"].includes(normalized)
     ? "ON"
