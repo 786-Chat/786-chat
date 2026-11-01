@@ -136,7 +136,7 @@ export default function FreshSmartCheck(){
   setBusy(true);
   try{
    const r=await fetch("/api/iot/devices/"+encodeURIComponent(d.id),{method:"DELETE",credentials:"include"});
-   if(!r.ok)throw Error((await r.json().catch(()=>({})).message||"Delete failed"));
+   if(!r.ok)throw Error((await r.json().catch(()=>({})))?.message||"Delete failed"));
    toast({title:"Registration deleted"});await refresh();
   }catch(e:any){setError(String(e?.message||e));}finally{setBusy(false);}
  };
