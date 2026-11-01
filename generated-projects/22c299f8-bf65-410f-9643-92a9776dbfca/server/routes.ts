@@ -8578,6 +8578,78 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Read-only diagnostics: never accept Wi-Fi credentials from this endpoint.
+  app.get("/api/iot/provisioning-readiness", isAdminAuthenticated, async (req, res) => {
+    try {
+      res.set("Cache-Control", "private, no-store");
+      const mac = String(req.query.mac || "").trim().toUpperCase();
+      const deviceId = String(req.query.deviceId || "").trim().toUpperCase();
+      if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)) {
+        return res.status(400).json({message:"Choose a physical mouse with a valid MAC first."});
+      }
+      if (deviceId && !/^FS-MOUSE-[0-9]{6,}$/.test(deviceId)) {
+        return res.status(400).json({message:"Invalid registered Food Safety mouse ID."});
+      }
+      await ensureOwnedIotSchema();
+      const sightingResult: any = await db.execute(sql`
+        SELECT hardware_key, mac_address, hostname, wifi_observation_source, wifi_signal_percent, last_seen_at
+        FROM owned_iot_device_checks
+        WHERE mac_address = ${mac} AND hardware_key = ${"wifi-ap:" + mac}
+        LIMIT 1
+      `);
+      const sighting: any = (Array.isArray(sightingResult)?sightingResult:sightingResult?.rows||[])[0];
+      const apTimestamp=sighting?.last_seen_at?new Date(sighting.last_seen_at).getTime():0;
+      const apRecentlySeen=Boolean(sighting?.wifi_observation_source==="hp2-wifi-scan"&&apTimestamp&&Date.now()-apTimestamp>=0&&Date.now()-apTimestamp<75000);
+
+      let device: any = null;
+      if (deviceId) {
+        const result: any = await db.execute(sql`
+          SELECT device_id, branch_id, installation_location, is_online, last_seen_at
+          FROM owned_iot_devices WHERE device_id = ${deviceId} LIMIT 1
+        `);
+        device=(Array.isArray(result)?result:result?.rows||[])[0]||null;
+      }
+      const foundMac=String(device?.installation_location||"").match(/Mouse MAC:\s*((?:[0-9A-F]{2}:){5}[0-9A-F]{2})/i)?.[1]?.toUpperCase()||"";
+      if (device && foundMac !== mac) {
+        return res.status(409).json({message:"Registered device MAC differs from selected physical mouse. No action taken.",code:"MOUSE_MAC_MISMATCH"});
+      }
+      const mqttTimestamp=device?.last_seen_at?new Date(device.last_seen_at).getTime():0;
+      const mqttRecentlyReceived=Boolean(device?.is_online&&mqttTimestamp&&Date.now()-mqttTimestamp>=0&&Date.now()-mqttTimestamp<180000);
+      await ensureHp2RouterScanTable();
+      const wifiResult:any=await db.execute(sql`
+        SELECT reported_at FROM hp2_router_wifi_scans
+        WHERE source_key = 'hp2-gateway' LIMIT 1
+      `);
+      const wifi=(Array.isArray(wifiResult)?wifiResult:wifiResult?.rows||[])[0];
+      const routerScanAt=wifi?.reported_at?new Date(wifi.reported_at).getTime():0;
+      const routerScanFresh=Boolean(routerScanAt&&Date.now()-routerScanAt>=0&&Date.now()-routerScanAt<180000);
+      return res.json({
+        deviceRegistered:Boolean(device),
+        deviceId:device?.device_id||null,
+        branchAssigned:Boolean(device?.branch_id),
+        apRecentlySeen,
+        apLastSeenAt:sighting?.last_seen_at||null,
+        apSignal:sighting?.wifi_signal_percent??null,
+        routerScanFresh,
+        routerScanAt:routerScanAt?new Date(routerScanAt).toISOString():null,
+        mqttRecentlyReceived,
+        mqttLastSeenAt:device?.last_seen_at||null,
+        firmwareCompatible:null,
+        provisioningSupported:false,
+        reason:!apRecentlySeen
+          ?"HP2 has no recent pairing broadcast from this MAC. Verify this mouse is in pairing mode. Website refresh is not a physical scan."
+          :!device
+            ?"HP2 detected this mouse MAC but it is not linked to a registered Food Safety device. Save its card and restaurant first."
+            :!device.branch_id
+              ?"The selected mouse is saved but not assigned to a restaurant."
+              :"The pairing AP and saved device identity exist, but no compatible 786.Chat Wi-Fi provisioning protocol is verified on this physical mouse. Its stock SmartLife AP cannot accept a plain SSID/password sent from Vercel. Confirm/install supported owned firmware before enabling Connect. No Wi-Fi password has been received or sent."
+      });
+    } catch(error:any){
+      console.error("Food Safety provisioning readiness:",error?.message||error);
+      return res.status(500).json({message:"Unable to check physical provisioning readiness."});
+    }
+  });
+
   app.get("/api/iot/router-wifi-networks", isAdminAuthenticated, async (_req, res) => {
     try {
       res.set("Cache-Control", "private, no-store");
