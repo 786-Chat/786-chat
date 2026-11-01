@@ -1,0 +1,12 @@
+{
+  "projectId": "6b55a4d1-7f4d-42a1-b7cc-2bbed74b5b1f",
+  "buildId": "58feacc8-3ad7-409e-9714-4b8a5238c0a7",
+  "title": "786 Journey Coffee",
+  "sourceVersion": "7c10326455db70fbf5efe8b8aca31a9b0557f1a1467467fb7ef058e3c8db8e7b",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-11-01T03:18:04.191Z"
+}
