@@ -75,7 +75,10 @@ export default function FreshSmartCheck(){
    const branchData=await b.json();
    const deviceData=await d.json();
    const networkData=await n.json() as Scan;
-   setObservations(Array.isArray(sightings)?sightings.filter(mouseAp):[]);
+   const mouseReports=Array.isArray(sightings)?sightings.filter(mouseAp):[];
+   setObservations(mouseReports);
+   const freshMice=mouseReports.filter(o=>o.isWifiRecentlySeen&&o.lastSeenAt&&Date.now()-new Date(o.lastSeenAt).getTime()<75000);
+   if(freshMice.length===1)setSelectedMac(previous=>previous||normalizedMac(freshMice[0].macAddress));
    setBranches(Array.isArray(branchData.branches)?branchData.branches:[]);
    setDevices(Array.isArray(deviceData)?deviceData:[]);
    setScan(networkData);
@@ -90,17 +93,18 @@ export default function FreshSmartCheck(){
  const selected=currentMice.find(o=>normalizedMac(o.macAddress)===selectedMac);
  const selectedRegistered=devices.find(d=>Boolean(selectedMac)&&savedMac(d)===selectedMac);
  const selectedBranch=branches.find(b=>b.id===branchId);
- const formValid=Boolean(branchId&&wifiName.trim()&&deviceName.trim()&&location.trim()&&selected);
+ const editingSaved=editing?devices.find(d=>d.id===editing):null;
+ const formValid=Boolean(branchId&&(wifiName.trim()||editingSaved)&&deviceName.trim()&&location.trim()&&(selected||(editingSaved&&savedMac(editingSaved)&&savedAp(editingSaved))));
  const resetForm=()=>{
   setDeviceName("");setLocation("");setNotes("");setSelectedMac("");setWifiName("");setEditing(null);
   setJustSaved(null);setError("");
  };
  const save=async()=>{
   const existing=editing?devices.find(d=>d.id===editing):selectedRegistered;
-  if(!branchId||!deviceName.trim()||!location.trim()||!wifiName.trim()){
+  if(!branchId||!deviceName.trim()||!location.trim()||(!editing&&!wifiName.trim())){
    setError("Choose a restaurant and its 2.4 GHz Wi-Fi, then enter mouse name and installation area.");return;
   }
-  const detected=selected|| (editing ? observations.find(o=>normalizedMac(o.macAddress)===savedMac(existing!)) : null);
+  const detected=selected||(existing&&editing?{macAddress:savedMac(existing),hostname:savedAp(existing)}:null);
   if(!detected?.macAddress||!detected.hostname){
    setError("Detect the physical mouse's pairing Wi-Fi and choose its MAC before saving. The mouse number cannot be inferred from the SmartLife Wi-Fi name.");return;
   }
@@ -128,7 +132,7 @@ export default function FreshSmartCheck(){
  const edit=(d:Device)=>{
   const mac=savedMac(d);
   setEditing(d.id);setBranchId(d.branchId||"");setDeviceName(d.deviceName||"");
-  setLocation(savedArea(d));setNotes("");setSelectedMac(mac);
+  setLocation(savedArea(d));setNotes("");setWifiName("");setSelectedMac(mac);
   setJustSaved(null);window.scrollTo({top:0,behavior:"smooth"});
  };
  const remove=async(d:Device)=>{
