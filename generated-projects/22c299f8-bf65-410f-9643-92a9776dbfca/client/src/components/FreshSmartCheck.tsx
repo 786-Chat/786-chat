@@ -160,6 +160,7 @@ export default function FreshSmartCheck(){
     <select aria-label="Select detected or registered physical mouse" className={input} value={selected} onChange={e=>setSelected(e.target.value)}>
      <option value="">Choose a physical mouse</option>
      {!selectedOptionPresent&&selected&&<option value={selected}>Previously selected mouse (not in current list)</option>}
+     {selected.startsWith("saved:")&&selectedOptionPresent&&observations.some(o=>normalizeMac(o.macAddress)===selectedMac)&&<option value={selected}>Saved · {registered?.deviceName||registered?.deviceId||"Physical mouse"} · {registered?.deviceId||""}</option>}
      {observations.map(o=>{
       const mac=normalizeMac(o.macAddress);
       const assigned=devices.find(d=>macFromRecord(d)===mac);
@@ -190,7 +191,7 @@ export default function FreshSmartCheck(){
      </div>
      <label className="block space-y-1 text-sm">Internal notes (optional)<textarea rows={2} className={input} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
      <button type="button" onClick={()=>void save()} disabled={busy||!branchId||!selectedMac||(!registered&&!observation?.isWifiRecentlySeen)} className="rounded-lg bg-cyan-600 px-5 py-3 font-semibold disabled:opacity-40">{busy?"Saving...":registered?"Save Existing Mouse / Branch":"Register This Detected Mouse"}</button>
-     {registered&&<p className="text-xs text-cyan-200">Saved record: {registered.deviceName||label} · {registered.deviceId} · {branches.find(b=>b.id===registered.branchId)?.name||"Unassigned"}. Saving updates this record; it does not register a second mouse.</p>}
+     {registered&&<div className="space-y-3"><p className="text-xs text-cyan-200">Saved record: {registered.deviceName||label} · {registered.deviceId} · {branches.find(b=>b.id===registered.branchId)?.name||"Unassigned"}. Saving updates this record; it does not register a second mouse.</p><button type="button" className="rounded-lg border border-cyan-500/40 px-4 py-2 text-sm" onClick={()=>window.dispatchEvent(new Event("pest:open-owned-smart-devices"))}>View this mouse in Smart Devices →</button></div>}
     </div>
     <div className="space-y-3 border-t border-slate-700 pt-5">
      <h3 className="text-lg font-semibold">3 · Nearby restaurant 2.4 GHz Wi-Fi</h3>
@@ -226,7 +227,7 @@ export default function FreshSmartCheck(){
   </section>
   {otherRegistered.length>0&&<section className="rounded-2xl border border-slate-700 bg-slate-900/75 p-4">
    <h3 className="mb-2 font-semibold">Other registered mouse records (not duplicated cards)</h3>
-   <div className="flex flex-wrap gap-2">{otherRegistered.map(d=><button type="button" key={d.id} onClick={()=>{setSelected("saved:"+d.id);window.scrollTo({top:0,behavior:"smooth"})}} className="rounded-lg border border-slate-600 bg-slate-950 p-3 text-left text-sm">{d.deviceName||d.deviceId} · {d.deviceId} · {d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</button>)}</div>
+   <div className="flex flex-wrap gap-2">{otherRegistered.map(d=><button type="button" key={d.id} onClick={()=>{const mac=macFromRecord(d);setSelected(mac&&observations.some(o=>normalizeMac(o.macAddress)===mac)?"ap:"+mac:"saved:"+d.id);window.scrollTo({top:0,behavior:"smooth"})}} className="rounded-lg border border-slate-600 bg-slate-950 p-3 text-left text-sm">{d.deviceName||d.deviceId} · {d.deviceId} · {d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</button>)}</div>
   </section>}
   <p className="text-xs text-slate-400"><Wifi size={14} className="mr-1 inline"/>HP2 detects pairing broadcasts; <WifiOff size={14} className="mr-1 inline"/>not seeing a broadcast does not prove power is OFF. Mouse ID, physical Wi-Fi provisioning and MQTT are independently verified.</p>
  </main>;
