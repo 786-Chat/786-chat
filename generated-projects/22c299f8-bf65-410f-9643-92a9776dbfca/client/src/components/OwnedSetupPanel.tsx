@@ -3,12 +3,15 @@ import { RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Branch = {id:string;name:string};
+type Observation = {hostname?:string|null;macAddress?:string|null;wifiSignalPercent?:number|null;lastSeenAt?:string|null;isWifiRecentlySeen?:boolean};
 type Device = {id:string;deviceId?:string;deviceName?:string;branchId?:string;branchName?:string;notes?:string;isOnline?:boolean;lastCheckedAt?:string|null;lastStatus?:Array<{code:string;value:any}>;alarmActive?:boolean};
+const recordedMouseMac=(d:Device)=>String(d.notes||"").match(/Mouse MAC:\s*((?:[0-9A-F]{2}:){5}[0-9A-F]{2})/i)?.[1]?.toUpperCase()||"";
 const area=(d:Device)=>{const raw=String(d.notes||"");const m=raw.match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i);return m?m[1]:raw};
 export default function OwnedSetupPanel(){
  const {toast}=useToast();
  const [branches,setBranches]=useState<Branch[]>([]);
  const [devices,setDevices]=useState<Device[]>([]);
+ const [observations,setObservations]=useState<Observation[]>([]);
  const [assignment,setAssignment]=useState<Record<string,string>>({});
  const [saving,setSaving]=useState("");
  const [loading,setLoading]=useState(false);
@@ -23,15 +26,20 @@ export default function OwnedSetupPanel(){
  const refresh=useCallback(async()=>{
   setLoading(true);
   try{
-   const [b,d]=await Promise.all([
+   const [b,d,o]=await Promise.all([
     fetch("/api/branches?page=1&limit=5000",{credentials:"include",cache:"no-store"}),
-    fetch("/api/iot/devices",{credentials:"include",cache:"no-store"})
+    fetch("/api/iot/devices",{credentials:"include",cache:"no-store"}),
+    fetch("/api/iot/device-check",{credentials:"include",cache:"no-store"})
    ]);
    if(!b.ok||!d.ok)throw Error("Unable to load registered devices or restaurants");
    const br=await b.json();const dv=await d.json();
    setBranches(Array.isArray(br.branches)?br.branches:[]);
    const records=Array.isArray(dv)?dv:[];
    setDevices(records);
+   // A Wi-Fi AP sighting is not authenticated MQTT; use only an exact MAC
+   // stored against a registered mouse to display HP2 pairing activity.
+   if(o.ok){const reports=await o.json();setObservations(Array.isArray(reports)?reports:[])}
+   else setObservations([]);
    setAssignment(prev=>Object.fromEntries(records.map((x:Device)=>[x.id,prev[x.id]??x.branchId??""])));
    setError("");
   }catch(e:any){setError(String(e?.message||e))}
@@ -97,6 +105,8 @@ export default function OwnedSetupPanel(){
    const connected=Boolean(d.isOnline&&last&&Date.now()-new Date(last).getTime()<180000);
    const hadReport=Boolean(last);
    const trap=connected&&d.alarmActive?"Mouse Caught":connected?"":"";
+   const mac=recordedMouseMac(d);
+   const sighting=mac?observations.find(o=>String(o.macAddress||"").toUpperCase()===mac):undefined;
    return <article key={d.id} className="space-y-4 rounded-2xl border border-cyan-500/25 bg-slate-950 p-5">
     <div className="flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</p><p className="text-xs text-slate-400">📍 {area(d)||"Installation area not set"}</p></div><span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-slate-800 text-slate-300")}>{connected?"Connected":hadReport?"Sleeping / no recent MQTT":"Not connected"}</span></div>
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[
@@ -105,7 +115,8 @@ export default function OwnedSetupPanel(){
       ["STATUS",connected?"Online":hadReport?"No recent MQTT":"Not confirmed"],
       ["TRAP",trap||"—"]
      ].map(([label,value])=><div key={label} className="rounded-xl bg-slate-800 p-3"><p className="text-xs text-slate-400">{label}</p><strong className="mt-1 block text-sm">{value}</strong></div>)}</div>
-    {signal!=null&&<p className="text-sm text-slate-300">📶 Wi-Fi RSSI: {signal}</p>}
+    {sighting&&<p className={"rounded-lg border p-2 text-xs "+(sighting.isWifiRecentlySeen?"border-cyan-600/40 bg-cyan-950/30 text-cyan-100":"border-slate-700 bg-slate-900 text-slate-400")}>{sighting.isWifiRecentlySeen?"📡 HP2 pairing Wi-Fi detected recently":"HP2 pairing Wi-Fi last seen (historical)"}{sighting.wifiSignalPercent!=null?" · "+sighting.wifiSignalPercent+"% signal":""}{sighting.lastSeenAt?" · "+new Date(sighting.lastSeenAt).toLocaleString("en-GB"):""}. This is NOT a restaurant Wi-Fi or MQTT connection.</p>}
+    {signal!=null&&<p className="text-sm text-slate-300">📶 MQTT-reported RSSI: {signal}</p>}
     {last&&<p className="text-xs text-slate-400">Last device report: {new Date(last).toLocaleString("en-GB")}</p>}
     <div className="space-y-2 border-t border-slate-700 pt-4"><label className="block text-sm font-semibold">Assign to Branch</label><div className="flex flex-wrap gap-2"><select className="min-w-0 flex-1 rounded-lg border border-slate-600 bg-slate-900 p-3" value={assignment[d.id]??d.branchId??""} onChange={e=>setAssignment(v=>({...v,[d.id]:e.target.value}))}><option value="">Choose restaurant</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select><button type="button" disabled={saving===d.id||!assignment[d.id]||assignment[d.id]===d.branchId} onClick={()=>assign(d)} className="rounded-lg bg-cyan-600 px-4 py-3 font-semibold disabled:opacity-40">{saving===d.id?"Saving...":"Assign"}</button></div><p className="text-xs text-slate-400">Assignment updates customer records; it does not mean physical Wi-Fi or MQTT is connected.</p></div>
    </article>
