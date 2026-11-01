@@ -51,8 +51,16 @@ export default function FreshSmartCheck(){
    if(!o.ok||!b.ok||!d.ok)throw Error("Mouse discovery, device records or restaurant list unavailable.");
    const [obs,br,dv]=await Promise.all([o.json(),b.json(),d.json()]);
    const seen=new Set<string>();
+   // The installation picker represents RECENT physical HP2 observations only.
+   // Historical AP sightings and saved database registrations stay in their
+   // own records and must never be presented as currently detected mice.
    const fresh=(Array.isArray(obs)?obs:[] as Observation[])
-    .filter((x:Observation)=>validAp(x))
+    .filter((x:Observation)=>{
+     const timestamp=x.lastSeenAt?new Date(x.lastSeenAt).getTime():NaN;
+     const age=Date.now()-timestamp;
+     return validAp(x)&&x.wifiObservationSource==="hp2-wifi-scan"&&x.isWifiRecentlySeen===true&&
+       Number.isFinite(age)&&age>=0&&age<75000;
+    })
     .sort((x:Observation,y:Observation)=>Date.parse(y.lastSeenAt||"")-Date.parse(x.lastSeenAt||""))
     .filter((x:Observation)=>{const mac=normalizeMac(x.macAddress);if(seen.has(mac))return false;seen.add(mac);return true;});
    const registered=Array.isArray(dv)?dv as Device[]:[];
@@ -61,25 +69,28 @@ export default function FreshSmartCheck(){
    setDevices(registered);
    setScan(n.ok?await n.json():null);
    setSelected(previous=>{
-    if(previous)return previous;
-    const recent=fresh.find((x:Observation)=>x.isWifiRecentlySeen);
-    if(recent)return "ap:"+normalizeMac(recent.macAddress);
-    const known=registered.find(x=>/mouse\s*#?\s*11\b/i.test(x.deviceName||""))||registered.find(x=>macFromRecord(x));
-    return known?"saved:"+known.id:"";
+    // Keep the selected mouse only while HP2 still reports its physical AP.
+    // With no recent AP there must be NO selected mouse or installation card.
+    if(previous.startsWith("ap:")&&fresh.some((x:Observation)=>normalizeMac(x.macAddress)===normalizeMac(previous.slice(3))))return previous;
+    // Automatically display the single physically observed mouse. When two
+    // are live, let the installer choose rather than guessing an identity.
+    return fresh.length===1?"ap:"+normalizeMac(fresh[0].macAddress):"";
    });
    setRefreshedAt(new Date().toLocaleTimeString("en-GB"));
    setError("");
-  }catch(e:any){setError(String(e?.message||e));}
+  }catch(e:any){
+   // Failed API reads are not evidence that a mouse is broadcasting.
+   setObservations([]);
+   setSelected("");
+   setError(String(e?.message||e));
+  }
   finally{setRefreshing(false);setInitialized(true)}
  },[]);
  useEffect(()=>{void refresh();const timer=window.setInterval(()=>void refresh(),15000);return()=>window.clearInterval(timer)},[refresh]);
 
- const selectedDeviceId=selected.startsWith("saved:")?selected.slice(6):"";
- const selectedMac=selected.startsWith("ap:")?normalizeMac(selected.slice(3)):macFromRecord(devices.find(d=>d.id===selectedDeviceId)||{id:""});
+ const selectedMac=selected.startsWith("ap:")?normalizeMac(selected.slice(3)):"";
  const observation=observations.find(o=>normalizeMac(o.macAddress)===selectedMac)||null;
- const registered=selectedDeviceId
-  ?devices.find(d=>d.id===selectedDeviceId)
-  :devices.find(d=>selectedMac&&macFromRecord(d)===selectedMac);
+ const registered=devices.find(d=>selectedMac&&macFromRecord(d)===selectedMac);
  const label=registered?.deviceName||observation?.hostname||"Detected mouse";
  const nearWifi=useMemo(()=>{
   if(!scan?.fresh)return [] as Network[];
@@ -92,10 +103,10 @@ export default function FreshSmartCheck(){
  const battery=registered?.lastStatus?.find(x=>x.code==="battery_percentage")?.value;
  const mqttRssi=registered?.lastStatus?.find(x=>x.code==="rssi")?.value;
 
- // Change the form only when selecting another physical MAC or existing card,
- // never on a 15-second scanner refresh while the installer is typing.
+ // Change the form only when selecting a different *currently observed* MAC.
+ // A normal background refresh must not overwrite an installer typing a name.
  useEffect(()=>{
-  const d=selectedDeviceId?devices.find(x=>x.id===selectedDeviceId):devices.find(x=>selected.startsWith("ap:")&&macFromRecord(x)===normalizeMac(selected.slice(3)));
+  const d=devices.find(x=>selected.startsWith("ap:")&&macFromRecord(x)===normalizeMac(selected.slice(3)));
   setDeviceName(d?.deviceName||"");
   setBranchId(d?.branchId||"");
   setLocation(d?areaFromRecord(d):"");
@@ -108,8 +119,10 @@ export default function FreshSmartCheck(){
  },[selected]);
 
  const save=async()=>{
-  if(!selected||!selectedMac){setError("Select a physical mouse with a confirmed MAC address first.");return;}
-  if(!registered&&!observation?.isWifiRecentlySeen){setError("A newly registered mouse requires a recent physical HP2 sighting.");return;}
+  if(!selectedMac||!observation?.isWifiRecentlySeen){
+   setError("No physical mouse pairing Wi-Fi detected recently. Switch on the mouse and wait for an HP2 sighting.");
+   return;
+  }
   if(!branchId||!deviceName.trim()){setError("Enter a mouse name and choose the restaurant.");return;}
   setBusy(true);setError("");
   try{
@@ -140,9 +153,6 @@ export default function FreshSmartCheck(){
   finally{setChecking(false)}
  };
  const available=branches.filter(b=>b.name.toLowerCase().includes(branchSearch.toLowerCase())||b.id===branchId);
- const selectedOptionPresent=Boolean(selected)&&
-  (selected.startsWith("ap:")?observations.some(o=>normalizeMac(o.macAddress)===selectedMac):devices.some(d=>d.id===selectedDeviceId));
- const otherRegistered=devices.filter(d=>d.id!==registered?.id);
 
  return <main className="mx-auto max-w-5xl space-y-5 text-white">
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
@@ -156,23 +166,27 @@ export default function FreshSmartCheck(){
   {error&&<p role="alert" className="rounded-xl border border-red-500/40 bg-red-950/60 p-4 text-sm text-red-100">{error}</p>}
   <section className="space-y-5 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
    <div className="space-y-2">
-    <h3 className="text-lg font-semibold">1 · Select physical mouse (HP2 discovery)</h3>
-    <select aria-label="Select detected or registered physical mouse" className={input} value={selected} onChange={e=>setSelected(e.target.value)}>
-     <option value="">Choose a physical mouse</option>
-     {!selectedOptionPresent&&selected&&<option value={selected}>Previously selected mouse (not in current list)</option>}
-     {selected.startsWith("saved:")&&selectedOptionPresent&&observations.some(o=>normalizeMac(o.macAddress)===selectedMac)&&<option value={selected}>Saved · {registered?.deviceName||registered?.deviceId||"Physical mouse"} · {registered?.deviceId||""}</option>}
-     {observations.map(o=>{
-      const mac=normalizeMac(o.macAddress);
-      const assigned=devices.find(d=>macFromRecord(d)===mac);
-      return <option key={mac} value={"ap:"+mac}>{o.isWifiRecentlySeen?"📡 Recent":"Historical"} · {assigned?.deviceName||o.hostname||"Mouse"} · {mac}{assigned?.deviceId?" · "+assigned.deviceId:""}</option>;
-     })}
-     {devices.filter(d=>!observations.some(o=>macFromRecord(d)&&macFromRecord(d)===normalizeMac(o.macAddress))).map(d=>
-      <option key={d.id} value={"saved:"+d.id}>Saved · {d.deviceName||d.deviceId} · {d.deviceId||"No ID"}{macFromRecord(d)?" · "+macFromRecord(d):" · MAC not recorded"}</option>
-     )}
-    </select>
-    <p className="text-xs text-slate-400">Detected SmartLife/OpenBK pairing networks use the physical MAC. Selecting another mouse will not reuse Mouse #11's ID or create a duplicate record.</p>
+    <h3 className="text-lg font-semibold">1 · Live HP2 mouse discovery</h3>
+    {observations.length===0?
+     <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-950/25 p-5">
+      <strong className="text-amber-200">No mouse pairing Wi-Fi detected recently</strong>
+      <p className="mt-2 text-sm text-slate-300">Smart Check only shows physical mouse Wi-Fi broadcasts reported by HP2 within the last 75 seconds. Switch on one mouse in slow-flashing pairing mode to see its real SmartLife/OpenBK ID and MAC here.</p>
+      <p className="mt-2 text-xs text-slate-400">Previously saved mice are kept in Smart Devices, not shown as live detections. No recent broadcast does not prove that the mouse is powered off.</p>
+      <button type="button" onClick={()=>window.dispatchEvent(new Event("pest:open-owned-smart-devices"))} className="mt-3 rounded-lg border border-cyan-500/50 bg-slate-800 px-4 py-2 text-sm text-cyan-200">View saved registrations in Smart Devices →</button>
+     </div>
+    :<>
+     <select aria-label="Select recently detected physical mouse" className={input} value={selected} onChange={e=>setSelected(e.target.value)}>
+      <option value="">Choose recently detected mouse</option>
+      {observations.map(o=>{
+       const mac=normalizeMac(o.macAddress);
+       const assigned=devices.find(d=>macFromRecord(d)===mac);
+       return <option key={mac} value={"ap:"+mac}>📡 Recently detected · {assigned?.deviceName||o.hostname||"Mouse"} · {o.hostname||"Unknown Wi-Fi ID"} · {mac}{assigned?.deviceId?" · "+assigned.deviceId:""}</option>;
+      })}
+     </select>
+     <p className="text-xs text-cyan-200">Showing {observations.length} recently detected pairing network{observations.length===1?"":"s"} from HP2 only. Historical sightings and saved offline cards are hidden here.</p>
+    </>}
    </div>
-   {selected&&<div className="space-y-5">
+   {selected&&observation?.isWifiRecentlySeen&&<div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
      <div className="rounded-xl bg-slate-950 p-3"><p className="text-xs text-slate-400">Physical Wi-Fi ID</p><strong>{observation?.hostname||"Not broadcasting now"}</strong></div>
      <div className="rounded-xl bg-slate-950 p-3"><p className="text-xs text-slate-400">Physical MAC</p><strong className="break-all font-mono text-sm">{selectedMac||"Not recorded"}</strong></div>
@@ -223,12 +237,8 @@ export default function FreshSmartCheck(){
      </div>}
     </div>
    </div>}
-   {!selected&&initialized&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">Switch on a mouse near HP2 and choose its actual SmartLife/OpenBK ID and MAC from the selector above. Previously saved mice can also be selected.</p>}
+   {!selected&&initialized&&observations.length>0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">Select one of the recently detected physical mice above to continue its installation. Your existing registrations remain safe in Smart Devices.</p>}
   </section>
-  {otherRegistered.length>0&&<section className="rounded-2xl border border-slate-700 bg-slate-900/75 p-4">
-   <h3 className="mb-2 font-semibold">Other registered mouse records (not duplicated cards)</h3>
-   <div className="flex flex-wrap gap-2">{otherRegistered.map(d=><button type="button" key={d.id} onClick={()=>{const mac=macFromRecord(d);setSelected(mac&&observations.some(o=>normalizeMac(o.macAddress)===mac)?"ap:"+mac:"saved:"+d.id);window.scrollTo({top:0,behavior:"smooth"})}} className="rounded-lg border border-slate-600 bg-slate-950 p-3 text-left text-sm">{d.deviceName||d.deviceId} · {d.deviceId} · {d.branchName||branches.find(b=>b.id===d.branchId)?.name||"Unassigned"}</button>)}</div>
-  </section>}
   <p className="text-xs text-slate-400"><Wifi size={14} className="mr-1 inline"/>HP2 detects pairing broadcasts; <WifiOff size={14} className="mr-1 inline"/>not seeing a broadcast does not prove power is OFF. Mouse ID, physical Wi-Fi provisioning and MQTT are independently verified.</p>
  </main>;
 }
