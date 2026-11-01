@@ -63,7 +63,7 @@ export default function OwnedSetupPanel(){
     method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({branchId:target,deviceName:d.deviceName||d.deviceId,notes:d.notes||"",hardwareModel:d.hardwareModel||"BK7231N-MOUSE-V1"})
    });
-   if(!r.ok)throw Error((await r.json().catch(()=>({})).message||"Could not assign restaurant."));
+   if(!r.ok)throw Error((await r.json().catch(()=>({})))?.message||"Could not assign restaurant."));
    toast({title:"Restaurant assignment saved",description:"Customer assignment updated. The physical Wi-Fi/MQTT connection was not altered."});
    await refresh();
   }catch(e:any){setError(String(e?.message||e));}finally{setSaving("");}
