@@ -51,6 +51,7 @@ export default function FreshSmartCheck(){
  const [wifiPassword,setWifiPassword]=useState("");
  const [showWifiPassword,setShowWifiPassword]=useState(false);
  const [wifiListOpen,setWifiListOpen]=useState(false);
+ const [wifiIsTyping,setWifiIsTyping]=useState(false);
  const [deviceName,setDeviceName]=useState("");
  const [location,setLocation]=useState("");
  const [notes,setNotes]=useState("");
@@ -107,7 +108,7 @@ export default function FreshSmartCheck(){
  const editingSaved=editing?devices.find(d=>d.id===editing):null;
  const formValid=Boolean(branchId&&(wifiName.trim()||editingSaved)&&deviceName.trim()&&location.trim()&&(selected||(editingSaved&&savedMac(editingSaved)&&savedAp(editingSaved))));
  const resetForm=()=>{
-  setDeviceName("");setLocation("");setNotes("");setSelectedMac("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setEditing(null);
+  setDeviceName("");setLocation("");setNotes("");setSelectedMac("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setWifiIsTyping(false);setEditing(null);
   setJustSaved(null);setError("");
  };
  const save=async()=>{
@@ -144,7 +145,7 @@ export default function FreshSmartCheck(){
  const edit=(d:Device)=>{
   const mac=savedMac(d);
   setEditing(d.id);setBranchId(d.branchId||"");setDeviceName(d.deviceName||"");
-  setLocation(savedArea(d));setNotes("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setSelectedMac(mac);
+  setLocation(savedArea(d));setNotes("");setWifiName("");setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setWifiIsTyping(false);setSelectedMac(mac);
   setJustSaved(null);window.scrollTo({top:0,behavior:"smooth"});
  };
  const remove=async(d:Device)=>{
@@ -173,21 +174,24 @@ export default function FreshSmartCheck(){
     </label>
     <div className="relative sm:col-span-2">
      <label htmlFor="mouse-install-wifi" className="mb-2 block font-semibold">2.4 GHz Wi-Fi — Restaurant / Home / Hotspot</label>
-     <div className="flex gap-2">
-      <input id="mouse-install-wifi" role="combobox" aria-controls="mouse-install-wifi-list" aria-expanded={wifiListOpen} aria-autocomplete="list" className={input+" min-w-0 flex-1"} placeholder="Select a scanned network or type Wi-Fi name" value={wifiName}
-       onFocus={()=>setWifiListOpen(true)}
-       onChange={e=>{setWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(true)}}/>
-      <button type="button" aria-label="Show scanned 2.4 GHz Wi-Fi networks" aria-expanded={wifiListOpen} className="rounded-xl border border-cyan-500/40 bg-cyan-950 px-4 py-3 text-sm font-semibold text-cyan-100"
-       onClick={()=>setWifiListOpen(open=>!open)}>{wifiListOpen?"Close list":"Wi-Fi list ▾"}</button>
+     <div className="relative">
+      <input id="mouse-install-wifi" role="combobox" aria-controls="mouse-install-wifi-list"
+       aria-expanded={wifiListOpen} aria-autocomplete="list" aria-haspopup="listbox"
+       className={input+" pr-12"} placeholder="Tap to choose scanned Wi-Fi, or type its name"
+       value={wifiName} onFocus={()=>{setWifiIsTyping(false);setWifiListOpen(true)}}
+       onClick={()=>{setWifiIsTyping(false);setWifiListOpen(true)}}
+       onChange={e=>{setWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiIsTyping(true);setWifiListOpen(true)}}
+       onKeyDown={e=>{if(e.key==="Escape")setWifiListOpen(false)}}/>
+      <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-cyan-200">▾</span>
      </div>
      {wifiListOpen&&<div id="mouse-install-wifi-list" role="listbox" aria-label="Nearby 2.4 GHz Wi-Fi networks" className="relative z-10 mt-2 max-h-56 overflow-y-auto rounded-xl border border-slate-600 bg-slate-950 shadow-xl">
-      {nearbyWifi.filter(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase())).map(n=>
+      {nearbyWifi.filter(n=>!wifiIsTyping||!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase())).map(n=>
        <button type="button" role="option" aria-selected={wifiName===n.ssid} key={n.ssid} className="flex w-full items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 text-left text-sm hover:bg-cyan-950 focus:bg-cyan-950"
-        onClick={()=>{setWifiName(n.ssid);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false)}}>
+        onClick={()=>{setWifiName(n.ssid);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setWifiIsTyping(false)}}>
         <span className="truncate font-semibold">{n.ssid}</span><span className="shrink-0 text-xs text-cyan-200">{n.signal}% · 2.4 GHz</span>
        </button>)}
       {nearbyWifi.length===0&&<p className="p-4 text-sm text-slate-400">No recent 2.4 GHz networks reported by HP2. Press Refresh above, or type the Wi-Fi name manually.</p>}
-      {nearbyWifi.length>0&&!nearbyWifi.some(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase()))&&<p className="p-4 text-sm text-slate-400">No scanned match. You can keep the Wi-Fi name you typed.</p>}
+      {nearbyWifi.length>0&&wifiIsTyping&&!nearbyWifi.some(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase()))&&<p className="p-4 text-sm text-slate-400">No scanned match. You can keep the Wi-Fi name you typed.</p>}
      </div>}
      {wifiName.trim()&&<div className="mt-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
       <label htmlFor="mouse-install-wifi-password" className="mb-2 block text-sm font-semibold">Wi-Fi password <span className="text-xs font-normal text-slate-400">(local form only)</span></label>
