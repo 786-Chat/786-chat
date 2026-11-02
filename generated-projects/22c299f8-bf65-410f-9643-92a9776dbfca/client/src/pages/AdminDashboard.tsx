@@ -2465,8 +2465,8 @@ export default function AdminDashboard() {
       { id: "iot-cloud", label: "Smart Devices", icon: Zap },
       { id: "smartlife-check", label: "SmartLife Check", icon: Wifi },
       { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield },
-      { id: "smartlife-app-test-check", label: "SmartLife App Test Check", icon: Smartphone },
-      { id: "smartlife-app-test-devices", label: "SmartLife App Devices", icon: Radio }
+      { id: "smartlife-app-test-check", label: "SmartLife App Test Check", icon: Radar },
+      { id: "smartlife-app-test-devices", label: "SmartLife App Devices", icon: Globe }
     ]},
     
     // ACCOUNT
