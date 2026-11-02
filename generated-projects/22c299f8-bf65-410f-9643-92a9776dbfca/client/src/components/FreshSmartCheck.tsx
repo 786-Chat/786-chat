@@ -46,7 +46,15 @@ export default function FreshSmartCheck(){
  const [observations,setObservations]=useState<Observation[]>([]);
  const [scan,setScan]=useState<Scan|null>(null);
  const [branchId,setBranchId]=useState("");
- const [searchBranch,setSearchBranch]=useState("");
+ const [branchesLoaded,setBranchesLoaded]=useState(false);
+ const [branchesLoading,setBranchesLoading]=useState(false);
+ const [branchError,setBranchError]=useState("");
+ const [wifiLoading,setWifiLoading]=useState(false);
+ const [wifiMessage,setWifiMessage]=useState("");
+ const [detectingMouse,setDetectingMouse]=useState(false);
+ const [mouseMessage,setMouseMessage]=useState("");
+ const [devicesLoaded,setDevicesLoaded]=useState(false);
+ const [showPrevious,setShowPrevious]=useState(false);
  const [wifiName,setWifiName]=useState("");
  const [wifiPassword,setWifiPassword]=useState("");
  const [showWifiPassword,setShowWifiPassword]=useState(false);
@@ -65,33 +73,68 @@ export default function FreshSmartCheck(){
 
  // Manual only: no useEffect, setInterval or background browser requests.
  // HP2 scans independently. Both Refresh and Detect read its saved reports.
+
+ // Load each data source independently: a scanner error must not hide restaurants.
+ const getJson=useCallback(async(path:string)=>{
+  const response=await fetch(path,{credentials:"include",cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  return response.json();
+ },[]);
+ const applyMouseReports=useCallback((value:unknown)=>{
+  const data=Array.isArray(value)?(value as Observation[]).filter(mouseAp):[];
+  setObservations(data);
+  const fresh=data.filter(x=>x.isWifiRecentlySeen&&x.lastSeenAt&&Date.now()-new Date(x.lastSeenAt).getTime()>=0&&Date.now()-new Date(x.lastSeenAt).getTime()<75000);
+  setSelectedMac(prev=>fresh.some(x=>normalizedMac(x.macAddress)===prev)?prev:fresh.length===1?normalizedMac(fresh[0].macAddress):"");
+  setMouseMessage(fresh.length?fresh.length+" recent mouse pairing signal(s) found.":"No recent HP2 mouse pairing signal. This does not prove that the mouse is OFF.");
+ },[]);
+ const applyBranches=useCallback((data:any)=>{
+  if(!Array.isArray(data?.branches))throw Error("Invalid branch data");
+  setBranches((data.branches as Branch[]).filter(x=>x?.id&&x?.name).sort((a,b)=>a.name.localeCompare(b.name)));
+  setBranchesLoaded(true);
+  setBranchError(data.branches.length?"":"No registered restaurants returned.");
+ },[]);
+ const loadBranches=async()=>{
+  if(branchesLoading)return;
+  setBranchesLoading(true);
+  try{applyBranches(await getJson("/api/branches?page=1&limit=5000"));}
+  catch(e:any){setBranchError("Restaurant list unavailable ("+String(e?.message||e)+"). Press Refresh to retry.");}
+  finally{setBranchesLoading(false);}
+ };
+ const loadWifi=async()=>{
+  if(wifiLoading)return;
+  setWifiLoading(true);
+  try{
+   const n=await getJson("/api/iot/router-wifi-networks") as Scan;
+   setScan(n);setWifiMessage(n.fresh?"Latest HP2 2.4 GHz scan received.":"No recent HP2 2.4 GHz Wi-Fi report. HP2 must be in radio range.");
+  }catch(e:any){setWifiMessage("HP2 Wi-Fi list unavailable ("+String(e?.message||e)+"). Manual SSID entry is possible.");}
+  finally{setWifiLoading(false);}
+ };
+ const detectMouse=async()=>{
+  if(detectingMouse)return;
+  setDetectingMouse(true);
+  try{applyMouseReports(await getJson("/api/iot/device-check"));}
+  catch(e:any){setMouseMessage("HP2 detection unavailable ("+String(e?.message||e)+").");setObservations([]);}
+  finally{setDetectingMouse(false);}
+ };
  const refresh=useCallback(async()=>{
   setRefreshing(true);
-  try {
-   const [o,b,d,n]=await Promise.all([
-    fetch("/api/iot/device-check",{credentials:"include",cache:"no-store"}),
-    fetch("/api/branches?page=1&limit=5000",{credentials:"include",cache:"no-store"}),
-    fetch("/api/iot/devices",{credentials:"include",cache:"no-store"}),
-    fetch("/api/iot/router-wifi-networks",{credentials:"include",cache:"no-store"})
-   ]);
-   if(!o.ok||!b.ok||!d.ok||!n.ok)throw Error("Could not load saved HP2 reports or device records.");
-   const sightings=await o.json() as Observation[];
-   const branchData=await b.json();
-   const deviceData=await d.json();
-   const networkData=await n.json() as Scan;
-   const mouseReports=Array.isArray(sightings)?sightings.filter(mouseAp):[];
-   setObservations(mouseReports);
-   const freshMice=mouseReports.filter(o=>o.isWifiRecentlySeen&&o.lastSeenAt&&Date.now()-new Date(o.lastSeenAt).getTime()<75000);
-   if(freshMice.length===1)setSelectedMac(previous=>previous||normalizedMac(freshMice[0].macAddress));
-   setBranches(Array.isArray(branchData.branches)?branchData.branches:[]);
-   setDevices(Array.isArray(deviceData)?deviceData:[]);
-   setScan(networkData);
-   setRefreshedAt(new Date().toLocaleTimeString("en-GB"));
-   setError("");
-  }catch(e:any){setError(String(e?.message||e));}
-  finally{setRefreshing(false);}
- },[]);
-
+  const [o,b,d,n]=await Promise.allSettled([
+   getJson("/api/iot/device-check"),getJson("/api/branches?page=1&limit=5000"),
+   getJson("/api/iot/devices"),getJson("/api/iot/router-wifi-networks")
+  ]);
+  if(o.status==="fulfilled")applyMouseReports(o.value);
+  else setMouseMessage("HP2 pairing scan unavailable.");
+  if(b.status==="fulfilled"){try{applyBranches(b.value);}catch(e:any){setBranchError("Bad restaurant response.");}}
+  else setBranchError("Restaurant list unavailable; click to retry.");
+  if(d.status==="fulfilled"&&Array.isArray(d.value)){setDevices(d.value);setDevicesLoaded(true);setError("");}
+  else setError("Registered mouse list unavailable; other sections can still load.");
+  if(n.status==="fulfilled"){
+   setScan(n.value as Scan);setWifiMessage(n.value?.fresh?"Latest HP2 Wi-Fi scan received.":"No recent 2.4 GHz scan from HP2.");
+  }else setWifiMessage("HP2 router scan unavailable. Wi-Fi name can be entered manually.");
+  setRefreshedAt(new Date().toLocaleTimeString("en-GB"));
+  setRefreshing(false);
+ },[getJson,applyMouseReports,applyBranches]);
+ // No timer: Refresh, Wi-Fi selection and Detect mouse act only on user clicks.
  const nearbyWifi=useMemo(()=>{
   if(!scan?.fresh)return [] as Network[];
   const strongest=new Map<string,Network>();
@@ -169,8 +212,11 @@ export default function FreshSmartCheck(){
    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-bold">Install a mouse · One form</h3><span className="rounded-full bg-cyan-950 px-3 py-1 text-xs text-cyan-200">{editing?"Editing saved mouse":"New installation"}</span></div>
    <div className="grid gap-4 sm:grid-cols-2">
     <label className="sm:col-span-2"><span className="mb-2 block font-semibold">Restaurant / Branch</span>
-     <input className={input} placeholder="Search registered restaurants" value={searchBranch} onChange={e=>setSearchBranch(e.target.value)}/>
-     <select className={"mt-2 "+input} value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Choose restaurant</option>{branches.filter(b=>b.name.toLowerCase().includes(searchBranch.toLowerCase())).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
+     <select className={input} value={branchId} onFocus={()=>{if(!branchesLoaded)void loadBranches()}} onClick={()=>{if(!branchesLoaded)void loadBranches()}} onChange={e=>setBranchId(e.target.value)}>
+      <option value="">{branchesLoading?"Loading restaurants...":"Choose registered restaurant"}</option>
+      {branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+     </select>
+     {branchError&&<p role="status" className="mt-2 text-sm text-amber-200">{branchError}</p>}
     </label>
     <div className="relative sm:col-span-2">
      <label htmlFor="mouse-install-wifi" className="mb-2 block font-semibold">2.4 GHz Wi-Fi — Restaurant / Home / Hotspot</label>
@@ -178,8 +224,8 @@ export default function FreshSmartCheck(){
       <input id="mouse-install-wifi" role="combobox" aria-controls="mouse-install-wifi-list"
        aria-expanded={wifiListOpen} aria-autocomplete="list" aria-haspopup="listbox"
        className={input+" pr-12"} placeholder="Tap to choose scanned Wi-Fi, or type its name"
-       value={wifiName} onFocus={()=>{setWifiIsTyping(false);setWifiListOpen(true)}}
-       onClick={()=>{setWifiIsTyping(false);setWifiListOpen(true)}}
+       value={wifiName} autoComplete="off" name="restaurant-wifi-ssid" onFocus={()=>{setWifiIsTyping(false);setWifiListOpen(true);void loadWifi()}}
+       onClick={()=>{setWifiIsTyping(false);setWifiListOpen(true);void loadWifi()}}
        onChange={e=>{setWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiIsTyping(true);setWifiListOpen(true)}}
        onKeyDown={e=>{if(e.key==="Escape")setWifiListOpen(false)}}/>
       <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-cyan-200">▾</span>
@@ -190,7 +236,7 @@ export default function FreshSmartCheck(){
         onClick={()=>{setWifiName(n.ssid);setWifiPassword("");setShowWifiPassword(false);setWifiListOpen(false);setWifiIsTyping(false)}}>
         <span className="truncate font-semibold">{n.ssid}</span><span className="shrink-0 text-xs text-cyan-200">{n.signal}% · 2.4 GHz</span>
        </button>)}
-      {nearbyWifi.length===0&&<p className="p-4 text-sm text-slate-400">No recent 2.4 GHz networks reported by HP2. Press Refresh above, or type the Wi-Fi name manually.</p>}
+      {nearbyWifi.length===0&&<p className="p-4 text-sm text-slate-400">{wifiLoading?"Loading Wi-Fi networks...":wifiMessage||"No recent HP2 2.4 GHz networks. You can type an SSID manually."}</p>}
       {nearbyWifi.length>0&&wifiIsTyping&&!nearbyWifi.some(n=>!wifiName||n.ssid.toLowerCase().includes(wifiName.toLowerCase()))&&<p className="p-4 text-sm text-slate-400">No scanned match. You can keep the Wi-Fi name you typed.</p>}
      </div>}
      {wifiName.trim()&&<div className="mt-3 rounded-xl border border-slate-700 bg-slate-950 p-4">
@@ -201,14 +247,14 @@ export default function FreshSmartCheck(){
       </div>
       <p className="mt-2 text-xs text-amber-200">Physical Wi-Fi setup is not yet available on the BMAX W003. Do not enter a real password for installation yet. This field is local-only; its value is never sent to the server or mouse, and is cleared on Save. Saving registers a mouse, not its Wi-Fi connection.</p>
      </div>}
-     {scan&&!scan.fresh&&<p className="mt-2 text-xs text-slate-400">HP2 has not reported a recent 2.4 GHz Wi-Fi scan. Press Refresh to check its saved report.</p>}
+     {wifiMessage&&<p role="status" className="mt-2 text-xs text-slate-400">{wifiMessage}</p>}
     </div>
     <label><span className="mb-2 block font-semibold">Mouse number / Device name</span><input className={input} value={deviceName} onChange={e=>setDeviceName(e.target.value)} placeholder="e.g. Mouse #13" maxLength={120}/></label>
     <label><span className="mb-2 block font-semibold">Installation area</span><input className={input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Kitchen, storage room, etc." maxLength={120}/></label>
    </div>
    <div className="space-y-3 rounded-xl border border-cyan-600/30 bg-slate-950 p-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-bold">Detect the physical mouse</h4><p className="mt-1 text-sm text-slate-300">Switch your chosen mouse ON so its pairing Wi-Fi flashes. HP2 scans independently.</p></div>
-     <button type="button" disabled={refreshing||busy} onClick={()=>void refresh()} className="flex items-center gap-2 rounded-lg border border-cyan-500 bg-cyan-950 px-4 py-3 font-semibold text-cyan-100 disabled:opacity-50"><RadioTower size={16}/>{refreshing?"Checking...":"Detect mouse"}</button>
+     <button type="button" disabled={detectingMouse||busy} onClick={()=>void detectMouse()} className="flex items-center gap-2 rounded-lg border border-cyan-500 bg-cyan-950 px-4 py-3 font-semibold text-cyan-100 disabled:opacity-50"><RadioTower size={16}/>{detectingMouse?"Checking HP2...":"Detect mouse"}</button>
     </div>
     <p className="text-xs text-slate-400">Detect mouse reads the latest saved HP2 report once. It does not start or repeatedly refresh HP2 scans. A SmartLife Wi-Fi name cannot reveal the mouse number—you enter that above.</p>
     <label className="block text-sm font-medium">Detected mouse Wi-Fi (choose the mouse you switched on)
@@ -221,7 +267,7 @@ export default function FreshSmartCheck(){
      <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Currently detected mouse Wi-Fi ID</p><strong>{selected?.hostname||"Not detected / not selected"}</strong></div>
      <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Currently detected mouse MAC</p><strong className="font-mono text-sm">{selected?.macAddress||"Not detected / not selected"}</strong></div>
     </div>
-    <p className="text-xs text-amber-200">{currentMice.length===0?"No current pairing Wi-Fi sighting from HP2. Do not assume the mouse is OFF.":currentMice.length===1?"One pairing Wi-Fi was seen. Confirm it is your mouse before selecting.":currentMice.length+" mouse pairing Wi-Fi networks were seen. Choose the correct physical mouse."}</p>
+     <p role="status" className="text-xs text-amber-200">{mouseMessage||"Press Detect mouse to load fresh HP2 Wi-Fi sightings."}</p>
    </div>
    <label className="block"><span className="mb-2 block font-semibold">Internal notes</span><textarea rows={2} className={input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional installation notes"/></label>
    {error&&<p role="alert" className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-red-200">{error}</p>}
