@@ -94,7 +94,6 @@ import {
   Share2,
   ExternalLink,
   RefreshCw,
-  Radar,
   Wifi,
   PlayCircle,
   PauseCircle,
@@ -160,7 +159,6 @@ import OwnedSetupPanel from "@/components/OwnedSetupPanel";
 import FreshSmartCheck from "@/components/FreshSmartCheck";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
-import SmartLifeAppTestPanel from "@/components/SmartLifeAppTestPanel";
 import PDFViewer from "@/components/PDFViewer";
 
 const branchSchema = z.object({
@@ -2464,9 +2462,7 @@ export default function AdminDashboard() {
       { id: "device-check", label: "Smart Check", icon: Wifi },
       { id: "iot-cloud", label: "Smart Devices", icon: Zap },
       { id: "smartlife-check", label: "SmartLife Check", icon: Wifi },
-      { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield },
-      { id: "smartlife-app-test-check", label: "SmartLife App Test Check", icon: Radar },
-      { id: "smartlife-app-test-devices", label: "SmartLife App Devices", icon: Globe }
+      { id: "smartlife-devices", label: "SmartLife Devices", icon: Shield }
     ]},
     
     // ACCOUNT
@@ -4094,8 +4090,6 @@ export default function AdminDashboard() {
             {/* Rule 2: isolated SmartLife management — never shares owned IoT tables. */}
             {activeTab === "smartlife-check" && <SmartLifeAdminPanel mode="check" />}
             {activeTab === "smartlife-devices" && <SmartLifeAdminPanel mode="devices" />}
-            {activeTab === "smartlife-app-test-check" && <SmartLifeAppTestPanel mode="check" />}
-            {activeTab === "smartlife-app-test-devices" && <SmartLifeAppTestPanel mode="devices" />}
 
             {/* Site Settings Section - Mobile Responsive */}
             {activeTab === "site-settings" && siteSettingsUnlocked && (
