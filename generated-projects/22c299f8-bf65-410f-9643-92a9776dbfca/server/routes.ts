@@ -30,6 +30,7 @@ import { z } from "zod";
 import { db } from "./db.js";
 import { sql } from "drizzle-orm";
 import { registerSmartLifeRoutes } from "./smartlife-routes.js";
+import { registerSmartLifeAppTestRoutes } from "./smartlife-app-test-routes.js";
 
 // Parameter validation schemas
 const idParamSchema = z.object({
@@ -2134,6 +2135,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
 
   // Independent SmartLife management, strictly separate from Food Safety Owned IoT.
   registerSmartLifeRoutes(app, isAdminAuthenticated);
+  registerSmartLifeAppTestRoutes(app, isAdminAuthenticated);
 
   // Admin Branch Management Routes with pagination and search
   app.get('/api/branches', isAdminAuthenticated, async (req, res) => {
