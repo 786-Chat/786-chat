@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, ArrowRight, Battery, BellRing, Cloud, Database, ExternalLink, Lock, Radio, RefreshCw, ShieldCheck, Smartphone, Wifi, Zap } from "lucide-react";
 
 type Device = {
@@ -106,7 +106,7 @@ export default function SmartLifeAppTestPanel({mode}:{mode:"check"|"devices"}){
       [<BellRing key="caught" size={16}/>, "Mouse caught",d.caught===null?"Not reported":d.caught?"YES — TEST ONLY":"No (reported)"],
       [<Zap key="last" size={16}/>, "Last received",clock(d.lastReportedAt)],
       [<Radio key="caughttime" size={16}/>, "Last caught",clock(d.lastCaughtAt)]
-     ] as [React.ReactNode,string,string][]).map(([icon,name,value])=><div key={name} className="rounded-xl bg-slate-900/80 p-3 text-sm"><div className="flex items-center gap-2 text-xs text-orange-200">{icon}{name}</div><div className="mt-2 break-words font-semibold">{value}</div></div>)}</div>
+     ] as [ReactNode,string,string][]).map(([icon,name,value])=><div key={name} className="rounded-xl bg-slate-900/80 p-3 text-sm"><div className="flex items-center gap-2 text-xs text-orange-200">{icon}{name}</div><div className="mt-2 break-words font-semibold">{value}</div></div>)}</div>
      <p className="mt-3 text-xs text-slate-500">Source: {d.source} · No customer alarm is sent from test data.</p>
     </article>)}</div>}
   </section>
