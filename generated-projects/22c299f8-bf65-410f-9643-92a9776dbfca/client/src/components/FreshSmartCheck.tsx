@@ -179,9 +179,10 @@ export default function FreshSmartCheck(){
    if(!response.ok)throw Error(data.message||"Could not save mouse registration.");
    setEditing(null);
    setWifiPassword("");setShowWifiPassword(false);
-   setJustSaved(mac);
+   setJustSaved(mac);setShowPrevious(false);
    toast({title:"Mouse registration saved",description:"Saved to the selected restaurant. Wi-Fi/MQTT connection is NOT yet verified."});
-   await refresh();
+   try{const newList=await getJson("/api/iot/devices");if(Array.isArray(newList)){setDevices(newList);setDevicesLoaded(true);}}
+   catch{setError("Registration saved. Press Refresh to load its card.");}
   }catch(e:any){setError(String(e?.message||e));}
   finally{setBusy(false);}
  };
@@ -269,6 +270,28 @@ export default function FreshSmartCheck(){
     </div>
      <p role="status" className="text-xs text-amber-200">{mouseMessage||"Press Detect mouse to load fresh HP2 Wi-Fi sightings."}</p>
    </div>
+   <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+    <h4 className="mb-3 font-semibold">Detected mouse information · real reports only</h4>
+    <div className="grid gap-2 sm:grid-cols-3">{(()=>{
+     const d=selectedRegistered;
+     const hasReport=Boolean(d&&validReport(d));
+     const bat=hasReport?reportedNumber(reportValue(d!,"battery_percentage")??d!.batteryPercent??d!.batteryPct,0,100):null;
+     const rssi=hasReport?reportedNumber(reportValue(d!,"rssi")??d!.rssi,-120,0):null;
+     const rows:[string,string][]=[
+      ["Mouse Wi-Fi ID",selected?.hostname||"Not detected"],
+      ["Mouse MAC",selected?.macAddress||"Not detected"],
+      ["Pairing signal",selected?.wifiSignalPercent!=null?selected.wifiSignalPercent+"% (HP2 Wi-Fi)":"Not reported"],
+      ["Battery",bat==null?"Not reported":bat+"% (last device report)"],
+      ["Restaurant Wi-Fi","Not verified"],
+      ["MQTT",d&&liveMqtt(d)?"Recent authenticated report":"Not verified / no recent report"],
+      ["MQTT signal",rssi==null?"Not reported":rssi+" dBm (last report)"],
+      ["Last device report",hasReport?when(d!.lastCheckedAt):"Not reported"],
+      ["Trap",hasReport&&d?.alarmActive?"Active catch alarm":"No verified catch event"]
+     ];
+     return rows.map(([name,value])=><div key={name} className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">{name}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>);
+    })()}</div>
+    <p className="mt-2 text-xs text-slate-400">A flashing mouse Wi-Fi broadcast does not reveal battery, caught-mouse status or an authenticated MQTT connection. Old values are marked as last reported.</p>
+   </div>
    <label className="block"><span className="mb-2 block font-semibold">Internal notes</span><textarea rows={2} className={input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional installation notes"/></label>
    {error&&<p role="alert" className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-red-200">{error}</p>}
    {selectedBranch&&selected&&<p className="text-sm text-cyan-200">Ready to register <strong>{deviceName||"the named mouse"}</strong> at <strong>{selectedBranch.name}</strong>. This records identity and branch; it does not provision restaurant Wi-Fi.</p>}
@@ -279,9 +302,11 @@ export default function FreshSmartCheck(){
   </section>
   <section className="space-y-4 rounded-2xl border border-slate-700 bg-slate-900/75 p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-xl font-bold">Registered Mouse Cards</h3><span className="text-xs text-slate-400">Real saved records · no simulated readings</span></div>
-   {!refreshedAt&&<p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-300">Click Refresh above to load your saved mouse cards.</p>}
-   {refreshedAt&&devices.length===0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">No saved mouse registrations.</p>}
-   <div className="grid gap-4 md:grid-cols-2">{devices.map(d=>{
+   {!devicesLoaded&&<p className="rounded-lg bg-slate-950 p-4 text-sm text-slate-300">Click Refresh to load saved records. Detect mouse only checks physical HP2 signals.</p>}
+   {devicesLoaded&&devices.length===0&&<p className="rounded-lg bg-slate-950 p-4 text-slate-300">No saved mouse registrations.</p>}
+   <p className="text-sm text-slate-300">Only the newly detected or saved mouse is shown here. Existing registrations stay in your records.</p>
+   <button type="button" className="rounded-xl border border-slate-600 px-4 py-2 text-sm text-cyan-200" onClick={()=>setShowPrevious(p=>!p)}>{showPrevious?"Hide previous registrations":"Show previous registrations ("+devices.length+")"}</button>
+   <div className="grid gap-4 md:grid-cols-2">{devices.filter(d=>showPrevious||(Boolean(justSaved)&&savedMac(d)===justSaved)||(Boolean(selectedMac)&&savedMac(d)===selectedMac)).map(d=>{
     const mac=savedMac(d),ap=savedAp(d);
     const apReport=observations.find(o=>Boolean(mac)&&normalizedMac(o.macAddress)===mac);
     const hasReport=validReport(d);
