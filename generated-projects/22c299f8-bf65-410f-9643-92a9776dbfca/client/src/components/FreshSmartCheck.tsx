@@ -186,6 +186,38 @@ export default function FreshSmartCheck(){
   }catch(e:any){setError(String(e?.message||e));}
   finally{setBusy(false);}
  };
+ // Transfer an observed mouse or a saved mouse registration to Smart Devices.
+ // No Wi-Fi passwords, network credentials or claimed MQTT status in this handoff.
+ const openSmartDevices=(known?:Device)=>{
+  const ap=known?savedAp(known):selected?.hostname;
+  const mac=known?savedMac(known):normalizedMac(selected?.macAddress);
+  if(!ap||!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)){
+   setError("Select a detected mouse or use Next on an existing saved card first.");
+   return;
+  }
+  if(!known){
+   const seen=selected?.lastSeenAt?Date.now()-new Date(selected.lastSeenAt).getTime():NaN;
+   if(!Number.isFinite(seen)||seen<0||seen>=75000){
+    setError("This HP2 pairing sighting is no longer recent. Press Detect mouse again to continue.");
+    return;
+   }
+  }
+  try{
+   window.sessionStorage.setItem("pest-smart-check-selected-v1",JSON.stringify({
+    version:1,createdAt:Date.now(),ssid:ap,mac,
+    branchId:known?.branchId||branchId,
+    deviceName:known?.deviceName||deviceName.trim(),
+    location:known?savedArea(known):location.trim(),
+    wifiSsid:known?"":wifiName.trim(),
+    savedDeviceId:known?.id||null
+   }));
+   setWifiPassword("");
+   setError("");
+   window.dispatchEvent(new Event("pest:open-owned-smart-devices"));
+  }catch{
+   setError("Could not open Smart Devices with this mouse. Please enable session storage and try again.");
+  }
+ };
  const edit=(d:Device)=>{
   const mac=savedMac(d);
   setEditing(d.id);setBranchId(d.branchId||"");setDeviceName(d.deviceName||"");
@@ -297,6 +329,8 @@ export default function FreshSmartCheck(){
    {selectedBranch&&selected&&<p className="text-sm text-cyan-200">Ready to register <strong>{deviceName||"the named mouse"}</strong> at <strong>{selectedBranch.name}</strong>. This records identity and branch; it does not provision restaurant Wi-Fi.</p>}
    <div className="flex flex-wrap gap-3">
     <button type="button" disabled={busy||refreshing||!formValid} onClick={()=>void save()} className="rounded-xl bg-cyan-600 px-6 py-3 font-bold disabled:opacity-40">{busy?"Saving...":editing?"Save Changes":"Save Mouse Card"}</button>
+    <button type="button" disabled={busy||refreshing||!(selected||editingSaved)} onClick={()=>openSmartDevices(editingSaved||undefined)}
+     className="inline-flex items-center gap-2 rounded-xl border border-cyan-500 bg-cyan-950 px-5 py-3 font-bold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"><ArrowRight size={17}/>NEXT → Smart Devices</button>
     {editing&&<button type="button" onClick={resetForm} className="rounded-xl border border-slate-600 px-5 py-3">Cancel edit</button>}
    </div>
   </section>
@@ -331,7 +365,7 @@ export default function FreshSmartCheck(){
       ] as [string,string][]).map(([key,value])=><div key={key} className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">{key}</p><p className="mt-1 font-semibold">{value}</p></div>)}
      </div>
      {apReport&&<p className="text-xs text-slate-400"><Wifi size={12} className="mr-1 inline"/>HP2 pairing AP: {apReport.wifiSignalPercent??"?"}% (last seen {when(apReport.lastSeenAt)}) · Not restaurant Wi-Fi</p>}
-     <p className="border-t border-slate-800 pt-3 text-xs text-cyan-200"><ArrowRight size={14} className="mr-1 inline"/>Next: Open Smart Devices in the sidebar to view verified MQTT monitoring. This registration stays saved even when the pairing light stops flashing.</p>
+     <div className="border-t border-slate-800 pt-3"><button type="button" onClick={()=>openSmartDevices(d)} className="inline-flex items-center gap-2 rounded-lg border border-cyan-500 bg-cyan-950 px-4 py-2 text-sm font-semibold text-cyan-100"><ArrowRight size={16}/>NEXT → Smart Devices</button><p className="mt-2 text-xs text-slate-400">Open this saved registration without resetting or re-detecting the mouse. No Wi-Fi or MQTT activation happens here.</p></div>
     </article>;
    })}</div>
   </section>
