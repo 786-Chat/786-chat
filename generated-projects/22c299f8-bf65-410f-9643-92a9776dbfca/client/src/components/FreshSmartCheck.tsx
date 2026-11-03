@@ -4,7 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 
 type Observation = {
  id:string; hardwareKey:string; hostname?:string|null; macAddress?:string|null;
- wifiSignalPercent?:number|null; lastSeenAt?:string|null; isWifiRecentlySeen?:boolean;
+ $1
+ wifiObservationSource?:string|null;
  assignedDeviceId?:string|null;
 };
 type Network = {ssid:string;frequency:number;signal:number};
@@ -85,9 +86,10 @@ export default function FreshSmartCheck(){
  const applyMouseReports=useCallback((value:unknown)=>{
   const data=Array.isArray(value)?(value as Observation[]).filter(mouseAp):[];
   setObservations(data);
-  const fresh=data.filter(x=>x.isWifiRecentlySeen&&x.lastSeenAt&&Date.now()-new Date(x.lastSeenAt).getTime()>=0&&Date.now()-new Date(x.lastSeenAt).getTime()<75000);
-  setSelectedMac(prev=>fresh.some(x=>normalizedMac(x.macAddress)===prev)?prev:fresh.length===1?normalizedMac(fresh[0].macAddress):"");
-  setMouseMessage(fresh.length?fresh.length+" recent mouse pairing signal(s) found.":"No recent HP2 mouse pairing signal. This does not prove that the mouse is OFF.");
+  const verified=data.filter(x=>x.wifiObservationSource==="hp2-wifi-scan"&&x.lastSeenAt);
+  const fresh=verified.filter(x=>x.isWifiRecentlySeen&&Date.now()-new Date(x.lastSeenAt!).getTime()>=0&&Date.now()-new Date(x.lastSeenAt!).getTime()<75000);
+  setSelectedMac(prev=>verified.some(x=>normalizedMac(x.macAddress)===prev)?prev:fresh.length===1?normalizedMac(fresh[0].macAddress):"");
+  setMouseMessage(fresh.length?fresh.length+" recent HP2 pairing Wi-Fi sighting(s) found.":verified.length?"No recent HP2 pairing signal. "+verified.length+" previous HP2 mouse AP(s) available for historical identification only.":"No HP2-scanned pairing AP available. A manual sighting is not proof of physical detection.");
  },[]);
  const applyBranches=useCallback((data:any)=>{
   if(!Array.isArray(data?.branches))throw Error("Invalid branch data");
@@ -158,8 +160,11 @@ export default function FreshSmartCheck(){
   }
   return [...strongest.values()].sort((a,b)=>b.signal-a.signal||a.ssid.localeCompare(b.ssid));
  },[scan]);
- const currentMice=useMemo(()=>observations.filter(o=>o.isWifiRecentlySeen&&o.macAddress&&o.lastSeenAt&&Date.now()-new Date(o.lastSeenAt).getTime()>=0&&Date.now()-new Date(o.lastSeenAt).getTime()<75000),[observations]);
- const selected=currentMice.find(o=>normalizedMac(o.macAddress)===selectedMac);
+ const recordedMice=useMemo(()=>observations.filter(o=>o.wifiObservationSource==="hp2-wifi-scan"&&o.macAddress&&o.lastSeenAt).sort((a,b)=>new Date(b.lastSeenAt!).getTime()-new Date(a.lastSeenAt!).getTime()),[observations]);
+ const currentMice=recordedMice.filter(o=>o.isWifiRecentlySeen&&Date.now()-new Date(o.lastSeenAt!).getTime()>=0&&Date.now()-new Date(o.lastSeenAt!).getTime()<75000);
+ const selectableMice=[...currentMice,...recordedMice.filter(o=>!currentMice.some(x=>x.id===o.id))];
+ const selected=selectableMice.find(o=>normalizedMac(o.macAddress)===selectedMac);
+ const selectedIsRecent=Boolean(selected&&currentMice.some(o=>o.id===selected.id));
  const selectedRegistered=devices.find(d=>Boolean(selectedMac)&&savedMac(d)===selectedMac);
  const selectedBranch=branches.find(b=>b.id===branchId);
  const editingSaved=editing?devices.find(d=>d.id===editing):null;
@@ -175,7 +180,7 @@ export default function FreshSmartCheck(){
   }
   const detected=selected||(existing&&editing?{macAddress:savedMac(existing),hostname:savedAp(existing)}:null);
   if(!detected?.macAddress||!detected.hostname){
-   setError("Detect the physical mouse's pairing Wi-Fi and choose its MAC before saving. The mouse number cannot be inferred from the SmartLife Wi-Fi name.");return;
+   setError("Choose an HP2-scanned mouse ID/MAC (recent or historical) before saving. The factory Wi-Fi name cannot reveal the mouse number.");return;
   }
   const mac=normalizedMac(detected.macAddress);
   const duplicate=devices.find(d=>savedMac(d)===mac&&d.id!==existing?.id);
@@ -209,12 +214,10 @@ export default function FreshSmartCheck(){
    setError("Select a detected mouse or use Next on an existing saved card first.");
    return;
   }
-  if(!known){
-   const seen=selected?.lastSeenAt?Date.now()-new Date(selected.lastSeenAt).getTime():NaN;
-   if(!Number.isFinite(seen)||seen<0||seen>=75000){
-    setError("This HP2 pairing sighting is no longer recent. Press Detect mouse again to continue.");
-    return;
-   }
+  // Previous authenticated HP2 scans are identification evidence, never MQTT proof.
+  if(!known&&(!selected||selected.wifiObservationSource!=="hp2-wifi-scan"||!selected.lastSeenAt)){
+   setError("Choose a verified HP2 observation or a saved registration; physical connectivity is still unverified.");
+   return;
   }
   try{
    window.sessionStorage.setItem("pest-smart-check-selected-v1",JSON.stringify({
@@ -304,22 +307,22 @@ export default function FreshSmartCheck(){
     <label><span className="mb-2 block font-semibold">Installation area</span><input className={input} value={location} onChange={e=>setLocation(e.target.value)} placeholder="Kitchen, storage room, etc." maxLength={120}/></label>
    </div>
    <div className="space-y-3 rounded-xl border border-cyan-600/30 bg-slate-950 p-4">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-bold">Detect the physical mouse</h4><p className="mt-1 text-sm text-slate-300">Switch your chosen mouse ON so its pairing Wi-Fi flashes. HP2 scans independently.</p></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h4 className="font-bold">Find mouse from HP2 reports</h4><p className="mt-1 text-sm text-slate-300">Read HP2 scans. A mouse already set up in Smart Life does not need resetting just to use its previously recorded pairing identity.</p></div>
      <button type="button" disabled={detectingMouse||busy} onClick={()=>void detectMouse()} className="flex items-center gap-2 rounded-lg border border-cyan-500 bg-cyan-950 px-4 py-3 font-semibold text-cyan-100 disabled:opacity-50"><RadioTower size={16}/>{detectingMouse?"Checking HP2...":"Detect mouse"}</button>
     </div>
     <p className="text-xs text-slate-400">Detect mouse reads the latest saved HP2 report once. It does not start or repeatedly refresh HP2 scans. A SmartLife Wi-Fi name cannot reveal the mouse number—you enter that above.</p>
-    <label className="block text-sm font-medium">Detected mouse Wi-Fi (choose the mouse you switched on)
-     <select className={"mt-2 "+input} value={currentMice.some(o=>normalizedMac(o.macAddress)===selectedMac)?selectedMac:""} onChange={e=>setSelectedMac(e.target.value)}>
-      <option value="">Select a currently detected mouse</option>
-      {currentMice.map(o=><option key={o.hardwareKey||o.id} value={normalizedMac(o.macAddress)}>{o.hostname} · {o.macAddress} · {o.wifiSignalPercent??"?"}% AP signal</option>)}
+    <label className="block text-sm font-medium">Mouse Wi-Fi ID from HP2 — recent or historical
+     <select className={"mt-2 "+input} value={selectableMice.some(o=>normalizedMac(o.macAddress)===selectedMac)?selectedMac:""} onChange={e=>setSelectedMac(e.target.value)}>
+      <option value="">Choose an HP2-scanned mouse ID and MAC</option>
+      {selectableMice.map(o=><option key={o.hardwareKey||o.id} value={normalizedMac(o.macAddress)}>{o.hostname} · {o.macAddress} · {currentMice.some(x=>x.id===o.id)?"RECENT":"HISTORICAL "+when(o.lastSeenAt)}</option>)}
      </select>
     </label>
     <div className="grid gap-3 sm:grid-cols-2">
-     <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Currently detected mouse Wi-Fi ID</p><strong>{selected?.hostname||"Not detected / not selected"}</strong></div>
-     <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Currently detected mouse MAC</p><strong className="font-mono text-sm">{selected?.macAddress||"Not detected / not selected"}</strong></div>
+     <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">{selectedIsRecent?"Recently scanned":"Last recorded"} mouse Wi-Fi ID</p><strong>{selected?.hostname||"Not detected / not selected"}</strong></div>
+     <div className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">Mouse MAC / BSSID ({selectedIsRecent?"recent":"historical"})</p><strong className="font-mono text-sm">{selected?.macAddress||"Not detected / not selected"}</strong></div>
     </div>
      <p role="status" className="text-xs text-amber-200">{mouseMessage||"Press Detect mouse to load fresh HP2 Wi-Fi sightings."}</p>
-     {currentMice.length===0&&observations.length>0&&<p className="text-xs text-slate-400">Latest saved pairing AP (historical, not live): {observations[0].hostname||"Unknown"} · {observations[0].macAddress||"No MAC"} · last seen {when(observations[0].lastSeenAt)}. HP2 must report a fresh sighting to select this mouse.</p>}
+     {selected&&!selectedIsRecent&&<p className="rounded-lg border border-amber-600/30 bg-amber-950/20 p-3 text-xs text-amber-100">Historical HP2 observation from {when(selected.lastSeenAt)}. This is a previously detected pairing Wi-Fi ID, not proof that the mouse is currently online, connected through Wi-Fi or MQTT, or catching mice. No reset is needed to reuse this record.</p>}
    </div>
    <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
     <h4 className="mb-3 font-semibold">Detected mouse information · real reports only</h4>
@@ -331,7 +334,7 @@ export default function FreshSmartCheck(){
      const rows:[string,string][]=[
       ["Mouse Wi-Fi ID",selected?.hostname||"Not detected"],
       ["Mouse MAC",selected?.macAddress||"Not detected"],
-      ["Pairing signal",selected?.wifiSignalPercent!=null?selected.wifiSignalPercent+"% (HP2 Wi-Fi)":"Not reported"],
+      ["Pairing signal",selected?.wifiSignalPercent!=null?selected.wifiSignalPercent+"% ("+(selectedIsRecent?"recent":"historical "+when(selected.lastSeenAt))+" HP2 AP observation)":"Not reported"],
       ["Battery",bat==null?"Not reported":bat+"% (last device report)"],
       ["Restaurant Wi-Fi","Not verified"],
       ["MQTT",d&&liveMqtt(d)?"Recent authenticated report":"Not verified / no recent report"],
@@ -345,7 +348,7 @@ export default function FreshSmartCheck(){
    </div>
    <label className="block"><span className="mb-2 block font-semibold">Internal notes</span><textarea rows={2} className={input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional installation notes"/></label>
    {error&&<p role="alert" className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-red-200">{error}</p>}
-   {selectedBranch&&selected&&<p className="text-sm text-cyan-200">Ready to register <strong>{deviceName||"the named mouse"}</strong> at <strong>{selectedBranch.name}</strong>. This records identity and branch; it does not provision restaurant Wi-Fi.</p>}
+   {selectedBranch&&selected&&<p className="text-sm text-cyan-200">Ready to register <strong>{deviceName||"the named mouse"}</strong> at <strong>{selectedBranch.name}</strong> from {selectedIsRecent?"a recent":"a historical"} HP2 observation. This records identity and branch; it does not provision restaurant Wi-Fi.</p>}
    <div className="flex flex-wrap gap-3">
     <button type="button" disabled={busy||refreshing||!formValid} onClick={()=>void save()} className="rounded-xl bg-cyan-600 px-6 py-3 font-bold disabled:opacity-40">{busy?"Saving...":editing?"Save Changes":"Save Mouse Card"}</button>
     <button type="button" disabled={busy||refreshing||!(selected||editingSaved)} onClick={()=>openSmartDevices(editingSaved||undefined)}
