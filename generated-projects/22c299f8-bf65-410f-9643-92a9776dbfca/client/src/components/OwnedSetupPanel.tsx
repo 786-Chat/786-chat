@@ -46,7 +46,7 @@ export default function OwnedSetupPanel(){
  const [registering,setRegistering]=useState(false);
  const [handoffError,setHandoffError]=useState("");
  const [deleteTarget,setDeleteTarget]=useState<Device|null>(null);
- const [deleteConfirmText,setDeleteConfirmText]=useState("");
+ const [deleteAcknowledged,setDeleteAcknowledged]=useState(false);
  const [deleteError,setDeleteError]=useState("");
  const [deleting,setDeleting]=useState(false);
  useEffect(()=>{
@@ -141,18 +141,18 @@ export default function OwnedSetupPanel(){
  };
  const permanentlyDeleteMouse=async()=>{
   const target=deleteTarget;
-  if(!target?.id||!target.deviceId||deleteConfirmText.trim()!==target.deviceId||deleting)return;
+  if(!target?.id||!target.deviceId||!deleteAcknowledged||deleting)return;
   setDeleting(true);setDeleteError("");
   try{
    const response=await fetch("/api/iot/devices/"+encodeURIComponent(target.id)+"/permanent",{
     method:"DELETE",credentials:"include",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({confirm:"DELETE",confirmDeviceId:deleteConfirmText.trim()})
+    body:JSON.stringify({confirm:"DELETE",confirmDeviceId:target.deviceId})
    });
    const result=await response.json().catch(()=>({}));
    if(!response.ok||!result.success)throw Error(result.message||"Could not delete this mouse.");
    setDevices(previous=>previous.filter(d=>d.id!==target.id));
    if(handoff&&(handoff.savedDeviceId===target.id||notesMac(target)===handoff.mac))clearSelection();
-   setDeleteTarget(null);setDeleteConfirmText("");setDeleteError("");
+   setDeleteTarget(null);setDeleteAcknowledged(false);setDeleteError("");
    toast({title:"Mouse permanently deleted",description:target.deviceId+" removed from backend registration and cards. A registration backup was saved."});
    await refresh();
   }catch(e:any){setDeleteError(String(e?.message||e));}
@@ -168,14 +168,17 @@ export default function OwnedSetupPanel(){
     <h3 id="delete-mouse-title" className="text-xl font-bold text-red-200">Permanently delete this mouse?</h3>
     <p className="font-semibold">{deleteTarget.deviceName||deleteTarget.deviceId} · <span className="font-mono">{deleteTarget.deviceId}</span></p>
     <p className="text-sm text-slate-200">This deletes the selected mouse registration from the backend database and removes its Smart Devices card, including linked MQTT event history. A restorable registration backup is saved first. Customer branches and manual SmartLife Check / SmartLife Devices records are not changed.</p>
-    <p className="rounded-lg border border-amber-500/60 bg-amber-950/40 p-3 text-sm font-semibold text-amber-100">Important: This preview and the live website use the same database configuration. Deleting here removes the actual backend mouse record, including the record seen by the live site. This is not a harmless preview test.</p>\n    <p className="text-sm text-amber-200">This does not reset or remove the physical mouse from the Smart Life mobile app. Historical MQTT events are not included in the registration backup.</p>
-    <label className="block text-sm font-semibold" htmlFor="mouse-permanent-delete-confirm">Type <span className="font-mono text-red-200">{deleteTarget.deviceId}</span> to confirm</label>
-    <input id="mouse-permanent-delete-confirm" value={deleteConfirmText} onChange={e=>setDeleteConfirmText(e.target.value)} autoComplete="off" spellCheck={false}
-     className={input+" w-full"} placeholder="Exact FS-MOUSE device ID" disabled={deleting}/>
+    <p className="rounded-lg border border-amber-500/60 bg-amber-950/40 p-3 text-sm font-semibold text-amber-100">Important: This preview and the live website use the same database configuration. Deleting here removes the actual backend mouse record, including the record seen by the live site. This is not a harmless preview test.</p>
+    <p className="text-sm text-amber-200">This does not reset or remove the physical mouse from the Smart Life mobile app. Historical MQTT events are not included in the registration backup.</p>
+    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-600 bg-slate-900 p-4 text-sm text-white">
+     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-red-600" checked={deleteAcknowledged} onChange={e=>setDeleteAcknowledged(e.target.checked)} disabled={deleting} aria-label="Confirm permanent deletion of selected mouse"/>
+     <span><strong>Yes, permanently delete {deleteTarget.deviceName||deleteTarget.deviceId} ({deleteTarget.deviceId}).</strong><span className="mt-1 block text-xs text-amber-200">I understand its registration and MQTT event history will be removed from the shared live database.</span></span>
+    </label>
+    {!deleteAcknowledged&&<p className="text-xs text-amber-200">Tick the box above to enable the red Delete button. Nothing is deleted until you press it.</p>}
     {deleteError&&<p role="alert" className="text-sm text-red-200">{deleteError}</p>}
     <div className="flex flex-wrap justify-end gap-3">
-     <button type="button" disabled={deleting} onClick={()=>{setDeleteTarget(null);setDeleteConfirmText("");setDeleteError("");}} className="rounded-lg border border-slate-600 px-4 py-2 font-semibold disabled:opacity-50">Cancel</button>
-     <button type="button" disabled={deleting||deleteConfirmText.trim()!==deleteTarget.deviceId} onClick={()=>void permanentlyDeleteMouse()} className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={16}/>{deleting?"Deleting…":"Permanently Delete"}</button>
+     <button type="button" disabled={deleting} onClick={()=>{setDeleteTarget(null);setDeleteAcknowledged(false);setDeleteError("");}} className="rounded-lg border border-slate-600 px-4 py-2 font-semibold disabled:opacity-50">Cancel</button>
+     <button type="button" disabled={deleting||!deleteAcknowledged} onClick={()=>void permanentlyDeleteMouse()} className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={16}/>{deleting?"Deleting…":"Permanently Delete"}</button>
     </div>
    </div>
   </div>}
@@ -233,7 +236,7 @@ export default function OwnedSetupPanel(){
      <div><h3 className="text-lg font-bold">{d.deviceName||d.deviceId}</h3><p className="font-mono text-xs text-cyan-200">{d.deviceId}</p><p className="mt-1 text-sm">{branch} · {area(d)}</p></div>
      <div className="flex flex-wrap items-center justify-end gap-2">
       <span className={"rounded-full px-3 py-1 text-xs font-semibold "+(connected?"bg-emerald-900 text-emerald-200":"bg-amber-950 text-amber-200")}>{connected?"Recent MQTT report":d.lastCheckedAt?"No recent MQTT report":"MQTT not verified"}</span>
-      <button type="button" aria-label={"Delete "+(d.deviceName||d.deviceId)+" permanently"} title="Delete this mouse from backend and card" onClick={()=>{setDeleteTarget(d);setDeleteConfirmText("");setDeleteError("");}} className="inline-flex items-center gap-1 rounded-lg border border-red-700/80 bg-red-950/70 px-2.5 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-900 focus-visible:ring-2 focus-visible:ring-red-300"><Trash2 size={15}/>Delete</button>
+      <button type="button" aria-label={"Delete "+(d.deviceName||d.deviceId)+" permanently"} title="Delete this mouse from backend and card" onClick={()=>{setDeleteTarget(d);setDeleteAcknowledged(false);setDeleteError("");}} className="inline-flex items-center gap-1 rounded-lg border border-red-700/80 bg-red-950/70 px-2.5 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-900 focus-visible:ring-2 focus-visible:ring-red-300"><Trash2 size={15}/>Delete</button>
      </div>
     </div>
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{([
