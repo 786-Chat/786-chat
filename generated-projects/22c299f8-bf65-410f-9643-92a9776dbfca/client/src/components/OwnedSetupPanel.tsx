@@ -90,7 +90,8 @@ export default function OwnedSetupPanel(){
   }catch(e:any){setError(String(e?.message||e))}
   finally{setLoading(false);setInitialLoadFinished(true);}
  },[]);
- useEffect(()=>{void refresh();const timer=window.setInterval(()=>void refresh(),15000);return()=>window.clearInterval(timer);},[refresh]);
+ // Initial load only; do not poll while the installer is choosing a branch or editing fields.
+ useEffect(()=>{void refresh();},[refresh]);
  const live=useMemo(()=>devices.filter(isLive),[devices]);
  const alreadyRegistered=handoff?devices.find(d=>notesMac(d)===handoff.mac):undefined;
  const clearSelection=()=>{
