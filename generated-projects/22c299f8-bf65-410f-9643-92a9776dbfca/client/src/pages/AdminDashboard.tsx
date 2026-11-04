@@ -94,7 +94,6 @@ import {
   Share2,
   ExternalLink,
   RefreshCw,
-  Radar,
   Wifi,
   PlayCircle,
   PauseCircle,

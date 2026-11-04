@@ -8973,6 +8973,65 @@ Generated: ${new Date().toISOString()}
     }
   });
 
+  // Explicit permanent delete for the Smart Devices admin card.
+  // Keep the existing DELETE /:id behaviour as an UNASSIGN operation for
+  // other flows. Never modify separate manual SmartLife device records.
+  // This table has owned_iot_events ON DELETE CASCADE: the UI must warn that
+  // historical MQTT events for this mouse are removed as well.
+  app.delete("/api/iot/devices/:id/permanent", isAdminAuthenticated, async (req, res) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      const confirmation = String(req.body?.confirmDeviceId || "").trim().toUpperCase();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ||
+          !/^FS-MOUSE-[0-9]{6,}$/.test(confirmation) ||
+          req.body?.confirm !== "DELETE") {
+        return res.status(400).json({ message: "Enter the exact mouse ID and confirm DELETE before permanently removing this registration." });
+      }
+      await ensureOwnedIotSchema();
+      const existingResult: any = await db.execute(sql`
+        SELECT id::text AS id, device_id, friendly_name
+        FROM owned_iot_devices
+        WHERE id::text = ${id} AND device_id = ${confirmation}
+        LIMIT 1
+      `);
+      const existingRows = Array.isArray(existingResult) ? existingResult : (existingResult?.rows || []);
+      const mouse = existingRows[0];
+      if (!mouse) {
+        return res.status(404).json({ message: "Mouse not found, or the entered device ID does not match this card." });
+      }
+
+      // Refuse deletion when a restorable identity/assignment backup fails.
+      // Historical MQTT event rows are not covered by this registry backup.
+      const backup = await createOwnedIotDeviceBackup(
+        "auto", "Before permanent mouse deletion: " + confirmation, "device", confirmation,
+      );
+      if (!backup) return res.status(500).json({ message: "Safety backup failed; mouse was not deleted." });
+
+      // Guard by both UUID and exact confirmed device ID to avoid wrong-card deletion.
+      // PostgreSQL cascade removes only this mouse's owned_iot_events.
+      const deletedResult: any = await db.execute(sql`
+        DELETE FROM owned_iot_devices
+        WHERE id::text = ${id} AND device_id = ${confirmation}
+        RETURNING id::text AS id, device_id
+      `);
+      const deletedRows = Array.isArray(deletedResult) ? deletedResult : (deletedResult?.rows || []);
+      if (!deletedRows.length) return res.status(409).json({ message: "Mouse changed during deletion. Please refresh and try again." });
+
+      // Stale Wi-Fi observations are not themselves device registrations.
+      // Release any linked identity so a deleted mouse does not stay assigned.
+      await db.execute(sql`
+        UPDATE owned_iot_device_checks
+        SET assigned_device_id = NULL, updated_at = now()
+        WHERE assigned_device_id = ${confirmation}
+      `).catch((error: any) => console.warn("Could not clear deleted mouse Wi-Fi observation link:", error?.message || error));
+
+      return res.json({ success: true, deletedDeviceId: confirmation, backupId: backup.id });
+    } catch (error: any) {
+      console.error("Permanent mouse deletion failed:", error?.message || error);
+      return res.status(500).json({ message: "Could not permanently delete this mouse. Please refresh and try again." });
+    }
+  });
+
   app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
