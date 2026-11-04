@@ -138,8 +138,9 @@ export default function DeviceCheckPanel() {
 
   useEffect(() => {
     load().catch(() => {});
-    const timer = window.setInterval(() => load().catch(() => {}), 5000);
-    return () => window.clearInterval(timer);
+    // Refresh is deliberately manual: polling while assigning a device can
+    // replace the on-screen selection and make dropdowns appear to jump.
+    // Use "Check latest HP2 reports" to fetch fresh gateway observations.
   }, []);
 
   const counts = useMemo(() => ({
