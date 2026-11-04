@@ -283,7 +283,7 @@ export default function FreshSmartCheck(){
        aria-expanded={wifiListOpen} aria-autocomplete="list" aria-haspopup="listbox"
        className={input+" pr-12"} placeholder="Tap to choose scanned Wi-Fi, or type its name"
        value={wifiName} autoComplete="off" name="restaurant-wifi-ssid" onFocus={()=>{setWifiListOpen(true);void loadWifi()}}
-       onClick={()=>{setWifiListOpen(true);void loadWifi()}}
+       // Focus already opens and loads this list; do not also fetch on click.
        onChange={e=>{setWifiName(e.target.value);setWifiPassword("");setShowWifiPassword(false);setWifiIsTyping(true);setWifiListOpen(true)}}
        onKeyDown={e=>{if(e.key==="Escape")setWifiListOpen(false)}}/>
       <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-cyan-200">▾</span>
