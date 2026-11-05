@@ -193,11 +193,13 @@ export default function IotAdminPanel() {
     try {
       const response = await fetch("/api/iot/router-wifi-networks", { credentials: "include", cache: "no-store" });
       if (!response.ok) {
+        setNearbyWifiNetworks([]);
         setRouterScanStatus("HP2 router scan service is not available on this preview (" + response.status + ").");
         return;
       }
       const data = await response.json();
       if (!data?.fresh || !Array.isArray(data.networks) || !data.networks.length) {
+        setNearbyWifiNetworks([]);
         setRouterScanStatus("No recent HP2 router scan. Use Refresh, or enter the SSID manually.");
         setRouterScanReportedAt(data?.reportedAt || null);
         return;
@@ -212,6 +214,7 @@ export default function IotAdminPanel() {
       setRouterScanStatus("HP2 router scan received — " + networks.length + " networks. Choose a 2.4 GHz router below.");
       setRouterScanReportedAt(data.reportedAt || null);
     } catch {
+      setNearbyWifiNetworks([]);
       setRouterScanStatus("Cannot reach HP2 router scan service. You may enter the SSID manually.");
     }
   };
@@ -251,11 +254,8 @@ export default function IotAdminPanel() {
     loadBase().catch(() => {});
     loadLatestScopedBackup("all").then(setAllDeviceBackup).catch(() => {});
     loadHp2RouterNetworks().catch(() => {});
-    const timer = window.setInterval(() => {
-      loadBase().catch(() => {});
-      loadHp2RouterNetworks().catch(() => {});
-    }, 20000);
-    return () => window.clearInterval(timer);
+    // Manual refresh only: do not interrupt branch/mouse/Wi-Fi dropdown interactions.
+    // The initial read is not a live radio scan. Operators refresh explicitly.
   }, []);
 
   useEffect(() => {
@@ -701,7 +701,11 @@ export default function IotAdminPanel() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-
+        <Button type="button" variant="outline" onClick={() => loadBase().catch(() => {
+          toast({ title: "Refresh failed", description: "Could not reload saved mouse/branch reports.", variant: "destructive" });
+        })} className="border-cyan-500/40 text-cyan-100">
+          <RefreshCw className="mr-2 h-4 w-4" /> Refresh device reports
+        </Button>
         <Button
           onClick={() => { setShowRegisterForm(true); window.setTimeout(() => document.getElementById("owned-device-name")?.focus(), 0); }}
           className="bg-cyan-600 hover:bg-cyan-500 text-white"
@@ -862,8 +866,8 @@ export default function IotAdminPanel() {
           {wifiPassword && <button type="button" onClick={() => setWifiPassword("")} className="text-cyan-200 underline">Clear password</button>}
         </div>
         <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
-          <strong>Not provisioned:</strong> Mouse #11 uses factory Tuya firmware. Selecting Wi-Fi and typing a password does not send them to the mouse or establish MQTT.
-          The password stays in this tab only and is cleared on refresh.
+          <strong>Not provisioned:</strong> Selecting Wi-Fi and typing a password here does not send credentials to any physical mouse or establish MQTT.
+          The password stays in this tab only and is cleared on refresh. Confirm the selected mouse's actual firmware and secure provisioning method before enabling a Connect action.
         </div>
         {selectedWifiMouse && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-500/25 bg-slate-900/50 p-3">
