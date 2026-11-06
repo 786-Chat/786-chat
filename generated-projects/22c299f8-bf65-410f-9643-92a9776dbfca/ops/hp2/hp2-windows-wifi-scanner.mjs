@@ -18,7 +18,24 @@ import { promisify } from "node:util";
 import assert from "node:assert/strict";
 
 const execFileAsync = promisify(execFile);
-const base = "https://786-generated-22c299f8bf65-git-fix-pest-persis-c578f5-mujeebpro.vercel.app";
+// Explicit preview target. The previous hardcoded deployment was outdated and
+// could send fresh HP2 sightings to a different preview than the admin uses.
+// Never allow this scanner to accidentally post to production.
+const previewDefault = "https://786-generated-22c299f8bf65-b0tt7nbj2-mujeebpro.vercel.app";
+const requestedBase = String(process.env.FOODSAFETY_HP2_PREVIEW_URL || previewDefault).trim().replace(/\/+$/, "");
+let base;
+try {
+  const target = new URL(requestedBase);
+  if (target.protocol !== "https:" ||
+      !/^786-generated-22c299f8bf65-[a-z0-9-]+\.vercel\.app$/i.test(target.hostname) ||
+      target.pathname !== "/" || target.search || target.hash) {
+    throw new Error("Expected this project's HTTPS Vercel preview hostname");
+  }
+  base = target.origin;
+} catch {
+  console.error("[hp2-windows] Invalid FOODSAFETY_HP2_PREVIEW_URL; refusing to send reports.");
+  process.exit(2);
+}
 const token = String(process.env.FOODSAFETY_IOT_GATEWAY_TOKEN || "").trim();
 const once = process.argv.includes("--once");
 const selfTest = process.argv.includes("--self-test");
@@ -141,6 +158,7 @@ async function scanOnce(includeRouters) {
     if (accepted) console.log("[hp2-windows] Pairing AP " + ap.ssid + " " + ap.macAddress + " " + ap.signalPercent + "% recorded; NOT MQTT.");
   }
   if (!mice.length) console.log("[hp2-windows] No mouse pairing AP broadcasting. A mouse already connected to Smart Life may not broadcast a pairing AP; do not reset it just for this check.");
+  console.log("[hp2-windows] Scan complete: " + mice.length + " pairing AP(s); " + networks.length + " router bands observed.");
 }
 
 if (help) {
@@ -156,6 +174,7 @@ if (!token) {
   console.error("[hp2-windows] Missing existing FOODSAFETY_IOT_GATEWAY_TOKEN. Configure it on HP2 privately, never send it in chat.");
   process.exit(2);
 }
+console.log("[hp2-windows] Reporting pairing Wi-Fi observations to PREVIEW: " + base + " (token not printed)");
 let cycle = 0;
 do {
   try { await scanOnce(cycle % 3 === 0); }
