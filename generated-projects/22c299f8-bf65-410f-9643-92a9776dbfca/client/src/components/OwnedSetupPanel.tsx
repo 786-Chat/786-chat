@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, RefreshCw, RadioTower, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -13,6 +13,17 @@ type Device={
 };
 const cleanMac=(v:unknown)=>String(v||"").toUpperCase().trim();
 const notesMac=(d:Device)=>cleanMac(String(d.notes||"").match(/Mouse MAC:\s*((?:[0-9A-F]{2}:){5}[0-9A-F]{2})/i)?.[1]);
+// Older registered mice were saved before the MAC was included in notes.
+// A factory SSID in the saved name may help find an existing card, but it
+// never authenticates the mouse's current Wi-Fi, MQTT, or physical identity.
+const nameFactoryAp=(d:Device)=>String(d.deviceName||"").match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0]?.toLowerCase()||"";
+const possibleSavedMouse=(d:Device,h:Handoff)=>{
+ const storedMac=notesMac(d);
+ if(storedMac&&storedMac!==h.mac)return false;
+ return storedMac===h.mac||
+  (Boolean(h.savedDeviceId)&&(d.id===h.savedDeviceId||d.deviceId===h.savedDeviceId))||
+  nameFactoryAp(d)===h.ssid.toLowerCase();
+};
 const area=(d:Device)=>{
  const text=String(d.notes||"");return text.match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i)?.[1]||text||"Not specified";
 };
@@ -49,6 +60,7 @@ export default function OwnedSetupPanel(){
  const [deleteAcknowledged,setDeleteAcknowledged]=useState(false);
  const [deleteError,setDeleteError]=useState("");
  const [deleting,setDeleting]=useState(false);
+ const navigatedHandoff=useRef("");
  useEffect(()=>{
   try{
    const raw=window.sessionStorage.getItem("pest-smart-check-selected-v1");
@@ -93,7 +105,20 @@ export default function OwnedSetupPanel(){
  // Initial load only; do not poll while the installer is choosing a branch or editing fields.
  useEffect(()=>{void refresh();},[refresh]);
  const live=useMemo(()=>devices.filter(isLive),[devices]);
- const alreadyRegistered=handoff?devices.find(d=>notesMac(d)===handoff.mac):undefined;
+ const existingMatches=useMemo(()=>handoff?devices.filter(d=>possibleSavedMouse(d,handoff)):[],[devices,handoff]);
+ const alreadyRegistered=existingMatches.length===1?existingMatches[0]:undefined;
+ // NEXT should locate an existing registration, including older Mouse #10
+ // records that did not store their factory BSSID in notes.
+ useEffect(()=>{
+  if(!handoff||!initialLoadFinished||!alreadyRegistered)return;
+  const key=handoff.createdAt+":"+handoff.mac;
+  if(navigatedHandoff.current===key)return;
+  navigatedHandoff.current=key;
+  setBranchFilter(alreadyRegistered.branchId||"");
+  setSearch(String(alreadyRegistered.deviceId||alreadyRegistered.deviceName||""));
+  const t=window.setTimeout(()=>document.getElementById("saved-mouse-cards")?.scrollIntoView({behavior:"smooth",block:"start"}),50);
+  return ()=>window.clearTimeout(t);
+ },[handoff,initialLoadFinished,alreadyRegistered]);
  const clearSelection=()=>{
   try{window.sessionStorage.removeItem("pest-smart-check-selected-v1");}catch{}
   setHandoff(null);setHandoffError("");setDraftNotes("");
@@ -109,8 +134,13 @@ export default function OwnedSetupPanel(){
    if(!response.ok)throw Error("Cannot check saved registrations. Please retry.");
    const current=await response.json();
    if(!Array.isArray(current))throw Error("Cannot check saved registrations.");
-   const duplicate=(current as Device[]).find(d=>notesMac(d)===handoff.mac);
-   if(duplicate){setDevices(current);setBranchFilter(duplicate.branchId||"");throw Error("Already saved as "+(duplicate.deviceName||duplicate.deviceId)+". No duplicate was added.");}
+   const duplicates=(current as Device[]).filter(d=>possibleSavedMouse(d,handoff));
+   if(duplicates.length){
+    setDevices(current);
+    setBranchFilter(duplicates.length===1?duplicates[0].branchId||"":"");
+    setSearch(duplicates.length===1?String(duplicates[0].deviceId||""):"");
+    throw Error(duplicates.length===1?"Already saved as "+(duplicates[0].deviceName||duplicates[0].deviceId)+". No duplicate was added.":"Multiple registrations may match this pairing ID. No duplicate was added.");
+   }
    const notes="Installation area: "+draftArea.trim()+". SmartLife AP: "+handoff.ssid+". Mouse MAC: "+handoff.mac+". "+draftNotes.trim();
    const created=await fetch("/api/iot/devices",{method:"POST",credentials:"include",
     headers:{"Content-Type":"application/json"},
@@ -190,10 +220,14 @@ export default function OwnedSetupPanel(){
    {alreadyRegistered?<div className="rounded-xl border border-emerald-500/30 bg-slate-950 p-4">
     <p className="font-semibold">Already saved: {alreadyRegistered.deviceName||alreadyRegistered.deviceId}</p>
     <p className="mt-1 text-xs text-slate-300">{alreadyRegistered.deviceId} · {branches.find(b=>b.id===alreadyRegistered.branchId)?.name||alreadyRegistered.branchName||"No restaurant"}</p>
-    <p className="mt-2 text-xs text-amber-200">We will not create a duplicate. The saved card is available below, even if MQTT is not connected.</p>
-    <button type="button" className="mt-3 rounded-lg border border-cyan-500 px-4 py-2 text-sm text-cyan-100" onClick={()=>{setBranchFilter(alreadyRegistered.branchId||"");setSearch("");document.getElementById("saved-mouse-cards")?.scrollIntoView({behavior:"smooth",block:"start"});}}>View saved mouse</button>
+    <p className="mt-2 text-xs text-amber-200">Matched from its saved ID, MAC or Wi-Fi name. This is a registration lookup, not proof of authenticated MQTT. No duplicate will be created.</p>
+    <button type="button" className="mt-3 rounded-lg border border-cyan-500 px-4 py-2 text-sm text-cyan-100" onClick={()=>{setBranchFilter(alreadyRegistered.branchId||"");setSearch(String(alreadyRegistered.deviceId||""));document.getElementById("saved-mouse-cards")?.scrollIntoView({behavior:"smooth",block:"start"});}}>View existing mouse card</button>
+   </div>:existingMatches.length>1?<div className="rounded-xl border border-amber-500/40 bg-slate-950 p-4">
+    <p className="font-semibold text-amber-200">Multiple existing mouse cards match this Wi-Fi identity.</p>
+    <p className="mt-2 text-sm">No new registration is allowed from this handoff until the existing records are reviewed.</p>
+    <button type="button" className="mt-3 rounded-lg border border-cyan-500 px-4 py-2 text-sm" onClick={()=>{setBranchFilter("");setSearch("");document.getElementById("saved-mouse-cards")?.scrollIntoView({behavior:"smooth",block:"start"});}}>Review all saved mice</button>
    </div>:<div className="space-y-3">
-    <p className="font-semibold">Review and register this mouse (pending activation)</p>
+    <p className="font-semibold">No matching saved card found — register only if this really is a new mouse</p>
     <div className="grid gap-3 sm:grid-cols-2">
      <label className="space-y-1 text-sm">Restaurant / Branch
       <select className={input+" w-full"} value={draftBranch} onChange={e=>setDraftBranch(e.target.value)}><option value="">Choose registered restaurant</option>{branches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
