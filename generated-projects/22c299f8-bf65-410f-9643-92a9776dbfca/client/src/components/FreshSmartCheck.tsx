@@ -23,6 +23,13 @@ const input="w-full rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 te
 const normalizedMac=(s:unknown)=>String(s||"").toUpperCase().trim();
 const mouseAp=(o:Observation)=>/^(SmartLife-|OpenBK)/i.test(o.hostname||"") && /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(o.macAddress||"");
 const savedMac=(d:Device)=>normalizedMac(String(d.notes||"").match(/Mouse MAC:\s*((?:[0-9A-F]{2}:){5}[0-9A-F]{2})/i)?.[1]);
+const factoryName=(d:Device)=>String(d.deviceName||"").match(/\b(?:SmartLife-[A-Z0-9]+|OpenBK[A-Z0-9_-]+)\b/i)?.[0]?.toLowerCase()||"";
+const matchesSighting=(d:Device,mac:string,ssid:string)=>{
+ const stored=savedMac(d);
+ // An explicit mismatching MAC overrides a coincidental name match.
+ if(stored&&stored!==mac)return false;
+ return (Boolean(stored)&&stored===mac)||(Boolean(ssid)&&factoryName(d)===ssid.toLowerCase());
+};
 const savedAp=(d:Device)=>String(d.notes||"").match(/SmartLife AP:\s*([a-zA-Z0-9_-]+)/i)?.[1]||"";
 const savedArea=(d:Device)=> {
  const m=String(d.notes||"").match(/Installation area:\s*(.*?)\.\s*SmartLife AP:/i);
@@ -173,7 +180,8 @@ export default function FreshSmartCheck(){
  const selectableMice=[...currentMice,...recordedMice.filter(o=>!currentMice.some(x=>x.id===o.id))];
  const selected=selectableMice.find(o=>normalizedMac(o.macAddress)===selectedMac);
  const selectedIsRecent=Boolean(selected&&currentMice.some(o=>o.id===selected.id));
- const selectedRegistered=devices.find(d=>Boolean(selectedMac)&&savedMac(d)===selectedMac);
+ const selectedRegisteredMatches=devices.filter(d=>Boolean(selectedMac)&&matchesSighting(d,selectedMac,String(selected?.hostname||"")));
+ const selectedRegistered=selectedRegisteredMatches.length===1?selectedRegisteredMatches[0]:undefined;
  const selectedBranch=branches.find(b=>b.id===branchId);
  const editingSaved=editing?devices.find(d=>d.id===editing):null;
  const formValid=Boolean(branchId&&(wifiName.trim()||editingSaved)&&deviceName.trim()&&location.trim()&&(selected||(editingSaved&&savedMac(editingSaved)&&savedAp(editingSaved))));
@@ -191,8 +199,8 @@ export default function FreshSmartCheck(){
    setError("Choose an HP2-scanned mouse ID/MAC (recent or historical) before saving. The factory Wi-Fi name cannot reveal the mouse number.");return;
   }
   const mac=normalizedMac(detected.macAddress);
-  const duplicate=devices.find(d=>savedMac(d)===mac&&d.id!==existing?.id);
-  if(duplicate){setError("This mouse MAC is already registered as "+(duplicate.deviceName||duplicate.deviceId)+". Edit that card instead of creating a duplicate.");return;}
+  const duplicate=devices.find(d=>matchesSighting(d,mac,String(detected.hostname))&&d.id!==existing?.id);
+  if(selectedRegisteredMatches.length>1||duplicate){setError("An existing mouse card may already use this pairing identity. Open the saved mouse card; do not create a duplicate.");return;}
   setBusy(true);
   try{
    const savedNotes="Installation area: "+location.trim()+". SmartLife AP: "+detected.hostname+". Mouse MAC: "+mac+". "+notes.trim();
