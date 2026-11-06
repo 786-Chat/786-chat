@@ -347,16 +347,16 @@ export default function FreshSmartCheck(){
       ["Mouse Wi-Fi ID",selected?.hostname||"Not detected"],
       ["Mouse MAC",selected?.macAddress||"Not detected"],
       ["Pairing signal",selected?.wifiSignalPercent!=null?selected.wifiSignalPercent+"% ("+(selectedIsRecent?"recent":"historical "+when(selected.lastSeenAt))+" HP2 AP observation)":"Not reported"],
-      ["Battery",bat==null?"Not reported":bat+"% (last device report)"],
-      ["Restaurant Wi-Fi","Not verified"],
-      ["MQTT",d&&liveMqtt(d)?"Recent authenticated report":"Not verified / no recent report"],
-      ["MQTT signal",rssi==null?"Not reported":rssi+" dBm (last report)"],
-      ["Last device report",hasReport?when(d!.lastCheckedAt):"Not reported"],
-      ["Trap",hasReport&&d?.alarmActive?"Active catch alarm":"No verified catch event"]
+      ["Battery",bat==null?"Not reported by device":bat+"% (last authenticated report)"],
+      ["Restaurant Wi-Fi",d&&liveMqtt(d)?"Device reports via MQTT; restaurant SSID unverified":"Not independently verified"],
+      ["MQTT",d&&liveMqtt(d)?"Recent authenticated gateway report":hasReport?"Last gateway report is old":"No authenticated report"],
+      ["MQTT signal",rssi==null?"No device RSSI reported":rssi+" dBm (last authenticated report)"],
+      ["Last device report",hasReport?when(d!.lastCheckedAt):"No gateway report"],
+      ["Trap",hasReport&&d?.alarmActive?"Recorded catch alarm":hasReport?"No active catch reported":"No verified catch event"]
      ];
      return rows.map(([name,value])=><div key={name} className="rounded-lg bg-slate-900 p-3"><p className="text-xs text-slate-400">{name}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>);
     })()}</div>
-    <p className="mt-2 text-xs text-slate-400">A flashing mouse Wi-Fi broadcast does not reveal battery, caught-mouse status or an authenticated MQTT connection. Old values are marked as last reported.</p>
+    <p className="mt-2 text-xs text-slate-400">These six readings come only from authenticated physical device/gateway reports. An HP2 SmartLife pairing Wi-Fi sighting proves none of them. Battery and signal are last-reported values, not live sensor readings; router SSID requires separate device-side verification. No simulated battery, connection or catch readings are used.</p>
    </div>
    <label className="block"><span className="mb-2 block font-semibold">Internal notes</span><textarea rows={2} className={input} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Optional installation notes"/></label>
    {error&&<p role="alert" className="rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-red-200">{error}</p>}
