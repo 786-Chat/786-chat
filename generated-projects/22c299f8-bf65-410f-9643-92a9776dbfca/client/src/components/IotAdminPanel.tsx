@@ -178,6 +178,30 @@ export default function IotAdminPanel() {
   const selectedWifiMouse = useMemo(() =>
     ownedDevices.find((device: any) => String(device.deviceId) === String(wifiDeviceId)) || null,
     [ownedDevices, wifiDeviceId]);
+
+  // The Smart Check handoff is an observed AP name, NOT an authenticated MQTT
+  // identity. Use it only to navigate to exactly one existing registration.
+  // If zero or multiple registered names match, never guess or create a device.
+  const existingSmartCheckMatches = useMemo(() => {
+    const ssid = String(smartCheckSelection?.ssid || "").trim().toLowerCase();
+    if (!ssid) return [];
+    return ownedDevices.filter((device: any) => namedFactoryWifi(device.deviceName) === ssid);
+  }, [ownedDevices, smartCheckSelection]);
+  const existingSmartCheckDevice = existingSmartCheckMatches.length === 1 ? existingSmartCheckMatches[0] : null;
+  const viewExistingSmartCheckDevice = () => {
+    if (!existingSmartCheckDevice) return;
+    const device = existingSmartCheckDevice;
+    const id = String(device.branchId || "");
+    const branch = branches.find((item) => String(item.id) === id);
+    setShowRegisterForm(false);
+    setActiveBranchId(id);
+    setBranchId(id);
+    setBranchSearch(branch?.name || "");
+    setBranchSearchOpen(false);
+    setDeviceSearch(String(device.deviceId || ""));
+    setWifiDeviceId(String(device.deviceId || ""));
+    window.setTimeout(() => document.getElementById("pest-registered-mice")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
   const branchSearchResults = useMemo(() => {
     const query = branchSearch.trim().toLowerCase();
     if (!query) return branches.slice(0, 12);
@@ -904,13 +928,25 @@ export default function IotAdminPanel() {
         <div className="rounded-xl border border-cyan-500/40 bg-cyan-950/30 p-4 text-sm text-white" role="status">
           <strong className="block text-base">Selected in Smart Check: {smartCheckSelection.ssid || "Wi-Fi mouse"}</strong>
           <p className="mt-1 font-mono text-xs text-cyan-200">Observed MAC: {smartCheckSelection.mac || "Unavailable"}</p>
-          <p className="mt-2 text-slate-300">Wi-Fi discovery only. Choose the correct customer branch and register the device below. Wi-Fi provisioning and MQTT must be verified separately.</p>
+          <p className="mt-2 text-slate-300">Wi-Fi discovery only; this does not verify restaurant Wi-Fi or MQTT. Existing registrations should be opened, not duplicated.</p>
+          {existingSmartCheckDevice ? (
+            <p className="mt-2 text-emerald-200">Existing saved card found: {existingSmartCheckDevice.deviceName} ({existingSmartCheckDevice.deviceId}). The Wi-Fi name match helps locate the card but does not authenticate the physical mouse.</p>
+          ) : existingSmartCheckMatches.length > 1 ? (
+            <p className="mt-2 text-amber-200">More than one saved card has this Wi-Fi name. Use the registered mouse list to check the correct record; do not create or auto-link a duplicate.</p>
+          ) : (
+            <p className="mt-2 text-amber-200">No matching registered card was found by its saved name. Search all registered mice before creating a new record.</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" type="button" onClick={() => {
-              setDeviceName(smartCheckSelection.ssid);
-              setShowRegisterForm(true);
-              window.setTimeout(() => document.getElementById("pest-add-device")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-            }} className="bg-cyan-600 text-white hover:bg-cyan-500">Next — Select branch</Button>
+              if (existingSmartCheckDevice) {
+                viewExistingSmartCheckDevice();
+                return;
+              }
+              setShowRegisterForm(false);
+              setActiveBranchId("");
+              setDeviceSearch("");
+              window.setTimeout(() => document.getElementById("pest-registered-mice")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+            }} className="bg-cyan-600 text-white hover:bg-cyan-500">{existingSmartCheckDevice ? "NEXT — View existing mouse" : "NEXT — Search registered mice"}</Button>
             <Button size="sm" type="button" variant="outline" onClick={() => {
               window.sessionStorage.removeItem("pest-smart-check-selected-v1");
               setSmartCheckSelection(null);
