@@ -1,0 +1,12 @@
+{
+  "projectId": "91e02ac0-25ad-4790-a591-2b96361d0bd7",
+  "buildId": "9c112688-221a-4574-a0f1-7dd2dc1ad8fa",
+  "title": "Manufacturing Ops Auth",
+  "sourceVersion": "c61a391c2695358601abceda736ee735a74ea8d656b2c18a30dc4a8169b40da3",
+  "generatedBy": "786.chat",
+  "providers": [
+    "DeepSeek",
+    "Gemini"
+  ],
+  "createdAt": "2026-08-21T01:45:33.844Z"
+}
