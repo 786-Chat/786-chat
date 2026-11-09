@@ -31,6 +31,7 @@ export function decodeFoodSafetyJson(topic, payload) {
 
 export function createFoodSafetyJsonEventGate() {
   const trapStates = new Map();
+  const notifiedCatches = new Set();
   const seenIds = new Set();
   return {
     observe({ topic, payload, retained = false } = {}) {
@@ -47,13 +48,16 @@ export function createFoodSafetyJsonEventGate() {
       const prev = trapStates.get(decoded.deviceId);
       if (decoded.type === 'trap_reset') {
         trapStates.set(decoded.deviceId, false);
-        // First reset is a baseline, not a new hardware event.
-        return prev === true ? decoded : null;
+        // Clear the dashboard only for an alarm actually forwarded by this gate.
+        const notified = notifiedCatches.delete(decoded.deviceId);
+        return notified ? decoded : null;
       }
       trapStates.set(decoded.deviceId, true);
       // Only a fresh 0 -> 1 transition in this process can raise an alarm.
       // Initial 'caught' without a baseline is intentionally suppressed.
-      return prev === false ? decoded : null;
+      if (prev !== false) return null;
+      notifiedCatches.add(decoded.deviceId);
+      return decoded;
     },
   };
 }
