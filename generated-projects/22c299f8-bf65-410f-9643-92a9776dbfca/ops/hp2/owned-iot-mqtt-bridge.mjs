@@ -160,6 +160,13 @@ const topics = Array.from(new Set([
   '+/host',
   '+/ip',
   '+/rssi',
+  // Direct-MQTT firmware uses an explicit device namespace, not DEVICE4/*.
+  // Discovery/linking is still required: topic text never authorizes an event by itself.
+  'fs/v1/device/+/connected',
+  'fs/v1/device/+/rssi',
+  'fs/v1/device/+/trap',
+  'fs/v1/device/+/battery',
+  'fs/v1/device/+/status',
 ]));
 
 const args = ['-h', mqttHost, '-p', mqttPort, '-v'];
@@ -183,9 +190,10 @@ rl.on('line', (line) => {
   const topic = space >= 0 ? line.slice(0, space) : '';
   const payload = space >= 0 ? line.slice(space + 1) : line;
   const parts = topic.split('/');
-  const prefix = String(parts[0] || '').trim();
+  const namespaced = parts.length === 5 && parts[0] === 'fs' && parts[1] === 'v1' && parts[2] === 'device';
+  const prefix = namespaced ? parts.slice(0, 4).join('/') : String(parts[0] || '').trim();
   const leaf = String(parts[parts.length - 1] || '').trim().toLowerCase();
-  if (!prefix) return;
+  if (!prefix || (namespaced && !/^FS-[A-Z0-9]+-[0-9]{6,}$/.test(parts[3]))) return;
 
   const state = states.get(prefix) || {};
   if (leaf === 'ip') state.ipAddress = String(payload || '').trim();
@@ -193,6 +201,24 @@ rl.on('line', (line) => {
   if (leaf === 'rssi') {
     const rssi = Number(String(payload || '').trim());
     if (Number.isFinite(rssi)) state.rssi = Math.trunc(rssi);
+  }
+  if (leaf === 'battery') {
+    const battery = Number(String(payload || '').trim());
+    if (Number.isInteger(battery) && battery >= 0 && battery <= 100) state.batteryPct = battery;
+  }
+  if (leaf === 'status' && namespaced) {
+    try {
+      const status = JSON.parse(payload);
+      if (status && typeof status === 'object' && !Array.isArray(status)) {
+        const rawBattery = status.batteryPct ?? status.battery_pct ?? status.battery;
+        if (rawBattery !== undefined && rawBattery !== null && rawBattery !== '') {
+          const battery = Number(rawBattery);
+          if (Number.isInteger(battery) && battery >= 0 && battery <= 100) state.batteryPct = battery;
+        }
+        const signal = Number(status.rssi);
+        if (Number.isFinite(signal) && signal >= -127 && signal <= 0) state.rssi = Math.trunc(signal);
+      }
+    } catch (_) { /* Ignore malformed status; do not manufacture telemetry. */ }
   }
   if (leaf === 'connected') {
     const normalized = String(payload || '').trim().toLowerCase();
@@ -211,15 +237,19 @@ rl.on('line', (line) => {
       if (id) {
         await postEvent(id, state.connected ? 'online' : 'offline', topic, payload, {
           rssi: Number.isFinite(state.rssi) ? state.rssi : undefined,
+          batteryPct: Number.isInteger(state.batteryPct) ? state.batteryPct : undefined,
         });
       }
       return;
     }
 
-    if (leaf === 'rssi') {
+    if (['rssi', 'battery', 'status'].includes(leaf)) {
       const id = await resolveAssignedDevice(prefix);
       if (id) {
-        await postEvent(id, 'heartbeat', topic, payload, { rssi: state.rssi });
+        await postEvent(id, 'heartbeat', topic, payload, {
+          rssi: Number.isFinite(state.rssi) ? state.rssi : undefined,
+          batteryPct: Number.isInteger(state.batteryPct) ? state.batteryPct : undefined,
+        });
       }
       return;
     }
@@ -237,6 +267,7 @@ rl.on('line', (line) => {
       }
       await postEvent(id, type, topic, payload, {
         rssi: Number.isFinite(state.rssi) ? state.rssi : undefined,
+        batteryPct: Number.isInteger(state.batteryPct) ? state.batteryPct : undefined,
       });
     }
   }).catch((error) => console.error('[bridge] ' + error.message));
