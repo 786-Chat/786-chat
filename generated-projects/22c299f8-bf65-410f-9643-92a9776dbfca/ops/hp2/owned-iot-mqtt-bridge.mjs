@@ -224,7 +224,11 @@ rl.on('line', (line) => {
         console.log('[bridge] W003 JSON event rejected: device ID is not registered and assigned');
         return;
       }
-      await postEvent(decoded.deviceId, decoded.type, topic, payload);
+      // Preserve the source event ID for gateway-side deduplication across
+      // bridge restarts; the fail-closed gate has already validated its format.
+      await postEvent(decoded.deviceId, decoded.type, topic, payload, {
+        eventId: decoded.deviceId + '-' + decoded.eventId,
+      });
     }).catch((error) => console.error('[bridge] W003 JSON event rejected: ' + error.message));
     return;
   }
