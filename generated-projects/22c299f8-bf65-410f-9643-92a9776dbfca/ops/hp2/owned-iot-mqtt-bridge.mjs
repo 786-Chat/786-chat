@@ -210,8 +210,11 @@ rl.on('line', (line) => {
     try {
       const status = JSON.parse(payload);
       if (status && typeof status === 'object' && !Array.isArray(status)) {
-        const battery = Number(status.batteryPct ?? status.battery_pct ?? status.battery);
-        if (Number.isInteger(battery) && battery >= 0 && battery <= 100) state.batteryPct = battery;
+        const rawBattery = status.batteryPct ?? status.battery_pct ?? status.battery;
+        if (rawBattery !== undefined && rawBattery !== null && rawBattery !== '') {
+          const battery = Number(rawBattery);
+          if (Number.isInteger(battery) && battery >= 0 && battery <= 100) state.batteryPct = battery;
+        }
         const signal = Number(status.rssi);
         if (Number.isFinite(signal) && signal >= -127 && signal <= 0) state.rssi = Math.trunc(signal);
       }
