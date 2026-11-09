@@ -3,6 +3,7 @@ import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import readline from 'node:readline';
+import { createFoodSafetyJsonEventGate } from './food-safety-json-event-gate.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +23,10 @@ const legacyEventTopic = String(process.env.MQTT_EVENT_TOPIC || 'DEVICE4/trap').
 const mqttUsername = String(process.env.MQTT_USERNAME || '').trim();
 const mqttPassword = String(process.env.MQTT_PASSWORD || '').trim();
 const legacyPrefix = legacyEventTopic.split('/')[0] || '';
+// Disabled by default. Enable only after DP103 false-alarm risk, broker ACLs,
+// device identity and the physical 0->1 trap event have been verified.
+const enableFoodSafetyJsonEvents = process.env.FOODSAFETY_ENABLE_JSON_EVENTS === '1';
+const foodSafetyJsonEventGate = createFoodSafetyJsonEventGate();
 
 const states = new Map();
 const resolvedDeviceCache = new Map();
@@ -36,6 +41,8 @@ const eventForPayload = (raw) => {
 // Battery reports are usable only when the firmware explicitly sends a percentage.
 // Tuya DP enums are hardware-specific and must never be treated as percentages.
 const batteryPercent = (value) => {
+  // Missing JSON batteryPct must NOT be silently converted to a fake 0%.
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   if (typeof value === 'string' && !/^\d{1,3}$/.test(value.trim())) return null;
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
@@ -173,6 +180,7 @@ const topics = Array.from(new Set([
   '+/battery_percentage',
   'fs/v1/device/+/status',
   'fs/v1/device/+/telemetry',
+  ...(enableFoodSafetyJsonEvents ? ['fs/v1/device/+/event'] : []),
 ]));
 
 // Ignore retained MQTT values on startup: old battery/online reports must not
@@ -202,6 +210,25 @@ rl.on('line', (line) => {
   const prefix = String(structuredDeviceTopic ? parts[3] : parts[0] || '').trim();
   const leaf = String(parts[parts.length - 1] || '').trim().toLowerCase();
   if (!prefix) return;
+
+  // Event messages from the recovered W003 firmware are JSON, not +/trap strings.
+  // This opt-in path uses a strict parser and requires a fresh reset->caught
+  // transition. It never forwards boot events, low-battery DP103 or retained data.
+  if (structuredDeviceTopic && leaf === 'event') {
+    if (!enableFoodSafetyJsonEvents) return;
+    const decoded = foodSafetyJsonEventGate.observe({ topic, payload, retained: false });
+    if (!decoded || (decoded.type !== 'trap_triggered' && decoded.type !== 'trap_reset')) return;
+    chain = chain.then(async () => {
+      const registeredId = await resolveAssignedDevice(decoded.deviceId);
+      if (registeredId !== decoded.deviceId) {
+        console.log('[bridge] W003 JSON event rejected: device ID is not registered and assigned');
+        return;
+      }
+      await postEvent(decoded.deviceId, decoded.type, topic, payload);
+    }).catch((error) => console.error('[bridge] W003 JSON event rejected: ' + error.message));
+    return;
+  }
+
   let explicitBattery = null;
   if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
     explicitBattery = batteryPercent(payload);
