@@ -160,7 +160,7 @@ import FreshSmartCheck from "@/components/FreshSmartCheck";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
-import { prepareBranchLogoUpload } from "@/lib/branch-logo-upload";
+import { prepareBranchLogoUpload, uploadOriginalBranchGif } from "@/lib/branch-logo-upload";
 
 const branchSchema = z.object({
   name: z.string().min(1, "Branch name is required"),
@@ -1121,8 +1121,9 @@ export default function AdminDashboard() {
         }
       });
       
-      // Add logo file if present
-      if (branchLogoFile) {
+      // GIFs are uploaded directly to private Blob *after* the branch exists.
+      // Do not put an animated GIF in the function request body or a DB data URL.
+      if (branchLogoFile && branchLogoFile.type !== 'image/gif') {
         formData.append('logo', await prepareBranchLogoUpload(branchLogoFile));
       }
       
@@ -1137,7 +1138,18 @@ export default function AdminDashboard() {
         throw new Error(`${response.status}: ${text}`);
       }
       
-      return response.json();
+      const created = await response.json();
+      if (branchLogoFile?.type === 'image/gif' && created?.id) {
+        try {
+          await uploadOriginalBranchGif(branchLogoFile, created.id);
+          created.logoUpdated = true;
+        } catch (error: any) {
+          // Branch registration already succeeded. Do NOT report that it
+          // failed or prompt another registration (duplicate customer risk).
+          created.logoUploadError = error?.message || 'GIF logo upload failed';
+        }
+      }
+      return created;
     },
     onSuccess: (data) => {
       console.log('✅ Branch created successfully:', data);
@@ -1153,8 +1165,9 @@ export default function AdminDashboard() {
       setBranchLogoFile(null);
       setBranchLogoPreview("");
       toast({
-        title: "Success",
-        description: `Branch "${data.name}" added successfully`,
+        title: data.logoUploadError ? "Branch saved, but GIF logo not uploaded" : "Success",
+        description: data.logoUploadError || `Branch "${data.name}" added successfully`,
+        variant: data.logoUploadError ? "destructive" : "default",
       });
     },
     onError: (error: any) => {
@@ -1286,8 +1299,8 @@ export default function AdminDashboard() {
     mutationFn: async (data: { id: string; formData: any; logoFile?: File }) => {
       let response;
       
-      if (data.logoFile) {
-        // If we have a logo file, use FormData for multipart upload
+      if (data.logoFile && data.logoFile.type !== 'image/gif') {
+        // Use FormData for PNG/JPG/WebP/SVG. GIF uses direct private Blob upload.
         const formData = new FormData();
         
         // Add all the form fields
@@ -1321,7 +1334,18 @@ export default function AdminDashboard() {
         throw new Error(`${response.status}: ${text}`);
       }
       
-      return response.json();
+      const updated = await response.json();
+      if (data.logoFile?.type === 'image/gif') {
+        try {
+          await uploadOriginalBranchGif(data.logoFile, data.id);
+          updated.logoUpdated = true;
+        } catch (error: any) {
+          // Other branch edits may already be saved; preserve that fact.
+          updated.logoUpdated = false;
+          updated.logoUploadError = error?.message || 'GIF upload failed';
+        }
+      }
+      return updated;
     },
     onSuccess: (updatedBranch) => {
       console.log('✅ Branch update successful:', updatedBranch);
@@ -1346,10 +1370,12 @@ export default function AdminDashboard() {
         fileInputRef.current.value = '';
       }
       toast({
-        title: "Success",
-        description: updatedBranch?.logoUpdated 
-          ? "Branch and logo updated successfully - changes are now visible"
-          : "Branch updated successfully",
+        title: updatedBranch?.logoUploadError ? "Branch details saved; logo not uploaded" : "Success",
+        description: updatedBranch?.logoUploadError ||
+          (updatedBranch?.logoUpdated
+            ? "Branch and logo updated successfully"
+            : "Branch updated successfully"),
+        variant: updatedBranch?.logoUploadError ? "destructive" : "default",
       });
     },
     onError: (error) => {
@@ -2122,10 +2148,10 @@ export default function AdminDashboard() {
     }
     // Animated GIFs must keep all frames: never offer to flatten or compress
     // them through canvas. Reject oversized animations before submitting.
-    if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
+    if (file.type === 'image/gif' && file.size > 10 * 1024 * 1024) {
       toast({
         title: "Animated GIF too large",
-        description: "Please optimise the animated GIF to 2MB or less. Its animation will be preserved.",
+        description: "Animated GIFs up to 10MB upload directly, preserving their animation.",
         variant: "destructive",
       });
       event.target.value = "";
@@ -5246,7 +5272,7 @@ export default function AdminDashboard() {
                     className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                   />
                   <p className="text-xs text-slate-400">
-                    PNG/JPG/WebP: auto-compressed if large. Animated GIF: max 2MB, animation preserved. SVG: max 350KB.
+                    PNG/JPG/WebP: auto-compressed. Animated GIF: up to 10MB, original animation kept (direct upload). SVG: max 350KB.
                   </p>
                   {branchLogoPreview && (
                     <div>
@@ -5626,8 +5652,8 @@ export default function AdminDashboard() {
                           e.target.value = "";
                           return;
                         }
-                        if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
-                          toast({ title: "Animated GIF too large", description: "Optimise your animated GIF to 2MB or less. Animation will remain intact.", variant: "destructive" });
+                        if (file.type === 'image/gif' && file.size > 10 * 1024 * 1024) {
+                          toast({ title: "Animated GIF too large", description: "Animated GIFs up to 10MB upload directly, preserving their animation.", variant: "destructive" });
                           e.target.value = "";
                           return;
                         }
@@ -5641,7 +5667,7 @@ export default function AdminDashboard() {
                       className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                     />
                     <p className="text-xs text-slate-400 mt-1">
-                      PNG/JPG/WebP: auto-compressed if large. Animated GIF: max 2MB, animation preserved. SVG: max 350KB.
+                      PNG/JPG/WebP: auto-compressed. Animated GIF: up to 10MB, original animation kept (direct upload). SVG: max 350KB.
                     </p>
                   </div>
                   
