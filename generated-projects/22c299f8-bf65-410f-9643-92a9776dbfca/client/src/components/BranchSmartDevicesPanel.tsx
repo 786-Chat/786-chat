@@ -45,13 +45,21 @@ function snapshot(statusList: any[]) {
 export default function BranchSmartDevicesPanel() {
   const [devices, setDevices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
 
   const load = async () => {
     try {
       const response = await fetch("/api/branch/iot-devices?refresh=1", { credentials: "include", cache: "no-store" });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setDeviceError(response.status === 401 ? "Branch session expired. Please log in again." : `Cannot load assigned devices (HTTP ${response.status}).`);
+        return;
+      }
       const data = await response.json();
       setDevices(Array.isArray(data) ? data : []);
+      setDeviceError(null);
+    } catch (error) {
+      setDeviceError("Device service unavailable. Please try again.");
+      console.error("Branch devices fetch failed:", error);
     } finally {
       setLoading(false);
     }
@@ -80,12 +88,13 @@ export default function BranchSmartDevicesPanel() {
         <Button size="sm" variant="outline" onClick={() => void load()} className="border-slate-600 text-slate-200"><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh</Button>
       </div>
 
+      {deviceError && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">{deviceError}</div>}
       {loading ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center text-slate-400">Loading smart devices…</div>
-      ) : devices.length === 0 ? (
+      ) : deviceError ? null : devices.length === 0 ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center">
           <p className="text-lg font-medium text-slate-300">No smart devices assigned</p>
-          <p className="mt-1 text-sm text-slate-500">Your pest-control provider will assign devices to this branch.</p>
+          <p className="mt-1 text-sm text-slate-500">No assigned mouse records were returned for this branch. Admin must confirm the correct branch assignment.</p>
         </div>
       ) : (
         <>
