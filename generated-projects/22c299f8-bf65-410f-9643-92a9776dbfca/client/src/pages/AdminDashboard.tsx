@@ -5803,7 +5803,7 @@ export default function AdminDashboard() {
                         <FormItem>
                           <FormLabel className="text-slate-300">New Password (leave blank to keep current)</FormLabel>
                           <FormControl>
-                            <Input {...field} type="password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Enter new password" />
+                            <Input {...field} type="password" autoComplete="new-password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Enter new password" />
                           </FormControl>
                           <FormMessage className="text-red-400" />
                         </FormItem>
@@ -5817,7 +5817,7 @@ export default function AdminDashboard() {
                         <FormItem>
                           <FormLabel className="text-slate-300">Confirm New Password</FormLabel>
                           <FormControl>
-                            <Input {...field} type="password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Confirm new password" />
+                            <Input {...field} type="password" autoComplete="new-password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Confirm new password" />
                           </FormControl>
                           <FormMessage className="text-red-400" />
                         </FormItem>
