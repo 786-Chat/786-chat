@@ -30,6 +30,7 @@ import { z } from "zod";
 import { db } from "./db.js";
 import { sql } from "drizzle-orm";
 import { registerSmartLifeRoutes } from "./smartlife-routes.js";
+import { ownedIotDisplayStatus } from "./owned-iot-display-status.mjs";
 
 // Parameter validation schemas
 const idParamSchema = z.object({
@@ -540,18 +541,18 @@ const logoUpload = multer({
   }),
   fileFilter: (req, file, cb) => {
     // Branch logos intentionally support the formats used by the original app.
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp'];
 
     if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid logo type. Only PNG, JPG/JPEG, GIF and SVG files are allowed.'));
+      cb(new Error('Invalid logo type. Only PNG, JPG/JPEG, GIF, SVG and WebP files are allowed.'));
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB branch-logo limit
+    fileSize: 3 * 1024 * 1024 // keep multipart upload below the Vercel 4.5MB function request limit
   }
 });
 
@@ -562,7 +563,7 @@ const uploadLogoSafe = (req: any, res: any, next: any) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
-          message: 'Logo file is too large. Maximum size is 10MB.'
+          message: 'Logo file is too large for this upload. Maximum size is 3MB. Please use a smaller image.'
         });
       }
       return res.status(400).json({ message: err.message || 'Logo upload failed' });
@@ -1050,13 +1051,14 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
       }
 
       const integerOrNull = (value: unknown): number | null => {
-        if (value === null || value === undefined || value === "") return null;
+        if (value === null || value === undefined || value === "" || typeof value === "boolean" || typeof value === "object") return null;
+        if (typeof value === "string" && !/^-?\d{1,4}$/.test(value.trim())) return null;
         const parsed = Number(value);
-        return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+        return Number.isSafeInteger(parsed) ? parsed : null;
       };
 
       const rssi = integerOrNull(body.rssi);
-      const rawBatteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      const rawBatteryPct = integerOrNull(body.batteryPct ?? body.battery_pct);
       // Only store genuine 0–100% telemetry; never turn a Tuya DP enum or
       // Wi-Fi signal reading into a battery percentage.
       const batteryPct = rawBatteryPct !== null && rawBatteryPct >= 0 && rawBatteryPct <= 100 ? rawBatteryPct : null;
@@ -2175,6 +2177,119 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
     }
   });
 
+
+
+  // Large animated GIF logos use small, authenticated HTTP chunks. Each
+  // Function request stays below 4.5MB; the original GIF is reassembled into
+  // PRIVATE Blob storage server-side. No raw bytes are persisted in branch
+  // records, and no browser-side canvas flattens the animation.
+  const originalGifChunkBytes = 1024 * 1024;
+  const originalGifMaxBytes = 10 * 1024 * 1024;
+  const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const privateGifChunkPath = (branchId: string, uploadId: string, index: number) =>
+    'pest-control/' + branchId + '/logos/pending/' + uploadId + '/part-' + index + '.bin';
+
+  app.put('/api/branches/:id/logo/gif-chunk/:uploadId/:part',
+    isAdminAuthenticated,
+    express.raw({ type: 'application/octet-stream', limit: '1100kb' }),
+    async (req: any, res) => {
+      try {
+        const branchId = String(req.params.id || '');
+        const uploadId = String(req.params.uploadId || '');
+        const index = Number(req.params.part);
+        if (!isUuid(branchId) || !isUuid(uploadId) || !Number.isInteger(index) || index < 0 || index > 9) {
+          return res.status(400).json({ message: 'Invalid GIF upload session' });
+        }
+        if (!await storage.getBranch(branchId)) return res.status(404).json({ message: 'Branch not found' });
+        if (!Buffer.isBuffer(req.body) || req.body.length <= 0 || req.body.length > originalGifChunkBytes) {
+          return res.status(400).json({ message: 'Invalid GIF chunk size' });
+        }
+        const { put } = await import('@vercel/blob');
+        await put(privateGifChunkPath(branchId, uploadId, index), req.body, {
+          access: 'private',
+          contentType: 'application/octet-stream',
+          addRandomSuffix: false,
+        });
+        return res.json({ ok: true, part: index });
+      } catch (error: any) {
+        console.error('Could not upload private GIF chunk:', error?.message || error);
+        return res.status(500).json({ message: 'GIF chunk upload failed' });
+      }
+    });
+
+  app.post('/api/branches/:id/logo/gif-complete', isAdminAuthenticated, async (req: any, res) => {
+    try {
+      const branchId = String(req.params.id || '');
+      const uploadId = String(req.body?.uploadId || '');
+      const totalSize = Number(req.body?.totalSize);
+      const partsCount = Number(req.body?.partsCount);
+      if (!isUuid(branchId) || !isUuid(uploadId) ||
+          !Number.isSafeInteger(totalSize) || totalSize < 1 || totalSize > originalGifMaxBytes ||
+          !Number.isInteger(partsCount) || partsCount < 1 ||
+          partsCount !== Math.ceil(totalSize / originalGifChunkBytes)) {
+        return res.status(400).json({ message: 'Invalid GIF upload completion data' });
+      }
+      if (!await storage.getBranch(branchId)) return res.status(404).json({ message: 'Branch not found' });
+      const { get, put, del } = await import('@vercel/blob');
+      const paths: string[] = [];
+      const buffers: Buffer[] = [];
+      for (let i = 0; i < partsCount; i += 1) {
+        const pathname = privateGifChunkPath(branchId, uploadId, i);
+        const piece = await get(pathname, { access: 'private' });
+        if (!piece || piece.statusCode !== 200) {
+          return res.status(409).json({ message: 'GIF upload is incomplete. Please retry.' });
+        }
+        const fragments: Buffer[] = [];
+        for await (const part of piece.stream as any) {
+          fragments.push(Buffer.isBuffer(part) ? part : Buffer.from(part));
+        }
+        const bytes = Buffer.concat(fragments);
+        const expectedBytes = Math.min(originalGifChunkBytes, totalSize - i * originalGifChunkBytes);
+        if (bytes.length !== expectedBytes) {
+          return res.status(400).json({ message: 'GIF upload chunk size does not match' });
+        }
+        buffers.push(bytes);
+        paths.push(pathname);
+      }
+      const originalGif = Buffer.concat(buffers);
+      const signature = originalGif.subarray(0, 6).toString('ascii');
+      if (originalGif.length !== totalSize || (signature !== 'GIF87a' && signature !== 'GIF89a')) {
+        return res.status(400).json({ message: 'Uploaded file is not a valid GIF' });
+      }
+      const pathname = 'pest-control/' + branchId + '/logos/' + randomUUID() + '.gif';
+      await put(pathname, originalGif, {
+        access: 'private',
+        contentType: 'image/gif',
+        addRandomSuffix: false,
+      });
+      const logoUrl = '/objects/vercel/' + encodeURIComponent(pathname);
+      await storage.updateBranch(branchId, { logoUrl });
+      // Temporary private chunks are removed only after durable attachment.
+      try { await del(paths); } catch (cleanupError: any) {
+        console.warn('GIF uploaded; old private chunks need cleanup:', cleanupError?.message || cleanupError);
+      }
+      return res.json({ success: true, logoUpdated: true, branchId });
+    } catch (error: any) {
+      console.error('Cannot complete private GIF upload:', error?.message || error);
+      return res.status(500).json({ message: 'Could not save animated GIF. Existing branch logo was preserved.' });
+    }
+  });
+
+  app.delete('/api/branches/:id/logo/gif-chunks/:uploadId', isAdminAuthenticated, async (req: any, res) => {
+    try {
+      const branchId = String(req.params.id || '');
+      const uploadId = String(req.params.uploadId || '');
+      if (!isUuid(branchId) || !isUuid(uploadId)) return res.sendStatus(400);
+      if (!await storage.getBranch(branchId)) return res.sendStatus(404);
+      const { del } = await import('@vercel/blob');
+      await Promise.allSettled(Array.from({ length: 10 }, (_, i) =>
+        del(privateGifChunkPath(branchId, uploadId, i))));
+      return res.json({ success: true });
+    } catch (error: any) {
+      return res.status(500).json({ message: 'Could not clean up incomplete GIF upload' });
+    }
+  });
+
   app.post('/api/branches', isAdminAuthenticated, uploadLogoSafe, async (req, res) => {
     let uploadedTempPath: string | undefined;
     try {
@@ -2259,6 +2374,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
       // Keep ordinary branch edits saveable even if logo persistence fails.
       // The existing logo is retained when a logo-specific error occurs.
       const uploadedLogo = req.file;
+      let logoSaved = false;
       if (uploadedLogo) {
         try {
           const objectStorageService = new ObjectStorageService();
@@ -2270,6 +2386,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
           });
 
           updateData.logoUrl = logoUrl;
+          logoSaved = true;
           console.log(`✅ Logo uploaded for branch ${branchId}: ${logoUrl}`);
         } catch (logoError) {
           console.warn(`⚠️ Branch logo update failed for ${branchId}; saving other branch changes with the existing logo:`, logoError);
@@ -2346,7 +2463,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
         finalLogoUrl: branch.logoUrl 
       });
       
-      res.json({ ...branch, password: undefined, logoUpdated: !!req.file });
+      res.json({ ...branch, password: undefined, logoUpdated: logoSaved });
     } catch (error) {
       console.error("Error updating branch:", error);
       res.status(500).json({ message: "Failed to update branch" });
@@ -7818,7 +7935,7 @@ Generated: ${new Date().toISOString()}
   });
 
   // ==================== Food Safety Owned Smart Devices Routes ====================
-  const ensureOwnedIotSchema = async () => {
+  const initializeOwnedIotSchema = async () => {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS owned_iot_devices (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -7911,6 +8028,21 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS owned_iot_device_checks_assigned_idx ON owned_iot_device_checks(assigned_device_id) WHERE assigned_device_id IS NOT NULL`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
+  };
+
+  // A request must not recreate tables/indexes and rescan historical events
+  // on every Admin, Branch or HP2 poll. Run the schema setup only once per
+  // server process, share it across simultaneous callers, and retry on failure.
+  // This avoids extra database activity without altering or deleting records.
+  let ownedIotSchemaSetup: Promise<void> | null = null;
+  const ensureOwnedIotSchema = (): Promise<void> => {
+    if (!ownedIotSchemaSetup) {
+      ownedIotSchemaSetup = initializeOwnedIotSchema().catch((error) => {
+        ownedIotSchemaSetup = null;
+        throw error;
+      });
+    }
+    return ownedIotSchemaSetup;
   };
 
   // 786.Chat: register Food Safety Owned IoT routes before any Neon call.
@@ -8356,7 +8488,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -8933,7 +9065,7 @@ Generated: ${new Date().toISOString()}
         provider: "food-safety-owned-mqtt",
         lastStatus: [
           { code: "battery_percentage", value: row.battery_pct },
-          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
           { code: "rssi", value: row.rssi },
           { code: "shock", value: Boolean(row.last_alarm_at) },
         ],
@@ -9243,7 +9375,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],

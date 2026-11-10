@@ -3,6 +3,8 @@ import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import readline from 'node:readline';
+import { createFoodSafetyJsonEventGate } from './food-safety-json-event-gate.mjs';
+import { registeredDeviceIdFromResponse } from './mqtt-device-identity.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -14,6 +16,8 @@ const required = (name) => {
 
 const apiBase = required('PEST_CONTROL_BASE_URL').replace(/\/+$/, '');
 const gatewayToken = required('FOODSAFETY_IOT_GATEWAY_TOKEN');
+// Informational legacy label ONLY. Never use this as a substitute for a
+// verified server-side device assignment, especially when API is unreachable.
 const legacyDeviceId = String(process.env.FOODSAFETY_DEVICE_ID || '').trim();
 
 const mqttHost = String(process.env.MQTT_HOST || '127.0.0.1').trim();
@@ -22,6 +26,10 @@ const legacyEventTopic = String(process.env.MQTT_EVENT_TOPIC || 'DEVICE4/trap').
 const mqttUsername = String(process.env.MQTT_USERNAME || '').trim();
 const mqttPassword = String(process.env.MQTT_PASSWORD || '').trim();
 const legacyPrefix = legacyEventTopic.split('/')[0] || '';
+// Disabled by default. Enable only after DP103 false-alarm risk, broker ACLs,
+// device identity and the physical 0->1 trap event have been verified.
+const enableFoodSafetyJsonEvents = process.env.FOODSAFETY_ENABLE_JSON_EVENTS === '1';
+const foodSafetyJsonEventGate = createFoodSafetyJsonEventGate();
 
 const states = new Map();
 const resolvedDeviceCache = new Map();
@@ -36,6 +44,8 @@ const eventForPayload = (raw) => {
 // Battery reports are usable only when the firmware explicitly sends a percentage.
 // Tuya DP enums are hardware-specific and must never be treated as percentages.
 const batteryPercent = (value) => {
+  // Missing JSON batteryPct must NOT be silently converted to a fake 0%.
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
   if (typeof value === 'string' && !/^\d{1,3}$/.test(value.trim())) return null;
   const n = Number(value);
   return Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
@@ -76,17 +86,20 @@ async function resolveAssignedDevice(prefix) {
     const response = await request('/api/iot/gateway/resolve-device?mqttPrefix=' + encodeURIComponent(prefix));
     if (response.ok) {
       const data = await response.json();
-      const id = String(data?.deviceId || '').trim();
+      const id = registeredDeviceIdFromResponse(data);
       if (id) {
         resolvedDeviceCache.set(prefix, { deviceId: id, expiresAt: Date.now() + 30000 });
         return id;
       }
+    } else {
+      console.error('[bridge] resolve-device HTTP ' + response.status + ' for MQTT prefix ' + prefix);
     }
   } catch (error) {
     console.error('[bridge] resolve failed for ' + prefix + ': ' + error.message);
   }
 
-  if (legacyDeviceId && prefix === legacyPrefix) return legacyDeviceId;
+  // Fail closed. A configurable DEVICE4 label cannot authenticate or
+  // identify Mouse #10 (or any other physical trap).
   return '';
 }
 
@@ -168,11 +181,13 @@ const topics = Array.from(new Set([
   '+/host',
   '+/ip',
   '+/rssi',
-  '+/battery',
+  // The ambiguous +/battery value can be a Tuya enum, NOT a percentage.
+  // Accept only explicit *_pct or *_percentage topics.
   '+/battery_pct',
   '+/battery_percentage',
   'fs/v1/device/+/status',
   'fs/v1/device/+/telemetry',
+  ...(enableFoodSafetyJsonEvents ? ['fs/v1/device/+/event'] : []),
 ]));
 
 // Ignore retained MQTT values on startup: old battery/online reports must not
@@ -202,13 +217,36 @@ rl.on('line', (line) => {
   const prefix = String(structuredDeviceTopic ? parts[3] : parts[0] || '').trim();
   const leaf = String(parts[parts.length - 1] || '').trim().toLowerCase();
   if (!prefix) return;
+
+  // Event messages from the recovered W003 firmware are JSON, not +/trap strings.
+  // This opt-in path uses a strict parser and requires a fresh reset->caught
+  // transition. It never forwards boot events, low-battery DP103 or retained data.
+  if (structuredDeviceTopic && leaf === 'event') {
+    if (!enableFoodSafetyJsonEvents) return;
+    const decoded = foodSafetyJsonEventGate.observe({ topic, payload, retained: false });
+    if (!decoded || (decoded.type !== 'trap_triggered' && decoded.type !== 'trap_reset')) return;
+    chain = chain.then(async () => {
+      const registeredId = await resolveAssignedDevice(decoded.deviceId);
+      if (registeredId !== decoded.deviceId) {
+        console.log('[bridge] W003 JSON event rejected: device ID is not registered and assigned');
+        return;
+      }
+      // Preserve the source event ID for gateway-side deduplication across
+      // bridge restarts; the fail-closed gate has already validated its format.
+      await postEvent(decoded.deviceId, decoded.type, topic, payload, {
+        eventId: decoded.deviceId + '-' + decoded.eventId,
+      });
+    }).catch((error) => console.error('[bridge] W003 JSON event rejected: ' + error.message));
+    return;
+  }
+
   let explicitBattery = null;
-  if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
+  if (['battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
     explicitBattery = batteryPercent(payload);
   } else if (structuredDeviceTopic && (leaf === 'status' || leaf === 'telemetry')) {
     try {
       const parsed = JSON.parse(payload);
-      if (parsed && typeof parsed === 'object' && (!parsed.deviceId || parsed.deviceId === prefix)) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.deviceId === prefix) {
         explicitBattery = batteryPercent(parsed.batteryPct ?? parsed.batteryPercentage ?? parsed.battery_percent);
       }
     } catch (_) { /* Ignore malformed and unverified payloads. */ }
@@ -233,7 +271,7 @@ rl.on('line', (line) => {
   }
 
   chain = chain.then(async () => {
-    if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) || structuredDeviceTopic && ['status', 'telemetry'].includes(leaf)) {
+    if (['battery_pct', 'battery_percentage'].includes(leaf) || structuredDeviceTopic && ['status', 'telemetry'].includes(leaf)) {
       if (explicitBattery === null) return;
       const id = await resolveAssignedDevice(prefix);
       if (!id) {

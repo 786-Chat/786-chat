@@ -160,6 +160,7 @@ import FreshSmartCheck from "@/components/FreshSmartCheck";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
+import { prepareBranchLogoUpload, uploadOriginalBranchGif } from "@/lib/branch-logo-upload";
 
 const branchSchema = z.object({
   name: z.string().min(1, "Branch name is required"),
@@ -1120,9 +1121,10 @@ export default function AdminDashboard() {
         }
       });
       
-      // Add logo file if present
-      if (branchLogoFile) {
-        formData.append('logo', branchLogoFile);
+      // GIFs are uploaded directly to private Blob *after* the branch exists.
+      // Do not put an animated GIF in the function request body or a DB data URL.
+      if (branchLogoFile && branchLogoFile.type !== 'image/gif') {
+        formData.append('logo', await prepareBranchLogoUpload(branchLogoFile));
       }
       
       const response = await fetch('/api/branches', {
@@ -1136,7 +1138,18 @@ export default function AdminDashboard() {
         throw new Error(`${response.status}: ${text}`);
       }
       
-      return response.json();
+      const created = await response.json();
+      if (branchLogoFile?.type === 'image/gif' && created?.id) {
+        try {
+          await uploadOriginalBranchGif(branchLogoFile, created.id);
+          created.logoUpdated = true;
+        } catch (error: any) {
+          // Branch registration already succeeded. Do NOT report that it
+          // failed or prompt another registration (duplicate customer risk).
+          created.logoUploadError = error?.message || 'GIF logo upload failed';
+        }
+      }
+      return created;
     },
     onSuccess: (data) => {
       console.log('✅ Branch created successfully:', data);
@@ -1152,8 +1165,9 @@ export default function AdminDashboard() {
       setBranchLogoFile(null);
       setBranchLogoPreview("");
       toast({
-        title: "Success",
-        description: `Branch "${data.name}" added successfully`,
+        title: data.logoUploadError ? "Branch saved, but GIF logo not uploaded" : "Success",
+        description: data.logoUploadError || `Branch "${data.name}" added successfully`,
+        variant: data.logoUploadError ? "destructive" : "default",
       });
     },
     onError: (error: any) => {
@@ -1285,8 +1299,8 @@ export default function AdminDashboard() {
     mutationFn: async (data: { id: string; formData: any; logoFile?: File }) => {
       let response;
       
-      if (data.logoFile) {
-        // If we have a logo file, use FormData for multipart upload
+      if (data.logoFile && data.logoFile.type !== 'image/gif') {
+        // Use FormData for PNG/JPG/WebP/SVG. GIF uses direct private Blob upload.
         const formData = new FormData();
         
         // Add all the form fields
@@ -1297,7 +1311,7 @@ export default function AdminDashboard() {
         });
         
         // Add the logo file
-        formData.append('logo', data.logoFile);
+        formData.append('logo', await prepareBranchLogoUpload(data.logoFile));
         
         response = await fetch(`/api/branches/${data.id}`, {
           method: 'PATCH',
@@ -1315,11 +1329,23 @@ export default function AdminDashboard() {
       }
       
       if (!response.ok) {
+        if (response.status === 413) throw new Error('Logo upload is too large. Please use a smaller image.');
         const text = await response.text();
         throw new Error(`${response.status}: ${text}`);
       }
       
-      return response.json();
+      const updated = await response.json();
+      if (data.logoFile?.type === 'image/gif') {
+        try {
+          await uploadOriginalBranchGif(data.logoFile, data.id);
+          updated.logoUpdated = true;
+        } catch (error: any) {
+          // Other branch edits may already be saved; preserve that fact.
+          updated.logoUpdated = false;
+          updated.logoUploadError = error?.message || 'GIF upload failed';
+        }
+      }
+      return updated;
     },
     onSuccess: (updatedBranch) => {
       console.log('✅ Branch update successful:', updatedBranch);
@@ -1344,10 +1370,12 @@ export default function AdminDashboard() {
         fileInputRef.current.value = '';
       }
       toast({
-        title: "Success",
-        description: updatedBranch?.logoUpdated 
-          ? "Branch and logo updated successfully - changes are now visible"
-          : "Branch updated successfully",
+        title: updatedBranch?.logoUploadError ? "Branch details saved; logo not uploaded" : "Success",
+        description: updatedBranch?.logoUploadError ||
+          (updatedBranch?.logoUpdated
+            ? "Branch and logo updated successfully"
+            : "Branch updated successfully"),
+        variant: updatedBranch?.logoUploadError ? "destructive" : "default",
       });
     },
     onError: (error) => {
@@ -2118,9 +2146,20 @@ export default function AdminDashboard() {
       event.target.value = "";
       return;
     }
+    // Animated GIFs must keep all frames: never offer to flatten or compress
+    // them through canvas. Reject oversized animations before submitting.
+    if (file.type === 'image/gif' && file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "Animated GIF too large",
+        description: "Animated GIFs up to 10MB upload directly, preserving their animation.",
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
 
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
-    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
+    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
     const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension)) {
       toast({
@@ -2162,7 +2201,7 @@ export default function AdminDashboard() {
     }
 
     // Validate file type - support all image formats
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       console.log('❌ Invalid file type:', file.type);
       toast({
@@ -5228,12 +5267,12 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   <input
                     type="file"
-                    accept=".png,.jpg,.jpeg,.gif,.svg,image/png,image/jpeg,image/gif,image/svg+xml"
+                    accept=".png,.jpg,.jpeg,.gif,.svg,.webp,image/png,image/jpeg,image/gif,image/svg+xml,image/webp"
                     onChange={handleLogoUpload}
                     className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                   />
                   <p className="text-xs text-slate-400">
-                    Supported formats: PNG, JPG/JPEG, GIF, SVG. Max size: 10MB
+                    PNG/JPG/WebP: auto-compressed. Animated GIF: up to 10MB, original animation kept (direct upload). SVG: max 350KB.
                   </p>
                   {branchLogoPreview && (
                     <div>
@@ -5601,15 +5640,20 @@ export default function AdminDashboard() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".png,.jpg,.jpeg,.gif,.svg,image/png,image/jpeg,image/gif,image/svg+xml"
+                      accept=".png,.jpg,.jpeg,.gif,.svg,.webp,image/png,image/jpeg,image/gif,image/svg+xml,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
-                        const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
+                        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
+                        const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
                         const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
                         if (file.size > 10 * 1024 * 1024) {
                           toast({ title: "File Too Large", description: "Logo file must be less than 10MB", variant: "destructive" });
+                          e.target.value = "";
+                          return;
+                        }
+                        if (file.type === 'image/gif' && file.size > 10 * 1024 * 1024) {
+                          toast({ title: "Animated GIF too large", description: "Animated GIFs up to 10MB upload directly, preserving their animation.", variant: "destructive" });
                           e.target.value = "";
                           return;
                         }
@@ -5623,7 +5667,7 @@ export default function AdminDashboard() {
                       className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                     />
                     <p className="text-xs text-slate-400 mt-1">
-                      Supported formats: PNG, JPG/JPEG, GIF, SVG. Max size: 10MB
+                      PNG/JPG/WebP: auto-compressed. Animated GIF: up to 10MB, original animation kept (direct upload). SVG: max 350KB.
                     </p>
                   </div>
                   
@@ -5801,7 +5845,7 @@ export default function AdminDashboard() {
                         <FormItem>
                           <FormLabel className="text-slate-300">New Password (leave blank to keep current)</FormLabel>
                           <FormControl>
-                            <Input {...field} type="password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Enter new password" />
+                            <Input {...field} type="password" autoComplete="new-password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Enter new password" />
                           </FormControl>
                           <FormMessage className="text-red-400" />
                         </FormItem>
@@ -5815,7 +5859,7 @@ export default function AdminDashboard() {
                         <FormItem>
                           <FormLabel className="text-slate-300">Confirm New Password</FormLabel>
                           <FormControl>
-                            <Input {...field} type="password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Confirm new password" />
+                            <Input {...field} type="password" autoComplete="new-password" className="bg-slate-800/50 border-slate-700 text-white" placeholder="Confirm new password" />
                           </FormControl>
                           <FormMessage className="text-red-400" />
                         </FormItem>
