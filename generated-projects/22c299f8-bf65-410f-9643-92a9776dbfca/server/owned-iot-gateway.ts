@@ -35,8 +35,10 @@ function tokenMatches(provided: string, expected: string): boolean {
 
 function integerOrNull(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean" || typeof value === "object") return null;
+  if (typeof value === "string" && !/^-?\d{1,4}$/.test(value.trim())) return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function eventValue(type: string, value: unknown): unknown {
@@ -46,6 +48,20 @@ function eventValue(type: string, value: unknown): unknown {
   if (type === "online") return true;
   if (type === "offline") return false;
   return null;
+}
+
+// Schema compatibility must not issue three ALTER TABLE statements per MQTT event.
+// Retry on failure so transient connection errors cannot permanently block reports.
+let gatewaySchemaReady: Promise<void> | undefined;
+function ensureGatewayEventColumns(): Promise<void> {
+  if (!gatewaySchemaReady) {
+    gatewaySchemaReady = (async () => {
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id uuid`);
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS friendly_name text`);
+      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS installation_location text`);
+    })().catch((error) => { gatewaySchemaReady = undefined; throw error; });
+  }
+  return gatewaySchemaReady;
 }
 
 export function registerOwnedIotGatewayRoutes(app: Express): void {
@@ -110,9 +126,7 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
         });
       }
 
-      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS branch_id uuid`);
-      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS friendly_name text`);
-      await db.execute(sql`ALTER TABLE owned_iot_events ADD COLUMN IF NOT EXISTS installation_location text`);
+      await ensureGatewayEventColumns();
 
       const suppliedEventId = String(body.eventId || body.event_id || "").trim();
       const eventId = suppliedEventId || randomUUID();
@@ -128,7 +142,11 @@ export function registerOwnedIotGatewayRoutes(app: Express): void {
       }
 
       const rssi = integerOrNull(body.rssi);
-      const batteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      const batteryInput = body.batteryPct ?? body.battery_pct;
+      // `battery` may be a Tuya DP enum (0..3), not a percentage.
+      // Only explicit 0-100 percentage fields may update the dashboard.
+      const rawBatteryPct = integerOrNull(batteryInput);
+      const batteryPct = rawBatteryPct !== null && rawBatteryPct >= 0 && rawBatteryPct <= 100 ? rawBatteryPct : null;
       const value = eventValue(type, body.value);
       const valueJson = JSON.stringify(value ?? null);
       const rawJson = JSON.stringify({
