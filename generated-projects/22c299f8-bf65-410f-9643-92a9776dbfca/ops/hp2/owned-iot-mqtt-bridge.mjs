@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import readline from 'node:readline';
 import { createFoodSafetyJsonEventGate } from './food-safety-json-event-gate.mjs';
+import { registeredDeviceIdFromResponse } from './mqtt-device-identity.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,6 +16,8 @@ const required = (name) => {
 
 const apiBase = required('PEST_CONTROL_BASE_URL').replace(/\/+$/, '');
 const gatewayToken = required('FOODSAFETY_IOT_GATEWAY_TOKEN');
+// Informational legacy label ONLY. Never use this as a substitute for a
+// verified server-side device assignment, especially when API is unreachable.
 const legacyDeviceId = String(process.env.FOODSAFETY_DEVICE_ID || '').trim();
 
 const mqttHost = String(process.env.MQTT_HOST || '127.0.0.1').trim();
@@ -83,17 +86,20 @@ async function resolveAssignedDevice(prefix) {
     const response = await request('/api/iot/gateway/resolve-device?mqttPrefix=' + encodeURIComponent(prefix));
     if (response.ok) {
       const data = await response.json();
-      const id = String(data?.deviceId || '').trim();
+      const id = registeredDeviceIdFromResponse(data);
       if (id) {
         resolvedDeviceCache.set(prefix, { deviceId: id, expiresAt: Date.now() + 30000 });
         return id;
       }
+    } else {
+      console.error('[bridge] resolve-device HTTP ' + response.status + ' for MQTT prefix ' + prefix);
     }
   } catch (error) {
     console.error('[bridge] resolve failed for ' + prefix + ': ' + error.message);
   }
 
-  if (legacyDeviceId && prefix === legacyPrefix) return legacyDeviceId;
+  // Fail closed. A configurable DEVICE4 label cannot authenticate or
+  // identify Mouse #10 (or any other physical trap).
   return '';
 }
 
