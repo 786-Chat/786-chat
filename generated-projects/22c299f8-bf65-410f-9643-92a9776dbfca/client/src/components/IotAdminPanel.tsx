@@ -1204,11 +1204,11 @@ export default function IotAdminPanel() {
                const index = activeBranchDevices.indexOf(device);
               const snap = deviceSnapshot(device.lastStatus);
               const connectivity = getMouseConnectivity(device);
-              const setupSsid = namedFactoryWifi(device.deviceName);
-              const matchingWifi = setupSsid
-                ? wifiObservations.find((observation: any) =>
-                    String(observation.hostname || "").trim().toLowerCase() === setupSsid)
-                : undefined;
+              // Prefer the explicit Smart Check -> registered device link.
+              // Factory Wi-Fi sightings never prove MQTT or restaurant Wi-Fi.
+              const matchingWifi = wifiObservations.find((observation: any) =>
+                String(observation.assignedDeviceId || "") === String(device.deviceId || "") &&
+                observation.wifiObservationSource === "hp2-wifi-scan");
               return (
                 <div key={device.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -1236,7 +1236,18 @@ export default function IotAdminPanel() {
                       <p className="text-sm text-white">{device.lastCheckedAt ? new Date(device.lastCheckedAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No MQTT report yet"}</p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-400">Wi-Fi setup sightings are managed in Smart Check. {device.notes ? "Installation: " + device.notes : ""}</p>
+                  {matchingWifi ? (
+                    <div className="mt-3 rounded-lg border border-cyan-500/25 bg-cyan-950/15 p-3 text-xs text-slate-200">
+                      <p className="font-semibold text-cyan-200">HP2 pairing Wi-Fi observation (historical, NOT MQTT)</p>
+                      <p className="mt-1 break-all">Wi-Fi ID: {String(matchingWifi.hostname || "Not reported")}</p>
+                      <p className="mt-1 break-all">Observed AP MAC: {String(matchingWifi.macAddress || "Not reported")}</p>
+                      <p className="mt-1">Last HP2 sighting: {matchingWifi.lastSeenAt ? new Date(matchingWifi.lastSeenAt).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "Unknown"}</p>
+                      <p className="mt-1 text-amber-200">Router Wi-Fi, physical MQTT, battery and trap alarm are NOT verified by this observation.</p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-400">No saved HP2 pairing Wi-Fi sighting is linked to this device.</p>
+                  )}
+                  {device.notes && <p className="mt-2 text-xs text-slate-400">Installation: {device.notes}</p>}
                   {editingDeviceId === String(device.id) && (
                     <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
                       <div className="mb-3 flex items-center justify-between gap-2">
