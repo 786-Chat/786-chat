@@ -175,7 +175,8 @@ const topics = Array.from(new Set([
   '+/host',
   '+/ip',
   '+/rssi',
-  '+/battery',
+  // The ambiguous +/battery value can be a Tuya enum, NOT a percentage.
+  // Accept only explicit *_pct or *_percentage topics.
   '+/battery_pct',
   '+/battery_percentage',
   'fs/v1/device/+/status',
@@ -234,12 +235,12 @@ rl.on('line', (line) => {
   }
 
   let explicitBattery = null;
-  if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
+  if (['battery_pct', 'battery_percentage'].includes(leaf) && !structuredDeviceTopic) {
     explicitBattery = batteryPercent(payload);
   } else if (structuredDeviceTopic && (leaf === 'status' || leaf === 'telemetry')) {
     try {
       const parsed = JSON.parse(payload);
-      if (parsed && typeof parsed === 'object' && (!parsed.deviceId || parsed.deviceId === prefix)) {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.deviceId === prefix) {
         explicitBattery = batteryPercent(parsed.batteryPct ?? parsed.batteryPercentage ?? parsed.battery_percent);
       }
     } catch (_) { /* Ignore malformed and unverified payloads. */ }
@@ -264,7 +265,7 @@ rl.on('line', (line) => {
   }
 
   chain = chain.then(async () => {
-    if (['battery', 'battery_pct', 'battery_percentage'].includes(leaf) || structuredDeviceTopic && ['status', 'telemetry'].includes(leaf)) {
+    if (['battery_pct', 'battery_percentage'].includes(leaf) || structuredDeviceTopic && ['status', 'telemetry'].includes(leaf)) {
       if (explicitBattery === null) return;
       const id = await resolveAssignedDevice(prefix);
       if (!id) {
