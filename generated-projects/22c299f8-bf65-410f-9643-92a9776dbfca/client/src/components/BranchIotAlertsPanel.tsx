@@ -28,6 +28,7 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
   const [history, setHistory] = useState<any[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
   const [stoppedKeys, setStoppedKeys] = useState<Set<string>>(new Set());
   const [deleteArmedId, setDeleteArmedId] = useState<string | number | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
@@ -47,6 +48,9 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
       if (deviceRes.ok) {
         const data = await deviceRes.json();
         setDevices(Array.isArray(data) ? data : []);
+        setDeviceError(null);
+      } else {
+        setDeviceError(deviceRes.status === 401 ? "Branch session expired. Sign in again to view assigned devices." : `Unable to load branch devices (HTTP ${deviceRes.status}). Please refresh or contact the administrator.`);
       }
       if (historyRes.ok) {
         const data = await historyRes.json();
@@ -57,6 +61,9 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
         setHiddenHistoryIds(new Set(Array.isArray(data) ? data.map(String) : []));
       }
       setStoppedKeys(readAcknowledgedKeys());
+    } catch (error) {
+      setDeviceError("Could not contact the branch device service. Please try again.");
+      console.error("Branch device/alert load failed:", error);
     } finally {
       setLoading(false);
     }
@@ -150,18 +157,19 @@ export default function BranchIotAlertsPanel({ onOpenDevices }: BranchIotAlertsP
         </div>
       </div>
 
+      {deviceError && <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">{deviceError}</div>}
       {loading ? (
         <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-10 text-center text-slate-400">Checking device alarms…</div>
-      ) : alarms.length === 0 ? (
-        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6">
+      ) : deviceError ? null : alarms.length === 0 ? (
+        <div className={`rounded-2xl border p-6 ${devices.length ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" />
+            {devices.length ? <CheckCircle2 className="mt-0.5 h-6 w-6 flex-shrink-0 text-emerald-300" /> : <Wifi className="mt-0.5 h-6 w-6 flex-shrink-0 text-amber-300" />}
             <div>
-              <h3 className="font-bold text-emerald-100">Ready</h3>
-              <p className="mt-1 text-sm text-emerald-200/80">
+              <h3 className={`font-bold ${devices.length ? "text-emerald-100" : "text-amber-100"}`}>{devices.length ? "No active catch alarm" : "No assigned devices found"}</h3>
+              <p className="mt-1 text-sm text-slate-200">
                 {devices.length
                   ? `All ${devices.length} assigned device${devices.length === 1 ? "" : "s"} are ready. ${offlineCount ? `${offlineCount} device${offlineCount === 1 ? " is" : "s are"} not currently connected.` : ""}`
-                  : "No smart devices are assigned to this branch yet."}
+                  : "No devices were returned for this signed-in branch. Check the saved branch assignment in Admin → Smart Devices; Wi-Fi sightings alone are not assigned devices."}
               </p>
             </div>
           </div>
