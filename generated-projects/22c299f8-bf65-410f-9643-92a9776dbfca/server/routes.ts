@@ -2261,6 +2261,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
       // Keep ordinary branch edits saveable even if logo persistence fails.
       // The existing logo is retained when a logo-specific error occurs.
       const uploadedLogo = req.file;
+      let logoSaved = false;
       if (uploadedLogo) {
         try {
           const objectStorageService = new ObjectStorageService();
@@ -2272,6 +2273,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
           });
 
           updateData.logoUrl = logoUrl;
+          logoSaved = true;
           console.log(`✅ Logo uploaded for branch ${branchId}: ${logoUrl}`);
         } catch (logoError) {
           console.warn(`⚠️ Branch logo update failed for ${branchId}; saving other branch changes with the existing logo:`, logoError);
@@ -2348,7 +2350,7 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
         finalLogoUrl: branch.logoUrl 
       });
       
-      res.json({ ...branch, password: undefined, logoUpdated: !!req.file });
+      res.json({ ...branch, password: undefined, logoUpdated: logoSaved });
     } catch (error) {
       console.error("Error updating branch:", error);
       res.status(500).json({ message: "Failed to update branch" });
