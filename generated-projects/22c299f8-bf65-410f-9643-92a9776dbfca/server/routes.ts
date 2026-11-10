@@ -541,18 +541,18 @@ const logoUpload = multer({
   }),
   fileFilter: (req, file, cb) => {
     // Branch logos intentionally support the formats used by the original app.
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml'];
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp'];
 
     if (allowedTypes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid logo type. Only PNG, JPG/JPEG, GIF and SVG files are allowed.'));
+      cb(new Error('Invalid logo type. Only PNG, JPG/JPEG, GIF, SVG and WebP files are allowed.'));
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB branch-logo limit
+    fileSize: 3 * 1024 * 1024 // keep multipart upload below the Vercel 4.5MB function request limit
   }
 });
 
@@ -563,7 +563,7 @@ const uploadLogoSafe = (req: any, res: any, next: any) => {
     if (err) {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
-          message: 'Logo file is too large. Maximum size is 10MB.'
+          message: 'Logo file is too large for this upload. Maximum size is 3MB. Please use a smaller image.'
         });
       }
       return res.status(400).json({ message: err.message || 'Logo upload failed' });
