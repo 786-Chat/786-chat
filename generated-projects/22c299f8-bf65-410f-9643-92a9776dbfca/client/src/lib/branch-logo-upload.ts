@@ -70,36 +70,56 @@ export async function prepareBranchLogoUpload(file: File): Promise<File> {
 }
 
 /**
- * Upload original GIF frames straight to private Blob storage, then link the
- * completed file to the existing branch. Never transmit GIF bytes as JSON.
+ * Preserve original GIF bytes and animation. Upload in 1MB authenticated
+ * pieces, then ask the server to combine them in PRIVATE Blob storage.
+ * Individual Function requests never hit Vercel's 4.5MB payload limit.
+ * A failed upload does not change the existing branch logo.
  */
 export async function uploadOriginalBranchGif(file: File, branchId: string): Promise<void> {
   if (file.type !== "image/gif" || file.size <= 0 || file.size > MAX_ANIMATED_GIF_BYTES) {
-    throw new Error("Please choose a GIF no larger than 10 MB.");
+    throw new Error("Choose an original animated GIF up to 10 MB.");
   }
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId)) {
     throw new Error("Invalid branch ID for logo upload.");
   }
-  const { upload } = await import("@vercel/blob/client");
-  const pathname = `pest-control/${branchId}/logos/${crypto.randomUUID()}.gif`;
-  const uploaded = await upload(pathname, file, {
-    access: "private",
-    handleUploadUrl: "/api/admin/branch-logo-direct-upload",
-    clientPayload: JSON.stringify({ branchId }),
-    contentType: "image/gif",
-    multipart: file.size > 5 * 1024 * 1024,
-  });
-  if (uploaded.pathname !== pathname) {
-    throw new Error("Could not verify the uploaded logo path.");
-  }
-  const response = await fetch(`/api/branches/${branchId}/logo/finalize`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pathname: uploaded.pathname }),
-  });
-  if (!response.ok) {
-    const detail = await response.json().catch(() => ({}));
-    throw new Error(detail.message || "GIF uploaded but its branch attachment could not be confirmed. Do not register the shop again.");
+  const chunkBytes = 1024 * 1024;
+  const partsCount = Math.ceil(file.size / chunkBytes);
+  const uploadId = crypto.randomUUID();
+  let completed = false;
+  try {
+    for (let index = 0; index < partsCount; index++) {
+      const chunk = file.slice(index * chunkBytes, Math.min(file.size, (index + 1) * chunkBytes));
+      const response = await fetch(
+        "/api/branches/" + branchId + "/logo/gif-chunk/" + uploadId + "/" + index,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: chunk,
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Animated GIF upload failed at part " + (index + 1) + " of " + partsCount + ". Your branch record is preserved.");
+      }
+    }
+    const response = await fetch("/api/branches/" + branchId + "/logo/gif-complete", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId, totalSize: file.size, partsCount }),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.message || "GIF could not be saved. Your existing shop record is preserved.");
+    }
+    completed = true;
+  } finally {
+    if (!completed) {
+      // Best-effort cleanup of incomplete chunks; never erase an existing logo.
+      await fetch("/api/branches/" + branchId + "/logo/gif-chunks/" + uploadId, {
+        method: "DELETE",
+        credentials: "include",
+      }).catch(() => undefined);
+    }
   }
 }
