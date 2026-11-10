@@ -5,6 +5,9 @@
  */
 const TARGET_BYTES = 350 * 1024;
 const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
+// GIF frames must never be rendered onto a canvas, which would flatten animation.
+// Limit original GIF bytes so Vercel + database-backed logo JSON responses stay small.
+export const MAX_ANIMATED_GIF_BYTES = 2 * 1024 * 1024;
 const RASTER_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]);
 const ALLOWED_TYPES = new Set([...RASTER_TYPES, "image/svg+xml"]);
 
@@ -14,6 +17,14 @@ export async function prepareBranchLogoUpload(file: File): Promise<File> {
   }
   if (file.size > MAX_ORIGINAL_BYTES) {
     throw new Error("The original logo is over 10 MB. Please resize it before uploading.");
+  }
+  // Preserve *all* frames and timing. ImageBitmap/canvas only reads the first
+  // animated GIF frame, so an animated GIF must go through unchanged.
+  if (file.type === "image/gif") {
+    if (file.size > MAX_ANIMATED_GIF_BYTES) {
+      throw new Error("Animated GIF exceeds 2 MB. Please optimise the GIF to 2 MB or less; converting it to JPG/PNG would remove its animation.");
+    }
+    return file;
   }
   // Small existing formats remain unchanged, including transparent SVG.
   if (file.size <= TARGET_BYTES) return file;
