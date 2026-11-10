@@ -2120,6 +2120,17 @@ export default function AdminDashboard() {
       event.target.value = "";
       return;
     }
+    // Animated GIFs must keep all frames: never offer to flatten or compress
+    // them through canvas. Reject oversized animations before submitting.
+    if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "Animated GIF too large",
+        description: "Please optimise the animated GIF to 2MB or less. Its animation will be preserved.",
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
 
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
     const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
@@ -5235,7 +5246,7 @@ export default function AdminDashboard() {
                     className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                   />
                   <p className="text-xs text-slate-400">
-                    PNG, JPG/JPEG, GIF, SVG or WebP. Up to 10MB original; large images are compressed automatically before upload.
+                    PNG/JPG/WebP: auto-compressed if large. Animated GIF: max 2MB, animation preserved. SVG: max 350KB.
                   </p>
                   {branchLogoPreview && (
                     <div>
@@ -5615,6 +5626,11 @@ export default function AdminDashboard() {
                           e.target.value = "";
                           return;
                         }
+                        if (file.type === 'image/gif' && file.size > 2 * 1024 * 1024) {
+                          toast({ title: "Animated GIF too large", description: "Optimise your animated GIF to 2MB or less. Animation will remain intact.", variant: "destructive" });
+                          e.target.value = "";
+                          return;
+                        }
                         if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension)) {
                           toast({ title: "Invalid File Type", description: "Please select PNG, JPG/JPEG, GIF or SVG", variant: "destructive" });
                           e.target.value = "";
@@ -5625,7 +5641,7 @@ export default function AdminDashboard() {
                       className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                     />
                     <p className="text-xs text-slate-400 mt-1">
-                      PNG, JPG/JPEG, GIF, SVG or WebP. Up to 10MB original; large images are compressed automatically before upload.
+                      PNG/JPG/WebP: auto-compressed if large. Animated GIF: max 2MB, animation preserved. SVG: max 350KB.
                     </p>
                   </div>
                   
