@@ -7820,7 +7820,7 @@ Generated: ${new Date().toISOString()}
   });
 
   // ==================== Food Safety Owned Smart Devices Routes ====================
-  const ensureOwnedIotSchema = async () => {
+  const initializeOwnedIotSchema = async () => {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS owned_iot_devices (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -7913,6 +7913,21 @@ Generated: ${new Date().toISOString()}
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_device_checks_mqtt_idx ON owned_iot_device_checks(mqtt_prefix)`);
     await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS owned_iot_device_checks_assigned_idx ON owned_iot_device_checks(assigned_device_id) WHERE assigned_device_id IS NOT NULL`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS owned_iot_events_device_time_idx ON owned_iot_events(device_id, event_at DESC)`);
+  };
+
+  // A request must not recreate tables/indexes and rescan historical events
+  // on every Admin, Branch or HP2 poll. Run the schema setup only once per
+  // server process, share it across simultaneous callers, and retry on failure.
+  // This avoids extra database activity without altering or deleting records.
+  let ownedIotSchemaSetup: Promise<void> | null = null;
+  const ensureOwnedIotSchema = (): Promise<void> => {
+    if (!ownedIotSchemaSetup) {
+      ownedIotSchemaSetup = initializeOwnedIotSchema().catch((error) => {
+        ownedIotSchemaSetup = null;
+        throw error;
+      });
+    }
+    return ownedIotSchemaSetup;
   };
 
   // 786.Chat: register Food Safety Owned IoT routes before any Neon call.
