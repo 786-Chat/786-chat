@@ -1050,13 +1050,14 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
       }
 
       const integerOrNull = (value: unknown): number | null => {
-        if (value === null || value === undefined || value === "") return null;
+        if (value === null || value === undefined || value === "" || typeof value === "boolean" || typeof value === "object") return null;
+        if (typeof value === "string" && !/^-?\d{1,4}$/.test(value.trim())) return null;
         const parsed = Number(value);
-        return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+        return Number.isSafeInteger(parsed) ? parsed : null;
       };
 
       const rssi = integerOrNull(body.rssi);
-      const rawBatteryPct = integerOrNull(body.batteryPct ?? body.battery_pct ?? body.battery);
+      const rawBatteryPct = integerOrNull(body.batteryPct ?? body.battery_pct);
       // Only store genuine 0–100% telemetry; never turn a Tuya DP enum or
       // Wi-Fi signal reading into a battery percentage.
       const batteryPct = rawBatteryPct !== null && rawBatteryPct >= 0 && rawBatteryPct <= 100 ? rawBatteryPct : null;
