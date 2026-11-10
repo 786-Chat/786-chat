@@ -5,9 +5,9 @@
  */
 const TARGET_BYTES = 350 * 1024;
 const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
-// GIF frames must never be rendered onto a canvas, which would flatten animation.
-// Limit original GIF bytes so Vercel + database-backed logo JSON responses stay small.
-export const MAX_ANIMATED_GIF_BYTES = 2 * 1024 * 1024;
+// Larger GIFs are sent directly to private Blob storage so animation stays intact
+// without putting the raw file in a function request or database JSON response.
+export const MAX_ANIMATED_GIF_BYTES = 10 * 1024 * 1024;
 const RASTER_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]);
 const ALLOWED_TYPES = new Set([...RASTER_TYPES, "image/svg+xml"]);
 
@@ -22,7 +22,7 @@ export async function prepareBranchLogoUpload(file: File): Promise<File> {
   // animated GIF frame, so an animated GIF must go through unchanged.
   if (file.type === "image/gif") {
     if (file.size > MAX_ANIMATED_GIF_BYTES) {
-      throw new Error("Animated GIF exceeds 2 MB. Please optimise the GIF to 2 MB or less; converting it to JPG/PNG would remove its animation.");
+      throw new Error("Animated GIF is over 10 MB. Please optimise the animation before uploading; converting it to JPG/PNG would remove its animation.");
     }
     return file;
   }
@@ -66,5 +66,40 @@ export async function prepareBranchLogoUpload(file: File): Promise<File> {
     throw new Error("Could not make this logo small enough. Please resize it to 500 × 500 pixels and try again.");
   } finally {
     bitmap.close();
+  }
+}
+
+/**
+ * Upload original GIF frames straight to private Blob storage, then link the
+ * completed file to the existing branch. Never transmit GIF bytes as JSON.
+ */
+export async function uploadOriginalBranchGif(file: File, branchId: string): Promise<void> {
+  if (file.type !== "image/gif" || file.size <= 0 || file.size > MAX_ANIMATED_GIF_BYTES) {
+    throw new Error("Please choose a GIF no larger than 10 MB.");
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId)) {
+    throw new Error("Invalid branch ID for logo upload.");
+  }
+  const { upload } = await import("@vercel/blob/client");
+  const pathname = `pest-control/${branchId}/logos/${crypto.randomUUID()}.gif`;
+  const uploaded = await upload(pathname, file, {
+    access: "private",
+    handleUploadUrl: "/api/admin/branch-logo-direct-upload",
+    clientPayload: JSON.stringify({ branchId }),
+    contentType: "image/gif",
+    multipart: file.size > 5 * 1024 * 1024,
+  });
+  if (uploaded.pathname !== pathname) {
+    throw new Error("Could not verify the uploaded logo path.");
+  }
+  const response = await fetch(`/api/branches/${branchId}/logo/finalize`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pathname: uploaded.pathname }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.message || "GIF uploaded but its branch attachment could not be confirmed. Do not register the shop again.");
   }
 }
