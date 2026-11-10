@@ -160,6 +160,7 @@ import FreshSmartCheck from "@/components/FreshSmartCheck";
 
 import SmartLifeAdminPanel from "@/components/SmartLifeAdminPanel";
 import PDFViewer from "@/components/PDFViewer";
+import { prepareBranchLogoUpload } from "@/lib/branch-logo-upload";
 
 const branchSchema = z.object({
   name: z.string().min(1, "Branch name is required"),
@@ -1122,7 +1123,7 @@ export default function AdminDashboard() {
       
       // Add logo file if present
       if (branchLogoFile) {
-        formData.append('logo', branchLogoFile);
+        formData.append('logo', await prepareBranchLogoUpload(branchLogoFile));
       }
       
       const response = await fetch('/api/branches', {
@@ -1297,7 +1298,7 @@ export default function AdminDashboard() {
         });
         
         // Add the logo file
-        formData.append('logo', data.logoFile);
+        formData.append('logo', await prepareBranchLogoUpload(data.logoFile));
         
         response = await fetch(`/api/branches/${data.id}`, {
           method: 'PATCH',
@@ -1315,6 +1316,7 @@ export default function AdminDashboard() {
       }
       
       if (!response.ok) {
+        if (response.status === 413) throw new Error('Logo upload is too large. Please use a smaller image.');
         const text = await response.text();
         throw new Error(`${response.status}: ${text}`);
       }
@@ -2119,8 +2121,8 @@ export default function AdminDashboard() {
       return;
     }
 
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
-    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
+    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
     const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension)) {
       toast({
@@ -2162,7 +2164,7 @@ export default function AdminDashboard() {
     }
 
     // Validate file type - support all image formats
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       console.log('❌ Invalid file type:', file.type);
       toast({
@@ -5228,12 +5230,12 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   <input
                     type="file"
-                    accept=".png,.jpg,.jpeg,.gif,.svg,image/png,image/jpeg,image/gif,image/svg+xml"
+                    accept=".png,.jpg,.jpeg,.gif,.svg,.webp,image/png,image/jpeg,image/gif,image/svg+xml,image/webp"
                     onChange={handleLogoUpload}
                     className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                   />
                   <p className="text-xs text-slate-400">
-                    Supported formats: PNG, JPG/JPEG, GIF, SVG. Max size: 10MB
+                    PNG, JPG/JPEG, GIF, SVG or WebP. Up to 10MB original; large images are compressed automatically before upload.
                   </p>
                   {branchLogoPreview && (
                     <div>
@@ -5601,12 +5603,12 @@ export default function AdminDashboard() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".png,.jpg,.jpeg,.gif,.svg,image/png,image/jpeg,image/gif,image/svg+xml"
+                      accept=".png,.jpg,.jpeg,.gif,.svg,.webp,image/png,image/jpeg,image/gif,image/svg+xml,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml'];
-                        const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg'];
+                        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/svg+xml', 'image/webp'];
+                        const allowedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
                         const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
                         if (file.size > 10 * 1024 * 1024) {
                           toast({ title: "File Too Large", description: "Logo file must be less than 10MB", variant: "destructive" });
@@ -5623,7 +5625,7 @@ export default function AdminDashboard() {
                       className="w-full text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-500 file:text-white hover:file:bg-orange-600 file:cursor-pointer cursor-pointer bg-slate-800/50 border border-slate-700 rounded-lg"
                     />
                     <p className="text-xs text-slate-400 mt-1">
-                      Supported formats: PNG, JPG/JPEG, GIF, SVG. Max size: 10MB
+                      PNG, JPG/JPEG, GIF, SVG or WebP. Up to 10MB original; large images are compressed automatically before upload.
                     </p>
                   </div>
                   
