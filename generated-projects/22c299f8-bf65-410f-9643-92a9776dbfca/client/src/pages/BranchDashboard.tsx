@@ -1674,9 +1674,14 @@ export default function BranchDashboard() {
         { id: "pest-control-docs", label: "Pest Control Docs", icon: FileText },
         { id: "monthly-reports", label: "Monthly Reports", icon: Calendar },
         { id: "yearly-docs", label: "Yearly Docs", icon: Archive },
-        { id: "useful-links", label: "Useful Links", icon: LinkIcon },
-        { id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell },
-        { id: "smart-devices", label: "Smart Devices", icon: Shield }
+        { id: "useful-links", label: "Useful Links", icon: LinkIcon }
+      ]
+    },
+    {
+      category: "PEST CONTROL TOOLS",
+      items: [
+        { id: "smart-devices", label: "Smart Devices", icon: Shield },
+        { id: "device-alerts", label: branchIotAlarms.length ? `Device Alerts (${branchIotAlarms.length})` : "Device Alerts", icon: Bell }
       ]
     },
     {
