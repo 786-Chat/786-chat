@@ -2178,76 +2178,115 @@ app.post(["/api/iot/gateway/events", "/api/iot/cloud/events"], async (req, res) 
   });
 
 
-  // Large animated GIF logos upload directly from the browser to private Blob.
-  // Admin authentication is required for the token, while Vercel validates
-  // its signed upload-completion webhook without browser cookies.
-  app.post('/api/admin/branch-logo-direct-upload', async (req: any, res: any) => {
-    const handle = async () => {
-      try {
-        const { handleUpload } = await import('@vercel/blob/client');
-        const result = await handleUpload({
-          body: req.body,
-          request: req,
-          onBeforeGenerateToken: async (pathname: string, clientPayload: string) => {
-            const parsed = JSON.parse(String(clientPayload || '{}'));
-            const branchId = String(parsed.branchId || '');
-            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId)) {
-              throw new Error('Invalid branch for GIF logo');
-            }
-            if (!await storage.getBranch(branchId)) throw new Error('Branch not found');
-            const pathPattern = new RegExp('^pest-control/' + branchId + '/logos/[0-9a-f-]{36}\\.gif$', 'i');
-            if (!pathPattern.test(pathname)) throw new Error('Invalid GIF logo pathname');
-            return {
-              allowedContentTypes: ['image/gif'],
-              maximumSizeInBytes: 10 * 1024 * 1024,
-              addRandomSuffix: false,
-              tokenPayload: JSON.stringify({ branchId }),
-            };
-          },
-          // Link the blob to a branch only after a separate admin-validated
-          // finalize call has checked that the private file exists.
-          onUploadCompleted: async () => {},
-        });
-        return res.json(result);
-      } catch (error: any) {
-        console.error('Signed GIF logo upload failed:', error?.message || error);
-        return res.status(400).json({ message: error?.message || 'Cannot upload GIF logo' });
-      }
-    };
-    if (req.body?.type === 'blob.generate-client-token') {
-      return isAdminAuthenticated(req, res, handle);
-    }
-    if (req.body?.type === 'blob.upload-completed') {
-      return handle();
-    }
-    return res.status(400).json({ message: 'Unsupported upload request' });
-  });
 
-  app.post('/api/branches/:id/logo/finalize', isAdminAuthenticated, async (req, res) => {
+  // Large animated GIF logos use small, authenticated HTTP chunks. Each
+  // Function request stays below 4.5MB; the original GIF is reassembled into
+  // PRIVATE Blob storage server-side. No raw bytes are persisted in branch
+  // records, and no browser-side canvas flattens the animation.
+  const originalGifChunkBytes = 1024 * 1024;
+  const originalGifMaxBytes = 10 * 1024 * 1024;
+  const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const privateGifChunkPath = (branchId: string, uploadId: string, index: number) =>
+    'pest-control/' + branchId + '/logos/pending/' + uploadId + '/part-' + index + '.bin';
+
+  app.put('/api/branches/:id/logo/gif-chunk/:uploadId/:part',
+    isAdminAuthenticated,
+    express.raw({ type: 'application/octet-stream', limit: '1100kb' }),
+    async (req: any, res) => {
+      try {
+        const branchId = String(req.params.id || '');
+        const uploadId = String(req.params.uploadId || '');
+        const index = Number(req.params.part);
+        if (!isUuid(branchId) || !isUuid(uploadId) || !Number.isInteger(index) || index < 0 || index > 9) {
+          return res.status(400).json({ message: 'Invalid GIF upload session' });
+        }
+        if (!await storage.getBranch(branchId)) return res.status(404).json({ message: 'Branch not found' });
+        if (!Buffer.isBuffer(req.body) || req.body.length <= 0 || req.body.length > originalGifChunkBytes) {
+          return res.status(400).json({ message: 'Invalid GIF chunk size' });
+        }
+        const { put } = await import('@vercel/blob');
+        await put(privateGifChunkPath(branchId, uploadId, index), req.body, {
+          access: 'private',
+          contentType: 'application/octet-stream',
+          addRandomSuffix: false,
+        });
+        return res.json({ ok: true, part: index });
+      } catch (error: any) {
+        console.error('Could not upload private GIF chunk:', error?.message || error);
+        return res.status(500).json({ message: 'GIF chunk upload failed' });
+      }
+    });
+
+  app.post('/api/branches/:id/logo/gif-complete', isAdminAuthenticated, async (req: any, res) => {
     try {
       const branchId = String(req.params.id || '');
-      const pathname = String(req.body?.pathname || '');
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId)) {
-        return res.status(400).json({ message: 'Invalid branch ID' });
+      const uploadId = String(req.body?.uploadId || '');
+      const totalSize = Number(req.body?.totalSize);
+      const partsCount = Number(req.body?.partsCount);
+      if (!isUuid(branchId) || !isUuid(uploadId) ||
+          !Number.isSafeInteger(totalSize) || totalSize < 1 || totalSize > originalGifMaxBytes ||
+          !Number.isInteger(partsCount) || partsCount < 1 ||
+          partsCount !== Math.ceil(totalSize / originalGifChunkBytes)) {
+        return res.status(400).json({ message: 'Invalid GIF upload completion data' });
       }
-      const pathPattern = new RegExp('^pest-control/' + branchId + '/logos/[0-9a-f-]{36}\\.gif$', 'i');
-      if (!pathPattern.test(pathname)) {
-        return res.status(400).json({ message: 'Invalid GIF logo path' });
+      if (!await storage.getBranch(branchId)) return res.status(404).json({ message: 'Branch not found' });
+      const { get, put, del } = await import('@vercel/blob');
+      const paths: string[] = [];
+      const buffers: Buffer[] = [];
+      for (let i = 0; i < partsCount; i += 1) {
+        const pathname = privateGifChunkPath(branchId, uploadId, i);
+        const piece = await get(pathname, { access: 'private' });
+        if (!piece || piece.statusCode !== 200) {
+          return res.status(409).json({ message: 'GIF upload is incomplete. Please retry.' });
+        }
+        const fragments: Buffer[] = [];
+        for await (const part of piece.stream as any) {
+          fragments.push(Buffer.isBuffer(part) ? part : Buffer.from(part));
+        }
+        const bytes = Buffer.concat(fragments);
+        const expectedBytes = Math.min(originalGifChunkBytes, totalSize - i * originalGifChunkBytes);
+        if (bytes.length !== expectedBytes) {
+          return res.status(400).json({ message: 'GIF upload chunk size does not match' });
+        }
+        buffers.push(bytes);
+        paths.push(pathname);
       }
-      if (!await storage.getBranch(branchId)) {
-        return res.status(404).json({ message: 'Branch not found' });
+      const originalGif = Buffer.concat(buffers);
+      const signature = originalGif.subarray(0, 6).toString('ascii');
+      if (originalGif.length !== totalSize || (signature !== 'GIF87a' && signature !== 'GIF89a')) {
+        return res.status(400).json({ message: 'Uploaded file is not a valid GIF' });
       }
-      const { head } = await import('@vercel/blob');
-      const blob = await head(pathname, { access: 'private' });
-      if (!blob || blob.contentType !== 'image/gif' || Number(blob.size) > 10 * 1024 * 1024 || Number(blob.size) <= 0) {
-        return res.status(400).json({ message: 'Uploaded GIF not verified' });
-      }
+      const pathname = 'pest-control/' + branchId + '/logos/' + randomUUID() + '.gif';
+      await put(pathname, originalGif, {
+        access: 'private',
+        contentType: 'image/gif',
+        addRandomSuffix: false,
+      });
       const logoUrl = '/objects/vercel/' + encodeURIComponent(pathname);
-      const updated = await storage.updateBranch(branchId, { logoUrl });
-      return res.json({ success: true, logoUpdated: true, branchId: updated.id });
+      await storage.updateBranch(branchId, { logoUrl });
+      // Temporary private chunks are removed only after durable attachment.
+      try { await del(paths); } catch (cleanupError: any) {
+        console.warn('GIF uploaded; old private chunks need cleanup:', cleanupError?.message || cleanupError);
+      }
+      return res.json({ success: true, logoUpdated: true, branchId });
     } catch (error: any) {
-      console.error('Could not attach private GIF logo:', error?.message || error);
-      return res.status(500).json({ message: 'GIF upload could not be attached to this branch' });
+      console.error('Cannot complete private GIF upload:', error?.message || error);
+      return res.status(500).json({ message: 'Could not save animated GIF. Existing branch logo was preserved.' });
+    }
+  });
+
+  app.delete('/api/branches/:id/logo/gif-chunks/:uploadId', isAdminAuthenticated, async (req: any, res) => {
+    try {
+      const branchId = String(req.params.id || '');
+      const uploadId = String(req.params.uploadId || '');
+      if (!isUuid(branchId) || !isUuid(uploadId)) return res.sendStatus(400);
+      if (!await storage.getBranch(branchId)) return res.sendStatus(404);
+      const { del } = await import('@vercel/blob');
+      await Promise.allSettled(Array.from({ length: 10 }, (_, i) =>
+        del(privateGifChunkPath(branchId, uploadId, i))));
+      return res.json({ success: true });
+    } catch (error: any) {
+      return res.status(500).json({ message: 'Could not clean up incomplete GIF upload' });
     }
   });
 
