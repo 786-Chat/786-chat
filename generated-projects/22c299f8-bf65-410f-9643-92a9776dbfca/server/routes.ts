@@ -30,6 +30,7 @@ import { z } from "zod";
 import { db } from "./db.js";
 import { sql } from "drizzle-orm";
 import { registerSmartLifeRoutes } from "./smartlife-routes.js";
+import { ownedIotDisplayStatus } from "./owned-iot-display-status.mjs";
 
 // Parameter validation schemas
 const idParamSchema = z.object({
@@ -8357,7 +8358,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
@@ -8934,7 +8935,7 @@ Generated: ${new Date().toISOString()}
         provider: "food-safety-owned-mqtt",
         lastStatus: [
           { code: "battery_percentage", value: row.battery_pct },
-          { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+          { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
           { code: "rssi", value: row.rssi },
           { code: "shock", value: Boolean(row.last_alarm_at) },
         ],
@@ -9244,7 +9245,7 @@ Generated: ${new Date().toISOString()}
           provider: "food-safety-owned-mqtt",
           lastStatus: [
             { code: "battery_percentage", value: row.battery_pct },
-            { code: "status", value: isOnline ? "online" : (row.last_seen_at ? "offline" : (row.lifecycle_state || "awaiting_activation")) },
+            { code: "status", value: ownedIotDisplayStatus({ branchId: row.branch_id, isOnline, lastSeenAt: row.last_seen_at, lifecycleState: row.lifecycle_state }) },
             { code: "rssi", value: row.rssi },
             { code: "shock", value: Boolean(row.last_alarm_at) },
           ],
