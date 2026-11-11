@@ -234,7 +234,7 @@ export default function SmartLifeAdminPanel({mode}:{mode:"check"|"devices"}) {
   const displayed=devices.filter(d=>[d.name,d.deviceCode,d.installationArea].some(v=>v.toLowerCase().includes(deviceFilter.toLowerCase())));
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 text-white">
+    <div className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-white">
       <div className="rounded-2xl border border-blue-500/30 bg-slate-900/70 p-5">
         <h2 className="flex items-center gap-2 text-2xl font-bold">
           {mode==="check"?<Smartphone className="h-6 w-6 text-cyan-300"/>:<Wifi className="h-6 w-6 text-cyan-300"/>}
