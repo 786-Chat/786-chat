@@ -266,7 +266,7 @@ export default function FreshSmartCheck(){
    toast({title:"Registration deleted"});await refresh();
   }catch(e:any){setError(String(e?.message||e));}finally{setBusy(false);}
  };
- return <main className="mx-auto max-w-5xl space-y-5 text-white">
+ return <main className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-white">
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
    <div className="flex flex-wrap items-center justify-between gap-3">
     <div><h2 className="text-2xl font-bold">Smart Check</h2><p className="mt-1 text-sm text-slate-300">One installation form · restaurant Wi-Fi · physical mouse detection · saved card</p></div>
