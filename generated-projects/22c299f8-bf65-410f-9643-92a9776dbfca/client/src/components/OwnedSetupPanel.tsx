@@ -189,7 +189,7 @@ export default function OwnedSetupPanel(){
   }catch(e:any){setDeleteError(String(e?.message||e));}
   finally{setDeleting(false);}
  };
- return <main className="mx-auto max-w-5xl space-y-5 text-white">
+ return <main className="mx-auto w-full min-w-0 max-w-[1500px] space-y-5 text-white">
   <header className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-5">
    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-bold">Smart Devices</h2><p className="mt-1 text-sm text-slate-300">Saved mouse registrations · {live.length} currently reporting through MQTT</p></div><button type="button" disabled={loading} onClick={()=>void refresh()} className="flex items-center gap-2 rounded-xl bg-cyan-600 px-5 py-3 font-semibold disabled:opacity-60"><RefreshCw size={17} className={loading?"animate-spin":""}/>{loading?"Refreshing...":"Refresh"}</button></div>
   </header>
