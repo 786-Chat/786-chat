@@ -64,12 +64,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(target)
   }
 
+  // Coolify staging is hosted on a separate domain, not on 786.chat.
+  // Only trust the exact hostname explicitly configured for staging.
+  // Never automatically trust *.sslip.io or other wildcard hosts.
+  const contaboStagingHost =
+    process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres"
+      ? (process.env.CONTABO_STAGING_HOSTNAME || "").trim().toLowerCase()
+      : ""
+  const isExplicitContaboHost =
+    Boolean(contaboStagingHost) &&
+    /^[a-z0-9.-]+$/.test(contaboStagingHost) &&
+    hostname === contaboStagingHost
+
   const isPlatformHost =
     !hostname ||
     hostname === "786.chat" ||
     hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
     hostname.endsWith(".localhost") ||
-    hostname.endsWith(".vercel.app")
+    hostname.endsWith(".vercel.app") ||
+    isExplicitContaboHost
 
   // Customer domains and 786.Chat subdomains must proxy every path — including
   // /_next assets, API routes, images and nested application pages — so the
