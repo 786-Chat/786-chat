@@ -22,8 +22,6 @@ const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start
   env: {
     ...process.env,
     NODE_ENV: "production",
-    CI: "true",
-    CONTABO_CI_TEST_LOOPBACK: "1",
     PORT: String(port),
     HOSTNAME: "127.0.0.1",
     CONTABO_GENERATED_DEPLOYMENTS_READY: "0",
@@ -39,7 +37,11 @@ child.stderr.resume()
 async function get(path) {
   return fetch(origin + path, {
     signal: AbortSignal.timeout(2500),
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      Host: "stage.example.test",
+      Authorization: `Basic ${Buffer.from("ci-staging:temporary-staging-ci-password").toString("base64")}`,
+    },
   })
 }
 
