@@ -70,7 +70,10 @@ test("trusted inline SQL and separately awaited raw SQL are both supported", asy
   assert.equal(statement.text, "UPDATE t SET updated_at = NOW() WHERE id = $1")
   assert.deepEqual([...statement.values], [42])
   await pgSql.unsafe("SELECT 1")
+  await pgSql.query("SELECT $1 AS number", [7])
   assert.equal(calls[0].text, "SELECT 1")
+  assert.equal(calls[1].text, "SELECT $1 AS number")
+  assert.deepEqual([...calls[1].values], [7])
 })
 
 test("batch transactions commit atomically and rollback on failure", async () => {
@@ -92,4 +95,14 @@ test("batch transactions commit atomically and rollback on failure", async () =>
 test("adapter refuses accidental non-staging database", async () => {
   const { pgSql } = fixture("postgres")
   await assert.rejects(async () => pgSql`SELECT 1`, /refuses non-staging/)
+})
+
+test("primary database path retains opt-in gate; admin transactions are gated", () => {
+  const db = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/db.ts"), "utf8")
+  const admin = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/786-admin/db.ts"), "utf8")
+  assert.match(db, /DATABASE_PROVIDER === 'postgres'/)
+  assert.match(db, /CONTABO_STAGING_ONLY === '1'/)
+  assert.match(db, /: neon\(platformDatabaseUrl\(\)\)/)
+  assert.match(admin, /isContaboStagingDatabase\(\)/)
+  assert.match(admin, /pgTransaction\(queries/)
 })
