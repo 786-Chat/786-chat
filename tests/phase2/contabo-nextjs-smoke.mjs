@@ -22,6 +22,7 @@ const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start
   env: {
     ...process.env,
     NODE_ENV: "production",
+    CI: "true",
     PORT: String(port),
     HOSTNAME: "127.0.0.1",
     CONTABO_GENERATED_DEPLOYMENTS_READY: "0",
