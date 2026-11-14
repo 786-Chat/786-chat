@@ -78,7 +78,7 @@ test("staging middleware protects every public route before rewriting", () => {
   assert.match(source, /WWW-Authenticate/)
   assert.match(source, /Staging hostname not allowed/)
   assert.match(source, /crypto\.subtle\.digest/)
-  assert.match(source, /process.env.CI === "true" && localHost/)
+  assert.match(source, /CONTABO_CI_TEST_LOOPBACK/)
   assert.ok(source.indexOf("if (stagingMode && !ciLoopback)") < source.indexOf('if (hostname === "www.786.chat")'))
   assert.ok(source.indexOf("if (stagingMode && !ciLoopback)") < source.indexOf("previewProjectId(hostname)"))
 })
