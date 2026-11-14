@@ -44,6 +44,15 @@ jobs:
         env:
           CONTABO_CI_DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
         run: node --test tests/phase2/contabo-postgres-live-ci.test.mjs tests/phase2/contabo-platform-integration.test.mjs
+      - name: Build 786.Chat in isolated Contabo staging mode
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+          DATABASE_PROVIDER: postgres
+          CONTABO_STAGING_ONLY: "1"
+          DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+          JWT_SECRET: ci-only-never-deploy-this-32-character-minimum-secret
+        run: npm run build
 
   ai-json-regression:
     runs-on: ubuntu-latest
