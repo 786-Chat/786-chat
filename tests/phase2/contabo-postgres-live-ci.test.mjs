@@ -53,7 +53,7 @@ test("PostgreSQL 17 integration: queries, atomic commit and rollback", async (t)
 
     rows = await pgSql.query("SELECT message FROM contabo_stage_ci_probe WHERE id = $1", [2])
     assert.equal(rows[0].message, "second")
-    await assert.rejects(() => pgSql`SELECT * FROM a_table_that_does_not_exist`, /does not exist/i)
+    await assert.rejects(async () => await pgSql`SELECT * FROM a_table_that_does_not_exist`, /does not exist/i)
   } finally {
     await closePgPool()
   }
