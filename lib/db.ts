@@ -1,4 +1,5 @@
-import { neon, NeonQueryFunction } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import { pgSql } from '@/lib/contabo-staging-postgres'
 
 // 786.Chat platform data always lives in the main Neon database. Generated
 // applications use sibling databases named generated_<project id>. Guard the
@@ -24,12 +25,19 @@ export function platformDatabaseUrl(): string {
   return raw
 }
 
+// Explicit opt-in only. Vercel/Neon stays the default until the staged migration is verified.
+export function isContaboStagingDatabase(): boolean {
+  return process.env.DATABASE_PROVIDER === 'postgres' && process.env.CONTABO_STAGING_ONLY === '1'
+}
+
 // Lazy-load database connection to avoid build-time errors
 let sqlInstance: NeonQueryFunction<false, false> | null = null
 
 export function getSql() {
   if (!sqlInstance) {
-    sqlInstance = neon(platformDatabaseUrl())
+    sqlInstance = isContaboStagingDatabase()
+      ? (pgSql as unknown as NeonQueryFunction<false, false>)
+      : neon(platformDatabaseUrl())
   }
   return sqlInstance
 }
