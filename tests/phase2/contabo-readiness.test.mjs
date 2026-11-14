@@ -67,7 +67,7 @@ test("middleware treats localhost as platform and only accepts explicit Contabo 
   const middleware = readFileSync(resolve(root, "middleware.ts"), "utf8")
   assert.ok(middleware.includes('hostname === "127.0.0.1"'))
   assert.match(middleware, /CONTABO_STAGING_HOSTNAME/)
-  assert.match(middleware, /hostname === contaboStagingHost/)
+  assert.match(middleware, /hostname === configuredStagingHost/)
   assert.ok(!middleware.includes('hostname.endsWith(".sslip.io")'))
 })
 
