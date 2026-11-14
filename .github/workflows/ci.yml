@@ -53,6 +53,14 @@ jobs:
           DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
           JWT_SECRET: ci-only-never-deploy-this-32-character-minimum-secret
         run: npm run build
+      - name: Boot Next.js and check staging health against disposable PostgreSQL
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          DATABASE_PROVIDER: postgres
+          CONTABO_STAGING_ONLY: "1"
+          DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+          JWT_SECRET: ci-only-never-deploy-this-32-character-minimum-secret
+        run: node tests/phase2/contabo-nextjs-smoke.mjs
 
   ai-json-regression:
     runs-on: ubuntu-latest
