@@ -55,7 +55,7 @@ test("Coolify generated app provisioning is staging-only and never deploys", asy
   assert.equal(body.instant_deploy, false)
   assert.equal(body.is_auto_deploy_enabled, false)
   assert.equal(body.git_commit_sha, "a".repeat(40))
-  assert.equal(body.base_directory, "generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca")
+  assert.equal(body.base_directory, "/generated-projects/22c299f8-bf65-410f-9643-92a9776dbfca")
   assert.equal(body.environment_name, "production")
   assert.equal(body.ports_exposes, "3000")
   assert.ok(!JSON.stringify(body).includes("test-token"))
