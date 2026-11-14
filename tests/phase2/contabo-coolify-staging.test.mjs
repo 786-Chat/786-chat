@@ -93,3 +93,9 @@ test("Coolify rejects invalid project IDs, Git refs, and unexpected responses", 
     /HTTP 401/,
   )
 })
+
+test("Contabo staging explicitly blocks legacy Vercel generated-project deployments", () => {
+  const deployer = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../lib/786-admin/vercel-project-deployer.ts"), "utf8")
+  const guard = 'process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres"'
+  assert.equal(deployer.split(guard).length - 1, 2, "both preview and production deployment entrypoints must be guarded")
+})
