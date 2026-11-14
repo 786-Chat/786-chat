@@ -62,3 +62,11 @@ test("health routes share hosting readiness logic", () => {
   assert.match(health, /inspectHostingReadiness\(process\.env, database\)/)
   assert.match(readiness, /inspectHostingReadiness\(process\.env, database\)/)
 })
+
+test("middleware treats localhost as platform and only accepts explicit Contabo staging host", () => {
+  const middleware = readFileSync(resolve(root, "middleware.ts"), "utf8")
+  assert.match(middleware, /hostname === "127\\.0\\.0\\.1"/)
+  assert.match(middleware, /CONTABO_STAGING_HOSTNAME/)
+  assert.match(middleware, /hostname === contaboStagingHost/)
+  assert.doesNotMatch(middleware, /hostname\\.endsWith\\("\\.sslip\\.io"\\)/)
+})
