@@ -31,3 +31,12 @@ Status: **NOT READY TO DEPLOY**. This document applies only to the isolated stag
 - Staging `DATABASE_URL` was saved with placeholder host/password values and must **not** be used as-is.
 
 This file is a deployment guard and implementation checklist, **not** evidence that the migration has been completed or tested.
+
+## Stage A review — 14 November 2026
+
+- **Passed:** dedicated adapter tests, TypeScript validation, and AI JSON regression in CI run `43638887995`.
+- **Unresolved:** the broader CI test suite still fails in Phase 1 A/B/C/D and Phase 2 A/B/C/D/F. Failure logs include source-pattern expectation mismatches and module resolution errors. These failures should be triaged separately; do not silently rewrite runtime code to satisfy obsolete string-matching tests.
+- **Important compatibility gap:** `lib/786-admin/vercel-project-deployer.ts` directly imports Neon, creates per-generated-project databases, and deploys applications through Vercel. It has NOT been migrated to Coolify/PostgreSQL. Generated-project deployments therefore cannot be called fully self-hosted.
+- **Main adapter integration:** `lib/db.ts` now explicitly opts into `pgSql` only if `DATABASE_PROVIDER=postgres` and `CONTABO_STAGING_ONLY=1`, and `lib/786-admin/db.ts` routes admin transactions via `pgTransaction` under the same guard. No production switch has occurred.
+- **Important safety limitation:** a successful driver mock test is not proof of a live database integration test; actual Coolify networking, schema permissions, imported data, JWT sessions, uploads and dashboard E2E tests remain outstanding.
+- **Do not begin Stage B** until Stage A compatibility gates are complete and the owner has been informed.
