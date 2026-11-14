@@ -16,6 +16,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contabo-postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: chat786_staging
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: temporary_ci_password_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chat786_staging"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify real PostgreSQL queries and transaction rollback
+        env:
+          CONTABO_CI_DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+        run: node --test tests/phase2/contabo-postgres-live-ci.test.mjs
+
   ai-json-regression:
     runs-on: ubuntu-latest
     timeout-minutes: 5
