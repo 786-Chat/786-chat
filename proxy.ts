@@ -61,11 +61,11 @@ export async function proxy(request: NextRequest) {
     /^[a-z0-9.-]+$/.test(configuredStagingHost) &&
     hostname === configuredStagingHost
 
-  // CI smoke tests use loopback. Production must never trust a spoofed Host header.
-  const ciLoopback = process.env.CI === "true" &&
-    process.env.CONTABO_CI_TEST_LOOPBACK === "1" && localHost
-  if (stagingMode && !ciLoopback) {
-    if (!configuredStagingHost || !isExplicitContaboHost) {
+  // Next.js may see the internal loopback Host behind a reverse proxy.
+  // Accept it for routing only; Basic authentication is still mandatory.
+  // Never treat loopback or CI as an authorization bypass.
+  if (stagingMode) {
+    if (!configuredStagingHost || (!isExplicitContaboHost && !localHost)) {
       return apiError("Staging hostname not allowed", 421)
     }
     const user = process.env.CONTABO_STAGING_ACCESS_USER || ""
