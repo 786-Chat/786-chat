@@ -48,3 +48,10 @@ This file is a deployment guard and implementation checklist, **not** evidence t
 - In the same run, `ai-json-regression: success`, isolated PostgreSQL adapter tests: success, TypeScript validation: success. The combined `test-and-typecheck` job is **failure** because multiple unrelated Phase 1/Phase 2 legacy tests still fail.
 - Therefore this adapter has **not** passed every application regression test and **has not** been deployed to Coolify. The generated-project Vercel/Neon path, authentication/session tests against imported data, uploads, staging URL protection, private credential rotation, and production safety checks remain blockers.
 - Keep Stage B (Neon data copying) on hold as requested until Stage A is genuinely complete and verified.
+
+## Stage A follow-up — Coolify staging provisioning contract (14 November 2026)
+
+- Added `lib/786-admin/coolify-staging-deployer.ts`: isolated, opt-in, authenticated `POST /api/v1/applications/public` client based on official Coolify API documentation. Uses a specific Git commit, `railpack`, port 3000, and a `/generated-projects/<id>` base directory. It explicitly disables both auto-deploy and instant-deploy.
+- Added `tests/phase2/contabo-coolify-staging.test.mjs` to verify creation parameters, branch/commit/path restrictions, staging opt-in and refusal of non-HTTPS Coolify origins. Tests inject a mock HTTP client and never contact Contabo.
+- This is **not** the full generated-project migration. The existing `lib/786-admin/vercel-project-deployer.ts` still provisions generated databases through Neon, Vercel Blob storage and Vercel deployments. Do not call generated app hosting functional on Contabo until those paths have been replaced and independently tested.
+- Checked the repository's original `main` workflow: `786.Chat CI` failed on commit `c8f713d8` in run `39984879055` (23 October 2026), before this staging branch was created. Therefore at least part of the broader CI red status is an inherited regression; fix and classify failures instead of altering functional code to satisfy outdated source-matching tests.
