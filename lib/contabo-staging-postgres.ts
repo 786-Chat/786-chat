@@ -89,6 +89,11 @@ export function pgSql(parts: TemplateStringsArray, ...values: unknown[]): SqlSta
 
 /** Explicit trusted raw SQL only. Never pass untrusted input to unsafe(). */
 // Supports both await sql.unsafe("SELECT ...") and ${sql.unsafe("trusted_column")}
+pgSql.query = (text: string, values: readonly unknown[] = []): SqlStatement => {
+  if (typeof text !== "string" || !text.trim()) throw new Error("query() requires SQL text")
+  return deferred(text, values)
+}
+
 pgSql.unsafe = (trustedSql: string): SqlStatement => {
   if (typeof trustedSql !== "string" || !trustedSql.trim()) {
     throw new Error("unsafe() requires a non-empty SQL string")
