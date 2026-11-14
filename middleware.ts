@@ -61,7 +61,9 @@ export async function middleware(request: NextRequest) {
     /^[a-z0-9.-]+$/.test(configuredStagingHost) &&
     hostname === configuredStagingHost
 
-  if (stagingMode && !localHost) {
+  // CI smoke tests use loopback. Production must never trust a spoofed Host header.
+  const ciLoopback = process.env.CI === "true" && localHost
+  if (stagingMode && !ciLoopback) {
     if (!configuredStagingHost || !isExplicitContaboHost) {
       return apiError("Staging hostname not allowed", 421)
     }
