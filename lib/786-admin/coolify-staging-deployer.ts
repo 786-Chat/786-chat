@@ -47,7 +47,7 @@ export function coolifyStagingPayload(config: CoolifyStagingConfig) {
     git_commit_sha: config.commitSha,
     build_pack: "railpack" as const,
     ports_exposes: "3000",
-    base_directory: `generated-projects/${config.generatedProjectId}`,
+    base_directory: `/generated-projects/${config.generatedProjectId}`,
     name: `786-staging-${config.generatedProjectId.slice(0, 12)}`,
     is_auto_deploy_enabled: false,
     is_preview_deployments_enabled: false,
