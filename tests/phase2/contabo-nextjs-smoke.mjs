@@ -17,7 +17,7 @@ assert.equal(process.env.DATABASE_PROVIDER, "postgres")
 
 const port = 31786
 const origin = `http://127.0.0.1:${port}`
-const child = spawn("npm", ["run", "start", "--", "-H", "127.0.0.1", "-p", String(port)], {
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(port)], {
   stdio: ["ignore", "pipe", "pipe"],
   env: {
     ...process.env,
@@ -27,9 +27,9 @@ const child = spawn("npm", ["run", "start", "--", "-H", "127.0.0.1", "-p", Strin
     CONTABO_GENERATED_DEPLOYMENTS_READY: "0",
   },
 })
-let logs = ""
-child.stdout.on("data", chunk => { logs += String(chunk).slice(0, 400) })
-child.stderr.on("data", chunk => { logs += String(chunk).slice(0, 400) })
+// Consume output so the child cannot block on a full pipe, but do not log secrets.
+child.stdout.resume()
+child.stderr.resume()
 
 async function get(path) {
   return fetch(origin + path, {
