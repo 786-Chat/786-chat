@@ -3,7 +3,8 @@
 // lazily-instantiated Neon HTTP client so the admin scope can persist
 // project + files + preview_state + messages atomically (all-or-nothing).
 import { neon } from "@neondatabase/serverless"
-import { platformDatabaseUrl, sql } from "@/lib/db"
+import { isContaboStagingDatabase, platformDatabaseUrl, sql } from "@/lib/db"
+import { pgTransaction } from "@/lib/contabo-staging-postgres"
 
 export { sql }
 
@@ -24,6 +25,9 @@ function getTxClient(): NeonSqlClient {
 export async function transaction<T = unknown>(
   queries: unknown[]
 ): Promise<T[]> {
+  if (isContaboStagingDatabase()) {
+    return (await pgTransaction(queries as Parameters<typeof pgTransaction>[0])) as T[]
+  }
   const client = getTxClient() as unknown as {
     transaction: (q: unknown[]) => Promise<T[]>
   }
