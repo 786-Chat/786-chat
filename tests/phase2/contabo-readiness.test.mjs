@@ -70,3 +70,14 @@ test("middleware treats localhost as platform and only accepts explicit Contabo 
   assert.match(middleware, /hostname === contaboStagingHost/)
   assert.ok(!middleware.includes('hostname.endsWith(".sslip.io")'))
 })
+
+test("staging middleware protects every public route before rewriting", () => {
+  const source = readFileSync(resolve(root, "middleware.ts"), "utf8")
+  assert.match(source, /CONTABO_STAGING_ACCESS_USER/)
+  assert.match(source, /CONTABO_STAGING_ACCESS_PASSWORD/)
+  assert.match(source, /WWW-Authenticate/)
+  assert.match(source, /Staging hostname not allowed/)
+  assert.match(source, /crypto\.subtle\.digest/)
+  assert.ok(source.indexOf("if (stagingMode && !localHost)") < source.indexOf('if (hostname === "www.786.chat")'))
+  assert.ok(source.indexOf("if (stagingMode && !localHost)") < source.indexOf("previewProjectId(hostname)"))
+})
