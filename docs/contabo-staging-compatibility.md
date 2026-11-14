@@ -40,3 +40,11 @@ This file is a deployment guard and implementation checklist, **not** evidence t
 - **Main adapter integration:** `lib/db.ts` now explicitly opts into `pgSql` only if `DATABASE_PROVIDER=postgres` and `CONTABO_STAGING_ONLY=1`, and `lib/786-admin/db.ts` routes admin transactions via `pgTransaction` under the same guard. No production switch has occurred.
 - **Important safety limitation:** a successful driver mock test is not proof of a live database integration test; actual Coolify networking, schema permissions, imported data, JWT sessions, uploads and dashboard E2E tests remain outstanding.
 - **Do not begin Stage B** until Stage A compatibility gates are complete and the owner has been informed.
+
+## Stage A follow-up — verified disposable PostgreSQL 17 integration (14 November 2026)
+
+- A dedicated GitHub Actions job starts PostgreSQL 17-alpine with a **temporary** `chat786_staging` database and CI-only credentials; it does not contact the Contabo VPS.
+- CI run `43639890270` finished with `contabo-postgres-integration: success`: SQL parameter binding, inserts, reads, transactional commit, duplicate-key rollback and explicit query execution were verified against a real PostgreSQL server.
+- In the same run, `ai-json-regression: success`, isolated PostgreSQL adapter tests: success, TypeScript validation: success. The combined `test-and-typecheck` job is **failure** because multiple unrelated Phase 1/Phase 2 legacy tests still fail.
+- Therefore this adapter has **not** passed every application regression test and **has not** been deployed to Coolify. The generated-project Vercel/Neon path, authentication/session tests against imported data, uploads, staging URL protection, private credential rotation, and production safety checks remain blockers.
+- Keep Stage B (Neon data copying) on hold as requested until Stage A is genuinely complete and verified.
