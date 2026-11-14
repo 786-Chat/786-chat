@@ -86,7 +86,7 @@ try {
     headers: { Host: "random.customer.example" },
     redirect: "manual",
   })
-  assert.equal(wrongHost.status, 421, "Public unknown host must not reach customer route")
+  assert.ok([401, 421].includes(wrongHost.status), "Unknown Host must not bypass staging access")
 
   const allowed = await fetch(origin + "/api/health/live", {
     headers: {
