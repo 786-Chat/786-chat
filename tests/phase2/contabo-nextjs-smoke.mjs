@@ -47,10 +47,12 @@ async function get(path) {
 
 try {
   let booted = false
+  let lastStatus = 0
   for (let i = 0; i < 50; i++) {
     if (child.exitCode !== null) throw new Error("Next.js exited before becoming healthy")
     try {
       const response = await get("/api/health/live")
+      lastStatus = response.status
       if (response.ok && (await response.json()).status === "alive") {
         booted = true
         break
@@ -58,7 +60,7 @@ try {
     } catch { /* not listening yet */ }
     await sleep(400)
   }
-  assert.ok(booted, "Next.js did not start within startup window")
+  assert.ok(booted, `Next.js did not pass staging health check (last HTTP status: ${lastStatus || "unreachable"})`)
 
   const live = await get("/api/health/live")
   assert.equal(live.status, 200)
