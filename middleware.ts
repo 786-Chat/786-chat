@@ -49,6 +49,55 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
 
+  // Restrict the entire unfinished Contabo site before rewrites, previews or
+  // auth routes can be reached. Loopback traffic is only for health checks.
+  const stagingMode =
+    process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres"
+  const localHost =
+    hostname === "127.0.0.1" || hostname === "localhost" ||
+    hostname === "::1" || hostname.endsWith(".localhost")
+  const configuredStagingHost = (process.env.CONTABO_STAGING_HOSTNAME || "").trim().toLowerCase()
+  const isExplicitContaboHost = stagingMode &&
+    /^[a-z0-9.-]+$/.test(configuredStagingHost) &&
+    hostname === configuredStagingHost
+
+  if (stagingMode && !localHost) {
+    if (!configuredStagingHost || !isExplicitContaboHost) {
+      return apiError("Staging hostname not allowed", 421)
+    }
+    const user = process.env.CONTABO_STAGING_ACCESS_USER || ""
+    const password = process.env.CONTABO_STAGING_ACCESS_PASSWORD || ""
+    if (!user || password.length < 16) {
+      return apiError("Staging access is not configured", 503)
+    }
+
+    const authorization = request.headers.get("authorization") || ""
+    let decoded = ""
+    if (authorization.startsWith("Basic ") && authorization.length < 4096) {
+      try { decoded = atob(authorization.slice(6)) } catch { /* invalid credentials */ }
+    }
+    const expected = `${user}:${password}`
+    // Compare fixed-sized digests rather than short-circuiting on input length.
+    const digest = async (value: string) =>
+      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))
+    const suppliedDigest = await digest(decoded)
+    const expectedDigest = await digest(expected)
+    let difference = 0
+    for (let i = 0; i < expectedDigest.length; i++) {
+      difference |= suppliedDigest[i] ^ expectedDigest[i]
+    }
+    if (difference !== 0) {
+      return new NextResponse("Staging login required", {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": 'Basic realm="786.Chat private staging"',
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow",
+        },
+      })
+    }
+  }
+
   if (hostname === "www.786.chat") {
     const canonical = new URL(request.url)
     canonical.protocol = "https:"
@@ -63,18 +112,6 @@ export async function middleware(request: NextRequest) {
     target.pathname = `/generated-preview-host/${previewId}${pathname === "/" ? "" : pathname}`
     return NextResponse.rewrite(target)
   }
-
-  // Coolify staging is hosted on a separate domain, not on 786.chat.
-  // Only trust the exact hostname explicitly configured for staging.
-  // Never automatically trust *.sslip.io or other wildcard hosts.
-  const contaboStagingHost =
-    process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres"
-      ? (process.env.CONTABO_STAGING_HOSTNAME || "").trim().toLowerCase()
-      : ""
-  const isExplicitContaboHost =
-    Boolean(contaboStagingHost) &&
-    /^[a-z0-9.-]+$/.test(contaboStagingHost) &&
-    hostname === contaboStagingHost
 
   const isPlatformHost =
     !hostname ||
