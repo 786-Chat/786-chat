@@ -64,7 +64,7 @@ test("health routes share hosting readiness logic", () => {
 })
 
 test("middleware treats localhost as platform and only accepts explicit Contabo staging host", () => {
-  const middleware = readFileSync(resolve(root, "middleware.ts"), "utf8")
+  const middleware = readFileSync(resolve(root, "proxy.ts"), "utf8")
   assert.ok(middleware.includes('hostname === "127.0.0.1"'))
   assert.match(middleware, /CONTABO_STAGING_HOSTNAME/)
   assert.match(middleware, /hostname === configuredStagingHost/)
@@ -72,7 +72,7 @@ test("middleware treats localhost as platform and only accepts explicit Contabo 
 })
 
 test("staging middleware protects every public route before rewriting", () => {
-  const source = readFileSync(resolve(root, "middleware.ts"), "utf8")
+  const source = readFileSync(resolve(root, "proxy.ts"), "utf8")
   assert.match(source, /CONTABO_STAGING_ACCESS_USER/)
   assert.match(source, /CONTABO_STAGING_ACCESS_PASSWORD/)
   assert.match(source, /WWW-Authenticate/)
