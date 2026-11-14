@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/786-admin/db"
 import { withTimeout } from "@/lib/786-admin/reliability"
+import { inspectHostingReadiness } from "@/lib/786-chat/hosting-readiness"
 
 export const dynamic = "force-dynamic"
-
-function configured(name: string): boolean {
-  return Boolean(process.env[name]?.trim())
-}
 
 export async function GET() {
   const startedAt = Date.now()
@@ -21,22 +18,13 @@ export async function GET() {
     database = "error"
   }
 
+  const hosting = inspectHostingReadiness(process.env, database)
   const services = {
     database,
-    deepseek: configured("DEEPSEEK_API_KEY") ? "configured" : "missing",
-    gemini: configured("GEMINI_API_KEY") ? "configured" : "missing",
-    githubBuildToken: configured("GITHUB_BUILD_TOKEN") ? "configured" : "missing",
-    buildRunnerSecret: configured("BUILD_RUNNER_SECRET") ? "configured" : "missing",
-    vercelToken: configured("VERCEL_TOKEN") ? "configured" : "missing",
-  } as const
-
-  const requiredReady =
-    database === "ok" &&
-    services.githubBuildToken === "configured" &&
-    services.buildRunnerSecret === "configured" &&
-    services.vercelToken === "configured"
-
-  const status = requiredReady ? "ready" : database === "ok" ? "degraded" : "unhealthy"
+    ...hosting.checks,
+    hosting: hosting.hosting,
+  }
+  const status = hosting.requiredReady ? "ready" : database === "ok" ? "degraded" : "unhealthy"
   const httpStatus = status === "unhealthy" ? 503 : 200
 
   return NextResponse.json(
