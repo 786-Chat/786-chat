@@ -25,6 +25,9 @@ const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start
     PORT: String(port),
     HOSTNAME: "127.0.0.1",
     CONTABO_GENERATED_DEPLOYMENTS_READY: "0",
+    CONTABO_STAGING_HOSTNAME: "stage.example.test",
+    CONTABO_STAGING_ACCESS_USER: "ci-staging",
+    CONTABO_STAGING_ACCESS_PASSWORD: "temporary-staging-ci-password",
   },
 })
 // Consume output so the child cannot block on a full pipe, but do not log secrets.
@@ -65,7 +68,30 @@ try {
   assert.equal(body.checks.hosting, "contabo-staging")
   assert.equal(body.checks.generatedDeployments, "not_verified")
   assert.equal(body.checks.vercelToken, "missing")
-  console.log("PASS: Next.js starts, local PostgreSQL is healthy, hosting readiness fails closed")
+  // Node's fetch supports a custom Host header for local reverse-proxy simulation.
+  // All public paths must be protected before application routing.
+  const blocked = await fetch(origin + "/api/health/live", {
+    headers: { Host: "stage.example.test" },
+    redirect: "manual",
+  })
+  assert.equal(blocked.status, 401, "Public staging host must require access credentials")
+
+  const wrongHost = await fetch(origin + "/api/health/live", {
+    headers: { Host: "random.customer.example" },
+    redirect: "manual",
+  })
+  assert.equal(wrongHost.status, 421, "Public unknown host must not reach customer route")
+
+  const allowed = await fetch(origin + "/api/health/live", {
+    headers: {
+      Host: "stage.example.test",
+      Authorization: `Basic ${Buffer.from("ci-staging:temporary-staging-ci-password").toString("base64")}`,
+    },
+    redirect: "manual",
+  })
+  assert.equal(allowed.status, 200, "Correct staging credentials must allow a health check")
+  assert.equal((await allowed.json()).status, "alive")
+  console.log("PASS: Next.js starts, PostgreSQL is healthy, and staging Basic Auth blocks public access")
 } catch (err) {
   // Deliberately do not log raw server output: build/runtime logs can contain secrets.
   console.error("Staging smoke test failed:", err instanceof Error ? err.message : String(err))
