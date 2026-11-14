@@ -43,7 +43,7 @@ jobs:
       - name: Verify real PostgreSQL queries and transaction rollback
         env:
           CONTABO_CI_DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
-        run: node --test tests/phase2/contabo-postgres-live-ci.test.mjs
+        run: node --test tests/phase2/contabo-postgres-live-ci.test.mjs tests/phase2/contabo-platform-integration.test.mjs
 
   ai-json-regression:
     runs-on: ubuntu-latest
