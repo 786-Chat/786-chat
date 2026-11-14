@@ -8,7 +8,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg"
 
 type SqlPrimitive = unknown
-type SqlFragment = { readonly kind: "fragment"; readonly parts: readonly string[]; readonly values: readonly SqlPrimitive[] }
 type SqlStatement = PromiseLike<QueryResultRow[]> & {
   readonly kind: "statement"
   readonly text: string
@@ -25,6 +24,9 @@ function connectionPool(): Pool {
   if (!["postgres:", "postgresql:"].includes(url.protocol)) {
     throw new Error("DATABASE_URL must use a PostgreSQL connection string")
   }
+  if (url.pathname !== "/chat786_staging") {
+    throw new Error("Staging PostgreSQL adapter refuses non-staging databases")
+  }
   pool = new Pool({
     connectionString,
     max: 10,
@@ -34,8 +36,9 @@ function connectionPool(): Pool {
   return pool
 }
 
-function isFragment(value: unknown): value is SqlFragment {
-  return typeof value === "object" && value !== null && (value as SqlFragment).kind === "fragment"
+function isInlineSql(value: unknown): value is SqlStatement {
+  return typeof value === "object" && value !== null &&
+    (value as { kind?: string }).kind === "statement"
 }
 
 function compile(parts: readonly string[], params: readonly unknown[]): { text: string; values: unknown[] } {
@@ -44,8 +47,8 @@ function compile(parts: readonly string[], params: readonly unknown[]): { text: 
   let text = parts[0] ?? ""
   for (let i = 0; i < params.length; i++) {
     const item = params[i]
-    if (isFragment(item)) {
-      const nested = compile(item.parts, item.values)
+    if (isInlineSql(item)) {
+      const nested = { text: item.text, values: [...item.values] }
       // Rebase parameter placeholders to the outer query.
       const offset = values.length
       text += nested.text.replace(/\$(\d+)/g, (_m, n: string) => `$${Number(n) + offset}`)
@@ -84,12 +87,15 @@ export function pgSql(parts: TemplateStringsArray, ...values: unknown[]): SqlSta
   return deferred(query.text, query.values)
 }
 
-/** Explicit trusted SQL fragments only. Never pass untrusted input to unsafe(). */
-pgSql.unsafe = (trustedSql: string): SqlFragment => ({
-  kind: "fragment",
-  parts: [trustedSql],
-  values: [],
-})
+/** Explicit trusted raw SQL only. Never pass untrusted input to unsafe(). */
+// Supports both await sql.unsafe("SELECT ...") and ${sql.unsafe("trusted_column")}
+pgSql.unsafe = (trustedSql: string): SqlStatement => {
+  if (typeof trustedSql !== "string" || !trustedSql.trim()) {
+    throw new Error("unsafe() requires a non-empty SQL string")
+  }
+  // This API does not escape SQL identifiers or raw SQL. Never pass user input.
+  return deferred(trustedSql, [])
+}
 
 /** Execute multiple deferred statements, sequentially, within one atomic transaction. */
 export async function pgTransaction(statements: readonly SqlStatement[]): Promise<QueryResultRow[][]> {
