@@ -45,9 +45,67 @@ function previewProjectId(hostname: string): string | null {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const hostname = (request.headers.get("host") || "").split(":")[0].toLowerCase()
+
+  // Restrict the entire unfinished Contabo site before rewrites, previews or
+  // auth routes can be reached. Loopback traffic is only for health checks.
+  const stagingMode =
+    process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres"
+  const localHost =
+    hostname === "127.0.0.1" || hostname === "localhost" ||
+    hostname === "::1" || hostname.endsWith(".localhost")
+  const configuredStagingHost = (process.env.CONTABO_STAGING_HOSTNAME || "").trim().toLowerCase()
+  const isExplicitContaboHost = stagingMode &&
+    /^[a-z0-9.-]+$/.test(configuredStagingHost) &&
+    hostname === configuredStagingHost
+
+  // Next.js may see the internal loopback Host behind a reverse proxy.
+  // Accept it for routing only; Basic authentication is still mandatory.
+  // Never treat loopback or CI as an authorization bypass.
+  if (stagingMode) {
+    if (!configuredStagingHost || (!isExplicitContaboHost && !localHost)) {
+      return apiError("Staging hostname not allowed", 421)
+    }
+    const user = process.env.CONTABO_STAGING_ACCESS_USER || ""
+    const password = process.env.CONTABO_STAGING_ACCESS_PASSWORD || ""
+    if (!user || password.length < 16) {
+      return apiError("Staging access is not configured", 503)
+    }
+
+    const authorization = request.headers.get("authorization") || ""
+    let decoded = ""
+    if (authorization.startsWith("Basic ") && authorization.length < 4096) {
+      try {
+        // HTTP Basic credentials are UTF-8 bytes encoded as Base64.
+        // atob() alone produces a Latin-1-like string and rejects valid
+        // passwords containing non-ASCII characters when hashed below.
+        const bytes = Uint8Array.from(atob(authorization.slice(6)), (character) => character.charCodeAt(0))
+        decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+      } catch { /* invalid credentials */ }
+    }
+    const expected = `${user}:${password}`
+    // Compare fixed-sized digests rather than short-circuiting on input length.
+    const digest = async (value: string) =>
+      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))
+    const suppliedDigest = await digest(decoded)
+    const expectedDigest = await digest(expected)
+    let difference = 0
+    for (let i = 0; i < expectedDigest.length; i++) {
+      difference |= suppliedDigest[i] ^ expectedDigest[i]
+    }
+    if (difference !== 0) {
+      return new NextResponse("Staging login required", {
+        status: 401,
+        headers: {
+          "WWW-Authenticate": 'Basic realm="786.Chat private staging"',
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow",
+        },
+      })
+    }
+  }
 
   if (hostname === "www.786.chat") {
     const canonical = new URL(request.url)
@@ -68,8 +126,11 @@ export async function middleware(request: NextRequest) {
     !hostname ||
     hostname === "786.chat" ||
     hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
     hostname.endsWith(".localhost") ||
-    hostname.endsWith(".vercel.app")
+    hostname.endsWith(".vercel.app") ||
+    isExplicitContaboHost
 
   // Customer domains and 786.Chat subdomains must proxy every path — including
   // /_next assets, API routes, images and nested application pages — so the

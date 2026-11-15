@@ -1,0 +1,109 @@
+/**
+ * CI-only boot smoke test against disposable local PostgreSQL 17.
+ * Runs the compiled Next.js server and verifies live/ready behavior without
+ * revealing credentials or contacting production services.
+ */
+import assert from "node:assert/strict"
+import { spawn } from "node:child_process"
+import { setTimeout as sleep } from "node:timers/promises"
+
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error("CI smoke test requires DATABASE_URL")
+const db = new URL(connectionString)
+assert.equal(db.pathname, "/chat786_staging")
+assert.ok(["localhost", "127.0.0.1"].includes(db.hostname), "Smoke tests cannot contact remote databases")
+assert.equal(process.env.CONTABO_STAGING_ONLY, "1")
+assert.equal(process.env.DATABASE_PROVIDER, "postgres")
+
+const port = 31786
+const origin = `http://127.0.0.1:${port}`
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", String(port)], {
+  stdio: ["ignore", "pipe", "pipe"],
+  env: {
+    ...process.env,
+    NODE_ENV: "production",
+    PORT: String(port),
+    HOSTNAME: "127.0.0.1",
+    CONTABO_GENERATED_DEPLOYMENTS_READY: "0",
+    CONTABO_STAGING_HOSTNAME: "stage.example.test",
+    CONTABO_STAGING_ACCESS_USER: "ci-staging",
+    CONTABO_STAGING_ACCESS_PASSWORD: "temporary-staging-ci-password",
+  },
+})
+// Consume output so the child cannot block on a full pipe, but do not log secrets.
+child.stdout.resume()
+child.stderr.resume()
+
+async function get(path) {
+  return fetch(origin + path, {
+    signal: AbortSignal.timeout(2500),
+    headers: {
+      Accept: "application/json",
+      Host: "stage.example.test",
+      Authorization: `Basic ${Buffer.from("ci-staging:temporary-staging-ci-password").toString("base64")}`,
+    },
+  })
+}
+
+try {
+  let booted = false
+  let lastStatus = 0
+  for (let i = 0; i < 50; i++) {
+    if (child.exitCode !== null) throw new Error("Next.js exited before becoming healthy")
+    try {
+      const response = await get("/api/health/live")
+      lastStatus = response.status
+      if (response.ok && (await response.json()).status === "alive") {
+        booted = true
+        break
+      }
+    } catch { /* not listening yet */ }
+    await sleep(400)
+  }
+  assert.ok(booted, `Next.js did not pass staging health check (last HTTP status: ${lastStatus || "unreachable"})`)
+
+  const live = await get("/api/health/live")
+  assert.equal(live.status, 200)
+  assert.equal((await live.json()).service, "786.chat")
+
+  const ready = await get("/api/health/ready")
+  // Database is working, but generated-app deployment isn't proven ready yet.
+  assert.equal(ready.status, 503, "Staging readiness must fail closed until generated hosting verified")
+  const body = await ready.json()
+  assert.equal(body.checks.database, "ok", "Staging must connect to local PostgreSQL")
+  assert.equal(body.checks.hosting, "contabo-staging")
+  assert.equal(body.checks.generatedDeployments, "not_verified")
+  assert.equal(body.checks.vercelToken, "missing")
+  // Node's fetch supports a custom Host header for local reverse-proxy simulation.
+  // All public paths must be protected before application routing.
+  const blocked = await fetch(origin + "/api/health/live", {
+    headers: { Host: "stage.example.test" },
+    redirect: "manual",
+  })
+  assert.equal(blocked.status, 401, "Public staging host must require access credentials")
+
+  const wrongHost = await fetch(origin + "/api/health/live", {
+    headers: { Host: "random.customer.example" },
+    redirect: "manual",
+  })
+  assert.ok([401, 421].includes(wrongHost.status), "Unknown Host must not bypass staging access")
+
+  const allowed = await fetch(origin + "/api/health/live", {
+    headers: {
+      Host: "stage.example.test",
+      Authorization: `Basic ${Buffer.from("ci-staging:temporary-staging-ci-password").toString("base64")}`,
+    },
+    redirect: "manual",
+  })
+  assert.equal(allowed.status, 200, "Correct staging credentials must allow a health check")
+  assert.equal((await allowed.json()).status, "alive")
+  console.log("PASS: Next.js starts, PostgreSQL is healthy, and staging Basic Auth blocks public access")
+} catch (err) {
+  // Deliberately do not log raw server output: build/runtime logs can contain secrets.
+  console.error("Staging smoke test failed:", err instanceof Error ? err.message : String(err))
+  throw err
+} finally {
+  child.kill("SIGTERM")
+  await sleep(400)
+  if (child.exitCode === null) child.kill("SIGKILL")
+}

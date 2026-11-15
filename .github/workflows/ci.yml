@@ -16,6 +16,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contabo-postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: chat786_staging
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: temporary_ci_password_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chat786_staging"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify real PostgreSQL queries and transaction rollback
+        env:
+          CONTABO_CI_DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+        run: node --test tests/phase2/contabo-postgres-live-ci.test.mjs tests/phase2/contabo-platform-integration.test.mjs
+      - name: Build 786.Chat in isolated Contabo staging mode
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+          DATABASE_PROVIDER: postgres
+          CONTABO_STAGING_ONLY: "1"
+          DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+          JWT_SECRET: ci-only-never-deploy-this-32-character-minimum-secret
+        run: npm run build
+      - name: Boot Next.js and check staging health against disposable PostgreSQL
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          DATABASE_PROVIDER: postgres
+          CONTABO_STAGING_ONLY: "1"
+          DATABASE_URL: postgresql://postgres:temporary_ci_password_only@127.0.0.1:5432/chat786_staging
+          JWT_SECRET: ci-only-never-deploy-this-32-character-minimum-secret
+        run: node tests/phase2/contabo-nextjs-smoke.mjs
+
   ai-json-regression:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -39,6 +85,8 @@ jobs:
         run: node --test tests/phase1/provider-json-recovery.test.mjs tests/phase1/builder-readonly-legacy-security.test.mjs tests/phase1/pestcontrol-devicecheck-join.test.mjs
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Contabo staging PostgreSQL adapter tests
+        run: node --test tests/phase2/contabo-db-adapter.test.mjs tests/phase2/contabo-coolify-staging.test.mjs tests/phase2/contabo-readiness.test.mjs tests/phase2/contabo-staging-auth-utf8.test.mjs
       - name: Phase 1 A
         run: node --test tests/phase1/account-security.test.mjs tests/phase1/admin-preview-storage.test.mjs tests/phase1/build-repair-loop.test.mjs tests/phase1/business-software-generation.test.mjs tests/phase1/canonical-workspace-actions.test.mjs tests/phase1/compiled-preview-contract.test.mjs tests/phase1/deployment-domains.test.mjs tests/phase1/deployment-lifecycle.test.mjs tests/phase1/generation-pipeline.test.mjs
       - name: Phase 1 B

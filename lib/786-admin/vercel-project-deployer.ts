@@ -505,6 +505,11 @@ export async function deployGeneratedProjectToVercel(input: {
   commitSha: string
   files: Record<string, string>
 }): Promise<GeneratedProjectDeployment> {
+  // Contabo staging must never send generated-project data or credentials to Vercel.
+  // Keep the legacy Vercel path unchanged outside explicit Contabo staging.
+  if (process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres") {
+    throw new Error("Generated-project deployment on Contabo is not enabled until Coolify runtime, database and upload compatibility are verified")
+  }
   const token = requiredEnv("VERCEL_TOKEN")
   const teamId = process.env.VERCEL_TEAM_ID?.trim()
   const repositoryId = process.env.VERCEL_GITHUB_REPOSITORY_ID?.trim() || DEFAULT_REPOSITORY_ID
@@ -608,6 +613,11 @@ export async function deployGeneratedProjectToProduction(input: {
   branch: string
   commitSha: string
 }): Promise<GeneratedProjectDeployment> {
+  // Contabo staging must never send generated-project data or credentials to Vercel.
+  // Keep the legacy Vercel path unchanged outside explicit Contabo staging.
+  if (process.env.CONTABO_STAGING_ONLY === "1" && process.env.DATABASE_PROVIDER === "postgres") {
+    throw new Error("Generated-project deployment on Contabo is not enabled until Coolify runtime, database and upload compatibility are verified")
+  }
   const token = requiredEnv("VERCEL_TOKEN")
   const teamId = process.env.VERCEL_TEAM_ID?.trim()
   const repositoryId = process.env.VERCEL_GITHUB_REPOSITORY_ID?.trim() || DEFAULT_REPOSITORY_ID
