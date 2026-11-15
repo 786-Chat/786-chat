@@ -77,7 +77,13 @@ export async function proxy(request: NextRequest) {
     const authorization = request.headers.get("authorization") || ""
     let decoded = ""
     if (authorization.startsWith("Basic ") && authorization.length < 4096) {
-      try { decoded = atob(authorization.slice(6)) } catch { /* invalid credentials */ }
+      try {
+        // HTTP Basic credentials are UTF-8 bytes encoded as Base64.
+        // atob() alone produces a Latin-1-like string and rejects valid
+        // passwords containing non-ASCII characters when hashed below.
+        const bytes = Uint8Array.from(atob(authorization.slice(6)), (character) => character.charCodeAt(0))
+        decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+      } catch { /* invalid credentials */ }
     }
     const expected = `${user}:${password}`
     // Compare fixed-sized digests rather than short-circuiting on input length.
