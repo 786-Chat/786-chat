@@ -16,6 +16,12 @@ export default async function ProjectsPage() {
       <ProjectsGallery />
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-3">
         <Link
+          href="/786.chat/deepseek-suite"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-violet-300/30 bg-[#34205a] px-4 text-sm font-black text-violet-100 shadow-2xl transition hover:-translate-y-0.5 hover:bg-[#472e73]"
+        >
+          ✦ DeepSeek Suite
+        </Link>
+        <Link
           href="/786.chat/import"
           className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-300/30 bg-[#10264a] px-4 text-sm font-black text-cyan-100 shadow-2xl transition hover:-translate-y-0.5 hover:bg-[#17345f]"
         >
