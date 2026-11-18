@@ -24,7 +24,7 @@ export function classifyBuilderMessageIntent(message: string): BuilderMessageInt
   if (!text) return "edit"
 
   if (DIRECT_EDIT_PATTERNS.some((pattern) => pattern.test(text))) return "edit"
-  if (READ_ONLY_INSPECTION.test(text) && !FOLLOW_UP_EDIT.test(text)) return "chat"
+  if (READ_ONLY_INSPECTION.test(text)) return FOLLOW_UP_EDIT.test(text) ? "edit" : "chat"
   if (QUESTION_PATTERNS.some((pattern) => pattern.test(text))) return "chat"
 
   // Unclear messages must never create a project or spend code-generation budget.
