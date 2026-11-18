@@ -192,11 +192,11 @@ export async function generateBuilderProject(request: GenerationRequest) {
     }
   }
 
-  if (request.existing && request.projectId && isBuilderChatOnlyMessage(request.message)) {
+  if (isBuilderChatOnlyMessage(request.message)) {
     const response = await fetch("/api/786-chat/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: request.message, projectId: request.projectId }),
+      body: JSON.stringify({ message: request.message, ...(request.projectId ? { projectId: request.projectId } : {}) }),
     })
     const payload = (await response.json().catch(() => ({}))) as ChatOnlyResult
     if (!response.ok || !payload.success || !payload.response) {
@@ -206,11 +206,13 @@ export async function generateBuilderProject(request: GenerationRequest) {
       response: payload.response,
       model: `chat-only:${payload.model || "assistant"}`,
       reason: payload.reason || "Chat-only answer. Project files were kept unchanged.",
-      project: {
-        title: request.existing.title,
-        description: request.existing.description,
-        files: { ...request.existing.keyFiles },
-      },
+      project: request.existing
+        ? {
+            title: request.existing.title,
+            description: request.existing.description,
+            files: { ...request.existing.keyFiles },
+          }
+        : { title: "Chat only", description: "", files: {} },
     } satisfies GenerationResult
   }
 
