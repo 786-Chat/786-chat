@@ -980,6 +980,21 @@ export function SevenEightSixWorkspace() {
             }
           : undefined,
       })
+      // A greeting or question in an empty workspace is a conversation, not a new website.
+      // Keep it transient until the user explicitly asks to create a project.
+      if (!project && String(generated.model || "").startsWith("chat-only:")) {
+        setMessages((current) => [
+          ...current,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: generated.response,
+            model: generated.model,
+            reason: generated.reason,
+          },
+        ])
+        return
+      }
       const saved = await saveBuilderProject({
         currentProjectId: project?.id || null,
         userPrompt: messageText,
