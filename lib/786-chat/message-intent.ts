@@ -4,7 +4,7 @@ const DIRECT_EDIT_PATTERNS = [
   /^(?:please\s+)?(?:add|create|build|make|change|update|edit|fix|repair|remove|delete|replace|redesign|implement|apply|move|rename|connect|integrate|deploy|restore|undo|redo|generate)\b/i,
   /\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:add|create|build|make|change|update|edit|fix|repair|remove|delete|replace|redesign|implement|apply|move|rename|connect|integrate|deploy|restore|undo|redo|generate)\b/i,
   /\bi\s+(?:need|want|would like)\s+(?:you\s+)?to\s+(?:add|create|build|make|change|update|edit|fix|repair|remove|delete|replace|redesign|implement|apply|move|rename|connect|integrate|deploy|restore|undo|redo|generate)\b/i,
-  /\bi\s+(?:need|want)\s+(?:an?\s+)?(?:new\s+)?(?:page|route|component|form|button|sidebar|menu|database|table|api|schema|layout|feature|workflow|dashboard|login|register)\b/i,
+  /\bi\s+(?:need|want)\s+(?:an?\s+)?(?:new\s+)?(?:page|route|component|form|button|sidebar|menu|database|table|api|schema|layout|feature|workflow|dashboard|login|register|website|app|project)\b/i,
 ] as const
 
 const QUESTION_PATTERNS = [
@@ -27,7 +27,9 @@ export function classifyBuilderMessageIntent(message: string): BuilderMessageInt
   if (READ_ONLY_INSPECTION.test(text) && !FOLLOW_UP_EDIT.test(text)) return "chat"
   if (QUESTION_PATTERNS.some((pattern) => pattern.test(text))) return "chat"
 
-  return "edit"
+  // Unclear messages must never create a project or spend code-generation budget.
+  // A positive mutation request above is required to enter edit mode.
+  return "chat"
 }
 
 export function isBuilderChatOnlyMessage(message: string) {
