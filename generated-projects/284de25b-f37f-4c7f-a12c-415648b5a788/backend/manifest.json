@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "northstar-logistics",
+  "description": "NorthStar Logistics management application",
+  "capabilities": ["database", "authentication", "email", "api"],
+  "providers": {
+    "database": {
+      "type": "neon",
+      "driver": "@neondatabase/serverless",
+      "connection": "DATABASE_URL",
+      "migration": "sql/migrations/001_initial.sql"
+    },
+    "authentication": {
+      "type": "jose",
+      "secret": "AUTH_SECRET",
+      "sessionCookie": "northstar_session",
+      "routes": [
+        "/api/auth/register",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/api/auth/verify-email"
+      ]
+    },
+    "email": {
+      "type": "resend",
+      "apiKey": "RESEND_API_KEY",
+      "from": "EMAIL_FROM",
+      "route": "/api/email"
+    },
+    "api": {
+      "basePath": "/api",
+      "routes": [
+        "/api/auth/register",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/session",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/api/auth/verify-email",
+        "/api/email"
+      ]
+    }
+  },
+  "environment": ["DATABASE_URL", "AUTH_SECRET", "RESEND_API_KEY", "EMAIL_FROM"],
+  "migrations": ["sql/migrations/001_initial.sql"]
+}
