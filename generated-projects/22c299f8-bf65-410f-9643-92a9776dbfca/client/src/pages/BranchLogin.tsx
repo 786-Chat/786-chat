@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,7 @@ const branchCubeImages = [
 
 export default function BranchLogin() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [branchPin, setBranchPin] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -99,6 +101,8 @@ export default function BranchLogin() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        // Do not reuse the previous branch's cached dashboard or documents.
+        queryClient.clear();
         playMagicSound(1000, 400); // Success sound
         toast({
           title: "Login Successful ✨",
