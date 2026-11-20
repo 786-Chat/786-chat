@@ -29,6 +29,7 @@ import {
 import { z } from "zod";
 import { db } from "./db.js";
 import { sql } from "drizzle-orm";
+import { registerSmartLifeRoutes } from "./smartlife-routes.js";
 
 // Parameter validation schemas
 const idParamSchema = z.object({
@@ -1956,6 +1957,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
 
+
+  // Rule 1: per-branch sidebar visibility. Defaults to visible; toggles never touch alerts/devices.
+  // We create the dedicated table only when an admin saves a change. Preview reads are non-mutating.
+  const getBranchSidebarVisibility = async (branchId: string) => {
+    const visibility = { deviceAlerts: true, smartDevices: true };
+    try {
+      const found: any = await db.execute(sql`
+        SELECT section_key, is_visible
+        FROM branch_sidebar_visibility
+        WHERE branch_id::text = ${branchId}
+      `);
+      const rows = Array.isArray(found) ? found : (found?.rows || []);
+      for (const row of rows) {
+        if (row.section_key === "device-alerts") visibility.deviceAlerts = Boolean(row.is_visible);
+        if (row.section_key === "smart-devices") visibility.smartDevices = Boolean(row.is_visible);
+      }
+    } catch (error: any) {
+      // Drizzle wraps PostgreSQL's undefined-table (42P01) in an error.cause.
+      const errorCode = String(error?.code || error?.cause?.code || "");
+      const detail = String(error?.cause?.message || error?.message || "");
+      if (errorCode !== "42P01" &&
+          !/relation .*branch_sidebar_visibility.* does not exist/i.test(detail)) {
+        throw error;
+      }
+    }
+    return visibility;
+  };
+
+  app.get("/api/admin/branch-sidebar-visibility", isAdminAuthenticated, async (req, res) => {
+    try {
+      const branchId = String(req.query.branchId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(branchId)) return res.status(400).json({ message: "Select a valid branch." });
+      const branch = await storage.getBranch(branchId);
+      if (!branch) return res.status(404).json({ message: "Branch not found." });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ branchId, ...(await getBranchSidebarVisibility(branchId)) });
+    } catch (error: any) {
+      return res.status(500).json({ message: error?.message || "Could not load branch visibility." });
+    }
+  });
+
+  app.post("/api/admin/branch-sidebar-visibility", isAdminAuthenticated, async (req, res) => {
+    try {
+      const branchId = String(req.body?.branchId || "").trim();
+      const sectionKey = String(req.body?.sectionKey || "").trim();
+      const visible = req.body?.visible;
+      if (!/^[0-9a-f-]{36}$/i.test(branchId) ||
+          !["device-alerts", "smart-devices"].includes(sectionKey) ||
+          typeof visible !== "boolean") {
+        return res.status(400).json({ message: "Valid branch, section and Show/Hide setting are required." });
+      }
+      const branch = await storage.getBranch(branchId);
+      if (!branch) return res.status(404).json({ message: "Branch not found." });
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS branch_sidebar_visibility (
+          branch_id uuid NOT NULL,
+          section_key text NOT NULL CHECK (section_key IN ('device-alerts', 'smart-devices')),
+          is_visible boolean NOT NULL DEFAULT true,
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (branch_id, section_key)
+        )
+      `);
+      await db.execute(sql`
+        INSERT INTO branch_sidebar_visibility (branch_id, section_key, is_visible, updated_at)
+        VALUES (${branchId}::uuid, ${sectionKey}, ${visible}, now())
+        ON CONFLICT (branch_id, section_key)
+        DO UPDATE SET is_visible=EXCLUDED.is_visible, updated_at=now()
+      `);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ success: true, branchId, ...(await getBranchSidebarVisibility(branchId)) });
+    } catch (error: any) {
+      return res.status(500).json({ message: error?.message || "Could not update visibility." });
+    }
+  });
+
+  app.get("/api/branch/sidebar-visibility", async (req, res) => {
+    try {
+      const session = req.session as any;
+      if (!session?.branchId || session.userType !== "branch") {
+        return res.status(401).json({ message: "Not authenticated." });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      const branchId = String(session.branchId);
+      const original = await getBranchSidebarVisibility(branchId);
+      // Read SmartLife's separate visibility table but preserve the Rule 1 response
+      // and the original Device Check / Smart Devices settings unchanged.
+      let smartlifeAlert = false;
+      let smartlifeDevices = false;
+      try {
+        const result: any = await db.execute(sql`
+          SELECT alert_visible, devices_visible
+          FROM smartlife_branch_visibility
+          WHERE branch_id = ${branchId}::uuid
+        `);
+        const records = Array.isArray(result) ? result : (result?.rows || []);
+        smartlifeAlert = records[0]?.alert_visible === true;
+        smartlifeDevices = records[0]?.devices_visible === true;
+      } catch (error: any) {
+        const code = String(error?.code || error?.cause?.code || "");
+        const message = String(error?.cause?.message || error?.message || "");
+        // New installations default to hidden until SmartLife tables are initialized.
+        if (code !== "42P01" && !/relation .*smartlife_branch_visibility.* does not exist/i.test(message)) {
+          throw error;
+        }
+      }
+      return res.json({ ...original, smartlifeAlert, smartlifeDevices });
+    } catch (error: any) {
+      return res.status(500).json({ message: error?.message || "Could not load sidebar visibility." });
+    }
+  });
+
+  // Independent SmartLife management, strictly separate from Food Safety Owned IoT.
+  registerSmartLifeRoutes(app, isAdminAuthenticated);
+
   // Admin Branch Management Routes with pagination and search
   app.get('/api/branches', isAdminAuthenticated, async (req, res) => {
     try {
@@ -2466,6 +2581,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate file existence and fix missing files for branch view
       const validatedDocuments = [];
       for (const doc of documents) {
+        // Files in private Vercel Blob are not on the serverless filesystem.
+        // fs.existsSync('/objects/...') always returns false even for valid PDFs.
+        // The authenticated /view endpoint checks availability when opened.
+        if (doc.filepath && doc.filepath.startsWith('/objects/')) {
+          validatedDocuments.push({ ...doc, fileMissing: false });
+          continue;
+        }
         let fullPath = doc.filepath;
         
         // Convert relative paths to absolute paths
@@ -2625,6 +2747,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate file existence and fix missing files for branch view
       const validatedDocuments = [];
       for (const doc of documents) {
+        // Files in private Vercel Blob are not on the serverless filesystem.
+        // fs.existsSync('/objects/...') always returns false even for valid PDFs.
+        // The authenticated /view endpoint checks availability when opened.
+        if (doc.filepath && doc.filepath.startsWith('/objects/')) {
+          validatedDocuments.push({ ...doc, fileMissing: false });
+          continue;
+        }
         let fullPath = doc.filepath;
         
         // Convert relative paths to absolute paths
@@ -2817,7 +2946,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (storageError) {
           console.error('Object Storage download error:', storageError);
-          return res.status(404).json({ message: "Document not found in Object Storage" });
+          if (res.headersSent) { res.destroy(); return; }
+          const missing = storageError instanceof ObjectNotFoundError;
+          return res.status(missing ? 404 : 503).json({
+            message: missing ? "Document not found" : "Document temporarily unavailable. Please retry."
+          });
         }
       }
 
@@ -4133,6 +4266,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
       }
 
+      if (process.env.VERCEL && !filepath.startsWith('/objects/vercel/')) {
+        throw new Error('Monthly report was not persisted to durable Vercel Blob storage');
+      }
+
       console.log(`✅ Monthly report uploaded to Object Storage: ${filepath}`);
 
       const reportData = {
@@ -4604,7 +4741,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (storageError) {
           console.error('Object Storage download error:', storageError);
-          return res.status(404).json({ message: "File not found in Object Storage" });
+          if (res.headersSent) { res.destroy(); return; }
+          const missing = storageError instanceof ObjectNotFoundError;
+          return res.status(missing ? 404 : 503).json({
+            message: missing ? "Document not found" : "Document temporarily unavailable. Please retry."
+          });
         }
       }
 
@@ -5296,7 +5437,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (storageError) {
           console.error('Object Storage download error:', storageError);
-          return res.status(404).json({ message: "File not found in Object Storage" });
+          if (res.headersSent) { res.destroy(); return; }
+          const missing = storageError instanceof ObjectNotFoundError;
+          return res.status(missing ? 404 : 503).json({
+            message: missing ? "Document not found" : "Document temporarily unavailable. Please retry."
+          });
         }
       }
 
@@ -5686,7 +5831,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         } catch (storageError) {
           console.error('Object Storage download error:', storageError);
-          return res.status(404).json({ message: "Document not found in Object Storage" });
+          if (res.headersSent) { res.destroy(); return; }
+          const missing = storageError instanceof ObjectNotFoundError;
+          return res.status(missing ? 404 : 503).json({
+            message: missing ? "Document not found" : "Document temporarily unavailable. Please retry."
+          });
         }
       }
 
@@ -8122,7 +8271,6 @@ Generated: ${new Date().toISOString()}
           last_seen_at,
           last_alarm_at
         FROM owned_iot_devices
-        WHERE COALESCE(lifecycle_state, '') <> 'archived'
         ORDER BY friendly_name NULLS LAST, device_id
       `);
       const rows = Array.isArray(result) ? result : (result?.rows || []);
@@ -8335,7 +8483,7 @@ Generated: ${new Date().toISOString()}
           b.name AS assigned_branch_name
         FROM owned_iot_device_checks c
         LEFT JOIN owned_iot_devices d ON d.device_id = c.assigned_device_id
-        LEFT JOIN branches b ON b.id::text = d.branch_id::text
+        LEFT JOIN branches b ON b.id::text = e.branch_id::text
         ORDER BY c.last_seen_at DESC
         LIMIT 200
       `);
@@ -8685,36 +8833,27 @@ Generated: ${new Date().toISOString()}
     }
   });
 
-  // Archive a registration without deleting telemetry, alarms, or customer history.
   app.delete("/api/iot/devices/:id", isAdminAuthenticated, async (req, res) => {
     try {
       await ensureOwnedIotSchema();
-      const deviceId = String(req.params.id || "").trim();
-      const existing: any = await db.execute(sql`
-        SELECT id, device_id FROM owned_iot_devices
-        WHERE id::text = ${deviceId} AND COALESCE(lifecycle_state, '') <> 'archived'
-        LIMIT 1
-      `);
-      const rows = Array.isArray(existing) ? existing : (existing?.rows || []);
-      if (!rows.length) return res.status(404).json({ message: "Device not found or already archived." });
-      // Do not archive if there is an active MQTT report within the last 90 seconds.
-      const active: any = await db.execute(sql`
-        SELECT id FROM owned_iot_devices
-        WHERE id::text = ${deviceId} AND is_online = true
-          AND last_seen_at > now() - interval '90 seconds' LIMIT 1
-      `);
-      if ((Array.isArray(active) ? active : (active?.rows || [])).length)
-        return res.status(409).json({ message: "Device is currently reporting live. Disconnect and verify before removing." });
-      await createOwnedIotDeviceBackup('auto', 'Before Archive Device');
-      await db.execute(sql`
+      await createOwnedIotDeviceBackup('auto', 'Before Unassign Device').catch((error: any) =>
+        console.warn('Automatic device backup failed:', error?.message || error),
+      );
+      const result: any = await db.execute(sql`
         UPDATE owned_iot_devices
-        SET lifecycle_state = 'archived', is_online = false, last_alarm_at = NULL, updated_at = now()
-        WHERE id::text = ${deviceId}
+        SET branch_id = NULL,
+            lifecycle_state = 'unassigned',
+            is_online = false,
+            last_alarm_at = NULL,
+            updated_at = now()
+        WHERE id::text = ${String(req.params.id)}
+        RETURNING id, device_id
       `);
-      return res.json({ success: true, archived: true, deviceId: rows[0].device_id });
+      const rows = Array.isArray(result) ? result : (result?.rows || []);
+      if (rows.length === 0) return res.status(404).json({ message: "Device not found" });
+      res.json({ success: true, source: "owned" });
     } catch (err: any) {
-      console.error("Archive owned IoT device:", err?.message || err);
-      return res.status(500).json({ message: "Could not archive device safely." });
+      res.status(500).json({ message: err?.message || "Unable to remove device" });
     }
   });
 
