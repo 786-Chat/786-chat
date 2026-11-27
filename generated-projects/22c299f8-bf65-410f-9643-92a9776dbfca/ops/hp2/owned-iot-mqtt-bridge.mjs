@@ -1,3 +1,4 @@
+import { parseMouse10Message, MOUSE10_TOPIC_PREFIX } from './mouse10-mqtt-parser.mjs';
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -160,6 +161,7 @@ const topics = Array.from(new Set([
   '+/host',
   '+/ip',
   '+/rssi',
+  MOUSE10_TOPIC_PREFIX + '+',
 ]));
 
 const args = ['-h', mqttHost, '-p', mqttPort, '-v'];
@@ -182,6 +184,31 @@ rl.on('line', (line) => {
   const space = line.indexOf(' ');
   const topic = space >= 0 ? line.slice(0, space) : '';
   const payload = space >= 0 ? line.slice(space + 1) : line;
+
+  // New firmware uses JSON reports. Do not interpret raw DP101 telemetry or
+  // boot/status messages as catches; only signed-in MQTT publisher accounts
+  // should have broker permission to publish to this device topic.
+  if (topic.startsWith(MOUSE10_TOPIC_PREFIX)) {
+    const report = parseMouse10Message(topic, payload);
+    if (!report) {
+      console.error('[bridge] invalid Mouse 10 report ignored on ' + topic);
+      return;
+    }
+    if (report.kind === 'event') {
+      // Preserve the original device event ID for API-side duplicate handling.
+      chain = chain.then(() => postEvent(report.deviceId, report.type, topic, payload, {
+        eventId: report.eventId, value: report.value, source: 'ovh-mqtt-bridge',
+      })).catch(error => console.error('[bridge] Mouse 10 event: ' + error.message));
+    } else if (report.kind === 'status') {
+      // Do not post heartbeats on every status report: current API stores an
+      // event row on every call; rate-limited status support is separate work.
+      console.log('[bridge] Mouse 10 status received (online=' + report.online + ')');
+    } else {
+      console.log('[bridge] Mouse 10 DP' + report.dpid + ' telemetry received');
+    }
+    return;
+  }
+
   const parts = topic.split('/');
   const prefix = String(parts[0] || '').trim();
   const leaf = String(parts[parts.length - 1] || '').trim().toLowerCase();
