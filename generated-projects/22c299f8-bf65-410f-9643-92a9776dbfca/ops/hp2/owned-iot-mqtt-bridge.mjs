@@ -1,5 +1,5 @@
-import { parseMouse10Message, MOUSE10_TOPIC_PREFIX } from './mouse10-mqtt-parser.mjs';
 #!/usr/bin/env node
+import { parseMouse10Message, MOUSE10_TOPIC_PREFIX } from './mouse10-mqtt-parser.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
